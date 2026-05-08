@@ -1,0 +1,16 @@
+.env
+.env.local
+.env.*.local
+
+node_modules/
+dist/
+
+.vercel/
+.firebase/
+firebase-debug.log
+
+vite-local.out.log
+vite-local.err.log
+
+.DS_Store
+Thumbs.db

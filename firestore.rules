@@ -1,0 +1,71 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return isSignedIn() && userDoc().data.role == 'owner' && userDoc().data.disabled != true;
+    }
+
+    function isStaff() {
+      return isSignedIn() && userDoc().data.disabled != true;
+    }
+
+    match /users/{userId} {
+      allow read: if isStaff();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner() || (request.auth.uid == userId && request.resource.data.role == resource.data.role);
+    }
+
+    match /appMetadata/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /stores/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /sales/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /purchases/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /vendors/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /cashouts/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /payments/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /loans/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /dailyCashouts/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /cashTransfers/{documentId} {
+      allow read, write: if isStaff();
+    }
+
+    match /settingsAudit/{documentId} {
+      allow read, write: if isStaff();
+    }
+  }
+}

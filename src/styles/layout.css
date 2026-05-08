@@ -1,0 +1,151 @@
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  border: 1px solid #d7e6d6;
+  border-radius: 10px;
+  background: #eff8ee;
+  color: #1c6532;
+  padding: 12px;
+  font-weight: 850;
+}
+
+.notice button {
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid #c8ebd1;
+  background: #ffffff;
+  color: #19642e;
+  padding: 0 13px;
+  font-weight: 850;
+}
+
+.cashout-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.summary-card,
+.cashout-card {
+  border: 1px solid #dfe3de;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 14px 34px rgba(28, 32, 26, 0.06);
+}
+
+.summary-card {
+  min-height: 96px;
+  padding: 16px;
+}
+
+.summary-card span {
+  display: block;
+  color: #67736d;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 14px;
+  font-size: 1.5rem;
+}
+
+.cashout-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.single-screen-layout {
+  margin-top: 16px;
+}
+
+.cashout-side {
+  display: grid;
+  gap: 14px;
+}
+
+.cashout-card {
+  padding: 20px;
+}
+
+.card-title {
+  margin-bottom: 16px;
+}
+
+.list-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-title label {
+  width: 150px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.daily-summary-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.summary-card.compact {
+  min-height: 78px;
+  padding: 12px;
+  width: fit-content;
+  min-width: 220px;
+}
+
+.entry-toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 120;
+  max-width: min(360px, calc(100vw - 32px));
+  border: 1px solid #d7e6d6;
+  border-radius: 8px;
+  background: #eff8ee;
+  color: #1c6532;
+  box-shadow: 0 14px 34px rgba(20, 42, 26, 0.16);
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.empty-state,
+.activity-item span {
+  color: #69756f;
+  font-size: 0.84rem;
+}
+
+.card-meta {
+  margin: 4px 0 0;
+  color: #6b7770;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.cash-balance {
+  border: 1px solid #d7e6d6;
+  border-radius: 8px;
+  background: #eff8ee;
+  color: #1e5f33;
+  padding: 10px 12px;
+  font-weight: 800;
+}
