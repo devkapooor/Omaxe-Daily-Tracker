@@ -180,7 +180,7 @@
 
 .app-navbar-dropdown {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 2px);
   left: 0;
   z-index: 40;
   width: 360px;
