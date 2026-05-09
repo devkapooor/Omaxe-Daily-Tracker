@@ -2,59 +2,95 @@
 
 ## Hard Rule
 
-Whenever the code structure, navigation, storage model, or delivery plan changes, update:
+Whenever auth flow, navigation, data structure, storage rules, or UI architecture changes, update:
 
 - `PLAN.md`
 - `ARCHITECTURE.md`
-- `TASK_QUEUE.md`
-- related docs such as `DATA_MODEL.md`, `CALCULATIONS.md`, and setup docs
+- `DRILL.md`
+- any other doc that becomes stale because of the change
 
-This is mandatory. Documentation sync is part of the definition of done.
+Documentation sync is part of the definition of done.
 
 ## Current Goal
 
-Maintain and extend a single-store finance operations app that already runs on:
+Maintain and extend a single-store finance operations app that now runs on:
 
 - React + Vite + TypeScript
 - Firebase Authentication
 - Firestore
-- shared component-based UI
-- modular CSS
+- Tailwind CSS v4
+- shadcn-style shared UI primitives in `src/components/ui`
 
-The current work is no longer about scaffolding the MVP. It is about:
+The app is already live and Firebase-first. Current work is about:
 
-- tightening the structure
-- improving navigation and workflows
-- filling missing finance screens and controls
-- keeping docs in lockstep with implementation
+- keeping finance workflows compact and dependable
+- making role-based user management simpler for the owner
+- preserving cross-device consistency
+- keeping the codebase easier to change as screens grow
 
 ## Current Product Scope
 
 The app currently supports:
 
 - login with Firebase email/password
-- role-based access
+- owner-created user accounts from `Settings`
+- owner / manager / billing role-based access
 - dashboard summaries and monthly projection
-- expense register entry flow
-- daily cashout register flow
+- expense register entry
+- daily cashout register entry
 - purchase entry
 - vendor directory management
 - loans entry
 - cash movement tracking
-- settings/user management
-- one-time legacy local-data import
+- password update for all signed-in users
+- account directory, create user, disable/restore, and settings audit for the owner
+- one-time legacy browser-data import into Firebase
 
-## Current Code Structure
+## Current Product Rules
+
+- Public signup is removed.
+- The owner creates staff accounts directly from `Settings`.
+- New staff accounts are active immediately after creation.
+- `Pending Requests` and `Launch Cleanup` are not part of the live product anymore.
+- The app remains single-store only.
+
+## Current Code Shape
 
 ```text
 src/
   app/
     App.tsx
     uiHelpers.ts
+    useDashboardMetrics.ts
   components/
-    ...
+    AppTopBar.tsx
+    CashMovementForm.tsx
+    CashoutForm.tsx
+    DailyCashoutFinalSummaryPanel.tsx
+    DailyCashoutForm.tsx
+    DashboardRangeFilter.tsx
+    DashboardTables.tsx
+    LoadingScreen.tsx
+    LoanForm.tsx
+    LoginScreen.tsx
+    MonthlyProjectionPanel.tsx
+    PurchaseForm.tsx
+    RecentCashoutList.tsx
+    SettingsPage.tsx
+    VendorsPage.tsx
     ui/
-      navbar1.tsx
+      background-components.tsx
+      badge.tsx
+      button.tsx
+      card.tsx
+      field-label.tsx
+      hover-gradient-nav-bar.tsx
+      input.tsx
+      native-select.tsx
+      section-heading.tsx
+      tabs.tsx
+      textarea.tsx
+      typewriter-effect.tsx
   data/
     appStore.ts
     storeActions.ts
@@ -64,94 +100,85 @@ src/
     seedData.ts
   domain/
     appTypes.ts
-    financeTypes.ts
     financeCalculations.ts
+    financeTypes.ts
   lib/
     firebase.ts
+    utils.ts
   styles/
     global.css
-    base.css
-    forms.css
-    auth.css
-    navigation.css
-    layout.css
-    dashboard.css
-    lists.css
-    responsive.css
 ```
 
 ## Current UI Direction
 
 The app should stay:
 
-- operational, not marketing-like
-- compact and quick to scan
-- green/neutral in palette
-- shared-component oriented
-- mobile-aware but usable on desktop first for owners/managers
+- operational first, not marketing-heavy
+- compact enough to show more information on one screen
+- warm neutral with green/blue accents
+- shared-component based
+- mobile-safe but owner-optimized on desktop
 
-The current navbar has already been upgraded to a grouped dropdown pattern and should remain shared.
+Important current UI choices:
 
-## Current Planning Priorities
+- fixed hover-gradient top bar
+- reusable glow background wrapper
+- login hero with animated `AlphaHub`
+- no custom per-page CSS files; utility-first Tailwind classes are the main styling layer
 
-### Priority 1: Complete Current Core Flows
+## Current Engineering Priorities
 
-- finish any missing finance entry surface that users still need
-- improve validation and user feedback
-- keep owner/manager/billing access rules clean
+### Priority 1: Workflow Reliability
 
-### Priority 2: Reporting And Data Confidence
+- keep every finance write flow stable across desktop and mobile
+- preserve linked updates between forms, summaries, and registers
+- keep Firestore rules aligned with the product rules
 
-- improve register/report views
-- add export flows
-- add data quality checks around incomplete or suspicious entries
+### Priority 2: Owner Administration
 
-### Priority 3: Change Safety
+- keep owner-created account flow simple
+- maintain clean role restrictions
+- keep settings audit meaningful
 
-- add tests where the logic risk is meaningful
-- protect derived summaries and projections
-- prevent structural regressions during refactors
+### Priority 3: Maintainability
 
-### Priority 4: Documentation Discipline
+- continue splitting oversized files when a stable seam exists
+- keep `App.tsx` focused on orchestration
+- keep derived calculations in hooks or pure helpers instead of growing render files
 
-- keep hierarchy and responsibilities documented
-- reflect shared component moves and data-layer splits
-- update task queue with real current state, not stale MVP notes
+### Priority 4: Documentation Accuracy
 
-## Current High-Level Work Breakdown
+- reflect real auth flow, not old signup-approval behavior
+- reflect the Tailwind/shadcn-style structure
+- keep QA drill steps aligned with the live product
 
-### App Shell And Navigation
+## Recent Structural Change
 
-- `App.tsx` coordinates page routing and screen composition
-- `AppTopBar.tsx` delegates to shared `ui/navbar1.tsx`
-- top navigation is shared and should remain the single source of truth
+To make future changes easier:
 
-### Data Layer
+- dashboard and summary derivations were moved out of `App.tsx` into `src/app/useDashboardMetrics.ts`
 
-- `appStore.ts` coordinates auth state, subscriptions, and actions
-- `storeSubscriptions.ts` owns Firestore reads
-- `storeActions.ts` owns Firestore writes and auth-side mutations
-- `storeShared.ts` owns helper types/constants/utilities
+This is the preferred direction for future splits:
 
-### Styling Layer
+- calculation-heavy logic into hooks or pure modules
+- app-shell rendering kept in `App.tsx`
+- screen-specific behavior kept close to the screen component
 
-- `global.css` is only the import hub
-- focused CSS files should continue to absorb area-specific changes
-
-## Out-Of-Scope For The Current Stage
+## Out Of Scope
 
 - multi-store support
 - full accounting ledger
-- GST/tax workflows
-- inventory system
-- payroll/attendance
-- backend replacement away from Firebase unless explicitly requested
+- payroll or attendance
+- inventory management
+- GST/tax module
+- Cloud Functions dependent flows unless explicitly requested
 
-## Immediate Expectation For Future Changes
+## Expectation For Future Changes
 
 All future work should preserve these habits:
 
-- shared components instead of repeated markup
-- area-specific style files instead of growing one giant stylesheet
-- data actions and subscriptions kept separate
+- shared UI primitives over repeated markup
+- owner-managed user creation, not public signup
+- focused hooks/helpers for derived data
+- Firebase-first persistence
 - documentation updated in the same change

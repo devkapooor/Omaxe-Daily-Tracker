@@ -1,6 +1,6 @@
-import type { AppUser } from '../domain/financeTypes'
-import type { Page } from '../domain/appTypes'
-import { Navbar1 } from './ui/navbar1'
+import type { AppUser } from '@/domain/financeTypes'
+import type { Page } from '@/domain/appTypes'
+import { HoverGradientNavBar } from '@/components/ui/hover-gradient-nav-bar'
 
 type AppTopBarProps = {
   currentUser: AppUser
@@ -10,5 +10,5 @@ type AppTopBarProps = {
 }
 
 export function AppTopBar({ currentUser, activePage, onPageChange, onLogout }: AppTopBarProps) {
-  return <Navbar1 currentUser={currentUser} activePage={activePage} onPageChange={onPageChange} onLogout={onLogout} />
+  return <HoverGradientNavBar currentUser={currentUser} activePage={activePage} onPageChange={onPageChange} onLogout={onLogout} />
 }

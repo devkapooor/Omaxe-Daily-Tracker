@@ -13,6 +13,15 @@ vite-local.out.log
 vite-local.err.log
 vite-live.out.log
 vite-live.err.log
+vite-nav.out.log
+vite-nav.err.log
+vite-recheck.out.log
+vite-recheck.err.log
+
+drill artifacts/
+drill screenshots/
+test-results/
+functions/
 
 .DS_Store
 Thumbs.db

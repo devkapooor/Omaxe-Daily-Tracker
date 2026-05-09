@@ -1,12 +1,8 @@
 import type { DocumentData } from 'firebase/firestore'
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import { seedData } from './seedData'
 import type {
-  Cashout,
-  DailySales,
   FinanceData,
-  Payment,
-  Purchase,
   Store,
 } from '../domain/financeTypes'
 import type {
@@ -25,9 +21,10 @@ export type NameDirectoryType = keyof NameDirectory
 
 export type CreateUserInput = {
   email: string
-  password: string
   name: string
-  role: UserAccount['role']
+  password: string
+  mobileNumber: string
+  role: Exclude<UserAccount['role'], 'owner'>
 }
 
 export type LoadedCollections = Record<
@@ -76,8 +73,6 @@ export const emptyNameDirectory: NameDirectory = {
 
 export type AppStoreSetters = {
   setAuthError: Dispatch<SetStateAction<string | null>>
-  setAuthUser: Dispatch<SetStateAction<import('firebase/auth').User | null>>
-  setAuthReady: Dispatch<SetStateAction<boolean>>
   setCashTransfers: Dispatch<SetStateAction<CashTransfer[]>>
   setDailyCashouts: Dispatch<SetStateAction<DailyCashoutEntry[]>>
   setFinanceData: Dispatch<SetStateAction<FinanceData>>
@@ -88,12 +83,6 @@ export type AppStoreSetters = {
   setSettingsAuditLog: Dispatch<SetStateAction<SettingsAuditEntry[]>>
   setUsers: Dispatch<SetStateAction<UserAccount[]>>
   setVendors: Dispatch<SetStateAction<VendorRecord[]>>
-}
-
-export type AppStoreRefs = {
-  bootstrappedOwnerRef: MutableRefObject<string | null>
-  localBypassAttemptedRef: MutableRefObject<boolean>
-  vendorFallbackLoadedRef: MutableRefObject<boolean>
 }
 
 export function sortByCreatedAtDesc<T extends { createdAt: string }>(items: T[]) {
@@ -167,17 +156,6 @@ export function salesDocId(storeId: string, date: string) {
 export function ensureSingleStore(stores: Store[]) {
   if (stores.length > 0) return stores
   return seedData.stores
-}
-
-export type StoreDataSnapshot = {
-  cashTransfers: CashTransfer[]
-  dailyCashouts: DailyCashoutEntry[]
-  financeData: FinanceData
-  loans: LoanEntry[]
-  nameDirectory: NameDirectory
-  settingsAuditLog: SettingsAuditEntry[]
-  users: UserAccount[]
-  vendors: VendorRecord[]
 }
 
 export type StoreCollectionState = {

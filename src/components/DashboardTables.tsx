@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
-import type { Cashout } from '../domain/financeTypes'
-import type { CashHolder } from '../domain/appTypes'
-import { money, today } from '../app/uiHelpers'
+import type { Cashout } from '@/domain/financeTypes'
+import type { CashHolder } from '@/domain/appTypes'
+import { money, today, type CashHolderAssignment } from '@/app/uiHelpers'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { SectionHeading } from '@/components/ui/section-heading'
 
 type DashboardTablesProps = {
   cashouts: Cashout[]
@@ -9,6 +11,36 @@ type DashboardTablesProps = {
   payments: { date: string; type: 'Received' | 'Paid'; amount: number; paymentMode: string }[]
   pendingCashBalances: Record<CashHolder, number>
   pendingCashBankTotal: number
+  holderAssignments: CashHolderAssignment[]
+}
+
+function DashboardListCard({
+  eyebrow,
+  title,
+  empty,
+  rows,
+}: {
+  eyebrow: string
+  title: string
+  empty: string
+  rows: Array<{ label: string; value: string }>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <SectionHeading eyebrow={eyebrow} title={title} />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.length === 0 && <p className="text-sm font-medium text-muted-foreground">{empty}</p>}
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-4 rounded-3xl border border-border/70 bg-secondary/55 p-4">
+            <span className="text-sm font-medium text-muted-foreground">{row.label}</span>
+            <strong className="text-sm font-bold text-foreground">{row.value}</strong>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
 }
 
 export function DashboardTables({
@@ -17,6 +49,7 @@ export function DashboardTables({
   payments,
   pendingCashBalances,
   pendingCashBankTotal,
+  holderAssignments,
 }: DashboardTablesProps) {
   const month = today().slice(0, 7)
 
@@ -57,74 +90,43 @@ export function DashboardTables({
   }, [month, payments])
 
   return (
-    <section className="dashboard-tables-grid">
-      <article className="cashout-card table-card">
-        <div className="card-title">
-          <p className="eyebrow">Month Table</p>
-          <h2>Expenses By Category</h2>
-        </div>
-        <div className="table-shell">
-          {expenseByCategory.length === 0 && <p className="empty-state">No category expenses this month.</p>}
-          {expenseByCategory.map((row) => (
-            <div className="table-row" key={row.category}>
-              <span>{row.category}</span>
-              <strong>{money(row.amount)}</strong>
-            </div>
-          ))}
-        </div>
-      </article>
+    <section className="grid gap-4 xl:grid-cols-2">
+      <DashboardListCard
+        eyebrow="Month Table"
+        title="Expenses By Category"
+        empty="No category expenses this month."
+        rows={expenseByCategory.map((row) => ({ label: row.category, value: money(row.amount) }))}
+      />
 
-      <article className="cashout-card table-card">
-        <div className="card-title">
-          <p className="eyebrow">Month Summary</p>
-          <h2>Purchase vs Vendor Payment</h2>
-        </div>
-        <div className="table-shell">
-          <div className="table-row">
-            <span>Total Purchase</span>
-            <strong>{money(monthlyPurchaseTotal)}</strong>
-          </div>
-          <div className="table-row">
-            <span>Total Vendor Payment</span>
-            <strong>{money(vendorPaymentTotal)}</strong>
-          </div>
-        </div>
-      </article>
+      <DashboardListCard
+        eyebrow="Month Summary"
+        title="Purchase vs Vendor Payment"
+        empty="No purchase or payment activity this month."
+        rows={[
+          { label: 'Total Purchase', value: money(monthlyPurchaseTotal) },
+          { label: 'Total Vendor Payment', value: money(vendorPaymentTotal) },
+        ]}
+      />
 
-      <article className="cashout-card table-card">
-        <div className="card-title">
-          <p className="eyebrow">Month Table</p>
-          <h2>Vendor Payment By Mode</h2>
-        </div>
-        <div className="table-shell">
-          {paymentByMode.length === 0 && <p className="empty-state">No vendor payment entries this month.</p>}
-          {paymentByMode.map((row) => (
-            <div className="table-row" key={row.mode}>
-              <span>{row.mode}</span>
-              <strong>{money(row.amount)}</strong>
-            </div>
-          ))}
-        </div>
-      </article>
+      <DashboardListCard
+        eyebrow="Month Table"
+        title="Vendor Payment By Mode"
+        empty="No vendor payment entries this month."
+        rows={paymentByMode.map((row) => ({ label: row.mode, value: money(row.amount) }))}
+      />
 
-      <article className="cashout-card table-card">
-        <div className="card-title">
-          <p className="eyebrow">Cash Overview</p>
-          <h2>Pending Cash Particulars</h2>
-        </div>
-        <div className="table-shell">
-          {(['Dev', 'Arsh', 'Farhan'] as CashHolder[]).map((person) => (
-            <div className="table-row" key={person}>
-              <span>{person}</span>
-              <strong>{money(pendingCashBalances[person] ?? 0)}</strong>
-            </div>
-          ))}
-          <div className="table-row">
-            <span>Transferred To Bank</span>
-            <strong>{money(pendingCashBankTotal)}</strong>
-          </div>
-        </div>
-      </article>
+      <DashboardListCard
+        eyebrow="Cash Overview"
+        title="Pending Cash Particulars"
+        empty="No pending cash recorded."
+        rows={[
+          ...holderAssignments.map((assignment) => ({
+            label: assignment.label,
+            value: money(pendingCashBalances[assignment.holder] ?? 0),
+          })),
+          { label: 'Transferred To Bank', value: money(pendingCashBankTotal) },
+        ]}
+      />
     </section>
   )
 }

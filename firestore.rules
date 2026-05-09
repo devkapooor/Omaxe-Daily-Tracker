@@ -19,9 +19,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isStaff();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isOwner() || (request.auth.uid == userId && request.resource.data.role == resource.data.role);
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == userId);
+      allow create: if isOwner();
+      allow update: if isOwner();
+      allow delete: if isOwner();
     }
 
     match /appMetadata/{documentId} {

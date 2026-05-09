@@ -1,5 +1,5 @@
 import type { Cashout } from '../domain/financeTypes'
-import type { CashHolder, Page } from '../domain/appTypes'
+import type { CashHolder, Page, UserAccount } from '../domain/appTypes'
 
 export type AppToast = {
   id: string
@@ -13,24 +13,46 @@ export const singleStoreId = 'single-store'
 export const monthlyFixedExpense = 500000
 
 export const cashoutCategories = [
-  'Staff',
   'Rent',
-  'Utility',
-  'Transport',
-  'Repair',
-  'Packaging',
   'Maintenance',
-  'Miscellaneous',
+  'Electricity',
+  'Salary',
+  'Stock Purchase',
+  'Transportation',
+  'Staff Welfare',
 ]
 
 export const cashoutPaymentModes: Cashout['paymentMode'][] = ['Cash', 'UPI', 'Card', 'Bank Transfer']
 
-export function resolveCashHolderFromUserName(name: string): CashHolder | null {
-  const lower = name.toLowerCase()
-  if (lower.includes('dev')) return 'Dev'
-  if (lower.includes('arsh')) return 'Arsh'
-  if (lower.includes('farhan')) return 'Farhan'
-  return null
+export type CashHolderAssignment = {
+  holder: CashHolder
+  label: string
+  userId?: string
+}
+
+export function buildCashHolderAssignments(users: UserAccount[]): CashHolderAssignment[] {
+  const enabledUsers = users.filter((user) => !user.disabled && user.approvalStatus !== 'rejected')
+  const owner = enabledUsers.find((user) => user.role === 'owner')
+  const staff = enabledUsers
+    .filter((user) => user.role !== 'owner')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(0, 2)
+
+  const assignments: CashHolderAssignment[] = []
+  if (owner) {
+    assignments.push({ holder: 'Dev', label: owner.name, userId: owner.id })
+  } else {
+    assignments.push({ holder: 'Dev', label: 'Owner' })
+  }
+
+  if (staff[0]) assignments.push({ holder: 'Arsh', label: staff[0].name, userId: staff[0].id })
+  if (staff[1]) assignments.push({ holder: 'Farhan', label: staff[1].name, userId: staff[1].id })
+  return assignments
+}
+
+export function resolveCashHolderForUser(userId: string, users: UserAccount[]) {
+  const match = buildCashHolderAssignments(users).find((assignment) => assignment.userId === userId)
+  return match?.holder ?? null
 }
 
 export function today() {
@@ -72,7 +94,7 @@ export function wordCount(value: string) {
 }
 
 export function canOpenSettings(role: string) {
-  return role === 'owner'
+  return role === 'owner' || role === 'manager' || role === 'billing'
 }
 
 export function normalizeName(value: string) {
@@ -93,7 +115,7 @@ export function uniqNames(values: string[]) {
 export function resolveActivePage(role: string, activePage: Page) {
   return role === 'owner'
     ? activePage
-    : activePage === 'dashboard' || activePage === 'loans' || activePage === 'settings'
+    : activePage === 'dashboard' || activePage === 'loans'
       ? 'expense'
       : activePage
 }

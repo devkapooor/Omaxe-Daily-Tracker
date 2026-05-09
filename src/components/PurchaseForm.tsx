@@ -1,7 +1,12 @@
 import { useState } from 'react'
-import type { PurchaseDraft } from '../domain/financeTypes'
-import { normalizeName, numberValue, singleStoreId, today } from '../app/uiHelpers'
-import { SearchableNameField } from './SearchableNameField'
+import type { PurchaseDraft } from '@/domain/financeTypes'
+import { normalizeName, numberValue, singleStoreId, today } from '@/app/uiHelpers'
+import { SearchableNameField } from '@/components/SearchableNameField'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { FieldLabel } from '@/components/ui/field-label'
+import { Input } from '@/components/ui/input'
+import { SectionHeading } from '@/components/ui/section-heading'
 
 type PurchaseFormProps = {
   vendorOptions: string[]
@@ -60,49 +65,46 @@ export function PurchaseForm({ vendorOptions, onCreateVendor, onSave }: Purchase
   }
 
   return (
-    <form className="cashout-card purchase-form" onSubmit={handleSubmit}>
-      <div className="card-title">
-        <p className="eyebrow">New Entry</p>
-        <h2>Record Purchase</h2>
-      </div>
+    <Card>
+      <CardHeader>
+        <SectionHeading eyebrow="New Entry" title="Record Purchase" />
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+          <FieldLabel label="Vendor Name">
+            <SearchableNameField
+              name="vendorName"
+              options={vendorOptions}
+              placeholder="Search or add vendor"
+              value={vendorName}
+              onCreate={onCreateVendor}
+              onValueChange={(value) => {
+                setVendorName(value)
+                setError('')
+              }}
+            />
+          </FieldLabel>
 
-      <label>
-        Vendor Name
-        <SearchableNameField
-          name="vendorName"
-          options={vendorOptions}
-          placeholder="Search or add vendor"
-          value={vendorName}
-          onCreate={onCreateVendor}
-          onValueChange={(value) => {
-            setVendorName(value)
-            setError('')
-          }}
-        />
-      </label>
+          <FieldLabel label="Brand Name">
+            <Input name="brandName" placeholder="Brand name" required onChange={() => setError('')} />
+          </FieldLabel>
 
-      <label>
-        Brand Name
-        <input name="brandName" placeholder="Brand name" required onChange={() => setError('')} />
-      </label>
+          <FieldLabel label="Total Amount">
+            <Input name="totalAmount" type="number" min="0" step="1" placeholder="0" required onChange={() => setError('')} />
+          </FieldLabel>
 
-      <label>
-        Total Amount
-        <input name="totalAmount" type="number" min="0" step="1" placeholder="0" required onChange={() => setError('')} />
-      </label>
+          <FieldLabel label="Date">
+            <Input name="date" type="date" value={purchaseDate} readOnly />
+          </FieldLabel>
 
-      <label>
-        Date
-        <input name="date" type="date" value={purchaseDate} readOnly />
-      </label>
+          <FieldLabel className="md:col-span-2" label="Invoice Number">
+            <Input name="invoiceNumber" placeholder="Invoice number" required onChange={() => setError('')} />
+          </FieldLabel>
 
-      <label className="full-width">
-        Invoice Number
-        <input name="invoiceNumber" placeholder="Invoice number" required onChange={() => setError('')} />
-      </label>
-
-      {error && <p className="form-error light full-width">{error}</p>}
-      <button className="primary full-width">Save Purchase</button>
-    </form>
+          {error && <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p>}
+          <Button className="md:col-span-2">Save Purchase</Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

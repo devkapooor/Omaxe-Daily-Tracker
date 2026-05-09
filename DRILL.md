@@ -2,27 +2,37 @@
 
 ## Purpose
 
-This document defines the execution drill for validating:
+This drill validates the current live product:
 
-- all major connections
-- all data entry points
-- all linked page updates
+- login and session behavior
+- owner-created user flow
+- all major data-entry surfaces
+- cross-page derived updates
 - desktop/mobile sync behavior
-- correctness of derived values across the app
-- desktop/mobile visual integrity through screenshot review
+- desktop/mobile visual integrity
 
 This is a planning document only. It does not imply the drill has been executed.
+
+## Current Product Assumptions
+
+The drill must reflect the current app behavior:
+
+- public signup does not exist
+- the owner creates users from `Settings`
+- owner, manager, and billing are the active roles
+- the app is Firebase-backed and single-store
+- the UI uses a fixed top bar rather than dropdown menu groups from older docs
 
 ## Goal
 
 Verify that:
 
-- every login/session path works
-- every data entry point saves correctly
+- every valid login path works
+- owner-created accounts behave correctly
 - every saved record appears correctly on all relevant pages
 - desktop and mobile stay in sync through Firebase/Firestore
 - derived values and summaries are consistent everywhere
-- visual issues are identified on both desktop and mobile through a screenshot pass
+- visual issues are identified through a screenshot pass
 
 ## Test Rig
 
@@ -33,12 +43,11 @@ Verify that:
 
 ### Tools
 
-- `Playwright` for repeatable desktop/browser flows
-- `Headless Chrome` / browser automation for quick verification
-- manual live browser session for realistic UI checks
-- screenshot capture for all major screens and important UI states
-- Firebase Console / Firestore viewer only for deep verification if needed
-- network/devtools checks only when a sync issue appears
+- live browser session on desktop
+- live browser session on mobile
+- screenshot capture for major screens and important states
+- Firebase Console / Firestore viewer only when deeper verification is needed
+- browser devtools only if a sync or permission issue appears
 
 ### Browsers
 
@@ -47,36 +56,25 @@ Verify that:
 
 ## Execution Principles
 
-- One action at a time, then verify everywhere it should surface
-- Always test both:
-  - `write success`
-  - `read/render correctness`
-- For every record created:
-  - verify source form
-  - verify target listing/page
-  - verify dashboard/summary impact
-  - verify second-device sync
-- For every major screen/state:
-  - capture screenshots on desktop
-  - capture screenshots on mobile
-  - review for overlap, clipping, layout breaks, hidden actions, and visual regressions
-- Keep a timestamped test ledger so each entry can be traced
+- Perform one write, then verify every place it should surface.
+- For every record created, verify:
+  - source form success
+  - target listing/render correctness
+  - dashboard/summary impact where applicable
+  - second-device sync
+- Capture screenshots for every major page on both desktop and mobile.
+- Keep a timestamped test ledger for every test record.
 
 ## Pre-Run Setup Checklist
 
 1. Confirm both devices point to the same Firebase-backed environment.
-2. Confirm both devices can log in with valid test users.
-3. Prepare test users:
-   - `owner`
-   - `manager`
-   - `billing`
-4. Clear ambiguity:
-   - know which project is live
-   - know which URL is under test
-5. Decide whether testing uses:
-   - clean dataset, or
-   - seeded existing dataset
-6. Create a test ledger document with:
+2. Confirm the tested URL is the live app under test.
+3. Confirm the owner account can log in.
+4. If manager/billing users do not exist yet, create them from `Settings` before continuing role tests.
+5. Decide whether the drill uses:
+   - a clean dataset, or
+   - an existing live-like dataset
+6. Create a test ledger with:
    - test id
    - created by
    - device
@@ -86,28 +84,22 @@ Verify that:
    - actual results
    - pass/fail
    - notes/screenshots
-7. Prepare screenshot naming/folder convention:
-   - store all screenshots inside a folder named `drill screenshots`
-   - use naming patterns such as:
-     - `desktop-auth-*`
-     - `desktop-dashboard-*`
-     - `desktop-register-*`
-     - `mobile-auth-*`
-     - `mobile-dashboard-*`
-     - `mobile-register-*`
-   - use equivalent names for each major page and state
+7. Prepare screenshot naming inside:
+   - `drill screenshots/desktop-*`
+   - `drill screenshots/mobile-*`
 
 ## Test Data Convention
 
-Use uniquely traceable values so records are easy to spot:
+Use uniquely traceable values:
 
-- Vendor: `TEST Vendor Alpha 20260509`
-- Person: `TEST Person Dev 20260509`
-- Notes: `SYNC-CHECK-01`, `SYNC-CHECK-02`, etc.
+- User: `TEST Billing User 20260510`
+- Vendor: `TEST Vendor Alpha 20260510`
+- Person: `TEST Person Dev 20260510`
+- Notes: `SYNC-CHECK-01`, `SYNC-CHECK-02`
 - Bill number: `INV-TEST-001`
 - Loan person: `TEST Loan Person 01`
 
-Use deliberately distinctive amounts:
+Use distinctive amounts:
 
 - `111`
 - `222`
@@ -115,19 +107,17 @@ Use deliberately distinctive amounts:
 - `444`
 - `555`
 
-This makes mismatches obvious.
+## Phase 1: Authentication And Session Drill
 
-## Phase 1: Authentication and Session Drill
-
-1. Login on desktop as `owner`
-   - verify successful entry
-   - verify correct navbar/pages visible
-2. Login on mobile as same `owner`
+1. Log in on desktop as `owner`
+   - verify success
+   - verify owner pages are visible
+2. Log in on mobile as the same `owner`
    - verify same access
-3. Logout on one device
+3. Log out on one device
    - verify local session behavior
-   - verify second device remains as expected unless auth refresh forces change
-4. Repeat for:
+4. Create test `manager` and `billing` users from `Settings` if needed.
+5. Repeat login/logout checks for:
    - `manager`
    - `billing`
 
@@ -135,7 +125,8 @@ This makes mismatches obvious.
 
 - role-based page visibility
 - restricted page fallback behavior
-- settings access only where intended
+- settings access
+- disabled-user login behavior
 
 ## Phase 2: Navigation Integrity Drill
 
@@ -152,20 +143,16 @@ On desktop and mobile, verify navigation to:
 
 ### Checks
 
-- dropdown opens reliably
-- page loads correctly
+- top bar navigation works reliably
+- active item state is correct
 - no dead links
 - no role-leak pages
-- mobile menu behavior stable
-- capture screenshots of each navigated state on desktop and mobile
+- mobile horizontal/top-bar behavior remains usable
+- capture screenshots of each state on desktop and mobile
 
-## Phase 2A: Screenshot Visual QA Pass
+## Phase 3: Visual Screenshot Pass
 
-For every major page and important state, capture screenshots and review them for UI quality.
-
-### Desktop Screenshot Pass
-
-Capture:
+Capture and review:
 
 - login screen
 - dashboard
@@ -176,56 +163,26 @@ Capture:
 - loans
 - cash movement
 - settings
-- navbar closed state
-- navbar dropdown open state
-- success/error/toast states if present
+- top bar active states
+- success/error/toast states where possible
 
-### Mobile Screenshot Pass
+### Review Checklist
 
-Capture:
-
-- login screen
-- dashboard
-- register
-- cashout
-- purchase
-- vendors
-- loans
-- cash movement
-- settings
-- mobile navbar closed state
-- mobile navbar expanded state
-- expanded submenu states
-- success/error/toast states if present
-
-### Visual Review Checklist
-
-Check screenshots for:
+Check for:
 
 - text clipping
-- overlapping elements
-- dropdown cutoff
+- overlap
+- top-bar cutoff or glow clipping
 - off-screen controls
 - broken spacing
 - excessive wrapping
-- inconsistent card heights where it harms readability
 - unreadable contrast
-- misaligned icons/buttons
-- mobile menu overflow problems
-- table/list rows collapsing badly
-- input fields or labels breaking layout
+- hidden actions on mobile
+- unstable card heights where it harms readability
+- input or label layout issues
 - toast placement issues
-- scroll traps or hidden actions
 
-Every visual issue found should be logged into the final report.
-
-All screenshots from this phase must be saved inside:
-
-```text
-drill screenshots/
-```
-
-## Phase 3: Core Data Entry Drill
+## Phase 4: Core Data Entry Drill
 
 For each form below, create one test record on desktop and validate on mobile.
 
@@ -255,31 +212,29 @@ Input:
 - upi sale
 - credit sale
 - audit values
-- denomination data
 
 Checks:
 
 - record saves
 - today summary updates
 - pending cash logic updates
-- dashboard impact correct
-- mobile reflects same values
+- dashboard impact is correct
+- mobile reflects the same values
 
 ### 3. PurchaseForm
 
 Input:
 
 - vendor
-- brand/category
+- category
 - amount
 - invoice
 
 Checks:
 
 - purchase saved
-- vendor directory linkages preserved
-- dashboard purchase totals update
-- mobile reflects same record
+- vendor linkage preserved
+- mobile reflects the same record
 
 ### 4. VendorsPage
 
@@ -289,7 +244,7 @@ Input:
 
 Checks:
 
-- saved vendor appears in vendor directory
+- vendor appears in vendor directory
 - becomes selectable in purchase flow
 - visible on mobile
 
@@ -320,8 +275,8 @@ Input:
 Checks:
 
 - balances update correctly
-- bank/person totals correct
-- history log correct
+- bank total is correct
+- history log is correct
 - sync to mobile
 
 ### 7. SettingsPage
@@ -329,33 +284,29 @@ Checks:
 Input:
 
 - create user
-- disable/enable user
+- disable/restore user
 - password change flow if test-safe
 
 Checks:
 
+- owner can create `manager`
+- owner can create `billing`
+- create-user flow does not log the owner out
+- created user can log in immediately
 - audit log updates
-- role permissions enforced
-- resulting user behavior correct on login
+- role permissions remain enforced
 
-## Phase 4: Cross-Page Consistency Drill
+## Phase 5: Cross-Page Consistency Drill
 
 For each created record, validate all affected pages.
 
 ### Example Mapping
 
 - Expense entry should affect:
-  - register page listing
+  - register page
   - recent expenses
   - today expense summary
   - dashboard expense counts/totals
-  - possibly cash-to-hand logic
-
-- Purchase entry should affect:
-  - purchase record storage
-  - purchase totals
-  - vendor-linked displays
-  - dashboard purchase summaries
 
 - Daily cashout entry should affect:
   - daily summary
@@ -367,11 +318,12 @@ For each created record, validate all affected pages.
   - bank total
   - movement history
 
-This phase is specifically about asking:
+- User creation should affect:
+  - account directory
+  - login behavior
+  - settings audit
 
-`After this single write, did every dependent read surface update correctly?`
-
-## Phase 5: Multi-Device Sync Drill
+## Phase 6: Multi-Device Sync Drill
 
 For each entity type:
 
@@ -383,7 +335,7 @@ For each entity type:
    - refresh-required
    - broken
 
-Then reverse:
+Then reverse where practical:
 
 1. Create on mobile
 2. Observe on desktop
@@ -398,11 +350,7 @@ Do this for:
 - cash transfer
 - settings/audit where safe
 
-Also capture screenshots before and after sync-sensitive actions when the UI changes visibly.
-
-## Phase 6: Derived Calculation Drill
-
-Manually compute expected values for a tiny known dataset and compare with UI.
+## Phase 7: Derived Calculation Drill
 
 Use a compact controlled scenario:
 
@@ -422,12 +370,10 @@ Then verify:
 - total sales = `900`
 - cash to hand = `500 - 111`
 - transfer total = `150`
-- pending balances adjusted correctly
-- dashboard tables and cards match expected math
+- pending balances adjust correctly
+- dashboard cards and tables match expected math
 
-This is the strongest way to catch hidden cross-page inconsistencies.
-
-## Phase 7: Negative and Edge Case Drill
+## Phase 8: Negative And Edge Case Drill
 
 Test:
 
@@ -435,15 +381,14 @@ Test:
 - zero values
 - large values
 - duplicate vendor/person creation
-- role-restricted navigation attempts
-- mobile menu interruptions during save
+- restricted navigation attempts
 - rapid repeated submission
-- date changes across forms
 - same-day multiple entries
 - unusual notes lengths
 - disable a user, then attempt login
+- create-user with invalid email / short password / invalid mobile
 
-## Phase 8: Persistence / Reload Drill
+## Phase 9: Persistence / Reload Drill
 
 For each major record type:
 
@@ -451,56 +396,9 @@ For each major record type:
 2. hard refresh desktop
 3. hard refresh mobile
 4. verify record persists
-5. verify derived cards still correct after reload
+5. verify derived cards still match after reload
 
-This catches “UI updated but backend write didn’t actually persist” problems.
-
-## Phase 9: Evidence Collection Drill
-
-For every failed or suspicious case, capture:
-
-- screenshot on source device
-- screenshot on target device
-- exact record payload
-- page where mismatch appears
-- expected vs actual
-- whether refresh fixes it
-- whether Firebase console shows correct raw document
-- desktop screenshot
-- mobile screenshot
-
-If needed, classify failures as:
-
-- write failure
-- read/render failure
-- sync latency issue
-- permission/role bug
-- derived calculation bug
-- stale state bug
-- mobile-only UI bug
-- desktop-only UI bug
-- cross-device visual inconsistency
-
-## Playwright Execution Structure
-
-Desktop automation suites:
-
-1. `auth.spec.ts`
-2. `navigation.spec.ts`
-3. `expense-flow.spec.ts`
-4. `cashout-flow.spec.ts`
-5. `purchase-flow.spec.ts`
-6. `vendor-flow.spec.ts`
-7. `loan-flow.spec.ts`
-8. `cash-movement.spec.ts`
-9. `settings.spec.ts`
-10. `cross-page-consistency.spec.ts`
-
-Manual/assisted sync checks:
-
-- keep mobile open during desktop-run
-- verify record appearance live
-- then reverse with mobile-originated writes
+This catches "UI updated but backend write did not persist" problems.
 
 ## Pass Criteria
 
@@ -508,8 +406,8 @@ A flow passes only if:
 
 - save succeeds
 - record is stored once
-- all linked pages show correct data
-- second device reflects same truth
+- linked pages show correct data
+- second device reflects the same truth
 - reload preserves state
 - role rules remain intact
 
@@ -525,22 +423,9 @@ If something fails, debug in this order:
 6. role or rules blocking part of the flow
 7. mobile-only rendering/state issue
 
-## Final Output After Execution
+## Required Deliverable After Execution
 
-After running the drill, produce:
-
-- tested flows matrix
-- pass/fail by module
-- sync behavior summary
-- calculation verification summary
-- screenshot review summary
-- bug list ranked by severity
-- exact repro steps
-- fix recommendations
-
-## Required Deliverable After Drill
-
-After execution, create:
+After the drill, create:
 
 - `Drill Report.md`
 
@@ -558,13 +443,11 @@ That report must include:
 - list of visual issues
 - severity for each issue
 - repro steps
-- suggested fixes or changes
-- final recommendation on readiness
+- suggested fixes
+- final readiness recommendation
 
-Associated evidence for the report should be stored in:
+Associated evidence should be stored in:
 
 ```text
 drill screenshots/
 ```
-
-The drill is only complete when `Drill Report.md` is produced with both functional and visual findings.

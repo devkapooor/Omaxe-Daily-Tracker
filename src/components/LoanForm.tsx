@@ -1,7 +1,12 @@
 import { useState } from 'react'
-import type { LoanEntry } from '../domain/appTypes'
-import { normalizeName, numberValue, today } from '../app/uiHelpers'
-import { SearchableNameField } from './SearchableNameField'
+import type { LoanEntry } from '@/domain/appTypes'
+import { normalizeName, numberValue, today } from '@/app/uiHelpers'
+import { SearchableNameField } from '@/components/SearchableNameField'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { FieldLabel } from '@/components/ui/field-label'
+import { Input } from '@/components/ui/input'
+import { SectionHeading } from '@/components/ui/section-heading'
 
 type LoanFormProps = {
   peopleOptions: string[]
@@ -51,57 +56,60 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
   }
 
   return (
-    <form className="cashout-card purchase-form" onSubmit={handleSubmit}>
-      <div className="card-title">
-        <p className="eyebrow">New Entry</p>
-        <h2>Loan Taken</h2>
-      </div>
-      <label>
-        Person Name
-        <SearchableNameField
-          name="personName"
-          options={peopleOptions}
-          placeholder="Search or add person"
-          value={personName}
-          onCreate={onCreatePerson}
-          onValueChange={(value) => {
-            setPersonName(value)
-            setError('')
-          }}
-        />
-      </label>
-      <label>
-        Amount
-        <input name="amount" type="number" min="0" step="1" placeholder="0" required onChange={() => setError('')} />
-      </label>
-      <label>
-        Date
-        <input
-          name="date"
-          type="date"
-          value={entryDate}
-          onChange={(event) => {
-            setEntryDate(event.target.value)
-            setError('')
-          }}
-          required
-        />
-      </label>
-      <label>
-        Promised Payoff Date
-        <input
-          name="promisedPayoffDate"
-          type="date"
-          value={promisedPayoffDate}
-          onChange={(event) => {
-            setPromisedPayoffDate(event.target.value)
-            setError('')
-          }}
-          required
-        />
-      </label>
-      {error && <p className="form-error light full-width">{error}</p>}
-      <button className="primary full-width">Save Loan</button>
-    </form>
+    <Card>
+      <CardHeader>
+        <SectionHeading eyebrow="New Entry" title="Loan Taken" />
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+          <FieldLabel label="Person Name">
+            <SearchableNameField
+              name="personName"
+              options={peopleOptions}
+              placeholder="Search or add person"
+              value={personName}
+              onCreate={onCreatePerson}
+              onValueChange={(value) => {
+                setPersonName(value)
+                setError('')
+              }}
+            />
+          </FieldLabel>
+
+          <FieldLabel label="Amount">
+            <Input name="amount" type="number" min="0" step="1" placeholder="0" required onChange={() => setError('')} />
+          </FieldLabel>
+
+          <FieldLabel label="Date">
+            <Input
+              name="date"
+              type="date"
+              value={entryDate}
+              onChange={(event) => {
+                setEntryDate(event.target.value)
+                setError('')
+              }}
+              required
+            />
+          </FieldLabel>
+
+          <FieldLabel label="Promised Payoff Date">
+            <Input
+              name="promisedPayoffDate"
+              type="date"
+              value={promisedPayoffDate}
+              onChange={(event) => {
+                setPromisedPayoffDate(event.target.value)
+                setError('')
+              }}
+              required
+            />
+          </FieldLabel>
+
+          {error && <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p>}
+          <Button className="md:col-span-2">Save Loan</Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

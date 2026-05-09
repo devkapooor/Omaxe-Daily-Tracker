@@ -1,4 +1,5 @@
-import type { DashboardRange } from '../app/uiHelpers'
+import type { DashboardRange } from '@/app/uiHelpers'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type DashboardRangeFilterProps = {
   value: DashboardRange
@@ -7,20 +8,12 @@ type DashboardRangeFilterProps = {
 
 export function DashboardRangeFilter({ value, onChange }: DashboardRangeFilterProps) {
   return (
-    <div className="settings-tabs dashboard-tabs">
-      <button type="button" className={`top-nav-link ${value === 'today' ? 'active' : ''}`} onClick={() => onChange('today')}>
-        Today
-      </button>
-      <button
-        type="button"
-        className={`top-nav-link ${value === 'yesterday' ? 'active' : ''}`}
-        onClick={() => onChange('yesterday')}
-      >
-        Yesterday
-      </button>
-      <button type="button" className={`top-nav-link ${value === 'mtd' ? 'active' : ''}`} onClick={() => onChange('mtd')}>
-        Month To Date
-      </button>
-    </div>
+    <Tabs value={value} onValueChange={(next) => onChange(next as DashboardRange)}>
+      <TabsList>
+        <TabsTrigger value="today">Today</TabsTrigger>
+        <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
+        <TabsTrigger value="mtd">Month To Date</TabsTrigger>
+      </TabsList>
+    </Tabs>
   )
 }

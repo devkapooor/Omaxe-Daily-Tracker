@@ -2,30 +2,28 @@
 
 ## Hard Rule
 
-These project documents must be updated whenever structure, navigation, data flow, storage, or implementation priorities change:
+These docs must be updated whenever auth flow, navigation, storage rules, data flow, or source structure changes:
 
 - `ARCHITECTURE.md`
 - `PLAN.md`
-- `TASK_QUEUE.md`
-- `DATA_MODEL.md`
-- `CALCULATIONS.md`
-- any setup doc affected by the change
+- `DRILL.md`
+- any other impacted setup or behavior doc
 
-No feature, refactor, or cleanup is considered complete until the relevant docs above are brought in sync.
+No feature or refactor is complete until the relevant docs match reality.
 
 ## Current Product Shape
 
-Omaxe Daily Tracker is currently a single-store finance operations web app with:
+Omaxe Daily Tracker is a single-store finance operations web app with:
 
 - Firebase Authentication using email/password
-- Firestore as the live data store
-- React + Vite + TypeScript frontend
-- Plain modular CSS, not Tailwind
-- Owner/manager/billing role-based navigation
-- A shared top navbar with grouped dropdown navigation
-- Screen-specific forms for expense register, cashout register, purchase, vendors, loans, cash movement, and settings
+- Firestore as the live shared database
+- React 19 + Vite + TypeScript frontend
+- Tailwind CSS v4 with shadcn-style shared UI primitives
+- Owner / manager / billing role-based navigation
+- A fixed top navigation bar shared across the app
+- Owner-created staff accounts from `Settings`
 
-This is no longer a browser-storage MVP. The current implementation is Firebase-first, with a one-time legacy browser-data import path.
+The app is no longer using public signup or owner approval queues. It is Firebase-first, with a one-time import bridge for legacy browser data.
 
 ## Current Stack
 
@@ -33,7 +31,9 @@ This is no longer a browser-storage MVP. The current implementation is Firebase-
 - Language: TypeScript
 - Auth: Firebase Authentication
 - Database: Firestore
-- Styling: modular plain CSS imported via `src/styles/global.css`
+- Styling: Tailwind CSS v4 via `src/styles/global.css`
+- UI primitives: local shadcn-style components under `src/components/ui`
+- Animation: `framer-motion`
 - Icons: `lucide-react`
 
 ## Current Source Hierarchy
@@ -43,6 +43,7 @@ src/
   app/
     App.tsx
     uiHelpers.ts
+    useDashboardMetrics.ts
 
   components/
     AppTopBar.tsx
@@ -58,11 +59,21 @@ src/
     MonthlyProjectionPanel.tsx
     PurchaseForm.tsx
     RecentCashoutList.tsx
-    SearchableNameField.tsx
     SettingsPage.tsx
     VendorsPage.tsx
     ui/
-      navbar1.tsx
+      background-components.tsx
+      badge.tsx
+      button.tsx
+      card.tsx
+      field-label.tsx
+      hover-gradient-nav-bar.tsx
+      input.tsx
+      native-select.tsx
+      section-heading.tsx
+      tabs.tsx
+      textarea.tsx
+      typewriter-effect.tsx
 
   data/
     appStore.ts
@@ -79,17 +90,10 @@ src/
 
   lib/
     firebase.ts
+    utils.ts
 
   styles/
-    auth.css
-    base.css
-    dashboard.css
-    forms.css
     global.css
-    layout.css
-    lists.css
-    navigation.css
-    responsive.css
 
   main.tsx
 ```
@@ -102,32 +106,55 @@ src/
 
 - owns page selection state
 - resolves role-restricted pages
-- computes dashboard summaries
-- wires store actions to UI forms
-- renders screen-level components
+- wires store actions to screen components
+- owns login/loading/app shell transitions
+- shows shared toasts and legacy-import banner
+
+### Derived Dashboard Logic
+
+[src/app/useDashboardMetrics.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/app/useDashboardMetrics.ts:1)
+
+- computes dashboard totals
+- computes pending cash balances
+- computes daily final summary
+- derives directory options and recent expense slices
+- keeps calculation-heavy logic out of `App.tsx`
 
 ### Shared UI Helpers
 
 [src/app/uiHelpers.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/app/uiHelpers.ts:1)
 
 - formatting helpers
-- shared constants
 - date helpers
-- simple UI/domain glue helpers
+- role/page helpers
+- cash-holder assignment helpers
+- shared UI constants such as categories and fixed expense
 
 ### UI Layer
 
 [src/components](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components:1) contains screen and form components.
 
-[src/components/ui/navbar1.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/navbar1.tsx:1) contains the shared top navbar pattern with:
+Important current screens:
 
-- desktop grouped dropdown menus
-- mobile expandable menu
-- current app palette and spacing conventions
+- `LoginScreen.tsx`
+  login-only start screen with animated `AlphaHub` hero
+- `SettingsPage.tsx`
+  owner-only create-user form, account directory, password update, and settings audit
+- `CashMovementForm.tsx`
+  transfer flow driven by dynamic user-to-holder labels
+
+Important shared UI:
+
+- [hover-gradient-nav-bar.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/hover-gradient-nav-bar.tsx:1)
+  fixed top navigation
+- [background-components.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/background-components.tsx:1)
+  full-app glow background wrapper
+- [typewriter-effect.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/typewriter-effect.tsx:1)
+  animated login hero text
 
 ### Data Layer
 
-[src/data/appStore.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/appStore.ts:1) is now a coordinator hook.
+[src/data/appStore.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/appStore.ts:1) is the coordinator hook.
 
 Supporting modules:
 
@@ -136,9 +163,9 @@ Supporting modules:
 - [storeSubscriptions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeSubscriptions.ts:1)
   Firestore listeners and collection hydration
 - [storeActions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeActions.ts:1)
-  auth actions, writes, imports, and persistence logic
+  auth actions, writes, owner-created user flow, imports, and persistence logic
 - [legacyLocalData.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/legacyLocalData.ts:1)
-  one-time import bridge from old browser storage
+  one-time import bridge from the old browser-storage version
 
 ### Domain Layer
 
@@ -146,57 +173,69 @@ Supporting modules:
 and
 [src/domain/appTypes.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/domain/appTypes.ts:1)
 
-define the app’s core records and role/page types.
+define the core finance records, user profile shape, page types, cash-holder model, and settings audit records.
 
 [src/domain/financeCalculations.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/domain/financeCalculations.ts:1)
-contains pure finance calculations where possible.
+holds pure calculation helpers where applicable.
 
 ### Styling Layer
 
 [src/styles/global.css](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/styles/global.css:1)
-is now an entrypoint that imports focused CSS files:
 
-- `base.css`
-- `forms.css`
-- `auth.css`
-- `navigation.css`
-- `layout.css`
-- `dashboard.css`
-- `lists.css`
-- `responsive.css`
+- imports Tailwind CSS
+- defines the theme tokens and radii
+- sets global base styles
+- acts as the single styling entrypoint
+
+There is no longer a multi-file authored CSS layer for screens and layout.
 
 ## Current Navigation Model
 
-The app uses a single shared top navbar. Available destinations depend on role.
+The app uses one shared fixed top bar. Available destinations depend on role.
 
 Owner:
 
 - Dashboard
+- Loans
 - Register
 - Cashout
 - Purchase
 - Vendors
-- Loans
 - Cash Movement
 - Settings
 
-Manager/Billing:
+Manager and Billing:
 
 - Register
 - Cashout
 - Purchase
 - Vendors
 - Cash Movement
+- Settings
 
-Restricted pages are resolved back to `expense` inside the app coordinator.
+Restricted pages resolve back to `expense` inside the app coordinator.
+
+## Current Auth And User Management Model
+
+- Login is email/password only.
+- Public signup is removed.
+- The owner creates staff accounts from `Settings`.
+- New staff users are created through a secondary Firebase auth session so the owner is not signed out during creation.
+- New staff profiles are written to Firestore immediately with:
+  - `disabled: false`
+  - `approvalStatus: 'approved'`
+- Owner can later disable or restore non-owner users from the account directory.
+- All signed-in roles can update their own password in `Settings`.
 
 ## Current Data Flow
 
 ```text
 Firebase auth state
-  -> appStore subscriptions load Firestore collections
-  -> current user profile resolves from users collection
-  -> App.tsx computes visible page state and dashboard values
+  -> appStore verifies user access
+  -> Firestore subscriptions hydrate collections
+  -> current user resolves from users collection
+  -> App.tsx chooses visible page and wires actions
+  -> useDashboardMetrics derives cross-screen summaries
   -> form components submit drafts
   -> storeActions persist records to Firestore
   -> onSnapshot listeners refresh UI state
@@ -205,10 +244,10 @@ Firebase auth state
 Legacy import flow:
 
 ```text
-Old browser storage detected
-  -> one-time import action available
-  -> import writes old records into Firestore
-  -> local legacy keys cleared
+Legacy browser data detected
+  -> owner/import-capable session triggers import
+  -> legacy records are written into Firestore
+  -> local legacy keys are cleared
 ```
 
 ## Current Major Screens
@@ -223,18 +262,24 @@ Old browser storage detected
 - Cash Movement
 - Settings
 
-## Current Implementation Notes
+## Current Firestore / Rules Notes
 
-- The app is not using Tailwind or shadcn as a project-wide UI system.
-- The navbar component lives in `src/components/ui` for reuse, but it is adapted to the app’s current plain-CSS stack.
-- Monthly fixed expense is currently hardcoded to `500000`.
-- The app remains single-store only.
+- `users` creation is owner-only at the rules layer.
+- Public signup request creation is no longer allowed.
+- Core operational collections remain staff-readable and staff-writable when the user is active.
+- The app still uses a single Firestore database and a single default store record.
 
-## Next Structural Guidance
+## Maintenance Notes
 
-When adding or refactoring features:
+- `App.tsx` was the longest file and has been partially reduced by extracting `useDashboardMetrics.ts`.
+- Future large-file splits should keep following stable seams:
+  - derived calculations into hooks
+  - pure transforms into helpers
+  - UI fragments into dedicated components
 
-- prefer shared components over copy-pasted UI
-- prefer focused files under `components/`, `data/`, and `styles/`
-- keep `appStore.ts` as coordinator, not a new dumping ground
-- update this file and related docs in the same change
+## Guidance For Future Changes
+
+- prefer shared primitives over screen-specific one-offs
+- keep auth/product rules consistent across UI, store actions, and Firestore rules
+- keep the app shell thin and orchestration-focused
+- update this file and the QA drill whenever product behavior changes

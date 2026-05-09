@@ -1,4 +1,6 @@
-import { normalizeName } from '../app/uiHelpers'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { normalizeName } from '@/app/uiHelpers'
 
 type SearchableNameFieldProps = {
   name: string
@@ -23,24 +25,33 @@ export function SearchableNameField({
   const canCreate = normalized.length > 0 && !exists
 
   return (
-    <div className="searchable-name-field">
-      <input name={name} list={listId} placeholder={placeholder} required value={value} onChange={(event) => onValueChange(event.target.value)} />
+    <div className="grid gap-2">
+      <Input
+        name={name}
+        list={listId}
+        placeholder={placeholder}
+        required
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+      />
       <datalist id={listId}>
         {options.map((option) => (
           <option key={option} value={option} />
         ))}
       </datalist>
       {canCreate && (
-        <button
+        <Button
           type="button"
-          className="ghost-light create-name-button"
+          variant="outline"
+          size="sm"
+          className="justify-self-start rounded-xl"
           onClick={() => {
             onCreate(normalized)
             onValueChange(normalized)
           }}
         >
           Add "{normalized}"
-        </button>
+        </Button>
       )}
     </div>
   )

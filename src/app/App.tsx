@@ -1,36 +1,35 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { CashoutDraft, PaymentDraft, PurchaseDraft } from '../domain/financeTypes'
-import type { Page } from '../domain/appTypes'
-import { useAppStore } from '../data/appStore'
-import { isLocalAuthBypassEnabled } from '../lib/firebase'
+import { useEffect, useState } from 'react'
+import { DatabaseZap } from 'lucide-react'
+import type { CashoutDraft, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
+import type { Page } from '@/domain/appTypes'
+import { useAppStore } from '@/data/appStore'
+import { isLocalAuthBypassEnabled } from '@/lib/firebase'
 import {
-  AppToast,
-  DashboardRange,
+  type AppToast,
+  type DashboardRange,
   canOpenSettings,
-  daysBetweenInclusive,
-  daysInMonth,
   money,
-  monthlyFixedExpense,
   resolveActivePage,
-  shiftDate,
   today,
-  uniqNames,
-} from './uiHelpers'
-import { AppTopBar } from '../components/AppTopBar'
-import { CashMovementForm } from '../components/CashMovementForm'
-import { CashoutForm } from '../components/CashoutForm'
-import { DailyCashoutFinalSummaryPanel } from '../components/DailyCashoutFinalSummaryPanel'
-import { DailyCashoutForm } from '../components/DailyCashoutForm'
-import { DashboardRangeFilter } from '../components/DashboardRangeFilter'
-import { DashboardTables } from '../components/DashboardTables'
-import { LoadingScreen } from '../components/LoadingScreen'
-import { LoanForm } from '../components/LoanForm'
-import { LoginScreen } from '../components/LoginScreen'
-import { MonthlyProjectionPanel } from '../components/MonthlyProjectionPanel'
-import { PurchaseForm } from '../components/PurchaseForm'
-import { RecentCashoutList } from '../components/RecentCashoutList'
-import { SettingsPage } from '../components/SettingsPage'
-import { VendorsPage } from '../components/VendorsPage'
+} from '@/app/uiHelpers'
+import { useDashboardMetrics } from '@/app/useDashboardMetrics'
+import { AppTopBar } from '@/components/AppTopBar'
+import { CashMovementForm } from '@/components/CashMovementForm'
+import { CashoutForm } from '@/components/CashoutForm'
+import { DailyCashoutFinalSummaryPanel } from '@/components/DailyCashoutFinalSummaryPanel'
+import { DailyCashoutForm } from '@/components/DailyCashoutForm'
+import { DashboardRangeFilter } from '@/components/DashboardRangeFilter'
+import { DashboardTables } from '@/components/DashboardTables'
+import { LoadingScreen } from '@/components/LoadingScreen'
+import { LoanForm } from '@/components/LoanForm'
+import { LoginScreen } from '@/components/LoginScreen'
+import { MonthlyProjectionPanel } from '@/components/MonthlyProjectionPanel'
+import { PurchaseForm } from '@/components/PurchaseForm'
+import { RecentCashoutList } from '@/components/RecentCashoutList'
+import { SettingsPage } from '@/components/SettingsPage'
+import { VendorsPage } from '@/components/VendorsPage'
+import { AppBackground } from '@/components/ui/background-components'
+import { Button } from '@/components/ui/button'
 
 function formatLastUpdated(value: string | null) {
   if (!value) return 'No updates'
@@ -40,6 +39,27 @@ function formatLastUpdated(value: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function SummaryCard({
+  label,
+  value,
+  meta,
+  updated,
+}: {
+  label: string
+  value: string | number
+  meta?: string
+  updated?: string
+}) {
+  return (
+    <div className="rounded-[22px] border border-border/80 bg-white/85 p-4 shadow-[0_14px_30px_rgba(24,32,27,0.07)] backdrop-blur-xl">
+      <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <strong className="mt-2.5 block text-2xl font-black tracking-tight text-foreground">{value}</strong>
+      {meta ? <p className="mt-1.5 text-[11px] font-semibold text-muted-foreground">{meta}</p> : null}
+      {updated ? <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">Updated: {updated}</p> : null}
+    </div>
+  )
 }
 
 export default function App() {
@@ -58,12 +78,6 @@ export default function App() {
     isBusy,
     loans,
     nameDirectory,
-    saveCashTransfer,
-    saveCashout,
-    saveDailyCashoutEntry,
-    saveLoanEntry,
-    savePayment,
-    savePurchase,
     setUserDisabled,
     settingsAuditLog,
     signIn,
@@ -71,6 +85,12 @@ export default function App() {
     users,
     vendors,
     ensureNameInDirectory,
+    saveCashTransfer,
+    saveCashout,
+    saveDailyCashoutEntry,
+    saveLoanEntry,
+    savePayment,
+    savePurchase,
     saveVendor,
   } = useAppStore()
 
@@ -79,161 +99,35 @@ export default function App() {
   const [cashoutFilterDate, setCashoutFilterDate] = useState(today())
   const [toast, setToast] = useState<AppToast | null>(null)
 
-  const directoryOptions = useMemo(() => {
-    const derivedPeople = data.cashouts.map((cashout) => cashout.paidTo)
-    const derivedVendors = data.purchases.map((purchase) => purchase.supplierName)
-    const userNames = users.map((user) => user.name)
-    return {
-      people: uniqNames([...nameDirectory.people, ...derivedPeople, ...userNames]),
-      vendors: uniqNames([...vendors.map((vendor) => vendor.name), ...nameDirectory.vendors, ...derivedVendors]),
-    }
-  }, [data.cashouts, data.purchases, nameDirectory.people, nameDirectory.vendors, users, vendors])
-
-  const filteredCashouts = useMemo(
-    () =>
-      [...data.cashouts]
-        .filter((cashout) => cashout.date === cashoutFilterDate)
-        .sort((a, b) => `${b.date}${b.createdAt}`.localeCompare(`${a.date}${a.createdAt}`))
-        .slice(0, 6),
-    [cashoutFilterDate, data.cashouts],
-  )
-
-  const todayCashout = useMemo(
-    () =>
-      data.cashouts
-        .filter((cashout) => cashout.date === today())
-        .reduce((total, cashout) => total + cashout.amount, 0),
-    [data.cashouts],
-  )
-
-  const todayPaymentPaid = useMemo(
-    () =>
-      data.payments
-        .filter((payment) => payment.date === today() && payment.type === 'Paid')
-        .reduce((total, payment) => total + payment.amount, 0),
-    [data.payments],
-  )
-
-  const todayPaymentReceived = useMemo(
-    () =>
-      data.payments
-        .filter((payment) => payment.date === today() && payment.type === 'Received')
-        .reduce((total, payment) => total + payment.amount, 0),
-    [data.payments],
-  )
-
-  const dashboardRangeBounds = useMemo(() => {
-    const now = today()
-    if (dashboardRange === 'yesterday') {
-      const y = shiftDate(now, -1)
-      return { from: y, to: y }
-    }
-    if (dashboardRange === 'mtd') {
-      return { from: `${now.slice(0, 7)}-01`, to: now }
-    }
-    return { from: now, to: now }
-  }, [dashboardRange])
-
-  const dashboardSales = useMemo(
-    () =>
-      data.sales
-        .filter((sale) => sale.date >= dashboardRangeBounds.from && sale.date <= dashboardRangeBounds.to)
-        .reduce((total, sale) => total + sale.totalSales, 0),
-    [data.sales, dashboardRangeBounds],
-  )
-
-  const dashboardExpenseEntries = useMemo(
-    () => data.cashouts.filter((item) => item.date >= dashboardRangeBounds.from && item.date <= dashboardRangeBounds.to).length,
-    [data.cashouts, dashboardRangeBounds],
-  )
-
-  const dashboardExpenseTotal = useMemo(
-    () =>
-      data.cashouts
-        .filter((item) => item.date >= dashboardRangeBounds.from && item.date <= dashboardRangeBounds.to)
-        .reduce((total, item) => total + item.amount, 0),
-    [data.cashouts, dashboardRangeBounds],
-  )
-
-  const projectedMonthlySales = useMemo(() => {
-    const now = today()
-    const monthStart = `${now.slice(0, 7)}-01`
-    const mtdSales = data.sales
-      .filter((sale) => sale.date >= monthStart && sale.date <= now)
-      .reduce((total, sale) => total + sale.totalSales, 0)
-    const completedDays = daysBetweenInclusive(monthStart, now)
-    const averageDailySales = completedDays > 0 ? mtdSales / completedDays : 0
-    return averageDailySales * daysInMonth(now)
-  }, [data.sales])
-
-  const currentMonthFixedExpense = monthlyFixedExpense
-  const totalLoans = useMemo(() => loans.reduce((total, loan) => total + loan.amount, 0), [loans])
-
-  const latestPendingCashBalances = useMemo(() => {
-    const latest = dailyCashouts[0]
-    if (latest?.pendingCashBalances) return latest.pendingCashBalances
-    return { dev: 0, arsh: 0, farhan: 0 }
-  }, [dailyCashouts])
-
-  const pendingCashNow = useMemo(() => {
-    const balances = {
-      Dev: latestPendingCashBalances.dev,
-      Arsh: latestPendingCashBalances.arsh,
-      Farhan: latestPendingCashBalances.farhan,
-    }
-    let bankTotal = 0
-    cashTransfers.forEach((entry) => {
-      balances[entry.from] -= entry.amount
-      if (entry.toType === 'person' && entry.toPerson) {
-        balances[entry.toPerson] += entry.amount
-      } else {
-        bankTotal += entry.amount
-      }
-    })
-    return { balances, bankTotal }
-  }, [cashTransfers, latestPendingCashBalances])
-
-  const dailyFinalSummary = useMemo(() => {
-    const todayDate = today()
-    const todayCashoutEntries = dailyCashouts.filter((entry) => entry.date === todayDate)
-    const cashSales = todayCashoutEntries.reduce((total, entry) => total + entry.cashSales, 0)
-    const upiSales = todayCashoutEntries.reduce((total, entry) => total + entry.upiSales, 0)
-    const creditSales = todayCashoutEntries.reduce((total, entry) => total + entry.creditSales, 0)
-    const returns = todayCashoutEntries.reduce((total, entry) => total + entry.returns, 0)
-    const totalSales = cashSales + upiSales + creditSales - returns
-    const cashExpenses = data.cashouts.filter((entry) => entry.date === todayDate).reduce((total, entry) => total + entry.amount, 0)
-    const cashToHand = cashSales - cashExpenses
-    const transfersToday = cashTransfers.filter((entry) => entry.date === todayDate).reduce((total, entry) => total + entry.amount, 0)
-
-    return {
-      totalSales,
-      cashSales,
-      upiSales,
-      creditSales,
-      returns,
-      cashExpenses,
-      cashToHand,
-      transfersToday,
-    }
-  }, [cashTransfers, dailyCashouts, data.cashouts])
-
-  const dashboardLastUpdated = useMemo(() => {
-    const salesLastUpdated = data.sales
-      .filter((sale) => sale.date >= dashboardRangeBounds.from && sale.date <= dashboardRangeBounds.to)
-      .map((sale) => sale.updatedAt)
-      .sort((a, b) => b.localeCompare(a))[0] ?? null
-    const expenseLastUpdated = data.cashouts
-      .filter((entry) => entry.date >= dashboardRangeBounds.from && entry.date <= dashboardRangeBounds.to)
-      .map((entry) => entry.updatedAt)
-      .sort((a, b) => b.localeCompare(a))[0] ?? null
-    const loansLastUpdated = loans.map((loan) => loan.createdAt).sort((a, b) => b.localeCompare(a))[0] ?? null
-    return {
-      sales: salesLastUpdated,
-      expenses: expenseLastUpdated,
-      loans: loansLastUpdated,
-      fixed: null,
-    }
-  }, [dashboardRangeBounds.from, dashboardRangeBounds.to, data.cashouts, data.sales, loans])
+  const {
+    currentHolder,
+    dailyFinalSummary,
+    dashboardExpenseEntries,
+    dashboardExpenseTotal,
+    dashboardLastUpdated,
+    dashboardSales,
+    directoryOptions,
+    filteredCashouts,
+    holderAssignments,
+    monthlyFixedExpense,
+    pendingCashNow,
+    projectedMonthlySales,
+    todayCashout,
+    todayPaymentPaid,
+    todayPaymentReceived,
+    totalLoans,
+  } = useDashboardMetrics({
+    cashTransfers,
+    cashoutFilterDate,
+    currentUserId: currentUser?.id,
+    dailyCashouts,
+    dashboardRange,
+    data,
+    loans,
+    nameDirectory,
+    users,
+    vendors,
+  })
 
   useEffect(() => {
     if (!toast) return
@@ -242,23 +136,33 @@ export default function App() {
   }, [toast])
 
   if (!authReady || (currentUser && !collectionsReady)) {
-    return <LoadingScreen message="Syncing Firebase workspace..." />
+    return (
+      <AppBackground>
+        <LoadingScreen message="Syncing Firebase workspace..." />
+      </AppBackground>
+    )
   }
 
   if (isLocalAuthBypassEnabled && isBusy && !currentUser) {
-    return <LoadingScreen message="Opening local workspace..." />
+    return (
+      <AppBackground>
+        <LoadingScreen message="Opening local workspace..." />
+      </AppBackground>
+    )
   }
 
   if (!currentUser) {
     return (
-      <LoginScreen
-        authError={authError}
-        isBusy={isBusy}
-        onLogin={async (email, password) => {
-          await signIn(email, password)
-          setToast(null)
-        }}
-      />
+      <AppBackground>
+        <LoginScreen
+          authError={authError}
+          isBusy={isBusy}
+          onLogin={async (email, password) => {
+            await signIn(email, password)
+            setToast(null)
+          }}
+        />
+      </AppBackground>
     )
   }
 
@@ -290,225 +194,237 @@ export default function App() {
   }
 
   return (
-    <main className="cashout-shell">
-      <AppTopBar
-        currentUser={currentUser}
-        activePage={activePage}
-        onPageChange={setActivePage}
-        onLogout={() => void signOutCurrentUser()}
-      />
-
-      {canImportLegacyData && (
-        <div className="notice">
-          <span>Legacy browser data found. Import it once into Firebase so every device sees the same records.</span>
-          <button
-            type="button"
-            onClick={() => {
-              void importLegacyData().then((imported) => {
-                if (imported) showToast('Legacy browser data imported into Firebase.')
-              })
-            }}
-          >
-            Import Legacy Data
-          </button>
-        </div>
-      )}
-
-      {toast && <div className="entry-toast">{toast.message}</div>}
-
-      {resolvedActivePage === 'dashboard' && currentUser.role === 'owner' && (
-        <section className="dashboard-layout">
-          <DashboardRangeFilter value={dashboardRange} onChange={setDashboardRange} />
-          <div className="dashboard-middle">
-            <MonthlyProjectionPanel
-              projectedMonthlySales={projectedMonthlySales}
-              monthlyFixedExpense={currentMonthFixedExpense}
-            />
-          </div>
-          <div className="cashout-summary dashboard-grid">
-            <div className="summary-card">
-              <span>Sales</span>
-              <strong>{money(dashboardSales)}</strong>
-              <p className="card-meta">Source: Sales records</p>
-              <p className="card-meta">Updated: {formatLastUpdated(dashboardLastUpdated.sales)}</p>
-            </div>
-            <div className="summary-card">
-              <span>Expense Entries</span>
-              <strong>{dashboardExpenseEntries}</strong>
-              <p className="card-meta">Source: Expense register entries</p>
-              <p className="card-meta">Updated: {formatLastUpdated(dashboardLastUpdated.expenses)}</p>
-            </div>
-            <div className="summary-card">
-              <span>Expenses</span>
-              <strong>{money(dashboardExpenseTotal)}</strong>
-              <p className="card-meta">Source: Expense register totals</p>
-              <p className="card-meta">Updated: {formatLastUpdated(dashboardLastUpdated.expenses)}</p>
-            </div>
-            <div className="summary-card">
-              <span>Total Loans Taken</span>
-              <strong>{money(totalLoans)}</strong>
-              <p className="card-meta">Source: Loans tab entries</p>
-              <p className="card-meta">Updated: {formatLastUpdated(dashboardLastUpdated.loans)}</p>
-            </div>
-            <div className="summary-card">
-              <span>Latest Fixed Expenses</span>
-              <strong>{money(monthlyFixedExpense)}</strong>
-              <p className="card-meta">Source: Hardcoded monthly fixed expense</p>
-              <p className="card-meta">Updated: {formatLastUpdated(dashboardLastUpdated.fixed)}</p>
-            </div>
-          </div>
-          <DailyCashoutFinalSummaryPanel dailyFinalSummary={dailyFinalSummary} pendingCashBalances={pendingCashNow.balances} />
-          <DashboardTables
-            cashouts={data.cashouts}
-            purchases={data.purchases}
-            payments={data.payments}
-            pendingCashBalances={pendingCashNow.balances}
-            pendingCashBankTotal={pendingCashNow.bankTotal}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'cashout' && (
-        <section className="daily-summary-row">
-          <div className="summary-card compact">
-            <span>Today Expenses</span>
-            <strong>{money(todayCashout)}</strong>
-          </div>
-        </section>
-      )}
-
-      {resolvedActivePage === 'expense' && (
-        <section className="cashout-layout">
-          <CashoutForm
-            currentUser={currentUser}
-            peopleOptions={directoryOptions.people}
-            onCreatePerson={(name) => {
-              void ensureNameInDirectory('people', name)
-              return true
-            }}
-            onSaveCashout={handleSaveCashout}
-            onSavePayment={handleSavePayment}
-          />
-          <aside className="cashout-side">
-            <section className="cashout-summary">
-              <div className="summary-card">
-                <span>Today Expense</span>
-                <strong>{money(todayCashout)}</strong>
-              </div>
-              <div className="summary-card">
-                <span>Today Payments (Net)</span>
-                <strong>{money(todayPaymentReceived - todayPaymentPaid)}</strong>
-              </div>
-            </section>
-            <RecentCashoutList
-              cashouts={filteredCashouts}
-              filterDate={cashoutFilterDate}
-              onFilterDateChange={setCashoutFilterDate}
-            />
-          </aside>
-        </section>
-      )}
-
-      {resolvedActivePage === 'cashout' && (
-        <section className="single-screen-layout">
-          <DailyCashoutForm
-            currentUserName={currentUser.name}
-            onSave={(draft) => {
-              void saveDailyCashoutEntry(draft)
-              showToast(`Cashout + Sales saved. Balance: ${money(draft.remainingBalance)}`)
-            }}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'purchase' && (
-        <section className="single-screen-layout">
-          <PurchaseForm
-            vendorOptions={directoryOptions.vendors}
-            onCreateVendor={(name) => {
-              void saveVendor({
-                name,
-                ownerName: '',
-                contact: '',
-                address: '',
-                companiesProvided: '',
-                notes: 'Quick-created from purchase form.',
-              })
-              return true
-            }}
-            onSave={handleSavePurchase}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'vendors' && (
-        <section className="single-screen-layout">
-          <VendorsPage
-            vendors={vendors}
-            isBusy={isBusy}
-            onSaveVendor={async (vendor) => {
-              await saveVendor(vendor)
-              showToast(`Vendor saved: ${vendor.name}`)
-            }}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'loans' && currentUser.role === 'owner' && (
-        <section className="single-screen-layout">
-          <LoanForm
-            peopleOptions={directoryOptions.people}
-            onCreatePerson={(name) => {
-              void ensureNameInDirectory('people', name)
-              return true
-            }}
-            onSave={(draft) => {
-              void saveLoanEntry(draft)
-              showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
-            }}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'movement' && (
-        <section className="single-screen-layout">
-          <CashMovementForm
-            currentUserName={currentUser.name}
-            balances={pendingCashNow.balances}
-            bankTotal={pendingCashNow.bankTotal}
-            transfers={cashTransfers}
-            onTransfer={(draft) => {
-              void saveCashTransfer(draft)
-              showToast(
-                draft.toType === 'bank'
-                  ? `Transferred ${money(draft.amount)} from ${draft.from} to Bank`
-                  : `Transferred ${money(draft.amount)} from ${draft.from} to ${draft.toPerson}`,
-              )
-            }}
-          />
-        </section>
-      )}
-
-      {resolvedActivePage === 'settings' && canOpenSettings(currentUser.role) && (
-        <SettingsPage
+    <AppBackground>
+      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 pb-6 pt-28 sm:px-4 md:pt-32">
+        <AppTopBar
           currentUser={currentUser}
-          users={users}
-          isBusy={isBusy}
-          onCreateUser={async (draft) => {
-            await createUserAccount(draft, currentUser.name)
-            showToast(`User created: ${draft.name}`)
-          }}
-          onSetUserDisabled={async (userId, disabled) => {
-            await setUserDisabled(userId, disabled, currentUser.name)
-            showToast(disabled ? 'User access disabled.' : 'User access restored.')
-          }}
-          onChangeOwnPassword={async (password) => {
-            await changeOwnPassword(password)
-            showToast('Password updated.')
-          }}
-          settingsAuditLog={settingsAuditLog}
+          activePage={activePage}
+          onPageChange={setActivePage}
+          onLogout={() => void signOutCurrentUser()}
         />
-      )}
-    </main>
+
+        {canImportLegacyData && (
+          <div className="mb-3 flex flex-col gap-2.5 rounded-[22px] border border-emerald-200 bg-emerald-50/90 p-3 text-emerald-800 shadow-sm md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <DatabaseZap className="mt-0.5 h-4 w-4 flex-none" />
+              <span className="text-xs font-semibold sm:text-sm">
+                Legacy browser data found. Import it once into Firebase so every device sees the same records.
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100"
+              onClick={() => {
+                void importLegacyData().then((imported) => {
+                  if (imported) showToast('Legacy browser data imported into Firebase.')
+                })
+              }}
+            >
+              Import Legacy Data
+            </Button>
+          </div>
+        )}
+
+        {toast && (
+          <div className="fixed right-4 top-4 z-[120] max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-xl sm:text-sm">
+            {toast.message}
+          </div>
+        )}
+
+        {resolvedActivePage === 'dashboard' && currentUser.role === 'owner' && (
+          <section className="space-y-3">
+            <DashboardRangeFilter value={dashboardRange} onChange={setDashboardRange} />
+            <MonthlyProjectionPanel projectedMonthlySales={projectedMonthlySales} monthlyFixedExpense={monthlyFixedExpense} />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <SummaryCard
+                label="Sales"
+                value={money(dashboardSales)}
+                meta="Source: Sales records"
+                updated={formatLastUpdated(dashboardLastUpdated.sales)}
+              />
+              <SummaryCard
+                label="Expense Entries"
+                value={dashboardExpenseEntries}
+                meta="Source: Expense register entries"
+                updated={formatLastUpdated(dashboardLastUpdated.expenses)}
+              />
+              <SummaryCard
+                label="Expenses"
+                value={money(dashboardExpenseTotal)}
+                meta="Source: Expense register totals"
+                updated={formatLastUpdated(dashboardLastUpdated.expenses)}
+              />
+              <SummaryCard
+                label="Total Loans Taken"
+                value={money(totalLoans)}
+                meta="Source: Loans tab entries"
+                updated={formatLastUpdated(dashboardLastUpdated.loans)}
+              />
+              <SummaryCard
+                label="Latest Fixed Expenses"
+                value={money(monthlyFixedExpense)}
+                meta="Source: Hardcoded monthly fixed expense"
+                updated={formatLastUpdated(dashboardLastUpdated.fixed)}
+              />
+            </div>
+            <DailyCashoutFinalSummaryPanel
+              dailyFinalSummary={dailyFinalSummary}
+              pendingCashBalances={pendingCashNow.balances}
+              holderAssignments={holderAssignments}
+            />
+            <DashboardTables
+              cashouts={data.cashouts}
+              purchases={data.purchases}
+              payments={data.payments}
+              pendingCashBalances={pendingCashNow.balances}
+              pendingCashBankTotal={pendingCashNow.bankTotal}
+              holderAssignments={holderAssignments}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'cashout' && (
+          <section className="mb-3">
+            <div className="w-fit rounded-[22px] border border-border/80 bg-white/85 px-4 py-3 shadow-[0_14px_30px_rgba(24,32,27,0.07)] backdrop-blur-xl">
+              <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Today Expenses</span>
+              <strong className="mt-2 block text-xl font-black tracking-tight text-foreground">{money(todayCashout)}</strong>
+            </div>
+          </section>
+        )}
+
+        {resolvedActivePage === 'expense' && (
+          <section className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <CashoutForm
+              currentUser={currentUser}
+              peopleOptions={directoryOptions.people}
+              onCreatePerson={(name) => {
+                void ensureNameInDirectory('people', name)
+                return true
+              }}
+              onSaveCashout={handleSaveCashout}
+              onSavePayment={handleSavePayment}
+            />
+            <aside className="grid gap-3">
+              <section className="grid gap-3 sm:grid-cols-2">
+                <SummaryCard label="Today Expense" value={money(todayCashout)} />
+                <SummaryCard label="Today Payments (Net)" value={money(todayPaymentReceived - todayPaymentPaid)} />
+              </section>
+              <RecentCashoutList
+                cashouts={filteredCashouts}
+                filterDate={cashoutFilterDate}
+                onFilterDateChange={setCashoutFilterDate}
+              />
+            </aside>
+          </section>
+        )}
+
+        {resolvedActivePage === 'cashout' && (
+          <section className="mt-3">
+            <DailyCashoutForm
+              currentUserHolder={currentHolder}
+              currentUserName={currentUser.name}
+              onSave={(draft) => {
+                void saveDailyCashoutEntry(draft)
+                showToast(`Cashout + Sales saved. Balance: ${money(draft.remainingBalance)}`)
+              }}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'purchase' && (
+          <section className="mt-3">
+            <PurchaseForm
+              vendorOptions={directoryOptions.vendors}
+              onCreateVendor={(name) => {
+                void saveVendor({
+                  name,
+                  ownerName: '',
+                  contact: '',
+                  address: '',
+                  companiesProvided: '',
+                  notes: 'Quick-created from purchase form.',
+                })
+                return true
+              }}
+              onSave={handleSavePurchase}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'vendors' && (
+          <section className="mt-3">
+            <VendorsPage
+              vendors={vendors}
+              isBusy={isBusy}
+              onSaveVendor={async (vendor) => {
+                await saveVendor(vendor)
+                showToast(`Vendor saved: ${vendor.name}`)
+              }}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'loans' && currentUser.role === 'owner' && (
+          <section className="mt-3">
+            <LoanForm
+              peopleOptions={directoryOptions.people}
+              onCreatePerson={(name) => {
+                void ensureNameInDirectory('people', name)
+                return true
+              }}
+              onSave={(draft) => {
+                void saveLoanEntry(draft)
+                showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
+              }}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'movement' && (
+          <section className="mt-3">
+            <CashMovementForm
+              currentHolder={currentHolder}
+              currentUserName={currentUser.name}
+              holderAssignments={holderAssignments}
+              balances={pendingCashNow.balances}
+              bankTotal={pendingCashNow.bankTotal}
+              transfers={cashTransfers}
+              onTransfer={async (draft) => {
+                await saveCashTransfer(draft)
+                showToast(
+                  draft.toType === 'bank'
+                    ? `Transferred ${money(draft.amount)} from ${draft.from} to Bank`
+                    : `Transferred ${money(draft.amount)} from ${draft.from} to ${draft.toPerson}`,
+                )
+              }}
+            />
+          </section>
+        )}
+
+        {resolvedActivePage === 'settings' && canOpenSettings(currentUser.role) && (
+          <section className="mt-3">
+            <SettingsPage
+              currentUser={currentUser}
+              users={users}
+              isBusy={isBusy}
+              onCreateUser={async (draft) => {
+                await createUserAccount(draft, currentUser.name)
+                showToast(`User created: ${draft.name}`)
+              }}
+              onSetUserDisabled={async (userId, disabled) => {
+                await setUserDisabled(userId, disabled, currentUser.name)
+                showToast(disabled ? 'User access disabled.' : 'User access restored.')
+              }}
+              onChangeOwnPassword={async (password) => {
+                await changeOwnPassword(password)
+                showToast('Password updated.')
+              }}
+              settingsAuditLog={settingsAuditLog}
+            />
+          </section>
+        )}
+      </main>
+    </AppBackground>
   )
 }

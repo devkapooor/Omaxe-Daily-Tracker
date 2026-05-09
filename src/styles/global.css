@@ -1,8 +1,64 @@
-@import './base.css';
-@import './forms.css';
-@import './auth.css';
-@import './navigation.css';
-@import './layout.css';
-@import './dashboard.css';
-@import './lists.css';
-@import './responsive.css';
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --color-background: #fcfbf4;
+  --color-foreground: #101312;
+  --color-card: #ffffff;
+  --color-card-foreground: #101312;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #101312;
+  --color-primary: #0f1720;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f2f5ef;
+  --color-secondary-foreground: #18201b;
+  --color-muted: #eef2eb;
+  --color-muted-foreground: #607168;
+  --color-accent: #edf6ef;
+  --color-accent-foreground: #16311d;
+  --color-destructive: #be3434;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #d9ddd7;
+  --color-input: #d9ddd7;
+  --color-ring: #36c365;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-70;
+  }
+
+  input,
+  textarea,
+  select {
+    @apply text-base md:text-sm;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}

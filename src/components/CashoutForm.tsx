@@ -1,7 +1,22 @@
 import { useState } from 'react'
-import type { AppUser, Cashout, CashoutDraft, PaymentDraft } from '../domain/financeTypes'
-import { cashoutCategories, cashoutPaymentModes, normalizeName, numberValue, singleStoreId, wordCount } from '../app/uiHelpers'
-import { SearchableNameField } from './SearchableNameField'
+import type { AppUser, Cashout, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
+import {
+  cashoutCategories,
+  cashoutPaymentModes,
+  normalizeName,
+  numberValue,
+  singleStoreId,
+  wordCount,
+} from '@/app/uiHelpers'
+import { SearchableNameField } from '@/components/SearchableNameField'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { FieldLabel } from '@/components/ui/field-label'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { SectionHeading } from '@/components/ui/section-heading'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 type CashoutFormProps = {
   currentUser: AppUser
@@ -18,15 +33,14 @@ export function CashoutForm({
   onSaveCashout,
   onSavePayment,
 }: CashoutFormProps) {
-  const [entryType, setEntryType] = useState<'expense' | 'payment-paid' | 'payment-received'>('expense')
+  const [entryType, setEntryType] = useState<'expense' | 'payment-paid'>('expense')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [paidTo, setPaidTo] = useState('')
   const notesWordCount = wordCount(notes)
   const isExpense = entryType === 'expense'
-  const isPaymentPaid = entryType === 'payment-paid'
-  const formHeading = isExpense ? 'Record Expense' : isPaymentPaid ? 'Record Payment Paid' : 'Record Payment Received'
-  const saveButtonLabel = isExpense ? 'Save Expense' : isPaymentPaid ? 'Save Payment Paid' : 'Save Payment Received'
+  const formHeading = isExpense ? 'Record Expense' : 'Record Payment Paid'
+  const saveButtonLabel = isExpense ? 'Save Expense' : 'Save Payment Paid'
   const categoryLabel = isExpense ? 'Category' : 'Purpose'
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -68,7 +82,7 @@ export function CashoutForm({
       onSavePayment({
         storeId: singleStoreId,
         date,
-        type: entryType === 'payment-paid' ? 'Paid' : 'Received',
+        type: 'Paid',
         partyName: paidToValue,
         amount,
         paymentMode,
@@ -83,82 +97,80 @@ export function CashoutForm({
   }
 
   return (
-    <form className="cashout-card cashout-form" onSubmit={handleSubmit}>
-      <div className="card-title">
-        <p className="eyebrow">New Entry</p>
-        <h2>{formHeading}</h2>
-      </div>
+    <Card>
+      <CardHeader>
+        <SectionHeading eyebrow="New Entry" title={formHeading} />
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
+          <FieldLabel label="Entry Type">
+            <NativeSelect
+              value={entryType}
+              onChange={(event) => {
+                setEntryType(event.target.value as 'expense' | 'payment-paid')
+                setError('')
+              }}
+            >
+              <option value="expense">Expense</option>
+              <option value="payment-paid">Payment Paid</option>
+            </NativeSelect>
+          </FieldLabel>
 
-      <label>
-        Entry Type
-        <select
-          value={entryType}
-          onChange={(event) => {
-            setEntryType(event.target.value as 'expense' | 'payment-paid' | 'payment-received')
-            setError('')
-          }}
-        >
-          <option value="expense">Expense</option>
-          <option value="payment-paid">Payment Paid</option>
-          <option value="payment-received">Payment Received</option>
-        </select>
-      </label>
+          <FieldLabel label="Person / Party">
+            <SearchableNameField
+              name="paidTo"
+              options={peopleOptions}
+              placeholder="Search or add person"
+              value={paidTo}
+              onCreate={onCreatePerson}
+              onValueChange={(value) => {
+                setPaidTo(value)
+                setError('')
+              }}
+            />
+          </FieldLabel>
 
-      <label>
-        Person / Party
-        <SearchableNameField
-          name="paidTo"
-          options={peopleOptions}
-          placeholder="Search or add person"
-          value={paidTo}
-          onCreate={onCreatePerson}
-          onValueChange={(value) => {
-            setPaidTo(value)
-            setError('')
-          }}
-        />
-      </label>
+          <FieldLabel label="Amount">
+            <Input name="amount" type="number" min="0" step="1" placeholder="0" required />
+          </FieldLabel>
 
-      <label>
-        Amount
-        <input name="amount" type="number" min="0" step="1" placeholder="0" required />
-      </label>
+          <FieldLabel label={categoryLabel}>
+            <NativeSelect name="category">
+              {cashoutCategories.map((category) => (
+                <option key={category}>{category}</option>
+              ))}
+            </NativeSelect>
+          </FieldLabel>
 
-      <label>
-        {categoryLabel}
-        <select name="category">
-          {cashoutCategories.map((category) => (
-            <option key={category}>{category}</option>
-          ))}
-        </select>
-      </label>
+          <FieldLabel label="Payment Mode">
+            <NativeSelect name="paymentMode">
+              {cashoutPaymentModes.map((mode) => (
+                <option key={mode}>{mode}</option>
+              ))}
+            </NativeSelect>
+          </FieldLabel>
 
-      <label>
-        Payment Mode
-        <select name="paymentMode">
-          {cashoutPaymentModes.map((mode) => (
-            <option key={mode}>{mode}</option>
-          ))}
-        </select>
-      </label>
+          <FieldLabel className="md:col-span-2" label="Notes">
+            <Textarea
+              name="notes"
+              placeholder="Add details if needed"
+              rows={3}
+              value={notes}
+              onChange={(event) => {
+                setNotes(event.target.value)
+                setError('')
+              }}
+            />
+          </FieldLabel>
 
-      <label className="full-width">
-        Notes
-        <textarea
-          name="notes"
-          placeholder="Add details if needed"
-          rows={3}
-          value={notes}
-          onChange={(event) => {
-            setNotes(event.target.value)
-            setError('')
-          }}
-        />
-      </label>
-      <div className={`word-limit ${notesWordCount > 50 ? 'over' : ''}`}>{notesWordCount}/50 words</div>
-      {error && <p className="form-error light full-width">{error}</p>}
+          <div className={cn('text-right text-xs font-bold text-muted-foreground md:col-span-2', notesWordCount > 50 && 'text-destructive')}>
+            {notesWordCount}/50 words
+          </div>
+          {error && <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p>}
 
-      <button className="primary full-width">{saveButtonLabel}</button>
-    </form>
+          <Button className="md:col-span-2">{saveButtonLabel}</Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

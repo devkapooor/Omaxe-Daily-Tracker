@@ -2,6 +2,8 @@ import type { AppUser } from './financeTypes'
 
 export type UserAccount = AppUser & {
   email: string
+  mobileNumber?: string
+  approvalStatus?: 'pending' | 'approved' | 'rejected'
   createdAt: string
   disabled?: boolean
 }
@@ -21,6 +23,7 @@ export type DailyCashoutEntry = {
   id: string
   date: string
   recordedBy: string
+  recordedByHolder?: CashHolder
   upiSales: number
   cashSales: number
   returns: number

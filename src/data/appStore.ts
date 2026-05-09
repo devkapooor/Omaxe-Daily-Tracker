@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
-import { doc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db, isLocalAuthBypassEnabled, localBypassCredentials } from '../lib/firebase'
 import type { AppUser, FinanceData } from '../domain/financeTypes'
 import type {
@@ -39,6 +39,7 @@ export function useAppStore() {
   const [cashTransfers, setCashTransfers] = useState<CashTransfer[]>([])
   const [settingsAuditLog, setSettingsAuditLog] = useState<SettingsAuditEntry[]>([])
   const [isBusy, setIsBusy] = useState(false)
+  const [canStartSubscriptions, setCanStartSubscriptions] = useState(false)
   const bootstrappedOwnerRef = useRef<string | null>(null)
   const localBypassAttemptedRef = useRef(false)
   const vendorFallbackLoadedRef = useRef(false)
@@ -57,6 +58,7 @@ export function useAppStore() {
       setDailyCashouts([])
       setCashTransfers([])
       setSettingsAuditLog([])
+      setCanStartSubscriptions(!nextUser)
     })
   }, [])
 
@@ -86,6 +88,46 @@ export function useAppStore() {
   useEffect(() => {
     if (!authUser) return
 
+    let cancelled = false
+    const currentAuthUser = authUser
+    async function verifyAccessBeforeSubscriptions() {
+      setCanStartSubscriptions(false)
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', currentAuthUser.uid))
+        if (!profileSnapshot.exists()) {
+          if (!cancelled) setCanStartSubscriptions(true)
+          return
+        }
+
+        const profile = profileSnapshot.data() as Partial<UserAccount>
+        if (profile.disabled) {
+          if (profile.approvalStatus === 'pending') {
+            setAuthError('This account is not active yet. Please contact the owner.')
+          } else if (profile.approvalStatus === 'rejected') {
+            setAuthError('This account is not active. Please contact the owner.')
+          } else {
+            setAuthError('This account has been disabled by the owner.')
+          }
+          await signOut(auth)
+          return
+        }
+
+        if (!cancelled) setCanStartSubscriptions(true)
+      } catch (error) {
+        setAuthError(error instanceof Error ? error.message : 'Unable to verify your workspace access.')
+        await signOut(auth).catch(() => undefined)
+      }
+    }
+
+    void verifyAccessBeforeSubscriptions()
+    return () => {
+      cancelled = true
+    }
+  }, [authUser])
+
+  useEffect(() => {
+    if (!authUser || !canStartSubscriptions) return
+
     return setupAppStoreSubscriptions({
       setCashTransfers,
       setDailyCashouts,
@@ -98,7 +140,7 @@ export function useAppStore() {
       setVendors,
       vendorFallbackLoadedRef,
     })
-  }, [authUser])
+  }, [authUser, canStartSubscriptions])
 
   const collectionsReady = useMemo(() => Object.values(loadedCollections).every(Boolean), [loadedCollections])
 
@@ -116,7 +158,6 @@ export function useAppStore() {
       const existingProfile = users.find((candidate) => candidate.id === authUser.uid)
       if (existingProfile) {
         if (existingProfile.disabled) {
-          setAuthError('This account has been disabled by the owner.')
           await signOut(auth)
         }
         return
@@ -152,8 +193,6 @@ export function useAppStore() {
 
     void seedDefaultStore()
   }, [authUser, financeData.stores.length, loadedCollections.stores])
-
-  const activeStores = useMemo(() => financeData.stores.filter((store) => store.active), [financeData.stores])
 
   const canImportLegacyData = useMemo(() => {
     if (!authUser || !collectionsReady) return false
@@ -206,24 +245,20 @@ export function useAppStore() {
   })
 
   return {
-    activeStores,
     authError,
     authReady,
     canImportLegacyData,
     cashTransfers,
     changeOwnPassword: actions.changeOwnPassword,
     collectionsReady,
-    createInitialOwnerAccount: actions.createInitialOwnerAccount,
     createUserAccount: actions.createUserAccount,
     currentUser,
     dailyCashouts,
     data: financeData,
-    hasAnyUserProfiles: actions.hasAnyUserProfiles,
     importLegacyData: actions.importLegacyData,
     isBusy,
     loans,
     nameDirectory,
-    resetDemoData: actions.resetDemoData,
     saveCashTransfer: actions.saveCashTransfer,
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
@@ -238,7 +273,6 @@ export function useAppStore() {
     signOutCurrentUser: actions.signOutCurrentUser,
     users,
     vendors,
-    addStore: actions.addStore,
     ensureNameInDirectory: actions.ensureNameInDirectory,
   }
 }

@@ -1,15 +1,38 @@
 import { useMemo, useState } from 'react'
-import type { AppUser, UserRole } from '../domain/financeTypes'
-import type { SettingsAuditEntry, UserAccount } from '../domain/appTypes'
+import type { AppUser, UserRole } from '@/domain/financeTypes'
+import type { SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { FieldLabel } from '@/components/ui/field-label'
+import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { SectionHeading } from '@/components/ui/section-heading'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type SettingsPageProps = {
   currentUser: AppUser
   users: UserAccount[]
   isBusy: boolean
-  onCreateUser: (draft: { email: string; password: string; name: string; role: UserRole }) => Promise<void>
+  onCreateUser: (draft: {
+    name: string
+    email: string
+    password: string
+    mobileNumber: string
+    role: Exclude<UserRole, 'owner'>
+  }) => Promise<void>
   onSetUserDisabled: (userId: string, disabled: boolean) => Promise<void>
   onChangeOwnPassword: (password: string) => Promise<void>
   settingsAuditLog: SettingsAuditEntry[]
+}
+
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function SettingsPage({
@@ -23,8 +46,8 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
-  const canCreateUsers = currentUser.role === 'owner'
-  const addableRoles: UserRole[] = ['manager', 'billing']
+  const canManageUsers = currentUser.role === 'owner'
+
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase()
     const visibleUsers = users.filter((user) => user.role !== 'owner' || user.id === currentUser.id)
@@ -33,51 +56,55 @@ export function SettingsPage({
       (user) =>
         user.name.toLowerCase().includes(search) ||
         user.role.toLowerCase().includes(search) ||
-        user.email.toLowerCase().includes(search),
+        user.email.toLowerCase().includes(search) ||
+        user.mobileNumber?.toLowerCase().includes(search),
     )
   }, [currentUser.id, userSearch, users])
 
   async function createUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const name = String(form.get('name') || '').trim()
     const email = String(form.get('email') || '').trim().toLowerCase()
     const password = String(form.get('password') || '').trim()
-    const role = String(form.get('role') || 'billing') as UserRole
+    const mobileNumber = String(form.get('mobileNumber') || '').trim()
+    const role = String(form.get('role') || 'billing') as Exclude<UserRole, 'owner'>
 
-    if (name.length < 2) {
-      setError('Name must be at least 2 characters.')
+    if (!name) {
+      setError('Enter a staff name.')
       return
     }
     if (!email.includes('@')) {
-      setError('A valid email address is required.')
-      return
-    }
-    if (users.some((user) => user.email.toLowerCase() === email)) {
-      setError('A user with this email already exists.')
+      setError('Enter a valid email address.')
       return
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters.')
       return
     }
-    if (!addableRoles.includes(role)) {
-      setError('You cannot create this role.')
+    if (mobileNumber.length < 10) {
+      setError('Enter a valid mobile number with at least 10 digits.')
+      return
+    }
+    if (role !== 'billing' && role !== 'manager') {
+      setError('Choose a valid staff role.')
       return
     }
 
     try {
       setError('')
-      await onCreateUser({ name, email, password, role })
-      event.currentTarget.reset()
+      await onCreateUser({ name, email, password, mobileNumber, role })
+      formElement.reset()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create user.')
+      setError(cause instanceof Error ? cause.message : 'Unable to create the user.')
     }
   }
 
   async function changeOwnUserPassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const password = String(form.get('password') || '').trim()
 
     if (password.length < 6) {
@@ -88,7 +115,7 @@ export function SettingsPage({
     try {
       setError('')
       await onChangeOwnPassword(password)
-      event.currentTarget.reset()
+      formElement.reset()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to update your password.')
     }
@@ -104,130 +131,137 @@ export function SettingsPage({
   }
 
   return (
-    <section className="settings-layout">
-      <>
-        {canCreateUsers ? (
-          <form className="cashout-card settings-form" onSubmit={createUser}>
-            <div className="card-title">
-              <p className="eyebrow">Access</p>
-              <h2>Create User</h2>
-            </div>
-            <label>
-              Name
-              <input name="name" placeholder="User name" required />
-            </label>
-            <label>
-              Email
-              <input name="email" placeholder="name@company.com" required type="email" />
-            </label>
-            <label>
-              Role
-              <select name="role">
-                {addableRoles.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Temporary Password
-              <input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
-            </label>
-            <p className="pin-note">Firebase creates the auth login and the Firestore profile together.</p>
-            {error && <p className="form-error light">{error}</p>}
-            <button className="primary" disabled={isBusy}>
-              {isBusy ? 'Creating...' : 'Create User'}
-            </button>
-          </form>
-        ) : (
-          <section className="cashout-card settings-form">
-            <div className="card-title">
-              <p className="eyebrow">Access</p>
-              <h2>Create User</h2>
-            </div>
-            <p className="pin-note">Only the owner can create staff accounts.</p>
-          </section>
-        )}
+    <section className="grid gap-4">
+      {error ? (
+        <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>
+      ) : null}
+      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid gap-4">
+        <TabsList className="w-full justify-start">
+          {canManageUsers ? <TabsTrigger value="create">Create User</TabsTrigger> : null}
+          <TabsTrigger value="directory">Account Directory</TabsTrigger>
+          <TabsTrigger value="password">Update Password</TabsTrigger>
+          <TabsTrigger value="audit">Settings Audit</TabsTrigger>
+        </TabsList>
 
-        <form className="cashout-card settings-form" onSubmit={changeOwnUserPassword}>
-          <div className="card-title">
-            <p className="eyebrow">Security</p>
-            <h2>Update My Password</h2>
-          </div>
-          <label>
-            New Password
-            <input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
-          </label>
-          {error && <p className="form-error light">{error}</p>}
-          <button className="primary" disabled={isBusy}>
-            {isBusy ? 'Saving...' : 'Save Password'}
-          </button>
-        </form>
-
-        <section className="cashout-card user-list-card">
-          <div className="card-title">
-            <p className="eyebrow">Users</p>
-            <h2>Account Directory</h2>
-          </div>
-          <label>
-            Search User
-            <input
-              value={userSearch}
-              placeholder="Name, role, or email"
-              onChange={(event) => {
-                setUserSearch(event.target.value)
-                setError('')
-              }}
-            />
-          </label>
-          <div className="user-list">
-            {filteredUsers.map((user) => (
-              <article className="user-row" key={user.id}>
-                <div>
-                  <strong>{user.name}</strong>
-                  <span>{user.role}</span>
-                  <span>{user.email}</span>
-                </div>
-                {canCreateUsers && user.id !== currentUser.id ? (
-                  <div className="pin-change-form">
-                    <span className="pin-note">{user.disabled ? 'Access disabled' : 'Access active'}</span>
-                    <button className="ghost-light" type="button" onClick={() => void toggleUserDisabled(user.id, !user.disabled)}>
-                      {user.disabled ? 'Restore' : 'Disable'}
-                    </button>
+        {canManageUsers ? (
+          <TabsContent value="create">
+            <Card className="max-w-3xl">
+              <CardHeader>
+                <SectionHeading eyebrow="Users" title="Create Staff Account" />
+              </CardHeader>
+              <CardContent>
+                <form className="grid gap-5 md:grid-cols-2" onSubmit={createUser}>
+                  <FieldLabel label="Staff Name">
+                    <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Role">
+                    <NativeSelect defaultValue="billing" name="role" onChange={() => setError('')}>
+                      <option value="billing">Billing</option>
+                      <option value="manager">Manager</option>
+                    </NativeSelect>
+                  </FieldLabel>
+                  <FieldLabel label="Email Address">
+                    <Input name="email" placeholder="staff@company.com" required type="email" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Mobile Number">
+                    <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel className="md:col-span-2" label="Password">
+                    <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <div className="md:col-span-2">
+                    <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
                   </div>
-                ) : (
-                  <span className="pin-note">{user.id === currentUser.id ? 'Current account' : 'Protected'}</span>
-                )}
-              </article>
-            ))}
-            {filteredUsers.length === 0 && <p className="empty-state">No users match this search.</p>}
-          </div>
-        </section>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
 
-        <section className="cashout-card user-list-card">
-          <div className="card-title">
-            <p className="eyebrow">Audit</p>
-            <h2>Recent Settings Activity</h2>
-          </div>
-          <div className="table-shell">
-            {settingsAuditLog.length === 0 && <p className="empty-state">No settings activity recorded yet.</p>}
-            {settingsAuditLog.slice(0, 10).map((entry) => (
-              <div className="table-row" key={entry.id}>
-                <span>
-                  {new Date(entry.createdAt).toLocaleString('en-IN', {
-                    day: '2-digit',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}{' '}
-                  | {entry.actor} | {entry.action}
-                </span>
+        <TabsContent value="directory">
+          <Card>
+            <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <SectionHeading eyebrow="Users" title="Account Directory" />
+              <FieldLabel className="w-full sm:max-w-sm" label="Search User">
+                <Input
+                  value={userSearch}
+                  placeholder="Name, role, email, or mobile"
+                  onChange={(event) => {
+                    setUserSearch(event.target.value)
+                    setError('')
+                  }}
+                />
+              </FieldLabel>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                {filteredUsers.map((user) => (
+                  <article
+                    className="flex flex-col gap-4 rounded-[20px] border border-border/70 bg-secondary/55 p-4 lg:flex-row lg:items-center lg:justify-between"
+                    key={user.id}
+                  >
+                    <div className="space-y-1">
+                      <strong className="text-base font-bold text-foreground">{user.name}</strong>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{user.role}</Badge>
+                        <span className="text-sm text-muted-foreground">{user.email}</span>
+                        {user.mobileNumber ? <span className="text-sm text-muted-foreground">{user.mobileNumber}</span> : null}
+                      </div>
+                    </div>
+                    {canManageUsers && user.id !== currentUser.id ? (
+                      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                        <span className="text-sm font-medium text-muted-foreground">{user.disabled ? 'Access disabled' : 'Access active'}</span>
+                        <Button variant="outline" type="button" onClick={() => void toggleUserDisabled(user.id, !user.disabled)}>
+                          {user.disabled ? 'Restore' : 'Disable'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-sm font-medium text-muted-foreground">{user.id === currentUser.id ? 'Current account' : 'Protected'}</span>
+                    )}
+                  </article>
+                ))}
+                {filteredUsers.length === 0 ? <p className="text-sm font-medium text-muted-foreground">No users match this search.</p> : null}
               </div>
-            ))}
-          </div>
-        </section>
-      </>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="password">
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <SectionHeading eyebrow="Security" title="Update My Password" />
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-5" onSubmit={changeOwnUserPassword}>
+                <FieldLabel label="New Password">
+                  <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
+                </FieldLabel>
+                <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Password'}</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader>
+              <SectionHeading eyebrow="Audit" title="Recent Settings Activity" />
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                {settingsAuditLog.length === 0 ? (
+                  <p className="text-sm font-medium text-muted-foreground">No settings activity recorded yet.</p>
+                ) : null}
+                {settingsAuditLog.slice(0, 12).map((entry) => (
+                  <div key={entry.id} className="rounded-[20px] border border-border/70 bg-secondary/55 p-4 text-sm text-foreground">
+                    {formatTimestamp(entry.createdAt)} | {entry.actor} | {entry.action}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </section>
   )
 }

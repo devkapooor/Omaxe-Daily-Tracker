@@ -1,13 +1,19 @@
 import { useState } from 'react'
-import type { DailyCashoutEntry } from '../domain/appTypes'
-import { numberValue, today } from '../app/uiHelpers'
+import type { CashHolder, DailyCashoutEntry } from '@/domain/appTypes'
+import { numberValue, today } from '@/app/uiHelpers'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { FieldLabel } from '@/components/ui/field-label'
+import { Input } from '@/components/ui/input'
+import { SectionHeading } from '@/components/ui/section-heading'
 
 type DailyCashoutFormProps = {
   currentUserName: string
+  currentUserHolder: CashHolder | null
   onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => void
 }
 
-export function DailyCashoutForm({ currentUserName, onSave }: DailyCashoutFormProps) {
+export function DailyCashoutForm({ currentUserName, currentUserHolder, onSave }: DailyCashoutFormProps) {
   const [entryDate, setEntryDate] = useState(today())
   const [cashSale, setCashSale] = useState('0')
   const [upiSale, setUpiSale] = useState('0')
@@ -58,6 +64,7 @@ export function DailyCashoutForm({ currentUserName, onSave }: DailyCashoutFormPr
     onSave({
       date: entryDate,
       recordedBy: currentUserName,
+      recordedByHolder: currentUserHolder ?? undefined,
       upiSales: upiSaleValue,
       cashSales: cashSaleValue,
       returns: 0,
@@ -90,100 +97,87 @@ export function DailyCashoutForm({ currentUserName, onSave }: DailyCashoutFormPr
   }
 
   return (
-    <form className="cashout-card purchase-form" onSubmit={handleSubmit}>
-      <div className="card-title">
-        <p className="eyebrow">Daily Details</p>
-        <h2>Cashout Register</h2>
-      </div>
+    <Card>
+      <CardHeader>
+        <SectionHeading eyebrow="Daily Details" title="Cashout Register" />
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" onSubmit={handleSubmit}>
+          <FieldLabel label="Cashout For Date">
+            <Input
+              type="date"
+              value={entryDate}
+              onChange={(event) => {
+                setEntryDate(event.target.value)
+                setError('')
+              }}
+              required
+            />
+          </FieldLabel>
 
-      <label>
-        Cashout For Date
-        <input
-          type="date"
-          value={entryDate}
-          onChange={(event) => {
-            setEntryDate(event.target.value)
-            setError('')
-          }}
-          required
-        />
-      </label>
+          <FieldLabel label="Cash Sale Recorded (a)">
+            <Input type="number" min="0" step="1" value={cashSale} onChange={(event) => setCashSale(event.target.value)} />
+          </FieldLabel>
 
-      <label>
-        Cash Sale Recorded (a)
-        <input type="number" min="0" step="1" value={cashSale} onChange={(event) => setCashSale(event.target.value)} />
-      </label>
+          <FieldLabel label="UPI Sale Recorded (b)">
+            <Input type="number" min="0" step="1" value={upiSale} onChange={(event) => setUpiSale(event.target.value)} />
+          </FieldLabel>
 
-      <label>
-        UPI Sale Recorded (b)
-        <input type="number" min="0" step="1" value={upiSale} onChange={(event) => setUpiSale(event.target.value)} />
-      </label>
+          <FieldLabel label="Credit Sale Recorded (c)">
+            <Input type="number" min="0" step="1" value={creditSale} onChange={(event) => setCreditSale(event.target.value)} />
+          </FieldLabel>
 
-      <label>
-        Credit Sale Recorded (c)
-        <input type="number" min="0" step="1" value={creditSale} onChange={(event) => setCreditSale(event.target.value)} />
-      </label>
+          <FieldLabel label="Cash Expense (d)">
+            <Input type="number" min="0" step="1" value={cashExpense} onChange={(event) => setCashExpense(event.target.value)} />
+          </FieldLabel>
 
-      <label>
-        Cash Expense (d)
-        <input type="number" min="0" step="1" value={cashExpense} onChange={(event) => setCashExpense(event.target.value)} />
-      </label>
+          <FieldLabel label="Cash Difference (a-d)">
+            <Input type="number" value={cashDifference} readOnly />
+          </FieldLabel>
 
-      <label>
-        Cash Difference (a-d)
-        <input type="number" value={cashDifference} readOnly />
-      </label>
+          <FieldLabel label="System Audit">
+            <Input type="number" min="0" step="1" value={systemAudit} onChange={(event) => setSystemAudit(event.target.value)} />
+          </FieldLabel>
 
-      <label>
-        System Audit
-        <input type="number" min="0" step="1" value={systemAudit} onChange={(event) => setSystemAudit(event.target.value)} />
-      </label>
+          <FieldLabel label="By">
+            <Input value={currentUserName} readOnly />
+          </FieldLabel>
 
-      <label>
-        By
-        <input value={currentUserName} readOnly />
-      </label>
+          <div className="space-y-1 xl:col-span-3">
+            <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-muted-foreground">Cash Drawer Particulars</p>
+            <h3 className="text-xl font-black tracking-tight text-foreground">Denomination Count</h3>
+          </div>
 
-      <div className="full-width">
-        <p className="denomination-title">Cash Drawer Particulars</p>
-      </div>
-      <label>
-        500
-        <input type="number" min="0" step="1" value={denom500} onChange={(event) => setDenom500(event.target.value)} />
-      </label>
-      <label>
-        200
-        <input type="number" min="0" step="1" value={denom200} onChange={(event) => setDenom200(event.target.value)} />
-      </label>
-      <label>
-        100
-        <input type="number" min="0" step="1" value={denom100} onChange={(event) => setDenom100(event.target.value)} />
-      </label>
-      <label>
-        50
-        <input type="number" min="0" step="1" value={denom50} onChange={(event) => setDenom50(event.target.value)} />
-      </label>
-      <label>
-        20
-        <input type="number" min="0" step="1" value={denom20} onChange={(event) => setDenom20(event.target.value)} />
-      </label>
-      <label>
-        10
-        <input type="number" min="0" step="1" value={denom10} onChange={(event) => setDenom10(event.target.value)} />
-      </label>
-      <label>
-        Change
-        <input type="number" min="0" step="1" value={change} onChange={(event) => setChange(event.target.value)} />
-      </label>
+          <FieldLabel label="500">
+            <Input type="number" min="0" step="1" value={denom500} onChange={(event) => setDenom500(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="200">
+            <Input type="number" min="0" step="1" value={denom200} onChange={(event) => setDenom200(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="100">
+            <Input type="number" min="0" step="1" value={denom100} onChange={(event) => setDenom100(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="50">
+            <Input type="number" min="0" step="1" value={denom50} onChange={(event) => setDenom50(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="20">
+            <Input type="number" min="0" step="1" value={denom20} onChange={(event) => setDenom20(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="10">
+            <Input type="number" min="0" step="1" value={denom10} onChange={(event) => setDenom10(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="Change">
+            <Input type="number" min="0" step="1" value={change} onChange={(event) => setChange(event.target.value)} />
+          </FieldLabel>
+          <FieldLabel label="Total">
+            <Input type="number" value={drawerTotal} readOnly />
+          </FieldLabel>
 
-      <label>
-        Total
-        <input type="number" value={drawerTotal} readOnly />
-      </label>
+          {error && <p className="text-sm font-semibold text-destructive xl:col-span-3">{error}</p>}
 
-      {error && <p className="form-error light full-width">{error}</p>}
-
-      <button className="primary full-width">Save Cashout</button>
-    </form>
+          <Button className="xl:col-span-3">Save Cashout</Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }

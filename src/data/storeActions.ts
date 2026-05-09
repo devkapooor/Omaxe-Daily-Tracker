@@ -8,28 +8,15 @@ import {
   updatePassword,
 } from 'firebase/auth'
 import {
-  collection,
   doc,
-  getCountFromServer,
   setDoc,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, firebaseConfig } from '../lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from './legacyLocalData'
-import { seedData } from './seedData'
-import type {
-  CashoutDraft,
-  PaymentDraft,
-  PurchaseDraft,
-  SalesDraft,
-} from '../domain/financeTypes'
-import type {
-  CashTransfer,
-  DailyCashoutEntry,
-  LoanEntry,
-  VendorRecord,
-} from '../domain/appTypes'
+import type { CashoutDraft, DailySales, PaymentDraft, PurchaseDraft } from '../domain/financeTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '../domain/appTypes'
 import type { CreateUserInput, StoreCollectionState } from './storeShared'
 import {
   NameDirectoryType,
@@ -73,7 +60,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     return true
   }
 
-  async function saveSales(draft: SalesDraft) {
+  async function saveSales(draft: Omit<DailySales, 'id' | 'createdAt' | 'updatedAt'>) {
     const { financeData } = getState()
     const id = salesDocId(draft.storeId, draft.date)
     const existing = financeData.sales.find((item) => item.id === id)
@@ -150,24 +137,6 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     })
   }
 
-  async function addStore(name: string, location: string) {
-    const id = `store-${crypto.randomUUID()}`
-    const timestamp = nowIso()
-    await setDoc(doc(db, 'stores', id), {
-      name: normalizeName(name),
-      location: normalizeName(location),
-      active: true,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-  }
-
-  async function resetDemoData() {
-    const batch = writeBatch(db)
-    seedData.stores.forEach((store) => batch.set(doc(db, 'stores', store.id), store))
-    await batch.commit()
-  }
-
   async function signInWithApp(email: string, password: string) {
     setIsBusy(true)
     setAuthError(null)
@@ -181,52 +150,60 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     }
   }
 
-  async function createInitialOwnerAccount(name: string, email: string, password: string) {
+  async function createUserAccount(input: CreateUserInput, actor: string) {
     setIsBusy(true)
     setAuthError(null)
+    const secondaryApp = initializeApp(firebaseConfig, `create-user-${crypto.randomUUID()}`)
+    const secondaryAuth = getAuth(secondaryApp)
     try {
-      await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
-      await setDoc(doc(db, 'users', auth.currentUser!.uid), {
-        name: normalizeName(name),
-        email: email.trim().toLowerCase(),
-        role: 'owner',
+      const name = normalizeName(input.name)
+      const email = input.email.trim().toLowerCase()
+      const password = input.password
+      const mobileNumber = input.mobileNumber.trim()
+      const role = input.role
+
+      if (!name) {
+        throw new Error('A staff name is required.')
+      }
+      if (!email.includes('@')) {
+        throw new Error('A valid email address is required.')
+      }
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters.')
+      }
+      if (mobileNumber.length < 10) {
+        throw new Error('A valid mobile number is required.')
+      }
+      if (role !== 'billing' && role !== 'manager') {
+        throw new Error('Choose a valid staff role.')
+      }
+
+      const credentials = await createUserWithEmailAndPassword(secondaryAuth, email, password)
+      const uid = credentials.user.uid
+      await setDoc(doc(db, 'users', uid), {
+        name,
+        email,
+        mobileNumber,
+        role,
+        approvalStatus: 'approved',
         createdAt: nowIso(),
         disabled: false,
       })
       await ensureNameInDirectory('people', name)
+      await pushSettingsAudit(`User created: ${name} (${role})`, actor)
+      return { uid, email }
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Unable to create the owner account.')
+      setAuthError(error instanceof Error ? error.message : 'Unable to create the user account.')
       throw error
     } finally {
+      await secondaryAuth.signOut().catch(() => undefined)
+      await deleteApp(secondaryApp).catch(() => undefined)
       setIsBusy(false)
     }
   }
 
   async function signOutCurrentUser() {
     await signOut(auth)
-  }
-
-  async function createUserAccount(input: CreateUserInput, actor: string) {
-    setIsBusy(true)
-    const secondaryApp = initializeApp(firebaseConfig, `secondary-${crypto.randomUUID()}`)
-    const secondaryAuth = getAuth(secondaryApp)
-
-    try {
-      const credentials = await createUserWithEmailAndPassword(secondaryAuth, input.email, input.password)
-      await setDoc(doc(db, 'users', credentials.user.uid), {
-        name: normalizeName(input.name),
-        email: input.email.trim().toLowerCase(),
-        role: input.role,
-        createdAt: nowIso(),
-        disabled: false,
-      })
-      await ensureNameInDirectory('people', input.name)
-      await pushSettingsAudit(`User created: ${input.name} (${input.role})`, actor)
-    } finally {
-      await secondaryAuth.signOut().catch(() => undefined)
-      await deleteApp(secondaryApp).catch(() => undefined)
-      setIsBusy(false)
-    }
   }
 
   async function setUserDisabled(userId: string, disabled: boolean, actor: string) {
@@ -255,10 +232,10 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     const { dailyCashouts, financeData } = getState()
     const latestPendingBalances = dailyCashouts[0]?.pendingCashBalances ?? { dev: 0, arsh: 0, farhan: 0 }
     const nextPendingBalances = { ...latestPendingBalances }
-    const lower = draft.recordedBy.toLowerCase()
-    if (lower.includes('dev')) nextPendingBalances.dev += draft.remainingBalance
-    if (lower.includes('arsh')) nextPendingBalances.arsh += draft.remainingBalance
-    if (lower.includes('farhan')) nextPendingBalances.farhan += draft.remainingBalance
+    const holder = draft.recordedByHolder
+    if (holder === 'Dev') nextPendingBalances.dev += draft.remainingBalance
+    if (holder === 'Arsh') nextPendingBalances.arsh += draft.remainingBalance
+    if (holder === 'Farhan') nextPendingBalances.farhan += draft.remainingBalance
 
     const entry: DailyCashoutEntry = {
       ...draft,
@@ -297,7 +274,17 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
       id: `cash-transfer-${crypto.randomUUID()}`,
       createdAt: nowIso(),
     }
-    await setDoc(doc(db, 'cashTransfers', transfer.id), transfer)
+    await setDoc(doc(db, 'cashTransfers', transfer.id), {
+      id: transfer.id,
+      date: transfer.date,
+      from: transfer.from,
+      toType: transfer.toType,
+      ...(transfer.toPerson ? { toPerson: transfer.toPerson } : {}),
+      amount: transfer.amount,
+      reason: transfer.reason,
+      createdBy: transfer.createdBy,
+      createdAt: transfer.createdAt,
+    })
   }
 
   async function importLegacyData() {
@@ -351,20 +338,11 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     }
   }
 
-  async function hasAnyUserProfiles() {
-    const snapshot = await getCountFromServer(collection(db, 'users'))
-    return snapshot.data().count > 0
-  }
-
   return {
-    addStore,
     changeOwnPassword,
-    createInitialOwnerAccount,
     createUserAccount,
     ensureNameInDirectory,
-    hasAnyUserProfiles,
     importLegacyData,
-    resetDemoData,
     saveCashTransfer,
     saveCashout,
     saveDailyCashoutEntry,
