@@ -13,6 +13,13 @@ If authentication flow, setup steps, storage behavior, or related file structure
 
 After the owner logs in, use the Settings screen to create manager and billing accounts.
 
+Current live setup expectations:
+
+- user creation happens only from `Settings`
+- no public signup flow is used
+- monthly operational expense is stored in `appMetadata/appSettings`
+- purchases, vendor payments, and daily cashouts all write live Firestore records that feed dashboard totals
+
 The app can import any old browser-only data one time into Firebase, then it clears the legacy local storage keys.
 
 Relevant current implementation files:

@@ -38,28 +38,21 @@ sum(payment.amount where payment.date = today and payment.type = "Received")
 
 Supported dashboard filters:
 
-- `today`
 - `yesterday`
 - `mtd`
 
 ```text
-today      -> from = today, to = today
 yesterday  -> from = yesterday, to = yesterday
 mtd        -> from = first day of current month, to = today
 ```
+
+All business-day calculations now use `Asia/Kolkata` date keys.
 
 ### Dashboard Sales
 
 ```text
 dashboardSales =
 sum(sale.totalSales where sale.date is within selected range)
-```
-
-### Dashboard Expense Entries
-
-```text
-dashboardExpenseEntries =
-count(cashout entries where cashout.date is within selected range)
 ```
 
 ### Dashboard Expense Total
@@ -98,10 +91,16 @@ projectedProfit = max(breakEvenDelta, 0)
 projectedLoss = abs(min(breakEvenDelta, 0))
 ```
 
-Current fixed monthly expense in the app:
+Current runtime fallback monthly operational expense in the app:
 
 ```text
 monthlyFixedExpense = 500000
+```
+
+The live source of truth is now:
+
+```text
+appMetadata/appSettings.monthlyOperationalExpense
 ```
 
 ## Daily Cashout Register Summary
@@ -152,6 +151,48 @@ person-to-person transfer:
 person-to-bank transfer:
   source balance -= amount
   bankTotal += amount
+```
+
+## Daily Cashout Audit Logic
+
+Final saved daily cashout balance:
+
+```text
+remainingBalance = drawerTotal
+```
+
+Audit classification:
+
+```text
+auditDifference = cashAudit - drawerTotal
+
+if auditDifference > 0  -> "Cash Less"
+if auditDifference < 0  -> "Cash More"
+if auditDifference = 0  -> matched audit
+```
+
+## Vendor Outstanding Logic
+
+### Purchase Save
+
+```text
+unpaidAmount = max(purchaseAmount - paidAmount, 0)
+```
+
+### Vendor Outstanding Total
+
+```text
+totalVendorOutstanding =
+sum(purchase.unpaidAmount for all open purchases)
+```
+
+### Vendor Payment Allocation
+
+```text
+find open purchases for selected vendor
+sort by oldest first
+apply payment amount across unpaidAmount values until exhausted
+reject if payment amount > total open vendor outstanding
 ```
 
 ## Purchase / Vendor Summary Tables

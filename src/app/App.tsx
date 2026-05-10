@@ -8,6 +8,7 @@ import {
   type AppToast,
   type DashboardRange,
   canOpenSettings,
+  formatDisplayDateTime,
   money,
   resolveActivePage,
   today,
@@ -18,9 +19,11 @@ import { CashMovementForm } from '@/components/CashMovementForm'
 import { CashoutForm } from '@/components/CashoutForm'
 import { DailyCashoutFinalSummaryPanel } from '@/components/DailyCashoutFinalSummaryPanel'
 import { DailyCashoutForm } from '@/components/DailyCashoutForm'
+import { DailyCashoutLog } from '@/components/DailyCashoutLog'
 import { DashboardRangeFilter } from '@/components/DashboardRangeFilter'
 import { DashboardTables } from '@/components/DashboardTables'
 import { LoadingScreen } from '@/components/LoadingScreen'
+import { LoanLedger } from '@/components/LoanLedger'
 import { LoanForm } from '@/components/LoanForm'
 import { LoginScreen } from '@/components/LoginScreen'
 import { MonthlyProjectionPanel } from '@/components/MonthlyProjectionPanel'
@@ -33,12 +36,7 @@ import { Button } from '@/components/ui/button'
 
 function formatLastUpdated(value: string | null) {
   if (!value) return 'No updates'
-  return new Date(value).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDisplayDateTime(value)
 }
 
 function SummaryCard({
@@ -66,6 +64,7 @@ export default function App() {
   const {
     authError,
     authReady,
+    appSettings,
     canImportLegacyData,
     cashTransfers,
     changeOwnPassword,
@@ -74,11 +73,11 @@ export default function App() {
     currentUser,
     dailyCashouts,
     data,
+    deleteUserAccount,
     importLegacyData,
     isBusy,
     loans,
     nameDirectory,
-    setUserDisabled,
     settingsAuditLog,
     signIn,
     signOutCurrentUser,
@@ -89,33 +88,37 @@ export default function App() {
     saveCashout,
     saveDailyCashoutEntry,
     saveLoanEntry,
+    saveMonthlyOperationalExpense,
     savePayment,
     savePurchase,
     saveVendor,
   } = useAppStore()
 
   const [activePage, setActivePage] = useState<Page>('dashboard')
-  const [dashboardRange, setDashboardRange] = useState<DashboardRange>('today')
+  const [dashboardRange, setDashboardRange] = useState<DashboardRange>('yesterday')
   const [cashoutFilterDate, setCashoutFilterDate] = useState(today())
   const [toast, setToast] = useState<AppToast | null>(null)
 
   const {
     currentHolder,
     dailyFinalSummary,
-    dashboardExpenseEntries,
     dashboardExpenseTotal,
     dashboardLastUpdated,
     dashboardSales,
+    dailyCashoutUserOptions,
     directoryOptions,
     filteredCashouts,
     holderAssignments,
     monthlyFixedExpense,
+    normalizedLoans,
     pendingCashNow,
     projectedMonthlySales,
+    totalVendorOutstanding,
     todayCashout,
     todayPaymentPaid,
     todayPaymentReceived,
     totalLoans,
+    vendorOutstandingByName,
   } = useDashboardMetrics({
     cashTransfers,
     cashoutFilterDate,
@@ -125,6 +128,7 @@ export default function App() {
     data,
     loans,
     nameDirectory,
+    monthlyOperationalExpense: appSettings.monthlyOperationalExpense,
     users,
     vendors,
   })
@@ -168,21 +172,25 @@ export default function App() {
 
   const resolvedActivePage = resolveActivePage(currentUser.role, activePage)
 
-  function handleSaveCashout(draft: CashoutDraft) {
-    void ensureNameInDirectory('people', draft.paidTo)
-    void saveCashout(draft)
+  async function handleSaveCashout(draft: CashoutDraft) {
+    await ensureNameInDirectory('people', draft.paidTo)
+    await saveCashout(draft)
     showToast(`Expense saved: ${draft.paidTo} - ${money(draft.amount)}`)
   }
 
-  function handleSavePayment(draft: PaymentDraft) {
-    void ensureNameInDirectory('people', draft.partyName)
-    void savePayment(draft)
-    showToast(`Payment ${draft.type.toLowerCase()} saved: ${draft.partyName} - ${money(draft.amount)}`)
+  async function handleSavePayment(draft: PaymentDraft) {
+    await ensureNameInDirectory('people', draft.partyName)
+    await savePayment(draft)
+    showToast(
+      draft.entryType === 'loan-payment'
+        ? `Loan payment saved: ${draft.partyName} - ${money(draft.amount)}`
+        : `Vendor payment saved: ${draft.partyName} - ${money(draft.amount)}`,
+    )
   }
 
-  function handleSavePurchase(draft: PurchaseDraft) {
-    void ensureNameInDirectory('vendors', draft.supplierName)
-    void savePurchase(draft)
+  async function handleSavePurchase(draft: PurchaseDraft) {
+    await ensureNameInDirectory('vendors', draft.supplierName)
+    await savePurchase(draft)
     showToast(`Purchase saved: ${draft.supplierName} - ${money(draft.purchaseAmount)}`)
   }
 
@@ -244,27 +252,26 @@ export default function App() {
                 updated={formatLastUpdated(dashboardLastUpdated.sales)}
               />
               <SummaryCard
-                label="Expense Entries"
-                value={dashboardExpenseEntries}
-                meta="Source: Expense register entries"
-                updated={formatLastUpdated(dashboardLastUpdated.expenses)}
-              />
-              <SummaryCard
                 label="Expenses"
                 value={money(dashboardExpenseTotal)}
                 meta="Source: Expense register totals"
                 updated={formatLastUpdated(dashboardLastUpdated.expenses)}
               />
               <SummaryCard
-                label="Total Loans Taken"
+                label="Open Loan Balance"
                 value={money(totalLoans)}
-                meta="Source: Loans tab entries"
+                meta="Source: unpaid remaining loan balances"
                 updated={formatLastUpdated(dashboardLastUpdated.loans)}
               />
               <SummaryCard
-                label="Latest Fixed Expenses"
+                label="Vendor Outstanding"
+                value={money(totalVendorOutstanding)}
+                meta="Source: all open vendor balances"
+              />
+              <SummaryCard
+                label="Monthly Operational Expenses"
                 value={money(monthlyFixedExpense)}
-                meta="Source: Hardcoded monthly fixed expense"
+                meta="Source: owner-managed settings"
                 updated={formatLastUpdated(dashboardLastUpdated.fixed)}
               />
             </div>
@@ -281,12 +288,13 @@ export default function App() {
               pendingCashBankTotal={pendingCashNow.bankTotal}
               holderAssignments={holderAssignments}
             />
+            <DailyCashoutLog entries={dailyCashouts} userOptions={dailyCashoutUserOptions} />
           </section>
         )}
 
         {resolvedActivePage === 'cashout' && (
           <section className="mb-3">
-            <div className="w-fit rounded-[22px] border border-border/80 bg-white/85 px-4 py-3 shadow-[0_14px_30px_rgba(24,32,27,0.07)] backdrop-blur-xl">
+            <div className="w-full rounded-[22px] border border-border/80 bg-white/85 px-4 py-3 shadow-[0_14px_30px_rgba(24,32,27,0.07)] backdrop-blur-xl">
               <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Today Expenses</span>
               <strong className="mt-2 block text-xl font-black tracking-tight text-foreground">{money(todayCashout)}</strong>
             </div>
@@ -298,10 +306,6 @@ export default function App() {
             <CashoutForm
               currentUser={currentUser}
               peopleOptions={directoryOptions.people}
-              onCreatePerson={(name) => {
-                void ensureNameInDirectory('people', name)
-                return true
-              }}
               onSaveCashout={handleSaveCashout}
               onSavePayment={handleSavePayment}
             />
@@ -324,9 +328,13 @@ export default function App() {
             <DailyCashoutForm
               currentUserHolder={currentHolder}
               currentUserName={currentUser.name}
-              onSave={(draft) => {
-                void saveDailyCashoutEntry(draft)
-                showToast(`Cashout + Sales saved. Balance: ${money(draft.remainingBalance)}`)
+              onSave={async (draft) => {
+                await saveDailyCashoutEntry(draft)
+                showToast(
+                  draft.auditStatus === 'matched'
+                    ? `Cashout + Sales saved. Drawer total: ${money(draft.drawerTotal ?? draft.remainingBalance)}`
+                    : `${draft.auditMessage} Drawer total saved: ${money(draft.drawerTotal ?? draft.remainingBalance)}`,
+                )
               }}
             />
           </section>
@@ -336,17 +344,6 @@ export default function App() {
           <section className="mt-3">
             <PurchaseForm
               vendorOptions={directoryOptions.vendors}
-              onCreateVendor={(name) => {
-                void saveVendor({
-                  name,
-                  ownerName: '',
-                  contact: '',
-                  address: '',
-                  companiesProvided: '',
-                  notes: 'Quick-created from purchase form.',
-                })
-                return true
-              }}
               onSave={handleSavePurchase}
             />
           </section>
@@ -356,6 +353,7 @@ export default function App() {
           <section className="mt-3">
             <VendorsPage
               vendors={vendors}
+              vendorOutstandingByName={vendorOutstandingByName}
               isBusy={isBusy}
               onSaveVendor={async (vendor) => {
                 await saveVendor(vendor)
@@ -366,18 +364,19 @@ export default function App() {
         )}
 
         {resolvedActivePage === 'loans' && currentUser.role === 'owner' && (
-          <section className="mt-3">
+          <section className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <LoanForm
               peopleOptions={directoryOptions.people}
               onCreatePerson={(name) => {
                 void ensureNameInDirectory('people', name)
                 return true
               }}
-              onSave={(draft) => {
-                void saveLoanEntry(draft)
+              onSave={async (draft) => {
+                await saveLoanEntry(draft)
                 showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
               }}
             />
+            <LoanLedger loans={normalizedLoans} />
           </section>
         )}
 
@@ -408,17 +407,22 @@ export default function App() {
               currentUser={currentUser}
               users={users}
               isBusy={isBusy}
+              monthlyOperationalExpense={appSettings.monthlyOperationalExpense}
               onCreateUser={async (draft) => {
                 await createUserAccount(draft, currentUser.name)
                 showToast(`User created: ${draft.name}`)
               }}
-              onSetUserDisabled={async (userId, disabled) => {
-                await setUserDisabled(userId, disabled, currentUser.name)
-                showToast(disabled ? 'User access disabled.' : 'User access restored.')
+              onDeleteUser={async (userId) => {
+                await deleteUserAccount(userId, currentUser.name)
+                showToast('User deleted.')
               }}
               onChangeOwnPassword={async (password) => {
                 await changeOwnPassword(password)
                 showToast('Password updated.')
+              }}
+              onSaveMonthlyOperationalExpense={async (amount) => {
+                await saveMonthlyOperationalExpense(amount, currentUser.name)
+                showToast('Monthly operational expense updated.')
               }}
               settingsAuditLog={settingsAuditLog}
             />

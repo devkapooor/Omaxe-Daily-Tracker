@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 type HoverGradientNavBarProps = {
   currentUser: AppUser
   activePage: Page
+  isHidden?: boolean
   onPageChange: (page: Page) => void
   onLogout: () => void
 }
@@ -154,13 +155,19 @@ function buildMenu(currentUser: AppUser): NavItem[] {
 export function HoverGradientNavBar({
   currentUser,
   activePage,
+  isHidden = false,
   onPageChange,
   onLogout,
 }: HoverGradientNavBarProps) {
   const menuItems = buildMenu(currentUser)
 
   return (
-    <div className="pointer-events-none fixed left-0 top-2 z-50 w-full px-3 sm:top-3 sm:px-4">
+    <div
+      className={cn(
+        'pointer-events-none fixed left-0 top-2 z-50 w-full px-3 transition-transform duration-300 ease-out sm:top-3 sm:px-4',
+        isHidden ? '-translate-y-[120%]' : 'translate-y-0',
+      )}
+    >
       <motion.nav
         className="pointer-events-auto mx-auto flex w-full max-w-7xl items-center gap-3 rounded-[28px] border border-border/80 bg-white/88 px-4 py-3 shadow-[0_18px_40px_rgba(19,26,20,0.1)] backdrop-blur-xl"
         initial="initial"

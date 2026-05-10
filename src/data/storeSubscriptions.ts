@@ -3,8 +3,10 @@ import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import type { AppStoreSetters, LoadedCollections } from './storeShared'
 import {
+  defaultAppSettings,
   ensureSingleStore,
   mapDoc,
+  normalizeLoanRecord,
   parseVendorCatalog,
   sortByCreatedAtDesc,
   uniqNames,
@@ -34,6 +36,7 @@ type SetupSubscriptionsArgs = Pick<
   | 'setFinanceData'
   | 'setLoadedCollections'
   | 'setLoans'
+  | 'setAppSettings'
   | 'setNameDirectory'
   | 'setSettingsAuditLog'
   | 'setUsers'
@@ -48,6 +51,7 @@ export function setupAppStoreSubscriptions({
   setFinanceData,
   setLoadedCollections,
   setLoans,
+  setAppSettings,
   setNameDirectory,
   setSettingsAuditLog,
   setUsers,
@@ -120,7 +124,11 @@ export function setupAppStoreSubscriptions({
       },
     ),
     onSnapshot(collection(db, 'loans'), (snapshot) => {
-      setLoans(sortByCreatedAtDesc(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<LoanEntry, 'id'>))))
+      setLoans(
+        sortByCreatedAtDesc(
+          snapshot.docs.map((item) => normalizeLoanRecord(mapDoc(item.id, item.data() as Omit<LoanEntry, 'id'>))),
+        ),
+      )
       markLoaded('loans')
     }),
     onSnapshot(collection(db, 'dailyCashouts'), (snapshot) => {
@@ -144,6 +152,14 @@ export function setupAppStoreSubscriptions({
         vendors: uniqNames(Array.isArray(data?.vendors) ? data.vendors : []),
       })
       markLoaded('nameDirectory')
+    }),
+    onSnapshot(doc(db, 'appMetadata', 'appSettings'), (snapshot) => {
+      const data = snapshot.data() as Partial<{ monthlyOperationalExpense: unknown }> | undefined
+      const value = typeof data?.monthlyOperationalExpense === 'number' && data.monthlyOperationalExpense >= 0
+        ? data.monthlyOperationalExpense
+        : defaultAppSettings.monthlyOperationalExpense
+      setAppSettings({ monthlyOperationalExpense: value })
+      markLoaded('appSettings')
     }),
   ]
 

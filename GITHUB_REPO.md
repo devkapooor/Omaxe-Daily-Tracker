@@ -7,18 +7,17 @@ Primary GitHub repository for this project:
 ## Current Status
 
 - Repository URL has been saved in the project.
-- Local git connection has not yet been completed from this environment because `git` is not currently installed or available on `PATH`.
+- Local git is available in this environment.
+- The repository is already connected to the remote and has an active `main` branch.
+- The latest pushed baseline commit referenced in the docs is `1076537`, with newer local changes still pending commit.
 
-## When Git Is Available
+## Standard Push Flow
 
 Run:
 
 ```powershell
 cd "C:\Users\devka\OneDrive\Desktop\Codex Projects\Omaxe Daily Tracker"
-git init
 git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/devkapooor/Omaxe-Daily-Tracker.git
-git push -u origin main
+git commit -m "Describe the current change set"
+git push origin main
 ```

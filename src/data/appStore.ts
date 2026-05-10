@@ -14,6 +14,7 @@ import type {
 } from '../domain/appTypes'
 import { createAppStoreActions } from './storeActions'
 import {
+  defaultAppSettings,
   emptyFinanceData,
   emptyNameDirectory,
   ensureSingleStore,
@@ -31,6 +32,7 @@ export function useAppStore() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [loadedCollections, setLoadedCollections] = useState<LoadedCollections>(initialLoadedCollections)
   const [financeData, setFinanceData] = useState<FinanceData>(emptyFinanceData)
+  const [appSettings, setAppSettings] = useState(defaultAppSettings)
   const [users, setUsers] = useState<UserAccount[]>([])
   const [vendors, setVendors] = useState<VendorRecord[]>([])
   const [nameDirectory, setNameDirectory] = useState<NameDirectory>(emptyNameDirectory)
@@ -51,6 +53,7 @@ export function useAppStore() {
       setAuthError(null)
       setLoadedCollections(initialLoadedCollections)
       setFinanceData(emptyFinanceData)
+      setAppSettings(defaultAppSettings)
       setUsers([])
       setVendors([])
       setNameDirectory(emptyNameDirectory)
@@ -132,6 +135,7 @@ export function useAppStore() {
       setCashTransfers,
       setDailyCashouts,
       setFinanceData,
+      setAppSettings,
       setLoadedCollections,
       setLoans,
       setNameDirectory,
@@ -233,6 +237,7 @@ export function useAppStore() {
       cashTransfers,
       dailyCashouts,
       financeData,
+      appSettings,
       loadedCollections,
       loans,
       nameDirectory,
@@ -247,6 +252,7 @@ export function useAppStore() {
   return {
     authError,
     authReady,
+    appSettings,
     canImportLegacyData,
     cashTransfers,
     changeOwnPassword: actions.changeOwnPassword,
@@ -255,6 +261,7 @@ export function useAppStore() {
     currentUser,
     dailyCashouts,
     data: financeData,
+    deleteUserAccount: actions.deleteUserAccount,
     importLegacyData: actions.importLegacyData,
     isBusy,
     loans,
@@ -263,11 +270,11 @@ export function useAppStore() {
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
     saveLoanEntry: actions.saveLoanEntry,
+    saveMonthlyOperationalExpense: actions.saveMonthlyOperationalExpense,
     savePayment: actions.savePayment,
     savePurchase: actions.savePurchase,
     saveSales: actions.saveSales,
     saveVendor: actions.saveVendor,
-    setUserDisabled: actions.setUserDisabled,
     settingsAuditLog,
     signIn: actions.signIn,
     signOutCurrentUser: actions.signOutCurrentUser,

@@ -10,13 +10,20 @@ export type UserAccount = AppUser & {
 
 export type Page = 'dashboard' | 'expense' | 'cashout' | 'purchase' | 'vendors' | 'loans' | 'movement' | 'settings'
 
+export type LoanStatus = 'Open' | 'Settled'
+
 export type LoanEntry = {
   id: string
   personName: string
   amount: number
+  paidAmount: number
+  remainingAmount: number
+  status: LoanStatus
   date: string
   promisedPayoffDate: string
+  settledAt?: string
   createdAt: string
+  updatedAt?: string
 }
 
 export type DailyCashoutEntry = {
@@ -29,6 +36,10 @@ export type DailyCashoutEntry = {
   returns: number
   creditSales: number
   cashAudit: number
+  drawerTotal?: number
+  auditDifference?: number
+  auditStatus?: 'matched' | 'cash-less' | 'cash-more'
+  auditMessage?: string
   actualCashParticulars: string
   pendingCashParticulars: string
   pendingCashBalances?: {

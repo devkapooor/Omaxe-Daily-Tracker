@@ -11,7 +11,7 @@ import { SectionHeading } from '@/components/ui/section-heading'
 type LoanFormProps = {
   peopleOptions: string[]
   onCreatePerson: (name: string) => boolean
-  onSave: (draft: Omit<LoanEntry, 'id' | 'createdAt'>) => void
+  onSave: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void> | void
 }
 
 export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProps) {
@@ -20,7 +20,7 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
   const [entryDate, setEntryDate] = useState(today())
   const [promisedPayoffDate, setPromisedPayoffDate] = useState(today())
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const normalizedPersonName = normalizeName(String(form.get('personName') || ''))
@@ -42,12 +42,17 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
     }
 
     onCreatePerson(normalizedPersonName)
-    onSave({
-      personName: normalizedPersonName,
-      amount,
-      date,
-      promisedPayoffDate: payoff,
-    })
+    try {
+      await onSave({
+        personName: normalizedPersonName,
+        amount,
+        date,
+        promisedPayoffDate: payoff,
+      })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save the loan.')
+      return
+    }
     setError('')
     setPersonName('')
     event.currentTarget.reset()

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Cashout } from '@/domain/financeTypes'
+import type { Cashout, Payment } from '@/domain/financeTypes'
 import type { CashHolder } from '@/domain/appTypes'
 import { money, today, type CashHolderAssignment } from '@/app/uiHelpers'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { SectionHeading } from '@/components/ui/section-heading'
 type DashboardTablesProps = {
   cashouts: Cashout[]
   purchases: { date: string; category: string; purchaseAmount: number }[]
-  payments: { date: string; type: 'Received' | 'Paid'; amount: number; paymentMode: string }[]
+  payments: Payment[]
   pendingCashBalances: Record<CashHolder, number>
   pendingCashBankTotal: number
   holderAssignments: CashHolderAssignment[]
@@ -74,7 +74,7 @@ export function DashboardTables({
   const vendorPaymentTotal = useMemo(
     () =>
       payments
-        .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid')
+        .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid' && (entry.entryType ?? 'vendor-payment') === 'vendor-payment')
         .reduce((total, entry) => total + entry.amount, 0),
     [month, payments],
   )
@@ -82,7 +82,7 @@ export function DashboardTables({
   const paymentByMode = useMemo(() => {
     const map = new Map<string, number>()
     payments
-      .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid')
+      .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid' && (entry.entryType ?? 'vendor-payment') === 'vendor-payment')
       .forEach((entry) => map.set(entry.paymentMode, (map.get(entry.paymentMode) ?? 0) + entry.amount))
     return Array.from(map.entries())
       .map(([mode, amount]) => ({ mode, amount }))

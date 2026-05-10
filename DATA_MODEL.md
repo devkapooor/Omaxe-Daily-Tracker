@@ -80,6 +80,7 @@ Core type sources:
 | storeId | string | yes | Single-store constant |
 | date | string | yes | Payment date |
 | type | `"Received" \| "Paid"` | yes | Payment direction |
+| entryType | `"vendor-payment" \| "loan-payment"` | no | Distinguishes payment allocation flow |
 | partyName | string | yes | Party or counterparty |
 | amount | number | yes | Payment amount |
 | paymentMode | string | yes | Cash, UPI, Card, Bank Transfer |
@@ -121,9 +122,14 @@ Core type sources:
 | id | string | yes | Unique ID |
 | personName | string | yes | Lender/person |
 | amount | number | yes | Loan amount |
+| paidAmount | number | yes | Repaid so far |
+| remainingAmount | number | yes | Open loan balance |
+| status | `"Open" \| "Settled"` | yes | Derived repayment state |
 | date | string | yes | Loan date |
 | promisedPayoffDate | string | yes | Payoff commitment date |
+| settledAt | string | no | Present when fully settled |
 | createdAt | string | yes | ISO timestamp |
+| updatedAt | string | no | Latest update time |
 
 ### DailyCashoutEntry
 
@@ -137,10 +143,14 @@ Core type sources:
 | returns | number | yes | Returns |
 | creditSales | number | yes | Credit sales |
 | cashAudit | number | yes | System audit value |
+| drawerTotal | number | no | Final drawer total counted in modal |
+| auditDifference | number | no | `cashAudit - drawerTotal` |
+| auditStatus | `"matched" \| "cash-less" \| "cash-more"` | no | Saved audit classification |
+| auditMessage | string | no | Human-readable audit warning/result |
 | actualCashParticulars | string | yes | Drawer breakdown |
 | pendingCashParticulars | string | yes | Pending-cash notes |
 | pendingCashBalances | object | no | Running balances by person |
-| remainingBalance | number | yes | Balance after cash expense |
+| remainingBalance | number | yes | Saved drawer total / carried balance |
 | createdAt | string | yes | ISO timestamp |
 
 ### CashTransfer
@@ -180,6 +190,9 @@ Used for autocomplete and canonical name reuse across forms.
 - Firebase Authentication stores auth credentials
 - Firestore stores all app records
 - old browser-only data can still be read once and imported into Firestore
+- `Purchase.unpaidAmount` is the source of truth for vendor outstanding
+- `Vendor Payment` allocates against open purchases oldest-first
+- `Loan Payment` allocates against open loans oldest-first
 
 ## Current Structural Ownership
 

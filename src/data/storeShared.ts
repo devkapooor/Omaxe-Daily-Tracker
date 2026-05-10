@@ -8,6 +8,7 @@ import type {
 import type {
   CashTransfer,
   DailyCashoutEntry,
+  LoanStatus,
   LoanEntry,
   NameDirectory,
   SettingsAuditEntry,
@@ -16,8 +17,13 @@ import type {
 } from '../domain/appTypes'
 
 export const singleStoreId = 'single-store'
+export const defaultMonthlyOperationalExpense = 500000
 
 export type NameDirectoryType = keyof NameDirectory
+
+export type AppSettings = {
+  monthlyOperationalExpense: number
+}
 
 export type CreateUserInput = {
   email: string
@@ -39,7 +45,8 @@ export type LoadedCollections = Record<
   | 'dailyCashouts'
   | 'cashTransfers'
   | 'settingsAudit'
-  | 'nameDirectory',
+  | 'nameDirectory'
+  | 'appSettings',
   boolean
 >
 
@@ -56,6 +63,7 @@ export const initialLoadedCollections: LoadedCollections = {
   cashTransfers: false,
   settingsAudit: false,
   nameDirectory: false,
+  appSettings: false,
 }
 
 export const emptyFinanceData: FinanceData = {
@@ -71,6 +79,10 @@ export const emptyNameDirectory: NameDirectory = {
   vendors: [],
 }
 
+export const defaultAppSettings: AppSettings = {
+  monthlyOperationalExpense: defaultMonthlyOperationalExpense,
+}
+
 export type AppStoreSetters = {
   setAuthError: Dispatch<SetStateAction<string | null>>
   setCashTransfers: Dispatch<SetStateAction<CashTransfer[]>>
@@ -80,6 +92,7 @@ export type AppStoreSetters = {
   setLoadedCollections: Dispatch<SetStateAction<LoadedCollections>>
   setLoans: Dispatch<SetStateAction<LoanEntry[]>>
   setNameDirectory: Dispatch<SetStateAction<NameDirectory>>
+  setAppSettings: Dispatch<SetStateAction<AppSettings>>
   setSettingsAuditLog: Dispatch<SetStateAction<SettingsAuditEntry[]>>
   setUsers: Dispatch<SetStateAction<UserAccount[]>>
   setVendors: Dispatch<SetStateAction<VendorRecord[]>>
@@ -117,6 +130,24 @@ export function normalizeVendorRecord(record: VendorRecord) {
     address: record.address.trim(),
     companiesProvided: record.companiesProvided.trim(),
     notes: record.notes.trim(),
+  }
+}
+
+export function normalizeLoanRecord(record: LoanEntry): LoanEntry {
+  const amount = Math.max(record.amount, 0)
+  const paidAmount = Math.max(record.paidAmount ?? 0, 0)
+  const remainingAmount = Math.max(record.remainingAmount ?? Math.max(amount - paidAmount, 0), 0)
+  const status: LoanStatus = remainingAmount > 0 ? 'Open' : 'Settled'
+
+  return {
+    ...record,
+    personName: normalizeName(record.personName),
+    amount,
+    paidAmount: Math.min(paidAmount, amount),
+    remainingAmount,
+    status,
+    settledAt: status === 'Settled' ? record.settledAt ?? record.createdAt : undefined,
+    updatedAt: record.updatedAt ?? record.createdAt,
   }
 }
 
@@ -159,6 +190,7 @@ export function ensureSingleStore(stores: Store[]) {
 }
 
 export type StoreCollectionState = {
+  appSettings: AppSettings
   cashTransfers: CashTransfer[]
   dailyCashouts: DailyCashoutEntry[]
   financeData: FinanceData

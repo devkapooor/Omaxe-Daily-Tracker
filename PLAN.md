@@ -35,15 +35,17 @@ The app currently supports:
 - login with Firebase email/password
 - owner-created user accounts from `Settings`
 - owner / manager / billing role-based access
-- dashboard summaries and monthly projection
-- expense register entry
-- daily cashout register entry
-- purchase entry
+- dashboard summaries, daily cashout log, and monthly projection
+- dashboard live vendor-outstanding total
+- expense register entry, vendor payment, and loan payment
+- daily cashout register entry with a 2-step drawer-details flow
+- purchase entry with full/partial/unpaid support
 - vendor directory management
-- loans entry
+- loans entry plus repayment-aware loan ledger
 - cash movement tracking
 - password update for all signed-in users
-- account directory, create user, disable/restore, and settings audit for the owner
+- account directory, create user, delete user, and settings audit for the owner
+- owner-managed monthly operational expense setting
 - one-time legacy browser-data import into Firebase
 
 ## Current Product Rules
@@ -121,10 +123,14 @@ The app should stay:
 
 Important current UI choices:
 
-- fixed hover-gradient top bar
+- fixed hover-gradient top bar with scroll hide/reveal
 - reusable glow background wrapper
 - login hero with animated `AlphaHub`
 - no custom per-page CSS files; utility-first Tailwind classes are the main styling layer
+- searchable database-backed selectors for register and purchase flows
+- display dates standardized to `DD/MM/YYYY` across visible app surfaces
+- dashboard date logic uses `Asia/Kolkata` business-day rules
+- dashboard range uses `Yesterday` and `Month To Date`
 
 ## Current Engineering Priorities
 
@@ -133,6 +139,7 @@ Important current UI choices:
 - keep every finance write flow stable across desktop and mobile
 - preserve linked updates between forms, summaries, and registers
 - keep Firestore rules aligned with the product rules
+- keep vendor outstanding and loan balances allocation-correct after every payment
 
 ### Priority 2: Owner Administration
 
@@ -157,6 +164,18 @@ Important current UI choices:
 To make future changes easier:
 
 - dashboard and summary derivations were moved out of `App.tsx` into `src/app/useDashboardMetrics.ts`
+
+## Current Finance Rules
+
+- `Vendor Payment` reduces the selected vendor's oldest open purchase balances first.
+- `Loan Payment` reduces the selected person's oldest open loans first.
+- `Purchase` records can now be fully paid, partially paid, or unpaid.
+- Dashboard `Vendor Outstanding` is a live balance and is not range-limited by `Yesterday` or `Month To Date`.
+- Daily cashout saves the drawer total as the final balance.
+- Daily cashout compares `System Audit` with `Drawer Total` and records:
+  - `Cash Less` when system audit is greater
+  - `Cash More` when drawer total is greater
+  - matched audit when equal
 
 This is the preferred direction for future splits:
 

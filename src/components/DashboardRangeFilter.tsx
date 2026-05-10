@@ -10,7 +10,6 @@ export function DashboardRangeFilter({ value, onChange }: DashboardRangeFilterPr
   return (
     <Tabs value={value} onValueChange={(next) => onChange(next as DashboardRange)}>
       <TabsList>
-        <TabsTrigger value="today">Today</TabsTrigger>
         <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
         <TabsTrigger value="mtd">Month To Date</TabsTrigger>
       </TabsList>

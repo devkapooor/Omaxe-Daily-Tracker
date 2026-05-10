@@ -6,9 +6,10 @@ import {
   normalizeName,
   numberValue,
   singleStoreId,
+  today,
   wordCount,
 } from '@/app/uiHelpers'
-import { SearchableNameField } from '@/components/SearchableNameField'
+import { SearchableSelect } from '@/components/SearchableSelect'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { FieldLabel } from '@/components/ui/field-label'
@@ -21,77 +22,80 @@ import { cn } from '@/lib/utils'
 type CashoutFormProps = {
   currentUser: AppUser
   peopleOptions: string[]
-  onCreatePerson: (name: string) => boolean
-  onSaveCashout: (draft: CashoutDraft) => void
-  onSavePayment: (draft: PaymentDraft) => void
+  onSaveCashout: (draft: CashoutDraft) => Promise<void> | void
+  onSavePayment: (draft: PaymentDraft) => Promise<void> | void
 }
 
 export function CashoutForm({
   currentUser,
   peopleOptions,
-  onCreatePerson,
   onSaveCashout,
   onSavePayment,
 }: CashoutFormProps) {
-  const [entryType, setEntryType] = useState<'expense' | 'payment-paid'>('expense')
+  const [entryType, setEntryType] = useState<'expense' | 'vendor-payment' | 'loan-payment'>('expense')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
-  const [paidTo, setPaidTo] = useState('')
+  const [partyName, setPartyName] = useState('')
   const notesWordCount = wordCount(notes)
   const isExpense = entryType === 'expense'
-  const formHeading = isExpense ? 'Record Expense' : 'Record Payment Paid'
-  const saveButtonLabel = isExpense ? 'Save Expense' : 'Save Payment Paid'
+  const isLoanPayment = entryType === 'loan-payment'
+  const formHeading = isExpense ? 'Record Expense' : isLoanPayment ? 'Record Loan Payment' : 'Record Vendor Payment'
+  const saveButtonLabel = isExpense ? 'Save Expense' : isLoanPayment ? 'Save Loan Payment' : 'Save Vendor Payment'
   const categoryLabel = isExpense ? 'Category' : 'Purpose'
+  const partyLabel = isExpense ? 'Person / Party' : isLoanPayment ? 'Loan Party' : 'Vendor / Party'
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const now = new Date()
     const isApprover = currentUser.role === 'owner' || currentUser.role === 'manager'
     const trimmedNotes = notes.trim()
-    const paidToValue = normalizeName(String(form.get('paidTo') || ''))
+    const partyValue = normalizeName(partyName)
 
     if (notesWordCount > 50) {
       setError('Notes cannot be more than 50 words.')
       return
     }
-    if (!paidToValue) {
-      setError('Person name is required.')
+    if (!partyValue) {
+      setError('Choose a name from the list.')
       return
     }
-
-    onCreatePerson(paidToValue)
 
     const amount = numberValue(form.get('amount'))
     const category = String(form.get('category') || 'Miscellaneous')
     const paymentMode = String(form.get('paymentMode')) as Cashout['paymentMode']
-    const date = now.toISOString().slice(0, 10)
+    const date = today()
 
-    if (entryType === 'expense') {
-      onSaveCashout({
-        storeId: singleStoreId,
-        date,
-        paidTo: paidToValue,
-        amount,
-        category,
-        paymentMode,
-        approvedBy: isApprover ? currentUser.name : 'Pending approval',
-        notes: trimmedNotes,
-      })
-    } else {
-      onSavePayment({
-        storeId: singleStoreId,
-        date,
-        type: 'Paid',
-        partyName: paidToValue,
-        amount,
-        paymentMode,
-        notes: category ? `${category}${trimmedNotes ? ` - ${trimmedNotes}` : ''}` : trimmedNotes,
-      })
+    try {
+      if (entryType === 'expense') {
+        await onSaveCashout({
+          storeId: singleStoreId,
+          date,
+          paidTo: partyValue,
+          amount,
+          category,
+          paymentMode,
+          approvedBy: isApprover ? currentUser.name : 'Pending approval',
+          notes: trimmedNotes,
+        })
+      } else {
+        await onSavePayment({
+          storeId: singleStoreId,
+          date,
+          type: 'Paid',
+          entryType,
+          partyName: partyValue,
+          amount,
+          paymentMode,
+          notes: category ? `${category}${trimmedNotes ? ` - ${trimmedNotes}` : ''}` : trimmedNotes,
+        })
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save this register entry.')
+      return
     }
 
     setNotes('')
-    setPaidTo('')
+    setPartyName('')
     setError('')
     event.currentTarget.reset()
   }
@@ -107,24 +111,23 @@ export function CashoutForm({
             <NativeSelect
               value={entryType}
               onChange={(event) => {
-                setEntryType(event.target.value as 'expense' | 'payment-paid')
+                setEntryType(event.target.value as 'expense' | 'vendor-payment' | 'loan-payment')
                 setError('')
               }}
             >
               <option value="expense">Expense</option>
-              <option value="payment-paid">Payment Paid</option>
+              <option value="vendor-payment">Vendor Payment</option>
+              <option value="loan-payment">Loan Payment</option>
             </NativeSelect>
           </FieldLabel>
 
-          <FieldLabel label="Person / Party">
-            <SearchableNameField
-              name="paidTo"
+          <FieldLabel label={partyLabel}>
+            <SearchableSelect
               options={peopleOptions}
-              placeholder="Search or add person"
-              value={paidTo}
-              onCreate={onCreatePerson}
+              placeholder="Search and select from saved names"
+              value={partyName}
               onValueChange={(value) => {
-                setPaidTo(value)
+                setPartyName(value)
                 setError('')
               }}
             />

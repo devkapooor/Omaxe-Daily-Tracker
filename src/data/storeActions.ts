@@ -8,9 +8,9 @@ import {
   updatePassword,
 } from 'firebase/auth'
 import {
+  deleteDoc,
   doc,
   setDoc,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db, firebaseConfig } from '../lib/firebase'
@@ -21,6 +21,7 @@ import type { CreateUserInput, StoreCollectionState } from './storeShared'
 import {
   NameDirectoryType,
   normalizeName,
+  normalizeLoanRecord,
   normalizeVendorRecord,
   nowIso,
   salesDocId,
@@ -43,6 +44,19 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
       actor,
       createdAt: nowIso(),
     })
+  }
+
+  async function saveMonthlyOperationalExpense(amount: number, actor: string) {
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error('Monthly operational expense must be zero or more.')
+    }
+
+    await setDoc(
+      doc(db, 'appMetadata', 'appSettings'),
+      { monthlyOperationalExpense: amount },
+      { merge: true },
+    )
+    await pushSettingsAudit(`Monthly operational expense updated to ${amount}`, actor)
   }
 
   async function ensureNameInDirectory(type: NameDirectoryType, rawName: string) {
@@ -130,11 +144,88 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
   async function savePayment(draft: PaymentDraft) {
     const id = `payment-${crypto.randomUUID()}`
     const timestamp = nowIso()
-    await setDoc(doc(db, 'payments', id), {
+    const normalizedPartyName = normalizeName(draft.partyName)
+    const paymentRecord = {
       ...draft,
+      partyName: normalizedPartyName,
       createdAt: timestamp,
       updatedAt: timestamp,
-    })
+    }
+
+    if (draft.type === 'Paid' && draft.entryType === 'loan-payment') {
+      const { loans } = getState()
+      const matchingLoans = loans
+        .map((loan) => normalizeLoanRecord(loan))
+        .filter((loan) => loan.personName.toLowerCase() === normalizedPartyName.toLowerCase() && loan.remainingAmount > 0)
+        .sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
+
+      if (matchingLoans.length === 0) {
+        throw new Error('No open loans found for the selected person.')
+      }
+
+      const totalOpenBalance = matchingLoans.reduce((total, loan) => total + loan.remainingAmount, 0)
+      if (draft.amount > totalOpenBalance) {
+        throw new Error('Loan payment exceeds the open loan balance for the selected person.')
+      }
+
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'payments', id), paymentRecord)
+
+      let remainingPayment = draft.amount
+      matchingLoans.forEach((loan) => {
+        if (remainingPayment <= 0) return
+        const applied = Math.min(loan.remainingAmount, remainingPayment)
+        const nextPaidAmount = loan.paidAmount + applied
+        const nextRemainingAmount = loan.remainingAmount - applied
+        batch.update(doc(db, 'loans', loan.id), {
+          paidAmount: nextPaidAmount,
+          remainingAmount: nextRemainingAmount,
+          status: nextRemainingAmount > 0 ? 'Open' : 'Settled',
+          settledAt: nextRemainingAmount > 0 ? null : timestamp,
+          updatedAt: timestamp,
+        })
+        remainingPayment -= applied
+      })
+
+      await batch.commit()
+      return
+    }
+
+    if (draft.type === 'Paid' && draft.entryType === 'vendor-payment') {
+      const { financeData } = getState()
+      const matchingPurchases = financeData.purchases
+        .filter((purchase) => purchase.supplierName.toLowerCase() === normalizedPartyName.toLowerCase() && purchase.unpaidAmount > 0)
+        .sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
+
+      if (matchingPurchases.length === 0) {
+        throw new Error('No open vendor outstanding found for the selected vendor.')
+      }
+
+      const totalOpenBalance = matchingPurchases.reduce((total, purchase) => total + purchase.unpaidAmount, 0)
+      if (draft.amount > totalOpenBalance) {
+        throw new Error('Vendor payment exceeds the open outstanding for the selected vendor.')
+      }
+
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'payments', id), paymentRecord)
+
+      let remainingPayment = draft.amount
+      matchingPurchases.forEach((purchase) => {
+        if (remainingPayment <= 0) return
+        const applied = Math.min(purchase.unpaidAmount, remainingPayment)
+        batch.update(doc(db, 'purchases', purchase.id), {
+          paidAmount: purchase.paidAmount + applied,
+          unpaidAmount: purchase.unpaidAmount - applied,
+          updatedAt: timestamp,
+        })
+        remainingPayment -= applied
+      })
+
+      await batch.commit()
+      return
+    }
+
+    await setDoc(doc(db, 'payments', id), paymentRecord)
   }
 
   async function signInWithApp(email: string, password: string) {
@@ -206,12 +297,12 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     await signOut(auth)
   }
 
-  async function setUserDisabled(userId: string, disabled: boolean, actor: string) {
+  async function deleteUserAccount(userId: string, actor: string) {
     const { users } = getState()
     const target = users.find((item) => item.id === userId)
-    if (!target) return
-    await updateDoc(doc(db, 'users', userId), { disabled })
-    await pushSettingsAudit(`${disabled ? 'Access disabled' : 'Access restored'}: ${target.name}`, actor)
+    if (!target || target.role === 'owner') return
+    await deleteDoc(doc(db, 'users', userId))
+    await pushSettingsAudit(`User deleted: ${target.name} (${target.role})`, actor)
   }
 
   async function changeOwnPassword(nextPassword: string) {
@@ -219,27 +310,49 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     await updatePassword(auth.currentUser, nextPassword)
   }
 
-  async function saveLoanEntry(draft: Omit<LoanEntry, 'id' | 'createdAt'>) {
+  async function saveLoanEntry(
+    draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>,
+  ) {
     const id = `loan-${crypto.randomUUID()}`
+    const timestamp = nowIso()
     await setDoc(doc(db, 'loans', id), {
       ...draft,
-      createdAt: nowIso(),
+      paidAmount: 0,
+      remainingAmount: draft.amount,
+      status: 'Open',
+      createdAt: timestamp,
+      updatedAt: timestamp,
     })
     await ensureNameInDirectory('people', draft.personName)
   }
 
   async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
     const { dailyCashouts, financeData } = getState()
+    const parsedDrawerTotal = draft.drawerTotal ?? draft.remainingBalance
+    const auditDifference = draft.cashAudit - parsedDrawerTotal
+    const auditStatus =
+      auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
+    const auditMessage =
+      auditDifference > 0
+        ? `WARNING: Cash is less by ${auditDifference}.`
+        : auditDifference < 0
+          ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
+          : 'Cash matches the system audit.'
     const latestPendingBalances = dailyCashouts[0]?.pendingCashBalances ?? { dev: 0, arsh: 0, farhan: 0 }
     const nextPendingBalances = { ...latestPendingBalances }
     const holder = draft.recordedByHolder
-    if (holder === 'Dev') nextPendingBalances.dev += draft.remainingBalance
-    if (holder === 'Arsh') nextPendingBalances.arsh += draft.remainingBalance
-    if (holder === 'Farhan') nextPendingBalances.farhan += draft.remainingBalance
+    if (holder === 'Dev') nextPendingBalances.dev += parsedDrawerTotal
+    if (holder === 'Arsh') nextPendingBalances.arsh += parsedDrawerTotal
+    if (holder === 'Farhan') nextPendingBalances.farhan += parsedDrawerTotal
 
     const entry: DailyCashoutEntry = {
       ...draft,
+      drawerTotal: parsedDrawerTotal,
+      auditDifference,
+      auditStatus,
+      auditMessage,
       pendingCashBalances: nextPendingBalances,
+      remainingBalance: parsedDrawerTotal,
       id: `daily-cashout-${crypto.randomUUID()}`,
       createdAt: nowIso(),
     }
@@ -343,6 +456,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     createUserAccount,
     ensureNameInDirectory,
     importLegacyData,
+    saveMonthlyOperationalExpense,
     saveCashTransfer,
     saveCashout,
     saveDailyCashoutEntry,
@@ -351,7 +465,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     savePurchase,
     saveSales,
     saveVendor,
-    setUserDisabled,
+    deleteUserAccount,
     signIn: signInWithApp,
     signOutCurrentUser,
   }

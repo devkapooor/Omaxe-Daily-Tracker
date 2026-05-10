@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
 import type { SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
+import { formatDisplayDateTime } from '@/app/uiHelpers'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -14,6 +15,7 @@ type SettingsPageProps = {
   currentUser: AppUser
   users: UserAccount[]
   isBusy: boolean
+  monthlyOperationalExpense: number
   onCreateUser: (draft: {
     name: string
     email: string
@@ -21,27 +23,25 @@ type SettingsPageProps = {
     mobileNumber: string
     role: Exclude<UserRole, 'owner'>
   }) => Promise<void>
-  onSetUserDisabled: (userId: string, disabled: boolean) => Promise<void>
+  onDeleteUser: (userId: string) => Promise<void>
   onChangeOwnPassword: (password: string) => Promise<void>
+  onSaveMonthlyOperationalExpense: (amount: number) => Promise<void>
   settingsAuditLog: SettingsAuditEntry[]
 }
 
 function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDisplayDateTime(value)
 }
 
 export function SettingsPage({
   currentUser,
   users,
   isBusy,
+  monthlyOperationalExpense,
   onCreateUser,
-  onSetUserDisabled,
+  onDeleteUser,
   onChangeOwnPassword,
+  onSaveMonthlyOperationalExpense,
   settingsAuditLog,
 }: SettingsPageProps) {
   const [error, setError] = useState('')
@@ -121,12 +121,30 @@ export function SettingsPage({
     }
   }
 
-  async function toggleUserDisabled(userId: string, disabled: boolean) {
+  async function updateMonthlyOperationalExpense(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const amount = Number(form.get('monthlyOperationalExpense') || 0)
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError('Monthly operational expense must be zero or more.')
+      return
+    }
+
     try {
       setError('')
-      await onSetUserDisabled(userId, disabled)
+      await onSaveMonthlyOperationalExpense(amount)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to update access.')
+      setError(cause instanceof Error ? cause.message : 'Unable to update monthly operational expense.')
+    }
+  }
+
+  async function deleteUser(userId: string) {
+    try {
+      setError('')
+      await onDeleteUser(userId)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to delete the user.')
     }
   }
 
@@ -145,36 +163,59 @@ export function SettingsPage({
 
         {canManageUsers ? (
           <TabsContent value="create">
-            <Card className="max-w-3xl">
-              <CardHeader>
-                <SectionHeading eyebrow="Users" title="Create Staff Account" />
-              </CardHeader>
-              <CardContent>
-                <form className="grid gap-5 md:grid-cols-2" onSubmit={createUser}>
-                  <FieldLabel label="Staff Name">
-                    <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
-                  </FieldLabel>
-                  <FieldLabel label="Role">
-                    <NativeSelect defaultValue="billing" name="role" onChange={() => setError('')}>
-                      <option value="billing">Billing</option>
-                      <option value="manager">Manager</option>
-                    </NativeSelect>
-                  </FieldLabel>
-                  <FieldLabel label="Email Address">
-                    <Input name="email" placeholder="staff@company.com" required type="email" onChange={() => setError('')} />
-                  </FieldLabel>
-                  <FieldLabel label="Mobile Number">
-                    <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
-                  </FieldLabel>
-                  <FieldLabel className="md:col-span-2" label="Password">
-                    <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
-                  </FieldLabel>
-                  <div className="md:col-span-2">
-                    <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <Card className="max-w-3xl">
+                <CardHeader>
+                  <SectionHeading eyebrow="Users" title="Create Staff Account" />
+                </CardHeader>
+                <CardContent>
+                  <form className="grid gap-5 md:grid-cols-2" onSubmit={createUser}>
+                    <FieldLabel label="Staff Name">
+                      <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
+                    </FieldLabel>
+                    <FieldLabel label="Role">
+                      <NativeSelect defaultValue="billing" name="role" onChange={() => setError('')}>
+                        <option value="billing">Billing</option>
+                        <option value="manager">Manager</option>
+                      </NativeSelect>
+                    </FieldLabel>
+                    <FieldLabel label="Email Address">
+                      <Input name="email" placeholder="staff@company.com" required type="email" onChange={() => setError('')} />
+                    </FieldLabel>
+                    <FieldLabel label="Mobile Number">
+                      <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
+                    </FieldLabel>
+                    <FieldLabel className="md:col-span-2" label="Password">
+                      <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
+                    </FieldLabel>
+                    <div className="md:col-span-2">
+                      <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <SectionHeading eyebrow="Operations" title="Monthly Operational Expenses" />
+                </CardHeader>
+                <CardContent>
+                  <form className="grid gap-5" onSubmit={updateMonthlyOperationalExpense}>
+                    <FieldLabel label="Current Monthly Expense">
+                      <Input
+                        defaultValue={String(monthlyOperationalExpense)}
+                        name="monthlyOperationalExpense"
+                        type="number"
+                        min="0"
+                        step="1"
+                        onChange={() => setError('')}
+                      />
+                    </FieldLabel>
+                    <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Operational Expense'}</Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         ) : null}
 
@@ -210,9 +251,9 @@ export function SettingsPage({
                     </div>
                     {canManageUsers && user.id !== currentUser.id ? (
                       <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                        <span className="text-sm font-medium text-muted-foreground">{user.disabled ? 'Access disabled' : 'Access active'}</span>
-                        <Button variant="outline" type="button" onClick={() => void toggleUserDisabled(user.id, !user.disabled)}>
-                          {user.disabled ? 'Restore' : 'Disable'}
+                        <span className="text-sm font-medium text-muted-foreground">Delete removes app access for this user.</span>
+                        <Button variant="destructive" type="button" onClick={() => void deleteUser(user.id)}>
+                          Delete
                         </Button>
                       </div>
                     ) : (

@@ -60,6 +60,7 @@ export type Payment = {
   storeId: string
   date: string
   type: 'Received' | 'Paid'
+  entryType?: 'vendor-payment' | 'loan-payment'
   partyName: string
   amount: number
   paymentMode: Exclude<PaymentMode, 'Credit'>

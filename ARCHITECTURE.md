@@ -22,6 +22,8 @@ Omaxe Daily Tracker is a single-store finance operations web app with:
 - Owner / manager / billing role-based navigation
 - A fixed top navigation bar shared across the app
 - Owner-created staff accounts from `Settings`
+- Loan repayment tracking tied to dedicated register entries
+- Vendor outstanding tracking tied to purchases plus vendor-payment allocation
 
 The app is no longer using public signup or owner approval queues. It is Firebase-first, with a one-time import bridge for legacy browser data.
 
@@ -51,14 +53,17 @@ src/
     CashoutForm.tsx
     DailyCashoutFinalSummaryPanel.tsx
     DailyCashoutForm.tsx
+    DailyCashoutLog.tsx
     DashboardRangeFilter.tsx
     DashboardTables.tsx
     LoadingScreen.tsx
+    LoanLedger.tsx
     LoanForm.tsx
     LoginScreen.tsx
     MonthlyProjectionPanel.tsx
     PurchaseForm.tsx
     RecentCashoutList.tsx
+    SearchableSelect.tsx
     SettingsPage.tsx
     VendorsPage.tsx
     ui/
@@ -126,9 +131,11 @@ src/
 
 - formatting helpers
 - date helpers
+- IST business-day helpers
 - role/page helpers
 - cash-holder assignment helpers
-- shared UI constants such as categories and fixed expense
+- shared UI constants such as categories and fixed expense fallback
+- visible date formatting is standardized through shared display helpers
 
 ### UI Layer
 
@@ -139,18 +146,28 @@ Important current screens:
 - `LoginScreen.tsx`
   login-only start screen with animated `AlphaHub` hero
 - `SettingsPage.tsx`
-  owner-only create-user form, account directory, password update, and settings audit
+  owner-only create-user form, account directory delete flow, operational-expense setting, password update, and settings audit
 - `CashMovementForm.tsx`
   transfer flow driven by dynamic user-to-holder labels
+- `DailyCashoutForm.tsx`
+  2-step cashout flow with a drawer-particulars modal
+- `DailyCashoutLog.tsx`
+  dashboard review surface for saved daily cashout entries
+- `PurchaseForm.tsx`
+  supports full, partial, and unpaid purchase capture
+- `VendorsPage.tsx`
+  searchable vendor directory plus per-vendor outstanding totals
 
 Important shared UI:
 
 - [hover-gradient-nav-bar.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/hover-gradient-nav-bar.tsx:1)
-  fixed top navigation
+  fixed top navigation with scroll hide/reveal behavior
 - [background-components.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/background-components.tsx:1)
   full-app glow background wrapper
 - [typewriter-effect.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/ui/typewriter-effect.tsx:1)
   animated login hero text
+- [SearchableSelect.tsx](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/components/SearchableSelect.tsx:1)
+  strict searchable selector backed by Firestore-synced options
 
 ### Data Layer
 
@@ -161,9 +178,9 @@ Supporting modules:
 - [storeShared.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeShared.ts:1)
   shared store types, constants, and helpers
 - [storeSubscriptions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeSubscriptions.ts:1)
-  Firestore listeners and collection hydration
+  Firestore listeners and collection hydration, including app settings
 - [storeActions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeActions.ts:1)
-  auth actions, writes, owner-created user flow, imports, and persistence logic
+  auth actions, writes, owner-created user flow, operational-expense updates, imports, and persistence logic
 - [legacyLocalData.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/legacyLocalData.ts:1)
   one-time import bridge from the old browser-storage version
 
@@ -174,6 +191,7 @@ and
 [src/domain/appTypes.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/domain/appTypes.ts:1)
 
 define the core finance records, user profile shape, page types, cash-holder model, and settings audit records.
+Loan records now also track repayment progress and status, payment records can distinguish vendor payments from loan payments, and daily cashout records can store drawer-audit metadata.
 
 [src/domain/financeCalculations.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/domain/financeCalculations.ts:1)
 holds pure calculation helpers where applicable.
@@ -192,6 +210,7 @@ There is no longer a multi-file authored CSS layer for screens and layout.
 ## Current Navigation Model
 
 The app uses one shared fixed top bar. Available destinations depend on role.
+The bar now slides away on downward scroll and reappears on upward scroll.
 
 Owner:
 
@@ -224,7 +243,7 @@ Restricted pages resolve back to `expense` inside the app coordinator.
 - New staff profiles are written to Firestore immediately with:
   - `disabled: false`
   - `approvalStatus: 'approved'`
-- Owner can later disable or restore non-owner users from the account directory.
+- Owner can delete non-owner users from the app directory.
 - All signed-in roles can update their own password in `Settings`.
 
 ## Current Data Flow
@@ -254,7 +273,7 @@ Legacy browser data detected
 
 - Login
 - Dashboard
-- Expense Register
+- Expense Register / Vendor Payment / Loan Payment
 - Cashout Register
 - Purchase Entry
 - Vendors
@@ -265,9 +284,19 @@ Legacy browser data detected
 ## Current Firestore / Rules Notes
 
 - `users` creation is owner-only at the rules layer.
+- `users` deletion is owner-only at the rules layer.
 - Public signup request creation is no longer allowed.
 - Core operational collections remain staff-readable and staff-writable when the user is active.
 - The app still uses a single Firestore database and a single default store record.
+
+## Current Finance Allocation Rules
+
+- `Loan Payment` reduces matching open loans oldest-first.
+- `Vendor Payment` reduces matching open purchases oldest-first.
+- `Purchase.unpaidAmount` is the source of truth for vendor outstanding.
+- Dashboard `Vendor Outstanding` is a live balance across all open vendor balances.
+- Daily cashout saves drawer total as the final balance.
+- Daily cashout records an audit status by comparing `cashAudit` and `drawerTotal`.
 
 ## Maintenance Notes
 

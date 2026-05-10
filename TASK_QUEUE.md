@@ -27,8 +27,23 @@ Phase 2 hardening on the live Firebase-based single-store app, with an emphasis 
 - Public signup, pending request approval, and launch cleanup flows are removed from the live product.
 - The owner creates users directly from `Settings`.
 - The shared fixed top bar is live.
+- The top bar now hides on downward scroll and reappears on upward scroll.
 - Legacy browser-only data can still be imported once into Firebase.
 - Dashboard summary derivations have been split out of `App.tsx` into `useDashboardMetrics.ts`.
+- Register now handles expense, vendor payment, and loan payment.
+- Purchase and register selectors are database-backed searchable lists only.
+- Dashboard now includes a daily cashout review log.
+- Loans now track repayment state and remaining balances.
+- Visible app dates are standardized to `DD/MM/YYYY`.
+- Business-day date logic now uses `Asia/Kolkata`.
+- Dashboard range now uses only `Yesterday` and `Month To Date`.
+- Register expense log now shows the full filtered list instead of a short recent-only slice.
+- Monthly operational expenses are now owner-managed from Settings instead of hardcoded.
+- Daily cashout now saves drawer total as the final cashout balance and records `Cash Less` / `Cash More` audit status.
+- Purchases now support full, partial, and unpaid vendor balances.
+- Vendor payments now reduce the oldest outstanding vendor purchases first.
+- Dashboard now shows a live `Vendor Outstanding` total.
+- Vendors page now shows vendor-level outstanding balances.
 
 ## In Progress
 
@@ -66,6 +81,15 @@ Phase 2 hardening on the live Firebase-based single-store app, with an emphasis 
 - [x] Make cash movement display dynamic user labels instead of stale placeholder names.
 - [x] Extract dashboard derivations into `src/app/useDashboardMetrics.ts`.
 - [x] Perform safe dead-code cleanup for retired signup-era and bootstrap-era code paths.
+- [x] Add scroll-aware top navigation hide/reveal behavior.
+- [x] Split cashout into a daily-details step and a drawer-particulars modal step.
+- [x] Add dashboard daily cashout log with date and user filters.
+- [x] Add repayment-aware loan ledger and loan payment register flow.
+- [x] Replace register and purchase datalist fields with strict searchable Firestore-backed selectors.
+- [x] Replace user disable/restore with owner-driven delete from account directory.
+- [x] Add vendor-ledger style outstanding tracking using purchase unpaid balances plus vendor-payment allocation.
+- [x] Add IST-based business-date handling for dashboard and shared formatters.
+- [x] Add cashout audit status based on system-audit vs drawer-total comparison.
 
 ## Next Phase Plan
 

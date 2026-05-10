@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { CashHolder, CashTransfer } from '@/domain/appTypes'
 import {
   type CashHolderAssignment,
+  formatDisplayDate,
+  formatDisplayTime,
   money,
   MovementHistoryRange,
   numberValue,
@@ -212,12 +214,11 @@ export function CashMovementForm({
                 >
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-foreground">
-                      {entry.date} | {labelByHolder[entry.from] ?? entry.from} to{' '}
+                      {formatDisplayDate(entry.date)} | {labelByHolder[entry.from] ?? entry.from} to{' '}
                       {entry.toType === 'bank' ? 'Bank' : entry.toPerson ? labelByHolder[entry.toPerson] ?? entry.toPerson : ''}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {entry.reason} | By {entry.createdBy} at{' '}
-                      {new Date(entry.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      {entry.reason} | By {entry.createdBy} at {formatDisplayTime(entry.createdAt)}
                     </p>
                   </div>
                   <Badge variant="outline" className="w-fit text-sm">
