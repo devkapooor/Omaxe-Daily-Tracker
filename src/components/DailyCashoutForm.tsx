@@ -163,11 +163,11 @@ export function DailyCashoutForm({ currentUserName, currentUserHolder, onSave }:
 
   return (
     <>
-      <Card>
+      <Card className="flex h-full min-h-0 flex-col">
         <CardHeader>
           <SectionHeading eyebrow="Daily Details" title="Cashout Register" />
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto">
           <form className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" onSubmit={openDrawerStep}>
             <FieldLabel label="Cashout For Date">
               <Input

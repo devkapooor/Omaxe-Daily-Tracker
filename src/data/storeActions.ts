@@ -36,6 +36,10 @@ type CreateActionsArgs = {
   setIsBusy: Dispatch<SetStateAction<boolean>>
 }
 
+function withoutUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)) as T
+}
+
 export function createAppStoreActions({ getState, setAuthError, setIsBusy }: CreateActionsArgs) {
   async function pushSettingsAudit(action: string, actor: string) {
     const id = `settings-audit-${crypto.randomUUID()}`
@@ -46,17 +50,23 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     })
   }
 
-  async function saveMonthlyOperationalExpense(amount: number, actor: string) {
-    if (!Number.isFinite(amount) || amount < 0) {
+  async function saveOperationalSettings(monthlyOperationalExpense: number, marginPercentage: number, actor: string) {
+    if (!Number.isFinite(monthlyOperationalExpense) || monthlyOperationalExpense < 0) {
       throw new Error('Monthly operational expense must be zero or more.')
+    }
+    if (!Number.isFinite(marginPercentage) || marginPercentage < 0 || marginPercentage > 100) {
+      throw new Error('Margin percentage must be between 0 and 100.')
     }
 
     await setDoc(
       doc(db, 'appMetadata', 'appSettings'),
-      { monthlyOperationalExpense: amount },
+      { marginPercentage, monthlyOperationalExpense },
       { merge: true },
     )
-    await pushSettingsAudit(`Monthly operational expense updated to ${amount}`, actor)
+    await pushSettingsAudit(
+      `Operational settings updated: monthly expense ${monthlyOperationalExpense}, margin ${marginPercentage}%`,
+      actor,
+    )
   }
 
   async function ensureNameInDirectory(type: NameDirectoryType, rawName: string) {
@@ -107,6 +117,14 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     const existing = vendors.find((vendor) => vendor.name.toLowerCase() === normalizedName.toLowerCase())
     const timestamp = nowIso()
     const id = existing?.id ?? `vendor-${crypto.randomUUID()}`
+    const nextOpeningOutstanding = Math.max(input.openingOutstanding ?? 0, 0)
+    const openingPaidAlready = Math.max(
+      (existing?.openingOutstanding ?? 0) - (existing?.openingOutstandingRemaining ?? existing?.openingOutstanding ?? 0),
+      0,
+    )
+    const nextOpeningOutstandingRemaining = existing
+      ? Math.max(nextOpeningOutstanding - openingPaidAlready, 0)
+      : nextOpeningOutstanding
     const record = normalizeVendorRecord({
       id,
       name: normalizedName,
@@ -115,6 +133,8 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
       address: input.address,
       companiesProvided: input.companiesProvided,
       notes: input.notes,
+      openingOutstanding: nextOpeningOutstanding,
+      openingOutstandingRemaining: nextOpeningOutstandingRemaining,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
     })
@@ -134,23 +154,23 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
   async function saveCashout(draft: CashoutDraft) {
     const id = `cashout-${crypto.randomUUID()}`
     const timestamp = nowIso()
-    await setDoc(doc(db, 'cashouts', id), {
+    await setDoc(doc(db, 'cashouts', id), withoutUndefined({
       ...draft,
       createdAt: timestamp,
       updatedAt: timestamp,
-    })
+    }))
   }
 
   async function savePayment(draft: PaymentDraft) {
     const id = `payment-${crypto.randomUUID()}`
     const timestamp = nowIso()
     const normalizedPartyName = normalizeName(draft.partyName)
-    const paymentRecord = {
+    const paymentRecord = withoutUndefined({
       ...draft,
       partyName: normalizedPartyName,
       createdAt: timestamp,
       updatedAt: timestamp,
-    }
+    })
 
     if (draft.type === 'Paid' && draft.entryType === 'loan-payment') {
       const { loans } = getState()
@@ -192,16 +212,19 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     }
 
     if (draft.type === 'Paid' && draft.entryType === 'vendor-payment') {
-      const { financeData } = getState()
+      const { financeData, vendors } = getState()
+      const matchingVendor = vendors.find((vendor) => vendor.name.toLowerCase() === normalizedPartyName.toLowerCase())
+      const openingOutstandingRemaining = matchingVendor?.openingOutstandingRemaining ?? 0
       const matchingPurchases = financeData.purchases
         .filter((purchase) => purchase.supplierName.toLowerCase() === normalizedPartyName.toLowerCase() && purchase.unpaidAmount > 0)
         .sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
 
-      if (matchingPurchases.length === 0) {
+      if (matchingPurchases.length === 0 && openingOutstandingRemaining <= 0) {
         throw new Error('No open vendor outstanding found for the selected vendor.')
       }
 
-      const totalOpenBalance = matchingPurchases.reduce((total, purchase) => total + purchase.unpaidAmount, 0)
+      const totalOpenBalance =
+        openingOutstandingRemaining + matchingPurchases.reduce((total, purchase) => total + purchase.unpaidAmount, 0)
       if (draft.amount > totalOpenBalance) {
         throw new Error('Vendor payment exceeds the open outstanding for the selected vendor.')
       }
@@ -210,6 +233,14 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
       batch.set(doc(db, 'payments', id), paymentRecord)
 
       let remainingPayment = draft.amount
+      if (matchingVendor && openingOutstandingRemaining > 0) {
+        const appliedToOpening = Math.min(openingOutstandingRemaining, remainingPayment)
+        batch.update(doc(db, 'vendors', matchingVendor.id), {
+          openingOutstandingRemaining: openingOutstandingRemaining - appliedToOpening,
+          updatedAt: timestamp,
+        })
+        remainingPayment -= appliedToOpening
+      }
       matchingPurchases.forEach((purchase) => {
         if (remainingPayment <= 0) return
         const applied = Math.min(purchase.unpaidAmount, remainingPayment)
@@ -422,6 +453,8 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
           address: '',
           companiesProvided: '',
           notes: 'Imported from legacy vendor list.',
+          openingOutstanding: 0,
+          openingOutstandingRemaining: 0,
           createdAt: nowIso(),
           updatedAt: nowIso(),
         })
@@ -456,7 +489,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     createUserAccount,
     ensureNameInDirectory,
     importLegacyData,
-    saveMonthlyOperationalExpense,
+    saveOperationalSettings,
     saveCashTransfer,
     saveCashout,
     saveDailyCashoutEntry,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { PurchaseDraft } from '@/domain/financeTypes'
-import { normalizeName, numberValue, singleStoreId, today } from '@/app/uiHelpers'
+import { normalizeName, numberValue, purchasePaymentModes, singleStoreId, today } from '@/app/uiHelpers'
 import { SearchableSelect } from '@/components/SearchableSelect'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -81,11 +81,11 @@ export function PurchaseForm({ vendorOptions, onSave }: PurchaseFormProps) {
   }
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="New Entry" title="Record Purchase" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto">
         <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
           <FieldLabel label="Vendor Name">
             <SearchableSelect
@@ -157,11 +157,11 @@ export function PurchaseForm({ vendorOptions, onSave }: PurchaseFormProps) {
                 setError('')
               }}
             >
-              <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="Card">Card</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Credit">Credit</option>
+              {purchasePaymentModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode}
+                </option>
+              ))}
             </NativeSelect>
           </FieldLabel>
 

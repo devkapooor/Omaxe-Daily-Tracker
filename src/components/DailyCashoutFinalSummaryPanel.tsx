@@ -1,10 +1,11 @@
+import { formatDisplayDate, money, type CashHolderAssignment } from '@/app/uiHelpers'
 import type { CashHolder } from '@/domain/appTypes'
-import { money, type CashHolderAssignment } from '@/app/uiHelpers'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { SectionHeading } from '@/components/ui/section-heading'
 
 type DailyCashoutFinalSummaryPanelProps = {
   dailyFinalSummary: {
+    date: string | null
     totalSales: number
     cashSales: number
     upiSales: number
@@ -32,16 +33,16 @@ export function DailyCashoutFinalSummaryPanel({
     ['Total Expenses (Expense Register)', money(dailyFinalSummary.cashExpenses)],
     ['Cash To Hand (Cash Sales - Cash Expenses)', money(dailyFinalSummary.cashToHand)],
     ['Cash Transferred Today', money(dailyFinalSummary.transfersToday)],
-    [
-      'Net Pending Cash By Person',
-      pendingCashSummary,
-    ],
+    ['Net Pending Cash By Person', pendingCashSummary],
   ]
 
   return (
     <Card>
       <CardHeader>
-        <SectionHeading eyebrow="Today Summary" title="Daily Cashout Final Summary" />
+        <SectionHeading
+          eyebrow={dailyFinalSummary.date ? `Latest Closed Day - ${formatDisplayDate(dailyFinalSummary.date)}` : 'Latest Closed Day'}
+          title="Daily Cashout Final Summary"
+        />
       </CardHeader>
       <CardContent className="space-y-3">
         {rows.map(([label, value]) => (

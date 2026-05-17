@@ -119,11 +119,11 @@ export function CashMovementForm({
   }
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="Cash Movement" title="Transfer Pending Cash" />
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {holderAssignments.map((assignment) => (
             <div key={assignment.holder} className="rounded-3xl border border-border/70 bg-secondary/55 p-4">
@@ -189,7 +189,7 @@ export function CashMovementForm({
         </Button>
 
         {showHistory && (
-          <div className="space-y-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             <Tabs value={historyRange} onValueChange={(value) => setHistoryRange(value as MovementHistoryRange)}>
               <TabsList>
                 <TabsTrigger value="today">Today</TabsTrigger>
@@ -205,7 +205,7 @@ export function CashMovementForm({
               </FieldLabel>
             )}
 
-            <div className="space-y-3">
+            <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
               {filteredTransfers.length === 0 && <p className="text-sm font-medium text-muted-foreground">No cash movement history for this filter.</p>}
               {filteredTransfers.map((entry) => (
                 <div

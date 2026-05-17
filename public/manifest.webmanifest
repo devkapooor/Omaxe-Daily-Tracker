@@ -1,0 +1,24 @@
+{
+  "name": "Omaxe Daily Tracker",
+  "short_name": "Omaxe",
+  "description": "Shared finance tracking for expenses, purchases, vendors, loans, and cash movement.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fcfbf4",
+  "theme_color": "#101312",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

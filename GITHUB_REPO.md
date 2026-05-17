@@ -1,23 +1,28 @@
 # GitHub Repository
 
-Primary GitHub repository for this project:
+Primary repository:
 
 `https://github.com/devkapooor/Omaxe-Daily-Tracker.git`
 
-## Current Status
+## Current Local State
 
-- Repository URL has been saved in the project.
-- Local git is available in this environment.
-- The repository is already connected to the remote and has an active `main` branch.
-- The latest pushed baseline commit referenced in the docs is `1076537`, with newer local changes still pending commit.
+- remote is already configured
+- active branch is `main`
+- latest recorded committed baseline in the local history is `de60440`
+- current local build is passing with `npm run build`
 
-## Standard Push Flow
-
-Run:
+## Recommended Pre-Push Flow
 
 ```powershell
 cd "C:\Users\devka\OneDrive\Desktop\Codex Projects\Omaxe Daily Tracker"
+git status --short
+npm run build
 git add .
-git commit -m "Describe the current change set"
+git commit -m "Finalize consolidated workspace and refresh docs"
 git push origin main
 ```
+
+## Notes
+
+- review `git status` before commit because the working tree has had broad in-progress refactor changes
+- a fresh QA drill is still recommended before treating the current state as release-signed-off

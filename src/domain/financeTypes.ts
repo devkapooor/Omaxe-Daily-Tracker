@@ -1,4 +1,4 @@
-export type PaymentMode = 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Credit'
+export type PaymentMode = 'Cash' | 'UPI' | 'Card' | 'Bank Transfer' | 'Cheque' | 'Credit'
 
 export type Store = {
   id: string
@@ -49,6 +49,8 @@ export type Cashout = {
   amount: number
   category: string
   paymentMode: Exclude<PaymentMode, 'Credit'>
+  chequeNumber?: string
+  chequePayDate?: string
   approvedBy: string
   notes: string
   createdAt: string
@@ -64,6 +66,8 @@ export type Payment = {
   partyName: string
   amount: number
   paymentMode: Exclude<PaymentMode, 'Credit'>
+  chequeNumber?: string
+  chequePayDate?: string
   notes: string
   createdAt: string
   updatedAt: string

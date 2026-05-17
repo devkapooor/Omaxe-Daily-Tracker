@@ -2,202 +2,88 @@
 
 ## Hard Rule
 
-Whenever auth flow, navigation, data structure, storage rules, or UI architecture changes, update:
-
-- `PLAN.md`
-- `ARCHITECTURE.md`
-- `DRILL.md`
-- any other doc that becomes stale because of the change
-
-Documentation sync is part of the definition of done.
+Code, docs, and QA notes must move together. Any change to auth, navigation, storage, installability, structure, or product behavior should update the affected markdown files in the same pass.
 
 ## Current Goal
 
-Maintain and extend a single-store finance operations app that now runs on:
-
-- React + Vite + TypeScript
-- Firebase Authentication
-- Firestore
-- Tailwind CSS v4
-- shadcn-style shared UI primitives in `src/components/ui`
-
-The app is already live and Firebase-first. Current work is about:
-
-- keeping finance workflows compact and dependable
-- making role-based user management simpler for the owner
-- preserving cross-device consistency
-- keeping the codebase easier to change as screens grow
+Keep the live single-store app stable while making the current consolidated workspace easier to maintain and easier to install on mobile Chrome.
 
 ## Current Product Scope
 
 The app currently supports:
 
-- login with Firebase email/password
-- owner-created user accounts from `Settings`
-- owner / manager / billing role-based access
-- dashboard summaries, daily cashout log, and monthly projection
-- dashboard live vendor-outstanding total
-- expense register entry, vendor payment, and loan payment
-- daily cashout register entry with a 2-step drawer-details flow
-- purchase entry with full/partial/unpaid support
-- vendor directory management
-- loans entry plus repayment-aware loan ledger
-- cash movement tracking
-- password update for all signed-in users
-- account directory, create user, delete user, and settings audit for the owner
-- owner-managed monthly operational expense setting
-- one-time legacy browser-data import into Firebase
+- Firebase email/password login
+- owner-created manager and billing accounts
+- owner dashboard with projections and finance summaries
+- shared party and vendor directory management
+- register flows for:
+  - expenses
+  - vendor payments
+  - purchases
+  - owner-only loans and loan repayments
+- daily cashout with drawer-audit save flow
+- pending cash movement tracking
+- owner-only logs workspace
+- user directory, password updates, and projection settings
+- one-time legacy browser-data import
+- installable PWA support for Chrome/mobile
+- explicit online-required offline behavior
 
-## Current Product Rules
-
-- Public signup is removed.
-- The owner creates staff accounts directly from `Settings`.
-- New staff accounts are active immediately after creation.
-- `Pending Requests` and `Launch Cleanup` are not part of the live product anymore.
-- The app remains single-store only.
-
-## Current Code Shape
-
-```text
-src/
-  app/
-    App.tsx
-    uiHelpers.ts
-    useDashboardMetrics.ts
-  components/
-    AppTopBar.tsx
-    CashMovementForm.tsx
-    CashoutForm.tsx
-    DailyCashoutFinalSummaryPanel.tsx
-    DailyCashoutForm.tsx
-    DashboardRangeFilter.tsx
-    DashboardTables.tsx
-    LoadingScreen.tsx
-    LoanForm.tsx
-    LoginScreen.tsx
-    MonthlyProjectionPanel.tsx
-    PurchaseForm.tsx
-    RecentCashoutList.tsx
-    SettingsPage.tsx
-    VendorsPage.tsx
-    ui/
-      background-components.tsx
-      badge.tsx
-      button.tsx
-      card.tsx
-      field-label.tsx
-      hover-gradient-nav-bar.tsx
-      input.tsx
-      native-select.tsx
-      section-heading.tsx
-      tabs.tsx
-      textarea.tsx
-      typewriter-effect.tsx
-  data/
-    appStore.ts
-    storeActions.ts
-    storeShared.ts
-    storeSubscriptions.ts
-    legacyLocalData.ts
-    seedData.ts
-  domain/
-    appTypes.ts
-    financeCalculations.ts
-    financeTypes.ts
-  lib/
-    firebase.ts
-    utils.ts
-  styles/
-    global.css
-```
-
-## Current UI Direction
-
-The app should stay:
-
-- operational first, not marketing-heavy
-- compact enough to show more information on one screen
-- warm neutral with green/blue accents
-- shared-component based
-- mobile-safe but owner-optimized on desktop
-
-Important current UI choices:
-
-- fixed hover-gradient top bar with scroll hide/reveal
-- reusable glow background wrapper
-- login hero with animated `AlphaHub`
-- no custom per-page CSS files; utility-first Tailwind classes are the main styling layer
-- searchable database-backed selectors for register and purchase flows
-- display dates standardized to `DD/MM/YYYY` across visible app surfaces
-- dashboard date logic uses `Asia/Kolkata` business-day rules
-- dashboard range uses `Yesterday` and `Month To Date`
-
-## Current Engineering Priorities
+## Current Priorities
 
 ### Priority 1: Workflow Reliability
 
-- keep every finance write flow stable across desktop and mobile
-- preserve linked updates between forms, summaries, and registers
-- keep Firestore rules aligned with the product rules
-- keep vendor outstanding and loan balances allocation-correct after every payment
+- keep every finance write flow stable
+- preserve vendor and loan allocation correctness
+- keep cheque-mode flows consistent across forms
+- keep Firestore-backed sync dependable
+- keep installed/mobile app launches dependable without pretending offline data is supported
 
-### Priority 2: Owner Administration
+### Priority 2: Owner Visibility
 
-- keep owner-created account flow simple
-- maintain clean role restrictions
-- keep settings audit meaningful
+- keep dashboard summaries trustworthy
+- keep logs and directory views easy to audit
+- preserve user and settings controls for the owner
 
 ### Priority 3: Maintainability
 
-- continue splitting oversized files when a stable seam exists
-- keep `App.tsx` focused on orchestration
-- keep derived calculations in hooks or pure helpers instead of growing render files
+- keep `App.tsx` orchestration-focused
+- keep reusable state and formatting logic out of large page files
+- split files only where the seam is stable and reduces duplication
 
-### Priority 4: Documentation Accuracy
+### Priority 4: Delivery Readiness
 
-- reflect real auth flow, not old signup-approval behavior
-- reflect the Tailwind/shadcn-style structure
-- keep QA drill steps aligned with the live product
+- keep the docs current
+- keep the build green
+- reduce risk before commit and push
 
-## Recent Structural Change
+## Recent Structural Progress
 
-To make future changes easier:
+Completed in the current local pass:
 
-- dashboard and summary derivations were moved out of `App.tsx` into `src/app/useDashboardMetrics.ts`
+- fixed the navigation config TypeScript build blocker
+- extracted shared cheque-mode state into `src/components/useChequeDetails.ts`
+- extracted shared stat card UI into `src/components/SummaryCard.tsx`
+- fixed the dashboard summary mojibake separator
+- added manifest, service worker, and install assets for mobile Chrome PWA installability
+- added explicit online-required handling for offline app launches
+- refreshed the markdown set to match the current consolidated app shape
 
-## Current Finance Rules
+## Near-Term Follow-Ups
 
-- `Vendor Payment` reduces the selected vendor's oldest open purchase balances first.
-- `Loan Payment` reduces the selected person's oldest open loans first.
-- `Purchase` records can now be fully paid, partially paid, or unpaid.
-- Dashboard `Vendor Outstanding` is a live balance and is not range-limited by `Yesterday` or `Month To Date`.
-- Daily cashout saves the drawer total as the final balance.
-- Daily cashout compares `System Audit` with `Drawer Total` and records:
-  - `Cash Less` when system audit is greater
-  - `Cash More` when drawer total is greater
-  - matched audit when equal
-
-This is the preferred direction for future splits:
-
-- calculation-heavy logic into hooks or pure modules
-- app-shell rendering kept in `App.tsx`
-- screen-specific behavior kept close to the screen component
+- validate PWA installability on hosted Chrome Android after deployment
+- consider splitting `LogsPage.tsx` by log section if it keeps growing
+- consider splitting `DirectoryPage.tsx` by tab content if the vendor editor expands
+- consider lazy loading or manual chunking if the production bundle warning becomes a practical issue
+- rerun a current-state QA drill after the refactor settles
+- defer true Android TWA packaging to a later phase after PWA validation
 
 ## Out Of Scope
 
 - multi-store support
-- full accounting ledger
-- payroll or attendance
 - inventory management
-- GST/tax module
-- Cloud Functions dependent flows unless explicitly requested
-
-## Expectation For Future Changes
-
-All future work should preserve these habits:
-
-- shared UI primitives over repeated markup
-- owner-managed user creation, not public signup
-- focused hooks/helpers for derived data
-- Firebase-first persistence
-- documentation updated in the same change
+- payroll
+- tax or GST workflows
+- deep accounting ledger behavior
+- offline business-data editing or queued writes
+- Cloud Functions-dependent product changes unless explicitly requested

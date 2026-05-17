@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
-import type { SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
-import { formatDisplayDateTime } from '@/app/uiHelpers'
+import type { UserAccount } from '@/domain/appTypes'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -15,6 +14,7 @@ type SettingsPageProps = {
   currentUser: AppUser
   users: UserAccount[]
   isBusy: boolean
+  marginPercentage: number
   monthlyOperationalExpense: number
   onCreateUser: (draft: {
     name: string
@@ -25,24 +25,19 @@ type SettingsPageProps = {
   }) => Promise<void>
   onDeleteUser: (userId: string) => Promise<void>
   onChangeOwnPassword: (password: string) => Promise<void>
-  onSaveMonthlyOperationalExpense: (amount: number) => Promise<void>
-  settingsAuditLog: SettingsAuditEntry[]
-}
-
-function formatTimestamp(value: string) {
-  return formatDisplayDateTime(value)
+  onSaveOperationalSettings: (monthlyOperationalExpense: number, marginPercentage: number) => Promise<void>
 }
 
 export function SettingsPage({
   currentUser,
   users,
   isBusy,
+  marginPercentage,
   monthlyOperationalExpense,
   onCreateUser,
   onDeleteUser,
   onChangeOwnPassword,
-  onSaveMonthlyOperationalExpense,
-  settingsAuditLog,
+  onSaveOperationalSettings,
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
@@ -121,21 +116,26 @@ export function SettingsPage({
     }
   }
 
-  async function updateMonthlyOperationalExpense(event: React.FormEvent<HTMLFormElement>) {
+  async function updateOperationalSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const amount = Number(form.get('monthlyOperationalExpense') || 0)
+    const nextMarginPercentage = Number(form.get('marginPercentage') || 0)
 
     if (!Number.isFinite(amount) || amount < 0) {
       setError('Monthly operational expense must be zero or more.')
       return
     }
+    if (!Number.isFinite(nextMarginPercentage) || nextMarginPercentage < 0 || nextMarginPercentage > 100) {
+      setError('Margin percentage must be between 0 and 100.')
+      return
+    }
 
     try {
       setError('')
-      await onSaveMonthlyOperationalExpense(amount)
+      await onSaveOperationalSettings(amount, nextMarginPercentage)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to update monthly operational expense.')
+      setError(cause instanceof Error ? cause.message : 'Unable to update operational settings.')
     }
   }
 
@@ -149,78 +149,93 @@ export function SettingsPage({
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="grid min-h-0 gap-4 overflow-hidden">
       {error ? (
         <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>
       ) : null}
-      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid gap-4">
+      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 gap-4 overflow-hidden">
         <TabsList className="w-full justify-start">
           {canManageUsers ? <TabsTrigger value="create">Create User</TabsTrigger> : null}
+          {canManageUsers ? <TabsTrigger value="operations">Operations</TabsTrigger> : null}
           <TabsTrigger value="directory">Account Directory</TabsTrigger>
           <TabsTrigger value="password">Update Password</TabsTrigger>
-          <TabsTrigger value="audit">Settings Audit</TabsTrigger>
         </TabsList>
 
         {canManageUsers ? (
-          <TabsContent value="create">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-              <Card className="max-w-3xl">
-                <CardHeader>
-                  <SectionHeading eyebrow="Users" title="Create Staff Account" />
-                </CardHeader>
-                <CardContent>
-                  <form className="grid gap-5 md:grid-cols-2" onSubmit={createUser}>
-                    <FieldLabel label="Staff Name">
-                      <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
-                    </FieldLabel>
-                    <FieldLabel label="Role">
-                      <NativeSelect defaultValue="billing" name="role" onChange={() => setError('')}>
-                        <option value="billing">Billing</option>
-                        <option value="manager">Manager</option>
-                      </NativeSelect>
-                    </FieldLabel>
-                    <FieldLabel label="Email Address">
-                      <Input name="email" placeholder="staff@company.com" required type="email" onChange={() => setError('')} />
-                    </FieldLabel>
-                    <FieldLabel label="Mobile Number">
-                      <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
-                    </FieldLabel>
-                    <FieldLabel className="md:col-span-2" label="Password">
-                      <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
-                    </FieldLabel>
-                    <div className="md:col-span-2">
-                      <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <SectionHeading eyebrow="Operations" title="Monthly Operational Expenses" />
-                </CardHeader>
-                <CardContent>
-                  <form className="grid gap-5" onSubmit={updateMonthlyOperationalExpense}>
-                    <FieldLabel label="Current Monthly Expense">
-                      <Input
-                        defaultValue={String(monthlyOperationalExpense)}
-                        name="monthlyOperationalExpense"
-                        type="number"
-                        min="0"
-                        step="1"
-                        onChange={() => setError('')}
-                      />
-                    </FieldLabel>
-                    <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Operational Expense'}</Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </div>
+          <TabsContent value="create" className="min-h-0">
+            <Card className="max-w-3xl">
+              <CardHeader className="pb-3">
+                <SectionHeading eyebrow="Users" title="Create Staff Account" />
+              </CardHeader>
+              <CardContent>
+                <form className="grid gap-4 sm:grid-cols-2" onSubmit={createUser}>
+                  <FieldLabel label="Staff Name">
+                    <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Role">
+                    <NativeSelect defaultValue="billing" name="role" onChange={() => setError('')}>
+                      <option value="billing">Billing</option>
+                      <option value="manager">Manager</option>
+                    </NativeSelect>
+                  </FieldLabel>
+                  <FieldLabel label="Email Address">
+                    <Input name="email" placeholder="staff@company.com" required type="email" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Mobile Number">
+                    <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel className="sm:col-span-2" label="Password">
+                    <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <div className="sm:col-span-2">
+                    <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </TabsContent>
         ) : null}
 
-        <TabsContent value="directory">
-          <Card>
+        {canManageUsers ? (
+          <TabsContent value="operations" className="min-h-0">
+            <Card className="max-w-3xl">
+              <CardHeader className="pb-3">
+                <SectionHeading eyebrow="Operations" title="Projection Settings" />
+              </CardHeader>
+              <CardContent>
+                <form className="grid gap-4 sm:grid-cols-2" onSubmit={updateOperationalSettings}>
+                  <FieldLabel label="Monthly Operational Expense">
+                    <Input
+                      defaultValue={String(monthlyOperationalExpense)}
+                      name="monthlyOperationalExpense"
+                      type="number"
+                      min="0"
+                      step="1"
+                      onChange={() => setError('')}
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Margin %">
+                    <Input
+                      defaultValue={String(marginPercentage)}
+                      name="marginPercentage"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      onChange={() => setError('')}
+                    />
+                  </FieldLabel>
+                  <div className="sm:col-span-2">
+                    <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Projection Settings'}</Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        <TabsContent value="directory" className="min-h-0">
+          <Card className="flex h-full min-h-0 flex-col">
             <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
               <SectionHeading eyebrow="Users" title="Account Directory" />
               <FieldLabel className="w-full sm:max-w-sm" label="Search User">
@@ -234,8 +249,8 @@ export function SettingsPage({
                 />
               </FieldLabel>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-3">
+            <CardContent className="min-h-0 flex-1 overflow-hidden">
+              <div className="grid min-h-0 gap-3 overflow-y-auto pr-1">
                 {filteredUsers.map((user) => (
                   <article
                     className="flex flex-col gap-4 rounded-[20px] border border-border/70 bg-secondary/55 p-4 lg:flex-row lg:items-center lg:justify-between"
@@ -267,38 +282,18 @@ export function SettingsPage({
           </Card>
         </TabsContent>
 
-        <TabsContent value="password">
+        <TabsContent value="password" className="min-h-0">
           <Card className="max-w-2xl">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <SectionHeading eyebrow="Security" title="Update My Password" />
             </CardHeader>
             <CardContent>
-              <form className="grid gap-5" onSubmit={changeOwnUserPassword}>
+              <form className="grid gap-4" onSubmit={changeOwnUserPassword}>
                 <FieldLabel label="New Password">
                   <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
                 </FieldLabel>
                 <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Password'}</Button>
               </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="audit">
-          <Card>
-            <CardHeader>
-              <SectionHeading eyebrow="Audit" title="Recent Settings Activity" />
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3">
-                {settingsAuditLog.length === 0 ? (
-                  <p className="text-sm font-medium text-muted-foreground">No settings activity recorded yet.</p>
-                ) : null}
-                {settingsAuditLog.slice(0, 12).map((entry) => (
-                  <div key={entry.id} className="rounded-[20px] border border-border/70 bg-secondary/55 p-4 text-sm text-foreground">
-                    {formatTimestamp(entry.createdAt)} | {entry.actor} | {entry.action}
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

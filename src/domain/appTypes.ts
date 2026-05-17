@@ -8,7 +8,7 @@ export type UserAccount = AppUser & {
   disabled?: boolean
 }
 
-export type Page = 'dashboard' | 'expense' | 'cashout' | 'purchase' | 'vendors' | 'loans' | 'movement' | 'settings'
+export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'logs' | 'settings'
 
 export type LoanStatus = 'Open' | 'Settled'
 
@@ -80,6 +80,8 @@ export type VendorRecord = {
   address: string
   companiesProvided: string
   notes: string
+  openingOutstanding: number
+  openingOutstandingRemaining: number
   createdAt: string
   updatedAt: string
 }

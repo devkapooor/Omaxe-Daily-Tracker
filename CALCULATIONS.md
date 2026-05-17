@@ -2,22 +2,111 @@
 
 ## Hard Rule
 
-If any displayed summary, derived value, or projection logic changes, update this file together with:
+If any displayed summary, projection, or allocation rule changes, update this file with the rest of the product docs.
 
-- `DATA_MODEL.md`
-- `ARCHITECTURE.md`
-- `PLAN.md`
-- `TASK_QUEUE.md` when roadmap or status changes
+## Current Runtime Sources
 
-## Purpose
+Most current derived summary logic lives in:
 
-This document tracks the finance numbers currently used by the app. Some calculations are still performed in `App.tsx`, while pure reusable finance logic belongs in:
+- `src/app/useDashboardMetrics.ts`
+- `src/components/DashboardTables.tsx`
 
-[src/domain/financeCalculations.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/domain/financeCalculations.ts:1)
+There is no longer an active `src/domain/financeCalculations.ts` module in the current codebase.
 
-## Current Dashboard / Summary Logic
+## Date Model
 
-### Today Expense Total
+- visible app dates are formatted as `DD/MM/YYYY`
+- business-day helpers use `Asia/Kolkata`
+- dashboard range options are currently:
+  - `yesterday`
+  - `mtd`
+
+## Dashboard Range Logic
+
+```text
+yesterday -> from = yesterday, to = yesterday
+mtd       -> from = first day of current month, to = today
+```
+
+## Dashboard Totals
+
+### Dashboard Sales
+
+```text
+dashboardSales =
+sum(sale.totalSales where sale.date is within selected range)
+```
+
+### Dashboard Expense Total
+
+```text
+dashboardExpenseTotal =
+sum(cashout.amount where cashout.date is within selected range)
+```
+
+### Open Loan Balance
+
+```text
+totalLoans =
+sum(normalizedLoan.remainingAmount for all loans)
+```
+
+### Vendor Outstanding
+
+```text
+vendorOutstandingByName =
+vendor.openingOutstandingRemaining
++ sum(purchase.unpaidAmount for matching vendor)
+
+totalVendorOutstanding =
+sum(all vendorOutstandingByName values)
+```
+
+## Projection Logic
+
+### Monthly Sales Projection
+
+```text
+monthStart = first day of current month
+latestRecordedSalesDate = latest sale date in current month
+mtdSales = sum(sale.totalSales from monthStart through latestRecordedSalesDate)
+completedDays = inclusive days between monthStart and latestRecordedSalesDate
+averageDailySales = mtdSales / completedDays
+projectedMonthlySales = averageDailySales * daysInMonth(latestRecordedSalesDate)
+```
+
+### Projection Settings
+
+The current source of truth is:
+
+```text
+appMetadata/appSettings.monthlyOperationalExpense
+appMetadata/appSettings.marginPercentage
+```
+
+## Latest Closed-Day Summary
+
+The owner dashboard uses the latest saved `DailyCashoutEntry.date` as the closed day reference.
+
+```text
+cashSales   = sum(entries.cashSales for latestClosedDay)
+upiSales    = sum(entries.upiSales for latestClosedDay)
+creditSales = sum(entries.creditSales for latestClosedDay)
+returns     = sum(entries.returns for latestClosedDay)
+totalSales  = cashSales + upiSales + creditSales - returns
+
+cashExpenses =
+sum(cashout.amount where cashout.date = latestClosedDay)
+
+cashToHand = cashSales - cashExpenses
+
+transfersToday =
+sum(cashTransfer.amount where cashTransfer.date = latestClosedDay)
+```
+
+## Current-Day Register Summaries
+
+### Today Expense
 
 ```text
 todayCashout =
@@ -34,200 +123,58 @@ todayPaymentReceived =
 sum(payment.amount where payment.date = today and payment.type = "Received")
 ```
 
-### Dashboard Range Bounds
-
-Supported dashboard filters:
-
-- `yesterday`
-- `mtd`
-
-```text
-yesterday  -> from = yesterday, to = yesterday
-mtd        -> from = first day of current month, to = today
-```
-
-All business-day calculations now use `Asia/Kolkata` date keys.
-
-### Dashboard Sales
-
-```text
-dashboardSales =
-sum(sale.totalSales where sale.date is within selected range)
-```
-
-### Dashboard Expense Total
-
-```text
-dashboardExpenseTotal =
-sum(cashout.amount where cashout.date is within selected range)
-```
-
-## Projection Logic
-
-### Monthly Sales Projection
-
-Current logic:
-
-```text
-projectedMonthlySales =
-monthToDateSales / completedDaysInMonth * totalDaysInMonth
-```
-
-Where:
-
-```text
-monthToDateSales =
-sum(sale.totalSales from first day of current month through today)
-```
-
-### Break-Even Projection
-
-The current UI uses:
-
-```text
-projectedMarginValue = projectedMonthlySales * 0.25
-breakEvenDelta = projectedMarginValue - monthlyFixedExpense
-projectedProfit = max(breakEvenDelta, 0)
-projectedLoss = abs(min(breakEvenDelta, 0))
-```
-
-Current runtime fallback monthly operational expense in the app:
-
-```text
-monthlyFixedExpense = 500000
-```
-
-The live source of truth is now:
-
-```text
-appMetadata/appSettings.monthlyOperationalExpense
-```
-
-## Daily Cashout Register Summary
-
-The current “Daily Cashout Final Summary” panel derives:
-
-### Daily Sales Summary
-
-```text
-cashSales   = sum(dailyCashoutEntry.cashSales for today)
-upiSales    = sum(dailyCashoutEntry.upiSales for today)
-creditSales = sum(dailyCashoutEntry.creditSales for today)
-returns     = sum(dailyCashoutEntry.returns for today)
-totalSales  = cashSales + upiSales + creditSales - returns
-```
-
-### Daily Cash Expense
-
-```text
-cashExpenses =
-sum(cashout.amount where cashout.date = today)
-```
-
-### Cash To Hand
-
-```text
-cashToHand = cashSales - cashExpenses
-```
-
-### Transfers Today
-
-```text
-transfersToday =
-sum(cashTransfer.amount where cashTransfer.date = today)
-```
-
 ## Pending Cash Logic
 
-The latest `DailyCashoutEntry.pendingCashBalances` is treated as the base running balance.
+Base balances come from the latest saved `DailyCashoutEntry.pendingCashBalances`.
 
-Then transfers adjust that balance:
+Transfers then adjust that base:
 
 ```text
-person-to-person transfer:
-  source balance -= amount
-  target balance += amount
+person-to-person:
+  source -= amount
+  target += amount
 
-person-to-bank transfer:
-  source balance -= amount
+person-to-bank:
+  source -= amount
   bankTotal += amount
 ```
 
 ## Daily Cashout Audit Logic
 
-Final saved daily cashout balance:
-
 ```text
 remainingBalance = drawerTotal
-```
-
-Audit classification:
-
-```text
 auditDifference = cashAudit - drawerTotal
 
-if auditDifference > 0  -> "Cash Less"
-if auditDifference < 0  -> "Cash More"
-if auditDifference = 0  -> matched audit
+auditDifference > 0 -> "cash-less"
+auditDifference < 0 -> "cash-more"
+auditDifference = 0 -> "matched"
 ```
 
-## Vendor Outstanding Logic
+## Payment Allocation Rules
 
-### Purchase Save
+### Loan Repayment
 
 ```text
-unpaidAmount = max(purchaseAmount - paidAmount, 0)
+find open loans for the selected person
+sort oldest first
+apply payment across remainingAmount until exhausted
+reject if payment exceeds total open balance
 ```
 
-### Vendor Outstanding Total
+### Vendor Payment
 
 ```text
-totalVendorOutstanding =
-sum(purchase.unpaidAmount for all open purchases)
+apply against vendor openingOutstandingRemaining first when present
+then apply against open purchases oldest first
+reject if payment exceeds total open vendor outstanding
 ```
 
-### Vendor Payment Allocation
+## Dashboard Tables
 
-```text
-find open purchases for selected vendor
-sort by oldest first
-apply payment amount across unpaidAmount values until exhausted
-reject if payment amount > total open vendor outstanding
-```
+Current tables include monthly grouped views such as:
 
-## Purchase / Vendor Summary Tables
+- expense by category
+- purchase total vs vendor payment total
+- payment mode breakdown for paid payments
 
-### Expense By Category
-
-```text
-monthExpenseByCategory =
-sum(cashout.amount grouped by cashout.category for current month)
-```
-
-### Monthly Purchase Total
-
-```text
-monthlyPurchaseTotal =
-sum(purchase.purchaseAmount for current month)
-```
-
-### Vendor Payment Total
-
-```text
-vendorPaymentTotal =
-sum(payment.amount where payment.type = "Paid" for current month)
-```
-
-### Vendor Payment By Mode
-
-```text
-paymentByMode =
-sum(payment.amount grouped by payment.paymentMode
-where payment.type = "Paid" for current month)
-```
-
-## Notes About Current State
-
-- The app currently mixes some derived UI logic inside `App.tsx` with reusable domain helpers.
-- Future cleanup should continue moving stable pure finance logic into `src/domain/financeCalculations.ts`.
-- Any such move must preserve these formulas or update this document if formulas change.
+These are read models only and do not write back to Firestore.

@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -38,7 +39,7 @@
   }
 
   body {
-    @apply min-h-screen bg-background text-foreground antialiased;
+    @apply min-h-screen overflow-hidden bg-background text-foreground antialiased;
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -59,6 +60,6 @@
   }
 
   #root {
-    @apply min-h-screen;
+    @apply h-[100dvh] min-h-screen overflow-hidden;
   }
 }

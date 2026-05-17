@@ -5,7 +5,7 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'rounded-[24px] border border-border/80 bg-white/85 text-card-foreground shadow-[0_16px_40px_rgba(24,32,27,0.07)] backdrop-blur-xl',
+        'rounded-[20px] border border-border/80 bg-white/85 text-card-foreground shadow-[0_12px_28px_rgba(24,32,27,0.06)] backdrop-blur-xl',
         className,
       )}
       {...props}
@@ -14,7 +14,7 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-1.5 p-4 sm:p-5', className)} {...props} />
+  return <div className={cn('flex flex-col gap-1.5 p-3.5 sm:p-4', className)} {...props} />
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
@@ -26,7 +26,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('px-4 pb-4 sm:px-5 sm:pb-5', className)} {...props} />
+  return <div className={cn('px-3.5 pb-3.5 sm:px-4 sm:pb-4', className)} {...props} />
 }
 
 export { Card, CardHeader, CardTitle, CardDescription, CardContent }

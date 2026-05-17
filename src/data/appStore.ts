@@ -27,6 +27,7 @@ import { seedData } from './seedData'
 import { readLegacyImportPayload } from './legacyLocalData'
 
 export function useAppStore() {
+  const [networkTick, setNetworkTick] = useState(0)
   const [authUser, setAuthUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -45,6 +46,19 @@ export function useAppStore() {
   const bootstrappedOwnerRef = useRef<string | null>(null)
   const localBypassAttemptedRef = useRef(false)
   const vendorFallbackLoadedRef = useRef(false)
+
+  useEffect(() => {
+    function handleNetworkChange() {
+      setNetworkTick((value) => value + 1)
+    }
+
+    window.addEventListener('online', handleNetworkChange)
+    window.addEventListener('offline', handleNetworkChange)
+    return () => {
+      window.removeEventListener('online', handleNetworkChange)
+      window.removeEventListener('offline', handleNetworkChange)
+    }
+  }, [])
 
   useEffect(() => {
     return onAuthStateChanged(auth, (nextUser) => {
@@ -117,6 +131,18 @@ export function useAppStore() {
 
         if (!cancelled) setCanStartSubscriptions(true)
       } catch (error) {
+        const code = error instanceof Error && 'code' in error ? String(error.code) : ''
+        const isNetworkError =
+          (typeof navigator !== 'undefined' && !navigator.onLine) ||
+          code.includes('unavailable') ||
+          code.includes('network') ||
+          code.includes('failed-precondition')
+
+        if (isNetworkError) {
+          setAuthError('Internet connection required to verify workspace access.')
+          return
+        }
+
         setAuthError(error instanceof Error ? error.message : 'Unable to verify your workspace access.')
         await signOut(auth).catch(() => undefined)
       }
@@ -126,7 +152,7 @@ export function useAppStore() {
     return () => {
       cancelled = true
     }
-  }, [authUser])
+  }, [authUser, networkTick])
 
   useEffect(() => {
     if (!authUser || !canStartSubscriptions) return
@@ -270,7 +296,7 @@ export function useAppStore() {
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
     saveLoanEntry: actions.saveLoanEntry,
-    saveMonthlyOperationalExpense: actions.saveMonthlyOperationalExpense,
+    saveOperationalSettings: actions.saveOperationalSettings,
     savePayment: actions.savePayment,
     savePurchase: actions.savePurchase,
     saveSales: actions.saveSales,

@@ -18,10 +18,12 @@ import type {
 
 export const singleStoreId = 'single-store'
 export const defaultMonthlyOperationalExpense = 500000
+export const defaultMarginPercentage = 25
 
 export type NameDirectoryType = keyof NameDirectory
 
 export type AppSettings = {
+  marginPercentage: number
   monthlyOperationalExpense: number
 }
 
@@ -80,6 +82,7 @@ export const emptyNameDirectory: NameDirectory = {
 }
 
 export const defaultAppSettings: AppSettings = {
+  marginPercentage: defaultMarginPercentage,
   monthlyOperationalExpense: defaultMonthlyOperationalExpense,
 }
 
@@ -122,6 +125,11 @@ export function mapDoc<T extends DocumentData>(id: string, data: T) {
 }
 
 export function normalizeVendorRecord(record: VendorRecord) {
+  const openingOutstanding = Math.max(record.openingOutstanding ?? 0, 0)
+  const openingOutstandingRemaining = Math.max(
+    Math.min(record.openingOutstandingRemaining ?? openingOutstanding, openingOutstanding),
+    0,
+  )
   return {
     ...record,
     name: normalizeName(record.name),
@@ -130,6 +138,8 @@ export function normalizeVendorRecord(record: VendorRecord) {
     address: record.address.trim(),
     companiesProvided: record.companiesProvided.trim(),
     notes: record.notes.trim(),
+    openingOutstanding,
+    openingOutstandingRemaining,
   }
 }
 
@@ -166,6 +176,8 @@ export function parseVendorCatalog(data: DocumentData | undefined) {
         typeof candidate.address !== 'string' ||
         typeof candidate.companiesProvided !== 'string' ||
         typeof candidate.notes !== 'string' ||
+        (candidate.openingOutstanding !== undefined && typeof candidate.openingOutstanding !== 'number') ||
+        (candidate.openingOutstandingRemaining !== undefined && typeof candidate.openingOutstandingRemaining !== 'number') ||
         typeof candidate.createdAt !== 'string' ||
         typeof candidate.updatedAt !== 'string'
       ) {

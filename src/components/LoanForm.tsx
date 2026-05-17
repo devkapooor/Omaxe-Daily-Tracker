@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { LoanEntry } from '@/domain/appTypes'
 import { normalizeName, numberValue, today } from '@/app/uiHelpers'
-import { SearchableNameField } from '@/components/SearchableNameField'
+import { SearchableSelect } from '@/components/SearchableSelect'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { FieldLabel } from '@/components/ui/field-label'
@@ -10,11 +10,10 @@ import { SectionHeading } from '@/components/ui/section-heading'
 
 type LoanFormProps = {
   peopleOptions: string[]
-  onCreatePerson: (name: string) => boolean
   onSave: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void> | void
 }
 
-export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProps) {
+export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
   const [error, setError] = useState('')
   const [personName, setPersonName] = useState('')
   const [entryDate, setEntryDate] = useState(today())
@@ -23,13 +22,13 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const normalizedPersonName = normalizeName(String(form.get('personName') || ''))
+    const normalizedPersonName = normalizeName(personName)
     const amount = numberValue(form.get('amount'))
     const date = String(form.get('date') || '')
     const payoff = String(form.get('promisedPayoffDate') || '')
 
     if (!normalizedPersonName) {
-      setError('Person name is required.')
+      setError('Choose a party from the saved list.')
       return
     }
     if (amount <= 0) {
@@ -41,7 +40,6 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
       return
     }
 
-    onCreatePerson(normalizedPersonName)
     try {
       await onSave({
         personName: normalizedPersonName,
@@ -61,19 +59,17 @@ export function LoanForm({ peopleOptions, onCreatePerson, onSave }: LoanFormProp
   }
 
   return (
-    <Card>
+    <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="New Entry" title="Loan Taken" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto">
         <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
           <FieldLabel label="Person Name">
-            <SearchableNameField
-              name="personName"
+            <SearchableSelect
               options={peopleOptions}
-              placeholder="Search or add person"
+              placeholder="Search and select from saved parties"
               value={personName}
-              onCreate={onCreatePerson}
               onValueChange={(value) => {
                 setPersonName(value)
                 setError('')

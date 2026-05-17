@@ -154,11 +154,16 @@ export function setupAppStoreSubscriptions({
       markLoaded('nameDirectory')
     }),
     onSnapshot(doc(db, 'appMetadata', 'appSettings'), (snapshot) => {
-      const data = snapshot.data() as Partial<{ monthlyOperationalExpense: unknown }> | undefined
-      const value = typeof data?.monthlyOperationalExpense === 'number' && data.monthlyOperationalExpense >= 0
-        ? data.monthlyOperationalExpense
-        : defaultAppSettings.monthlyOperationalExpense
-      setAppSettings({ monthlyOperationalExpense: value })
+      const data = snapshot.data() as Partial<{ marginPercentage: unknown; monthlyOperationalExpense: unknown }> | undefined
+      const monthlyOperationalExpense =
+        typeof data?.monthlyOperationalExpense === 'number' && data.monthlyOperationalExpense >= 0
+          ? data.monthlyOperationalExpense
+          : defaultAppSettings.monthlyOperationalExpense
+      const marginPercentage =
+        typeof data?.marginPercentage === 'number' && data.marginPercentage >= 0
+          ? data.marginPercentage
+          : defaultAppSettings.marginPercentage
+      setAppSettings({ marginPercentage, monthlyOperationalExpense })
       markLoaded('appSettings')
     }),
   ]

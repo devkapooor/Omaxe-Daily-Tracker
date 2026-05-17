@@ -1,4 +1,4 @@
-import type { Cashout } from '../domain/financeTypes'
+import type { Cashout, PurchaseDraft } from '../domain/financeTypes'
 import type { CashHolder, Page, UserAccount } from '../domain/appTypes'
 
 export type AppToast = {
@@ -11,7 +11,6 @@ export type MovementHistoryRange = 'today' | DashboardRange | 'custom'
 export const IST_TIMEZONE = 'Asia/Kolkata'
 
 export const singleStoreId = 'single-store'
-export const monthlyFixedExpense = 500000
 
 export const cashoutCategories = [
   'Rent',
@@ -24,7 +23,8 @@ export const cashoutCategories = [
   'Loan Repayment',
 ]
 
-export const cashoutPaymentModes: Cashout['paymentMode'][] = ['Cash', 'UPI', 'Card', 'Bank Transfer']
+export const cashoutPaymentModes: Cashout['paymentMode'][] = ['Cash', 'Bank Transfer', 'Cheque']
+export const purchasePaymentModes: PurchaseDraft['paymentMode'][] = ['Cash', 'Bank Transfer', 'Cheque', 'Credit']
 
 export type CashHolderAssignment = {
   holder: CashHolder
@@ -181,7 +181,7 @@ export function uniqNames(values: string[]) {
 export function resolveActivePage(role: string, activePage: Page) {
   return role === 'owner'
     ? activePage
-    : activePage === 'dashboard' || activePage === 'loans'
+    : activePage === 'dashboard' || activePage === 'logs'
       ? 'expense'
       : activePage
 }

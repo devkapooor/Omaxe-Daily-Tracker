@@ -2,29 +2,49 @@
 
 ## Hard Rule
 
-If authentication flow, setup steps, storage behavior, or related file structure changes, update this file together with the main planning docs.
+If auth setup, first-user bootstrap, or storage behavior changes, update this file with the main architecture docs.
 
-1. Create a Firebase project and enable `Authentication -> Email/Password`.
-2. Create a Firestore database in production mode.
-3. Copy `.env.example` to `.env` and fill in your Firebase web app values.
-4. Create the first auth user in the Firebase Authentication console.
-5. Sign in once with that user. The app will auto-create the first Firestore profile as `owner`.
-6. Deploy [firestore.rules](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/firestore.rules) to protect the data.
+## Setup Steps
 
-After the owner logs in, use the Settings screen to create manager and billing accounts.
+1. Create a Firebase project.
+2. Enable `Authentication -> Email/Password`.
+3. Create Firestore in production mode.
+4. Copy `.env.example` to `.env` and fill in the Firebase web config.
+5. Deploy `firestore.rules`.
+6. Create the first auth user in Firebase Authentication.
+7. Sign in once with that first user.
 
-Current live setup expectations:
+## First User Bootstrap
 
-- user creation happens only from `Settings`
-- no public signup flow is used
-- monthly operational expense is stored in `appMetadata/appSettings`
-- purchases, vendor payments, and daily cashouts all write live Firestore records that feed dashboard totals
+On first successful login, the app creates the initial Firestore profile as the `owner`.
 
-The app can import any old browser-only data one time into Firebase, then it clears the legacy local storage keys.
+After that:
 
-Relevant current implementation files:
+- use `Settings` to create `manager` and `billing` users
+- do not use a public signup flow because the live product no longer supports it
 
-- [src/lib/firebase.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/lib/firebase.ts:1)
-- [src/data/appStore.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/appStore.ts:1)
-- [src/data/storeActions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeActions.ts:1)
-- [src/data/storeSubscriptions.ts](/c:/Users/devka/OneDrive/Desktop/Codex Projects/Omaxe Daily Tracker/src/data/storeSubscriptions.ts:1)
+## Current Live Expectations
+
+- auth is Firebase email/password only
+- users are created from inside the app by the owner
+- finance writes go straight to Firestore
+- app settings live under `appMetadata/appSettings`
+- shared searchable names live under `appMetadata/nameDirectory`
+- vendor catalog fallback data may live under `appMetadata/vendorCatalog` if direct vendor writes are permission-blocked
+
+## Local Testing Note
+
+For local owner-only testing, the app can run with:
+
+```text
+VITE_LOCAL_AUTH_BYPASS=true
+```
+
+That is a local developer convenience, not the live auth model.
+
+## Relevant Files
+
+- `src/lib/firebase.ts`
+- `src/data/appStore.ts`
+- `src/data/storeActions.ts`
+- `src/data/storeSubscriptions.ts`

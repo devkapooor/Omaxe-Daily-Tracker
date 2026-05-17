@@ -11,11 +11,11 @@ import {
   today,
   uniqNames,
 } from '@/app/uiHelpers'
-import { defaultMonthlyOperationalExpense, normalizeLoanRecord } from '@/data/storeShared'
+import { defaultMarginPercentage, defaultMonthlyOperationalExpense, normalizeLoanRecord } from '@/data/storeShared'
 
 type UseDashboardMetricsArgs = {
   cashTransfers: CashTransfer[]
-  cashoutFilterDate: string
+  cashoutFilterDate?: string
   dailyCashouts: DailyCashoutEntry[]
   dashboardRange: DashboardRange
   data: FinanceData
@@ -25,6 +25,7 @@ type UseDashboardMetricsArgs = {
     vendors: string[]
   }
   monthlyOperationalExpense?: number
+  marginPercentage?: number
   users: UserAccount[]
   vendors: VendorRecord[]
   currentUserId?: string
@@ -32,7 +33,7 @@ type UseDashboardMetricsArgs = {
 
 export function useDashboardMetrics({
   cashTransfers,
-  cashoutFilterDate,
+  cashoutFilterDate = today(),
   currentUserId,
   dailyCashouts,
   dashboardRange,
@@ -40,6 +41,7 @@ export function useDashboardMetrics({
   loans,
   nameDirectory,
   monthlyOperationalExpense = defaultMonthlyOperationalExpense,
+  marginPercentage = defaultMarginPercentage,
   users,
   vendors,
 }: UseDashboardMetricsArgs) {
@@ -51,16 +53,21 @@ export function useDashboardMetrics({
   )
 
   const directoryOptions = useMemo(() => {
-    const derivedPeople = [
+    const derivedPartyNames = [
       ...data.cashouts.map((cashout) => cashout.paidTo),
       ...data.payments.map((payment) => payment.partyName),
       ...loans.map((loan) => loan.personName),
     ]
     const derivedVendors = data.purchases.map((purchase) => purchase.supplierName)
     const userNames = users.map((user) => user.name)
+    const vendorNames = vendors.map((vendor) => vendor.name)
+    const vendorNameKeys = new Set(vendorNames.map((vendor) => vendor.trim().toLowerCase()))
+    const partyOptions = uniqNames([...nameDirectory.people, ...derivedPartyNames, ...userNames]).filter(
+      (name) => !vendorNameKeys.has(name.trim().toLowerCase()),
+    )
     return {
-      people: uniqNames([...nameDirectory.people, ...derivedPeople, ...userNames, ...vendors.map((vendor) => vendor.name)]),
-      vendors: uniqNames([...vendors.map((vendor) => vendor.name), ...nameDirectory.vendors, ...derivedVendors]),
+      party: partyOptions,
+      vendors: uniqNames([...vendorNames, ...nameDirectory.vendors, ...derivedVendors]),
     }
   }, [data.cashouts, data.payments, data.purchases, loans, nameDirectory.people, nameDirectory.vendors, users, vendors])
 
@@ -124,15 +131,25 @@ export function useDashboardMetrics({
     [data.cashouts, dashboardRangeBounds],
   )
 
-  const projectedMonthlySales = useMemo(() => {
+  const monthlySalesProjection = useMemo(() => {
     const now = today()
     const monthStart = `${now.slice(0, 7)}-01`
-    const mtdSales = data.sales
-      .filter((sale) => sale.date >= monthStart && sale.date <= now)
-      .reduce((total, sale) => total + sale.totalSales, 0)
-    const completedDays = daysBetweenInclusive(monthStart, now)
+    const currentMonthSales = data.sales.filter((sale) => sale.date >= monthStart && sale.date <= now)
+    const latestRecordedSalesDate = currentMonthSales.map((sale) => sale.date).sort((a, b) => b.localeCompare(a))[0]
+    if (!latestRecordedSalesDate) {
+      return {
+        averageDailySales: 0,
+        projectedMonthlySales: 0,
+      }
+    }
+
+    const mtdSales = currentMonthSales.reduce((total, sale) => total + sale.totalSales, 0)
+    const completedDays = daysBetweenInclusive(monthStart, latestRecordedSalesDate)
     const averageDailySales = completedDays > 0 ? mtdSales / completedDays : 0
-    return averageDailySales * daysInMonth(now)
+    return {
+      averageDailySales,
+      projectedMonthlySales: averageDailySales * daysInMonth(latestRecordedSalesDate),
+    }
   }, [data.sales])
 
   const normalizedLoans = useMemo(() => loans.map((loan) => normalizeLoanRecord(loan)), [loans])
@@ -144,13 +161,18 @@ export function useDashboardMetrics({
 
   const vendorOutstandingByName = useMemo(() => {
     const totals = new Map<string, number>()
+    vendors.forEach((vendor) => {
+      const key = vendor.name.trim().toLowerCase()
+      if (!key) return
+      totals.set(key, vendor.openingOutstandingRemaining ?? 0)
+    })
     data.purchases.forEach((purchase) => {
       const key = purchase.supplierName.trim().toLowerCase()
       if (!key) return
       totals.set(key, (totals.get(key) ?? 0) + purchase.unpaidAmount)
     })
     return totals
-  }, [data.purchases])
+  }, [data.purchases, vendors])
 
   const totalVendorOutstanding = useMemo(
     () => Array.from(vendorOutstandingByName.values()).reduce((total, value) => total + value, 0),
@@ -181,19 +203,35 @@ export function useDashboardMetrics({
     return { balances, bankTotal }
   }, [cashTransfers, latestPendingCashBalances])
 
-  const dailyFinalSummary = useMemo(() => {
-    const todayDate = today()
-    const todayCashoutEntries = dailyCashouts.filter((entry) => entry.date === todayDate)
-    const cashSales = todayCashoutEntries.reduce((total, entry) => total + entry.cashSales, 0)
-    const upiSales = todayCashoutEntries.reduce((total, entry) => total + entry.upiSales, 0)
-    const creditSales = todayCashoutEntries.reduce((total, entry) => total + entry.creditSales, 0)
-    const returns = todayCashoutEntries.reduce((total, entry) => total + entry.returns, 0)
+  const latestClosedDay = dailyCashouts[0]?.date ?? null
+
+  const latestClosedDaySummary = useMemo(() => {
+    if (!latestClosedDay) {
+      return {
+        date: null,
+        totalSales: 0,
+        cashSales: 0,
+        upiSales: 0,
+        creditSales: 0,
+        returns: 0,
+        cashExpenses: 0,
+        cashToHand: 0,
+        transfersToday: 0,
+      }
+    }
+
+    const latestCashoutEntries = dailyCashouts.filter((entry) => entry.date === latestClosedDay)
+    const cashSales = latestCashoutEntries.reduce((total, entry) => total + entry.cashSales, 0)
+    const upiSales = latestCashoutEntries.reduce((total, entry) => total + entry.upiSales, 0)
+    const creditSales = latestCashoutEntries.reduce((total, entry) => total + entry.creditSales, 0)
+    const returns = latestCashoutEntries.reduce((total, entry) => total + entry.returns, 0)
     const totalSales = cashSales + upiSales + creditSales - returns
-    const cashExpenses = data.cashouts.filter((entry) => entry.date === todayDate).reduce((total, entry) => total + entry.amount, 0)
+    const cashExpenses = data.cashouts.filter((entry) => entry.date === latestClosedDay).reduce((total, entry) => total + entry.amount, 0)
     const cashToHand = cashSales - cashExpenses
-    const transfersToday = cashTransfers.filter((entry) => entry.date === todayDate).reduce((total, entry) => total + entry.amount, 0)
+    const transfersToday = cashTransfers.filter((entry) => entry.date === latestClosedDay).reduce((total, entry) => total + entry.amount, 0)
 
     return {
+      date: latestClosedDay,
       totalSales,
       cashSales,
       upiSales,
@@ -203,7 +241,7 @@ export function useDashboardMetrics({
       cashToHand,
       transfersToday,
     }
-  }, [cashTransfers, dailyCashouts, data.cashouts])
+  }, [cashTransfers, dailyCashouts, data.cashouts, latestClosedDay])
 
   const dashboardLastUpdated = useMemo(() => {
     const salesLastUpdated = data.sales
@@ -225,7 +263,6 @@ export function useDashboardMetrics({
 
   return {
     currentHolder,
-    dailyFinalSummary,
     dashboardExpenseTotal,
     dashboardLastUpdated,
     dashboardSales,
@@ -234,10 +271,14 @@ export function useDashboardMetrics({
     directoryOptions,
     filteredCashouts,
     holderAssignments,
-    monthlyFixedExpense: monthlyOperationalExpense,
+    latestClosedDay,
+    latestClosedDaySummary,
+    monthlyOperationalExpense,
+    marginPercentage,
     normalizedLoans,
     pendingCashNow,
-    projectedMonthlySales,
+    projectedMonthlySales: monthlySalesProjection.projectedMonthlySales,
+    averageDailySales: monthlySalesProjection.averageDailySales,
     totalVendorOutstanding,
     todayCashout,
     todayPaymentPaid,
