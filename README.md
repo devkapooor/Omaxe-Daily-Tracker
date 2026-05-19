@@ -129,6 +129,7 @@ src/
 - `docs/architecture/ARCHITECTURE.md`
 - `docs/domain/DATA_MODEL.md`
 - `docs/domain/CALCULATIONS.md`
+- `docs/operations/CURRENT_DRILL_PLAN.md`
 - `docs/archive/DRILL.md`
 - `docs/archive/Drill Report.md`
 - `docs/operations/TASK_QUEUE.md`
