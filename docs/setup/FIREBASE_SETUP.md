@@ -2,7 +2,7 @@
 
 ## Hard Rule
 
-If auth setup, first-user bootstrap, or storage behavior changes, update this file with the main architecture docs.
+If auth setup, first-user bootstrap, Firestore collections, or rules expectations change, update this file with the main architecture docs.
 
 ## Setup Steps
 
@@ -12,16 +12,17 @@ If auth setup, first-user bootstrap, or storage behavior changes, update this fi
 4. Copy `.env.example` to `.env` and fill in the Firebase web config.
 5. Deploy `firestore.rules`.
 6. Create the first auth user in Firebase Authentication.
-7. Sign in once with that first user.
+7. Sign in once with that first user so the app can bootstrap the first owner profile.
 
 ## First User Bootstrap
 
-On first successful login, the app creates the initial Firestore profile as the `owner`.
+On first successful login, if the `users` collection is empty, the app creates the initial Firestore profile as the `owner`.
 
 After that:
 
 - use `Settings` to create `manager` and `billing` users
 - do not use a public signup flow because the live product no longer supports it
+- any Firebase auth user without a matching Firestore user profile should be treated as invalid workspace access
 
 ## Current Live Expectations
 
@@ -30,7 +31,29 @@ After that:
 - finance writes go straight to Firestore
 - app settings live under `appMetadata/appSettings`
 - shared searchable names live under `appMetadata/nameDirectory`
-- vendor catalog fallback data may live under `appMetadata/vendorCatalog` if direct vendor writes are permission-blocked
+- manual planner payments are stored in Firestore and subscribe live with the rest of the workspace data
+
+## Main Collections And Metadata
+
+- `users`
+- `stores`
+- `sales`
+- `purchases`
+- `cashouts`
+- `payments`
+- `loans`
+- `dailyCashouts`
+- `cashTransfers`
+- `plannedPayments`
+- `settingsAudit`
+- `appMetadata/appSettings`
+- `appMetadata/nameDirectory`
+
+## Deployment Notes
+
+- If a feature introduces a new Firestore collection or metadata document, deploy matching `firestore.rules` before or with the app deploy.
+- Hosting deploys alone are not enough when data access rules have changed.
+- Stable production releases should be tagged before major deployments.
 
 ## Local Testing Note
 
@@ -48,4 +71,4 @@ That is a local developer convenience, not the live auth model.
 - `src/store/appStore.ts`
 - `src/store/storeActions.ts`
 - `src/store/storeSubscriptions.ts`
-
+- `firestore.rules`

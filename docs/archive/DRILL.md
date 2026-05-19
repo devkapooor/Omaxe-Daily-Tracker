@@ -1,8 +1,12 @@
 # Cross-Device QA Drill
 
+## Archive Status
+
+This file is now a maintained drill template stored in `archive` for historical continuity. It has been refreshed to match the current AlphaHub V1 app shape, but execution reports belong in `Drill Report.md`.
+
 ## Purpose
 
-This is the current drill plan for the live Firebase-backed app. It should be used for the next full verification pass after structural changes.
+Use this drill for the next broad manual verification pass after structural or workflow changes.
 
 ## Current Product Assumptions
 
@@ -10,10 +14,10 @@ This is the current drill plan for the live Firebase-backed app. It should be us
 - the owner creates manager and billing users from `Settings`
 - the app is single-store
 - the live source of truth is Firestore
-- owner navigation includes `Dashboard`, `Directory`, `Register`, `Cashout`, `Cash Movement`, `Logs`, and `Settings`
-- manager and billing do not have `Dashboard` or `Logs`
+- owner navigation includes `Dashboard`, `Directory`, `Register`, `Cashout`, `Cash Movement`, `Payment Planner`, `Logs`, and `Settings`
+- manager navigation includes `Directory`, `Register`, `Cashout`, `Cash Movement`, `Payment Planner`, and `Settings`
+- billing does not have `Dashboard`, `Logs`, or `Payment Planner`
 - `Register` contains expenses, vendor payments, purchases, and owner-only loans
-- `Directory` contains vendor and party tabs
 - `Logs` contains sales, expenses, purchases, payments, loans, daily cashouts, cash transfers, and settings audit
 - cheque mode is available in expense and payment flows
 - visible display dates should read as `DD/MM/YYYY`
@@ -28,9 +32,8 @@ Verify:
 - role-based access works
 - navigation stays coherent on desktop and mobile
 - every write flow persists correctly
-- linked summaries and logs refresh correctly
+- linked summaries, planner entries, and logs refresh correctly
 - cross-device sync stays truthful
-- the current consolidated screens are visually stable
 - the hosted app is installable from Chrome on mobile
 
 ## Test Rig
@@ -58,8 +61,9 @@ Verify:
 Checks:
 
 - owner sees dashboard and logs
-- manager and billing do not
-- deleted users lose access
+- manager sees planner but not dashboard or logs
+- billing does not see planner
+- deleted or disabled users lose access
 - password updates still work
 
 ## Phase 2: Navigation Integrity
@@ -71,6 +75,7 @@ Check desktop and mobile navigation to:
 - Register
 - Cashout
 - Cash Movement
+- Payment Planner
 - Logs
 - Settings
 
@@ -78,7 +83,7 @@ Checks:
 
 - active state is correct
 - no dead ends
-- mobile drawer or grouped nav remains usable
+- sidebar and mobile drawer remain usable
 - owner-only items do not leak to non-owner roles
 - installed PWA shell still lands on a valid page without browser chrome
 
@@ -104,7 +109,7 @@ Verify:
 - expense saves successfully
 - cheque mode requires cheque details
 - expense appears in logs
-- summaries update where expected
+- summaries and planner schedule update where expected
 
 ### Vendor Payments
 
@@ -114,6 +119,7 @@ Verify:
 - oldest vendor outstanding reduces first
 - vendor outstanding totals update
 - cheque mode works correctly
+- cheque-mode vendor payments appear in planner
 
 ### Purchases
 
@@ -156,7 +162,21 @@ Checks:
 - bank total updates correctly
 - transfer history appears in logs
 
-## Phase 7: Settings Drill
+## Phase 7: Payment Planner Drill
+
+1. Verify cheque expenses appear on the correct planned deduction dates.
+2. Verify cheque vendor payments appear on the correct dates.
+3. Add a manual planned payment.
+4. Update the planner bank balance.
+5. Verify availability and running balance calculations.
+
+Checks:
+
+- planner uses bank balance only for availability
+- manual plans can be deleted
+- counter cash remains reference-only in planner
+
+## Phase 8: Settings Drill
 
 Owner:
 
@@ -174,7 +194,7 @@ Checks:
 - audit log updates
 - settings restrictions remain correct
 
-## Phase 8: Logs Drill
+## Phase 9: Logs Drill
 
 Owner only:
 
@@ -189,7 +209,7 @@ Verify filters, search, and visibility for:
 - cash transfers
 - settings audit
 
-## Phase 9: Persistence And Sync
+## Phase 10: Persistence And Sync
 
 For each major entity type:
 
@@ -209,9 +229,10 @@ Entity list:
 - loan repayment
 - daily cashout
 - cash transfer
+- manual planned payment
 - settings audit event
 
-## Phase 10: Installability And Offline Messaging
+## Phase 11: Installability And Offline Messaging
 
 1. Open the hosted app in Chrome on Android.
 2. Confirm install prompt or Add to Home Screen eligibility.
@@ -240,4 +261,3 @@ Include:
 - findings
 - screenshots or evidence paths
 - final readiness recommendation
-

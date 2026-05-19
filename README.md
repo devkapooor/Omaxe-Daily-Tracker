@@ -2,6 +2,11 @@
 
 Single-store finance operations app for the AlphaHub workflow.
 
+## Current Baseline
+
+- Stable release tag: `v1.0.0`
+- Live Hosting URL: `https://alphahub-f137b.web.app`
+
 ## Current Scope
 
 - Owner, manager, and billing login with Firebase Authentication
@@ -125,6 +130,7 @@ src/
 - `docs/domain/DATA_MODEL.md`
 - `docs/domain/CALCULATIONS.md`
 - `docs/archive/DRILL.md`
+- `docs/archive/Drill Report.md`
 - `docs/operations/TASK_QUEUE.md`
 - `docs/operations/PLAN.md`
 - `docs/operations/VERSION_LOG.md`

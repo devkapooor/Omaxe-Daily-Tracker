@@ -8,15 +8,14 @@ If any displayed summary, projection, or allocation rule changes, update this fi
 
 Most current derived summary logic lives in:
 
-- `src/app/useDashboardMetrics.ts`
+- `src/features/dashboard/hooks/useDashboardMetrics.ts`
 - `src/features/dashboard/components/DashboardTables.tsx`
-
-There is no longer an active `src/domain/financeCalculations.ts` module in the current codebase.
+- `src/features/planner/components/PaymentPlannerPage.tsx`
 
 ## Date Model
 
 - visible app dates are formatted as `DD/MM/YYYY`
-- business-day helpers use `Asia/Kolkata`
+- visible date-time uses `Asia/Kolkata`
 - dashboard range options are currently:
   - `yesterday`
   - `mtd`
@@ -169,6 +168,32 @@ then apply against open purchases oldest first
 reject if payment exceeds total open vendor outstanding
 ```
 
+## Payment Planner Logic
+
+Planner schedule items are built from:
+
+```text
+all expenses where paymentMode = "Cheque" and chequePayDate exists
++ all payments where type = "Paid" and entryType = "vendor-payment" and paymentMode = "Cheque"
++ all manual planned payments
+```
+
+Then:
+
+```text
+sort by deduction date
+runningBalance starts at appSettings.currentBankBalance
+for each planner item:
+  runningBalance -= amount
+  status = runningBalance >= 0 ? "available" : "deficit"
+```
+
+Planner notes:
+
+- counter cash is shown for reference only
+- planner records do not alter pending cash balances
+- planner does not currently ingest loan-repayment cheques
+
 ## Dashboard Tables
 
 Current tables include monthly grouped views such as:
@@ -178,4 +203,3 @@ Current tables include monthly grouped views such as:
 - payment mode breakdown for paid payments
 
 These are read models only and do not write back to Firestore.
-

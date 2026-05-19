@@ -1,28 +1,45 @@
 # GitHub Repository
 
-Primary repository:
+## Archive Status
+
+This note is retained as a lightweight repository reference. It now reflects the current AlphaHub V1 setup instead of the earlier pre-release snapshot.
+
+## Primary Repository
 
 `https://github.com/devkapooor/Omaxe-Daily-Tracker.git`
 
-## Current Local State
+## Current Git Baseline
 
-- remote is already configured
-- active branch is `main`
-- latest recorded committed baseline in the local history is `de60440`
-- current local build is passing with `npm run build`
+- primary branch: `main`
+- first stable release tag: `v1.0.0`
+- release commit for `v1.0.0`: `e88dd54915eb273ffaea82fb92b497386b8618ce`
+- current release-management follow-up commit on `main`: `d0e04e0`
 
-## Recommended Pre-Push Flow
+## Standard Release Flow
 
 ```powershell
-cd "C:\Users\devka\OneDrive\Desktop\Codex Projects\Omaxe Daily Tracker"
 git status --short
 npm run build
-git add .
-git commit -m "Finalize consolidated workspace and refresh docs"
+npm run lint
+git add -A
+git commit -m "release: cut AlphaHub vX.Y.Z"
+git tag -a vX.Y.Z -m "AlphaHub vX.Y.Z"
 git push origin main
+git push origin vX.Y.Z
+```
+
+## Standard Rollback Flow
+
+```powershell
+git fetch --tags
+git checkout -b rollback/v1.0.0 v1.0.0
+npm run build
+npm run lint
+firebase deploy --only hosting
 ```
 
 ## Notes
 
-- review `git status` before commit because the working tree has had broad in-progress refactor changes
-- a fresh QA drill is still recommended before treating the current state as release-signed-off
+- use `docs/operations/VERSION_LOG.md` as the human-readable release history
+- use `docs/operations/RELEASE_PROCESS.md` for the operational release checklist
+- prefer redeploying tagged stable commits instead of rewriting `main`

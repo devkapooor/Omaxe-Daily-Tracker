@@ -1,5 +1,9 @@
 # Drill Report
 
+## Historical Status
+
+This report is a historical read-only drill snapshot from before the current V1 stabilization and release-management pass. Keep it for audit history, but do not treat it as the current verification status of the live app.
+
 ## Drill Date / Time
 
 - `2026-05-17 12:26 +05:30`
@@ -27,7 +31,7 @@
 - Desktop: Chromium automation
 - Mobile: Pixel 7 style mobile emulation
 
-## Pages Covered
+## Pages Covered At The Time
 
 - Dashboard
 - Directory
@@ -37,17 +41,17 @@
 - Logs
 - Settings
 
-## Execution Notes
+## Historical Notes
 
-- Because the app is live and in active use, this pass intentionally skipped all write-path testing.
-- To avoid accidental data mutation, page switching was executed through the app's saved active-page state rather than form or submit flows.
-- The app loaded successfully against live Firestore-backed data on both desktop and mobile emulation.
+- This pass happened before the current `Payment Planner` rollout and before the later V1 release/rollback workflow was documented.
+- Because the app was live and in active use, this pass intentionally skipped all write-path testing.
+- To avoid accidental data mutation, page switching was executed through the saved active-page state rather than form submissions.
 
 ## Sync / Read Observations
 
 - Desktop and mobile reflected the same owner-facing high-level totals during the pass.
-- The current owner dashboard loaded live values for sales, open loan balance, vendor outstanding, and pending cash.
-- Logs rendered recent sales history and auto-synced cashout-derived sales entries successfully in both desktop and mobile captures.
+- The owner dashboard loaded live values for sales, open loan balance, vendor outstanding, and pending cash.
+- Logs rendered recent history and auto-synced cashout-derived sales entries successfully in both desktop and mobile captures.
 
 ## Functional Findings
 
@@ -59,16 +63,10 @@
 
 ## Follow-Up Status
 
-- The dashboard summary label issue has now been fixed in code by switching to a plain ASCII separator.
-- PWA installability and online-only offline handling were added after this read-only drill.
-- A new installability-focused verification pass is still recommended on hosted Chrome Android after deployment.
-
-## Visual Findings
-
-- No release-blocking layout break was observed in the covered owner flows.
-- Desktop dashboard, directory, register, cashout, movement, logs, and settings all rendered successfully.
-- Mobile versions of the same pages also rendered successfully in the read-only pass.
-- The current grouped navigation structure is reflected correctly in the captured owner screens.
+- The dashboard summary label issue was fixed after this drill.
+- PWA installability and online-only offline handling were added after this pass.
+- Later app work also added `Payment Planner`, release tagging, rollback docs, and the current AlphaHub V1 baseline.
+- A fresh current-state drill is still recommended before treating this historical report as operationally representative.
 
 ## Evidence
 
@@ -88,14 +86,8 @@
 - `drill screenshots/mobile-logs.png`
 - `drill screenshots/mobile-settings.png`
 
-## Final Recommendation On Readiness
+## Final Recommendation At The Time
 
-- `Conditionally ready` for continued live owner use from a read-only validation perspective.
+- `Conditionally ready` from a read-only validation perspective.
 - No destructive-path testing was performed in this pass by design.
 - No release-blocking read/navigation failure was found in the covered owner screens.
-- Before a stronger sign-off, the next drill should add:
-  - manager and billing coverage
-  - controlled write-path verification in a safe test window
-  - direct navigation interaction checks for the grouped desktop and mobile menus
-  - hosted Chrome Android installability verification
-
