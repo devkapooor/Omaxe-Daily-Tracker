@@ -1,6 +1,6 @@
 {
-  "name": "Omaxe Daily Tracker",
-  "short_name": "Omaxe",
+  "name": "AlphaHub",
+  "short_name": "AlphaHub",
   "description": "Shared finance tracking for expenses, purchases, vendors, loans, and cash movement.",
   "start_url": "/",
   "scope": "/",

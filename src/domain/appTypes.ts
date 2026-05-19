@@ -8,7 +8,7 @@ export type UserAccount = AppUser & {
   disabled?: boolean
 }
 
-export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'logs' | 'settings'
 
 export type LoanStatus = 'Open' | 'Settled'
 
@@ -62,7 +62,19 @@ export type CashTransfer = {
   amount: number
   reason: string
   createdBy: string
+  recordType?: 'bank-transfer' | 'cash-movement'
   createdAt: string
+}
+
+export type PlannedPayment = {
+  id: string
+  title: string
+  date: string
+  amount: number
+  notes: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
 }
 
 export type SettingsAuditEntry = {

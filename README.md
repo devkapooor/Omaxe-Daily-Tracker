@@ -1,6 +1,6 @@
-# Omaxe Daily Tracker
+# AlphaHub
 
-Single-store finance operations app for the Omaxe workflow.
+Single-store finance operations app for the AlphaHub workflow.
 
 ## Current Scope
 
@@ -9,8 +9,9 @@ Single-store finance operations app for the Omaxe workflow.
 - Owner dashboard with projections, balances, and summaries
 - Directory management for vendors and parties
 - Register workflows for expenses, vendor payments, purchases, and owner-only loan entries
+- Cash movement tracking between staff holders and bank
 - Daily cashout flow with drawer audit details
-- Cash movement tracking between holders and bank
+- Payment planner with cheque-based deduction schedule and manual planned payouts
 - Owner-only logs workspace for sales, expenses, purchases, payments, loans, daily cashouts, transfers, and settings audit
 - Owner-managed users, password updates, and projection settings
 - Installable mobile Chrome PWA with standalone app-shell launch
@@ -36,10 +37,20 @@ Owner sees:
 - `Register`
 - `Cashout`
 - `Cash Movement`
+- `Payment Planner`
 - `Logs`
 - `Settings`
 
-Manager and billing see:
+Manager sees:
+
+- `Directory`
+- `Register`
+- `Cashout`
+- `Cash Movement`
+- `Payment Planner`
+- `Settings`
+
+Billing sees:
 
 - `Directory`
 - `Register`
@@ -70,6 +81,20 @@ npm run build
 npm run preview
 ```
 
+## Root Files
+
+These files stay at the repo root because the toolchain expects them there:
+
+- `package.json` and `package-lock.json`: npm scripts and dependency locking
+- `vite.config.ts`: Vite bundler config
+- `tsconfig*.json`: TypeScript compiler config
+- `eslint.config.js`: linting rules
+- `firebase.json`, `.firebaserc`, `firestore.rules`: Firebase Hosting and Firestore config
+- `components.json`: shadcn component alias config
+- `index.html`: Vite app entry HTML
+
+Everything else should generally live under `src/`, `public/`, or `docs/`.
+
 ## Local Auth Bypass
 
 For local owner-only testing, the app can run with:
@@ -80,12 +105,27 @@ VITE_LOCAL_AUTH_BYPASS=true
 
 That bypass is for local development only and does not replace Firebase auth in the live app.
 
+## Source Layout
+
+```text
+src/
+  app/                 app shell and top-level workspace composition
+  domain/              stable domain and finance types
+  features/            feature modules grouped by workflow
+  shared/
+    lib/               shared infrastructure and utilities
+    ui/                reusable UI primitives
+  store/               Firestore-backed app store and actions
+  styles/              global styling entrypoints
+```
+
 ## Key Docs
 
-- `ARCHITECTURE.md`
-- `DATA_MODEL.md`
-- `CALCULATIONS.md`
-- `DRILL.md`
-- `TASK_QUEUE.md`
-- `PLAN.md`
-- `FIREBASE_SETUP.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/domain/DATA_MODEL.md`
+- `docs/domain/CALCULATIONS.md`
+- `docs/archive/DRILL.md`
+- `docs/operations/TASK_QUEUE.md`
+- `docs/operations/PLAN.md`
+- `docs/setup/FIREBASE_SETUP.md`
+

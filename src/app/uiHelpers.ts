@@ -163,6 +163,10 @@ export function canOpenSettings(role: string) {
   return role === 'owner' || role === 'manager' || role === 'billing'
 }
 
+export function canOpenPlanner(role: string) {
+  return role === 'owner' || role === 'manager'
+}
+
 export function normalizeName(value: string) {
   return value.trim().replace(/\s+/g, ' ')
 }
@@ -179,9 +183,8 @@ export function uniqNames(values: string[]) {
 }
 
 export function resolveActivePage(role: string, activePage: Page) {
-  return role === 'owner'
-    ? activePage
-    : activePage === 'dashboard' || activePage === 'logs'
-      ? 'expense'
-      : activePage
+  if (role === 'owner') return activePage
+  if (activePage === 'dashboard' || activePage === 'logs') return 'expense'
+  if (activePage === 'planner' && role === 'billing') return 'expense'
+  return activePage
 }
