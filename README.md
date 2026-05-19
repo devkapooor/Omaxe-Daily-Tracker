@@ -127,5 +127,14 @@ src/
 - `docs/archive/DRILL.md`
 - `docs/operations/TASK_QUEUE.md`
 - `docs/operations/PLAN.md`
+- `docs/operations/VERSION_LOG.md`
+- `docs/operations/RELEASE_PROCESS.md`
+- `docs/operations/ROLLBACK.md`
 - `docs/setup/FIREBASE_SETUP.md`
+
+## Release Management
+
+- Stable versions are tagged in Git using semantic version tags such as `v1.0.0`.
+- Every stable release gets an entry in `docs/operations/VERSION_LOG.md`.
+- Rollbacks should redeploy a tagged stable version instead of rewriting `main`.
 
