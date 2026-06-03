@@ -319,6 +319,7 @@ export function useAppStore() {
     loans,
     plannedPayments,
     profileLoaded: loadedCollections.users,
+    renamePartyInDirectory: actions.renamePartyInDirectory,
     nameDirectory,
     savePlannerBankBalance: actions.savePlannerBankBalance,
     savePlannedPayment: actions.savePlannedPayment,

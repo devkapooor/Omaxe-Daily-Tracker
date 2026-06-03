@@ -100,6 +100,8 @@ type AppWorkspaceProps = {
   }
   plannedPayments: PlannedPayment[]
   projectedMonthlySales: number
+  renamePartyInDirectory: (previousName: string, nextName: string) => Promise<boolean>
+  savedPartyNames: string[]
   saveCashTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
   saveCashout: (draft: CashoutDraft) => Promise<void>
   saveDailyCashoutEntry: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void>
@@ -164,6 +166,8 @@ export function AppWorkspace({
   pendingCashNow,
   plannedPayments,
   projectedMonthlySales,
+  renamePartyInDirectory,
+  savedPartyNames,
   saveCashTransfer,
   saveCashout,
   saveDailyCashoutEntry,
@@ -187,6 +191,10 @@ export function AppWorkspace({
   vendors,
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
+  function holderLabel(holder: CashHolder) {
+    return holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
+  }
+
   return (
     <main className="mx-auto flex h-[100dvh] w-full max-w-[1800px] overflow-hidden">
       <AppTopBar
@@ -278,11 +286,16 @@ export function AppWorkspace({
               currentUserRole={currentUser.role}
               isBusy={isBusy}
               partyOptions={directoryOptions.party}
+              savedPartyNames={savedPartyNames}
               vendors={vendors}
               vendorOutstandingByName={vendorOutstandingByName}
               onAddParty={async (name) => {
                 await ensureNameInDirectory('people', name)
                 showToast(`Party saved: ${name}`)
+              }}
+              onRenameParty={async (previousName, nextName) => {
+                const renamed = await renamePartyInDirectory(previousName, nextName)
+                if (renamed) showToast(`Party renamed: ${previousName} to ${nextName}`)
               }}
               onSaveVendor={async (vendor) => {
                 await saveVendor(vendor)
@@ -294,8 +307,8 @@ export function AppWorkspace({
 
         {activePage === 'expense' ? (
           <section className="grid min-h-0 flex-1 gap-3 overflow-hidden">
-            <Tabs defaultValue="expenses" className="grid min-h-0 flex-1 gap-3 overflow-hidden">
-              <TabsList className="grid-cols-4">
+            <Tabs defaultValue="expenses" className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
+              <TabsList className={currentUser.role === 'owner' ? 'min-h-11 grid-cols-4' : 'min-h-11 grid-cols-3'}>
                 <TabsTrigger value="expenses">Expenses</TabsTrigger>
                 <TabsTrigger value="vendor-payments">Vendor Payments</TabsTrigger>
                 <TabsTrigger value="purchases">Purchases</TabsTrigger>
@@ -339,8 +352,8 @@ export function AppWorkspace({
 
               {currentUser.role === 'owner' ? (
                 <TabsContent value="loans" className="min-h-0">
-                  <Tabs defaultValue="loan-taken" className="grid min-h-0 gap-3 overflow-hidden">
-                    <TabsList className="grid-cols-2">
+                  <Tabs defaultValue="loan-taken" className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
+                    <TabsList className="min-h-11 grid-cols-2">
                       <TabsTrigger value="loan-taken">Loan Taken</TabsTrigger>
                       <TabsTrigger value="loan-repayment">Loan Repayment</TabsTrigger>
                     </TabsList>
@@ -390,7 +403,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'movement' ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
               currentHolder={currentHolder}
               currentUserName={currentUser.name}
@@ -399,7 +412,9 @@ export function AppWorkspace({
               transfers={cashTransfers}
               onTransfer={async (draft) => {
                 await saveCashTransfer(draft)
-                showToast(`Cash movement saved: ${money(draft.amount)} from ${draft.from} to ${draft.toType === 'bank' ? 'Bank' : draft.toPerson}`)
+                showToast(
+                  `Cash movement saved: ${money(draft.amount)} from ${holderLabel(draft.from)} to ${draft.toType === 'bank' ? 'Bank' : draft.toPerson ? holderLabel(draft.toPerson) : '-'}`,
+                )
               }}
             />
           </section>
@@ -431,7 +446,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'logs' && currentUser.role === 'owner' ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
             <LogsPage
               sales={data.sales}
               expenses={data.cashouts}

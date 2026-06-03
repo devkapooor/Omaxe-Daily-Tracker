@@ -38,6 +38,34 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     return true
   }
 
+  async function renamePartyInDirectory(previousRawName: string, nextRawName: string) {
+    const { nameDirectory } = getState()
+    const previousName = normalizeName(previousRawName)
+    const nextName = normalizeName(nextRawName)
+
+    if (!previousName) throw new Error('Current party name is required.')
+    if (!nextName) throw new Error('New party name is required.')
+
+    const previousKey = previousName.toLowerCase()
+    const nextKey = nextName.toLowerCase()
+    const existingIndex = nameDirectory.people.findIndex((item) => item.toLowerCase() === previousKey)
+
+    if (existingIndex === -1) throw new Error('This saved party could not be found.')
+    if (previousKey === nextKey) return false
+    if (nameDirectory.people.some((item) => item.toLowerCase() === nextKey)) {
+      throw new Error('A saved party with this name already exists.')
+    }
+
+    const nextPeople = [...nameDirectory.people]
+    nextPeople[existingIndex] = nextName
+    await setDoc(
+      doc(db, 'appMetadata', 'nameDirectory'),
+      { people: uniqNames(nextPeople) },
+      { merge: true },
+    )
+    return true
+  }
+
   const settingsActions = createSettingsActions({ pushSettingsAudit })
   const financeActions = createFinanceActions({ getState, setIsBusy, ensureNameInDirectory })
   const authActions = createAuthActions({ getState, setAuthError, setIsBusy, ensureNameInDirectory, pushSettingsAudit })
@@ -45,6 +73,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
   return {
     ...authActions,
     ...financeActions,
+    renamePartyInDirectory,
     ...settingsActions,
   }
 }

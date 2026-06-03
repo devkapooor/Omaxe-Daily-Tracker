@@ -15,9 +15,11 @@ type DirectoryPageProps = {
   currentUserRole: UserRole
   isBusy: boolean
   partyOptions: string[]
+  savedPartyNames: string[]
   vendors: VendorRecord[]
   vendorOutstandingByName: Map<string, number>
   onAddParty: (name: string) => Promise<void>
+  onRenameParty: (previousName: string, nextName: string) => Promise<void>
   onSaveVendor: (vendor: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
 }
 
@@ -25,14 +27,17 @@ export function DirectoryPage({
   currentUserRole,
   isBusy,
   partyOptions,
+  savedPartyNames,
   vendors,
   vendorOutstandingByName,
   onAddParty,
+  onRenameParty,
   onSaveVendor,
 }: DirectoryPageProps) {
   const [vendorSearch, setVendorSearch] = useState('')
   const [partySearch, setPartySearch] = useState('')
   const [partyName, setPartyName] = useState('')
+  const [partyRename, setPartyRename] = useState('')
   const [directoryError, setDirectoryError] = useState('')
   const [vendorName, setVendorName] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -42,8 +47,13 @@ export function DirectoryPage({
   const [notes, setNotes] = useState('')
   const [openingOutstanding, setOpeningOutstanding] = useState('')
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null)
+  const [selectedParty, setSelectedParty] = useState<string | null>(null)
   const [selectedVendor, setSelectedVendor] = useState<VendorRecord | null>(null)
   const canSeeOutstanding = currentUserRole === 'owner'
+  const savedPartyKeys = useMemo(
+    () => new Set(savedPartyNames.map((party) => party.toLowerCase())),
+    [savedPartyNames],
+  )
 
   const filteredVendors = useMemo(() => {
     const query = vendorSearch.trim().toLowerCase()
@@ -64,6 +74,8 @@ export function DirectoryPage({
     if (!query) return partyOptions
     return partyOptions.filter((party) => party.toLowerCase().includes(query))
   }, [partyOptions, partySearch])
+
+  const selectedPartyIsEditable = selectedParty ? savedPartyKeys.has(selectedParty.toLowerCase()) : false
 
   function resetVendorForm() {
     setVendorName('')
@@ -89,6 +101,12 @@ export function DirectoryPage({
     setDirectoryError('')
   }
 
+  function openPartyDetails(party: string) {
+    setSelectedParty(party)
+    setPartyRename(party)
+    setDirectoryError('')
+  }
+
   async function handlePartySubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const normalized = normalizeName(partyName)
@@ -102,6 +120,26 @@ export function DirectoryPage({
       setDirectoryError('')
     } catch (cause) {
       setDirectoryError(cause instanceof Error ? cause.message : 'Unable to save the party.')
+    }
+  }
+
+  async function handlePartyRename(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedParty || !selectedPartyIsEditable) return
+
+    const normalized = normalizeName(partyRename)
+    if (!normalized) {
+      setDirectoryError('Party name is required.')
+      return
+    }
+
+    try {
+      await onRenameParty(selectedParty, normalized)
+      setSelectedParty(normalized)
+      setPartyRename(normalized)
+      setDirectoryError('')
+    } catch (cause) {
+      setDirectoryError(cause instanceof Error ? cause.message : 'Unable to rename the party.')
     }
   }
 
@@ -308,9 +346,17 @@ export function DirectoryPage({
                 <div className="grid gap-2.5 sm:grid-cols-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:grid-cols-3">
                   {filteredParties.length === 0 ? <p className="text-sm font-medium text-muted-foreground">No parties found.</p> : null}
                   {filteredParties.map((party) => (
-                    <article key={party} className="rounded-[16px] border border-border/70 bg-secondary/55 px-3.5 py-2.5">
-                      <strong className="text-sm font-bold text-foreground">{party}</strong>
-                    </article>
+                    <button
+                      key={party}
+                      type="button"
+                      className="rounded-[16px] border border-border/70 bg-secondary/55 px-3.5 py-2.5 text-left transition-colors hover:bg-secondary/75"
+                      onClick={() => openPartyDetails(party)}
+                    >
+                      <strong className="block text-sm font-bold text-foreground">{party}</strong>
+                      <span className="mt-1 block text-xs font-medium text-muted-foreground">
+                        {savedPartyKeys.has(party.toLowerCase()) ? 'Saved party entry' : 'Reference from records or users'}
+                      </span>
+                    </button>
                   ))}
                 </div>
               </CardContent>
@@ -371,6 +417,62 @@ export function DirectoryPage({
                   Edit Vendor
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {selectedParty ? (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm">
+          <Card className="max-h-[90vh] w-full max-w-[32rem] overflow-y-auto">
+            <CardHeader className="gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-3">
+                  <SectionHeading eyebrow="Party Directory" title={selectedParty} />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {selectedPartyIsEditable
+                      ? 'This party was manually saved in the directory and can be renamed safely.'
+                      : 'This name is shown for reference from existing records or users and is view-only here.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  onClick={() => {
+                    setSelectedParty(null)
+                    setPartyRename('')
+                    setDirectoryError('')
+                  }}
+                  aria-label="Close party details"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <DetailBlock label="Party Name" value={selectedParty} />
+              <DetailBlock label="Directory Status" value={selectedPartyIsEditable ? 'Saved party entry' : 'Read-only reference'} />
+
+              {selectedPartyIsEditable ? (
+                <form className="grid gap-3" onSubmit={handlePartyRename}>
+                  <FieldLabel label="Rename Party">
+                    <Input
+                      value={partyRename}
+                      onChange={(event) => {
+                        setPartyRename(event.target.value)
+                        setDirectoryError('')
+                      }}
+                      placeholder="Enter updated party name"
+                      required
+                    />
+                  </FieldLabel>
+                  <div className="flex justify-end gap-2">
+                    <Button type="submit" disabled={isBusy}>
+                      {isBusy ? 'Saving...' : 'Save Party Name'}
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
             </CardContent>
           </Card>
         </div>

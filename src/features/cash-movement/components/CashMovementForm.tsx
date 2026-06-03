@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { CashHolder, CashTransfer } from '@/domain/appTypes'
 import {
   type CashHolderAssignment,
-  formatDisplayDate,
   money,
   numberValue,
   today,
 } from '@/app/uiHelpers'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -29,8 +27,7 @@ function labelForHolder(holder: CashHolder, holderAssignments: CashHolderAssignm
 }
 
 function displayHolder(holder: CashHolder, holderAssignments: CashHolderAssignment[]) {
-  const assigned = labelForHolder(holder, holderAssignments)
-  return assigned === holder ? holder : `${assigned} (${holder})`
+  return labelForHolder(holder, holderAssignments)
 }
 
 export function CashMovementForm({
@@ -41,19 +38,12 @@ export function CashMovementForm({
   transfers,
   onTransfer,
 }: CashMovementFormProps) {
+  void transfers
   const [transferFrom, setTransferFrom] = useState<CashHolder | ''>(currentHolder ?? '')
   const [transferTo, setTransferTo] = useState<CashHolder | 'bank' | ''>('bank')
   const [amount, setAmount] = useState('0')
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
-
-  const recentMovements = useMemo(
-    () =>
-      transfers
-        .slice()
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [transfers],
-  )
 
   async function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -108,11 +98,11 @@ export function CashMovementForm({
   }
 
   return (
-    <Card className="flex h-full min-h-0 flex-col">
+    <Card className="flex min-h-full flex-col xl:h-full xl:min-h-0">
       <CardHeader>
         <SectionHeading eyebrow="Cash Control" title="Move Counter Cash To Bank" />
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <CardContent className="flex flex-1 flex-col gap-4">
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {holderAssignments.map((assignment) => (
             <div key={assignment.holder} className="rounded-[18px] border border-border/70 bg-secondary/55 p-3.5">
@@ -191,34 +181,6 @@ export function CashMovementForm({
           {error ? <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p> : null}
           <Button className="md:col-span-2">Save Cash Movement</Button>
         </form>
-
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <div className="mb-3">
-            <SectionHeading eyebrow="History" title="Cash Movement Log" />
-          </div>
-          <div className="min-h-0 space-y-2.5 overflow-y-auto pr-1">
-            {recentMovements.length === 0 ? (
-              <p className="text-sm font-medium text-muted-foreground">No cash movement records yet.</p>
-            ) : null}
-            {recentMovements.map((entry) => {
-              const destinationLabel =
-                entry.toType === 'bank' ? 'Bank' : entry.toPerson ? displayHolder(entry.toPerson, holderAssignments) : '-'
-              return (
-                <div key={entry.id} className="rounded-[18px] border border-border/70 bg-secondary/55 p-3.5 text-sm text-foreground">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-bold">
-                      {formatDisplayDate(entry.date)} | {displayHolder(entry.from, holderAssignments)} to {destinationLabel}
-                    </p>
-                    <Badge variant="outline">{entry.toType === 'bank' ? 'Bank Movement' : 'Cash Movement'}</Badge>
-                  </div>
-                  <p className="mt-2 text-muted-foreground">Amount {money(entry.amount)}</p>
-                  <p className="text-muted-foreground">{entry.reason}</p>
-                  <p className="text-muted-foreground">Created by {entry.createdBy}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
       </CardContent>
     </Card>
   )

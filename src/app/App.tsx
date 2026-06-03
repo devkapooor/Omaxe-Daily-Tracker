@@ -43,6 +43,7 @@ export default function App() {
     nameDirectory,
     plannedPayments,
     profileLoaded,
+    renamePartyInDirectory,
     savePlannerBankBalance,
     savePlannedPayment,
     settingsAuditLog,
@@ -239,6 +240,7 @@ export default function App() {
         pendingCashNow={pendingCashNow}
         plannedPayments={plannedPayments}
         projectedMonthlySales={projectedMonthlySales}
+        renamePartyInDirectory={renamePartyInDirectory}
         saveCashTransfer={saveCashTransfer}
         saveCashout={saveCashout}
         saveDailyCashoutEntry={saveDailyCashoutEntry}
@@ -259,6 +261,7 @@ export default function App() {
         totalLoans={totalLoans}
         totalVendorOutstanding={totalVendorOutstanding}
         users={users}
+        savedPartyNames={nameDirectory.people}
         vendors={vendors}
         vendorOutstandingByName={vendorOutstandingByName}
       />
