@@ -1,14 +1,16 @@
 import type { LoanEntry } from '@/domain/appTypes'
 import { formatDisplayDate, formatDisplayDateTime, money } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
 type LoanLedgerProps = {
   loans: LoanEntry[]
+  onDelete: (loan: LoanEntry) => Promise<void> | void
 }
 
-export function LoanLedger({ loans }: LoanLedgerProps) {
+export function LoanLedger({ loans, onDelete }: LoanLedgerProps) {
   return (
     <Card>
       <CardHeader>
@@ -34,7 +36,12 @@ export function LoanLedger({ loans }: LoanLedgerProps) {
               <Metric label="Paid" value={money(loan.paidAmount)} />
               <Metric label="Remaining" value={money(loan.remainingAmount)} />
               <Metric label="Status" value={loan.status} />
-              <Metric label="Settled At" value={loan.settledAt ? formatDisplayDateTime(loan.settledAt) : '-'} />
+              <div className="space-y-2">
+                <Metric label="Settled At" value={loan.settledAt ? formatDisplayDateTime(loan.settledAt) : '-'} />
+                <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(loan)}>
+                  Delete Loan
+                </Button>
+              </div>
             </article>
           ))}
         </div>

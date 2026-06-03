@@ -188,6 +188,11 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await ensureNameInDirectory('people', draft.personName)
   }
 
+  async function deleteLoanEntry(loanId: string) {
+    if (!loanId.trim()) throw new Error('Loan id is required.')
+    await deleteDoc(doc(db, 'loans', loanId))
+  }
+
   async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
     const { dailyCashouts, financeData } = getState()
     const parsedDrawerTotal = draft.drawerTotal ?? draft.remainingBalance
@@ -336,6 +341,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   return {
+    deleteLoanEntry,
     deletePlannedPayment,
     ensureNameInDirectory,
     importLegacyData,

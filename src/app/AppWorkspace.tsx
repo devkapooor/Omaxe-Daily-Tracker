@@ -21,6 +21,7 @@ import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlanner
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { ExpenseForm } from '@/features/register/components/ExpenseForm'
 import { LoanForm } from '@/features/register/components/LoanForm'
+import { LoanLedger } from '@/features/register/components/LoanLedger'
 import { LoanRepaymentForm } from '@/features/register/components/LoanRepaymentForm'
 import { PurchaseForm } from '@/features/register/components/PurchaseForm'
 import { VendorPaymentForm } from '@/features/register/components/VendorPaymentForm'
@@ -66,6 +67,7 @@ type AppWorkspaceProps = {
   dashboardRange: DashboardRange
   dashboardSales: number
   data: FinanceData
+  deleteLoanEntry: (loanId: string) => Promise<void>
   deletePlannedPayment: (paymentId: string) => Promise<void>
   deleteUserAccount: (userId: string, actor: string) => Promise<void>
   directoryOptions: {
@@ -132,6 +134,24 @@ function formatLastUpdated(value: string | null) {
   return formatDisplayDateTime(value)
 }
 
+function shouldDeleteLoanEntry(loan: LoanEntry) {
+  const lines = [
+    'Delete this loan entry?',
+    '',
+    `Party: ${loan.personName}`,
+    `Amount: ${money(loan.amount)}`,
+    `Remaining: ${money(loan.remainingAmount)}`,
+    `Loan Date: ${formatDisplayDate(loan.date)}`,
+  ]
+
+  if (loan.paidAmount > 0) {
+    lines.push('', 'Warning: this loan already has repayment applied.')
+  }
+
+  lines.push('', 'This action cannot be undone.')
+  return window.confirm(lines.join('\n'))
+}
+
 export function AppWorkspace({
   activePage,
   appSettings,
@@ -148,6 +168,7 @@ export function AppWorkspace({
   dashboardRange,
   dashboardSales,
   data,
+  deleteLoanEntry,
   deletePlannedPayment,
   deleteUserAccount,
   directoryOptions,
@@ -359,13 +380,23 @@ export function AppWorkspace({
                     </TabsList>
 
                     <TabsContent value="loan-taken" className="min-h-0">
-                      <LoanForm
-                        peopleOptions={directoryOptions.party}
-                        onSave={async (draft) => {
-                          await saveLoanEntry(draft)
-                          showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
-                        }}
-                      />
+                      <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                        <LoanForm
+                          peopleOptions={directoryOptions.party}
+                          onSave={async (draft) => {
+                            await saveLoanEntry(draft)
+                            showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
+                          }}
+                        />
+                        <LoanLedger
+                          loans={normalizedLoans}
+                          onDelete={async (loan) => {
+                            if (!shouldDeleteLoanEntry(loan)) return
+                            await deleteLoanEntry(loan.id)
+                            showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
+                          }}
+                        />
+                      </div>
                     </TabsContent>
 
                     <TabsContent value="loan-repayment" className="min-h-0">

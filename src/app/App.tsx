@@ -34,6 +34,7 @@ export default function App() {
     currentUser,
     dailyCashouts,
     data,
+    deleteLoanEntry,
     deleteUserAccount,
     hasAuthenticatedSession,
     hasWorkspaceAccess,
@@ -222,6 +223,7 @@ export default function App() {
         dashboardRange={dashboardRange}
         dashboardSales={dashboardSales}
         data={data}
+        deleteLoanEntry={deleteLoanEntry}
         deletePlannedPayment={deletePlannedPayment}
         deleteUserAccount={deleteUserAccount}
         directoryOptions={directoryOptions}

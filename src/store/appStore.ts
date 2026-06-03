@@ -313,6 +313,7 @@ export function useAppStore() {
     hasWorkspaceAccess: canStartSubscriptions,
     dailyCashouts,
     data: financeData,
+    deleteLoanEntry: actions.deleteLoanEntry,
     deleteUserAccount: actions.deleteUserAccount,
     importLegacyData: actions.importLegacyData,
     isBusy,
