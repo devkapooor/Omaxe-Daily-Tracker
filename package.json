@@ -41,5 +41,21 @@
     "globals": "^16.5.0",
     "tailwindcss": "^4.3.0",
     "typescript-eslint": "^8.59.2"
-  }
+  },
+  "description": "Single-store finance operations app for the AlphaHub workflow.",
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devkapooor/Omaxe-Daily-Tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/devkapooor/Omaxe-Daily-Tracker/issues"
+  },
+  "homepage": "https://github.com/devkapooor/Omaxe-Daily-Tracker#readme"
 }
