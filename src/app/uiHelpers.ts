@@ -1,5 +1,5 @@
 import type { Cashout, PurchaseDraft } from '../domain/financeTypes'
-import type { CashHolder, Page, UserAccount } from '../domain/appTypes'
+import type { LegacyCashHolder, Page, UserAccount } from '../domain/appTypes'
 
 export type AppToast = {
   id: string
@@ -26,12 +26,6 @@ export const cashoutCategories = [
 export const cashoutPaymentModes: Cashout['paymentMode'][] = ['Cash', 'Bank Transfer', 'Cheque']
 export const purchasePaymentModes: PurchaseDraft['paymentMode'][] = ['Cash', 'Bank Transfer', 'Cheque', 'Credit']
 
-export type CashHolderAssignment = {
-  holder: CashHolder
-  label: string
-  userId?: string
-}
-
 export type PendingCashUserBalance = {
   userId: string
   name: string
@@ -39,7 +33,7 @@ export type PendingCashUserBalance = {
 }
 
 export type LegacyCashBalance = {
-  holder: CashHolder
+  holder: LegacyCashHolder | 'unassigned'
   label: string
   amount: number
   cashoutCount: number
@@ -51,33 +45,13 @@ export function activeWorkspaceUsers(users: UserAccount[]) {
   return users.filter((user) => !user.disabled && user.approvalStatus !== 'rejected')
 }
 
-export function buildCashHolderAssignments(users: UserAccount[]): CashHolderAssignment[] {
-  const enabledUsers = activeWorkspaceUsers(users)
-  const owner = enabledUsers.find((user) => user.role === 'owner')
-  const staff = enabledUsers
-    .filter((user) => user.role !== 'owner')
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .slice(0, 2)
-
-  const assignments: CashHolderAssignment[] = []
-  if (owner) {
-    assignments.push({ holder: 'Dev', label: owner.name, userId: owner.id })
-  } else {
-    assignments.push({ holder: 'Dev', label: 'Owner' })
-  }
-
-  if (staff[0]) assignments.push({ holder: 'Arsh', label: staff[0].name, userId: staff[0].id })
-  if (staff[1]) assignments.push({ holder: 'Farhan', label: staff[1].name, userId: staff[1].id })
-  return assignments
-}
-
-export function resolveCashHolderForUser(userId: string, users: UserAccount[]) {
-  const match = buildCashHolderAssignments(users).find((assignment) => assignment.userId === userId)
-  return match?.holder ?? null
-}
-
 export function userNameById(users: UserAccount[]) {
   return new Map(activeWorkspaceUsers(users).map((user) => [user.id, user.name]))
+}
+
+export function legacyCashHolderLabel(holder?: LegacyCashHolder | 'unassigned') {
+  if (!holder || holder === 'unassigned') return 'Legacy unassigned'
+  return `Legacy ${holder} slot`
 }
 
 export function today() {

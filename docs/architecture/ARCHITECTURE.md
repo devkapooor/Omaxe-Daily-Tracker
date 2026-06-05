@@ -94,7 +94,7 @@ src/
 
 - IST date and display formatting helpers
 - page-access resolution for non-owner roles
-- cash-holder assignment helpers
+- user-name resolution and cash-display helpers
 - shared payment mode and category constants
 
 ### Feature Ownership
@@ -104,7 +104,7 @@ src/
 - `features/directory`: vendor and party management
 - `features/register`: expenses, vendor payments, purchases, loans, cheque helpers
 - `features/cashout`: daily cashout workflow and drawer audit
-- `features/cash-movement`: holder-to-holder and holder-to-bank movement logging
+- `features/cash-movement`: user-to-user and user-to-bank movement logging
 - `features/planner`: cheque-based and manual payment planning against bank balance
 - `features/logs`: owner-only audit and record history
 - `features/settings`: user management, password updates, projection settings
@@ -199,4 +199,7 @@ App opened without internet
 - The app is intentionally single-store and does not implement multi-store routing.
 - `Payment Planner` uses live expense/payment cheque data plus manual planned payments, but it does not change cashout or cash-movement balances.
 - `Cash Movement` remains separate from `Cashout` and separate from the removed shift-handover experiment.
+- Active cash ownership now uses Firebase user IDs end to end for cashouts, transfers, balance cards, and transfer logs.
+- Legacy slot fields such as `recordedByHolder`, `from`, and `toPerson` are compatibility-only fields for older documents and are not written by new runtime flows.
+- The live workspace migration on `2026-06-05` mapped all resolvable legacy cashouts and cash transfers onto user IDs, so unresolved legacy cash should no longer appear in normal operations.
 - Stable releases are now tracked with Git tags and operational docs under `docs/operations/`.

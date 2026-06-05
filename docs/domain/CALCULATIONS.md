@@ -81,6 +81,20 @@ The current source of truth is:
 ```text
 appMetadata/appSettings.monthlyOperationalExpense
 appMetadata/appSettings.marginPercentage
+appMetadata/appSettings.operationalExpenseBreakdown
+```
+
+Save behavior:
+
+```text
+monthlyOperationalExpense =
+  rent
+  + electricity
+  + maintenance
+  + salaries
+  + royalty
+  + caFee
+  + miscellaneous
 ```
 
 ## Latest Closed-Day Summary
@@ -124,19 +138,38 @@ sum(payment.amount where payment.date = today and payment.type = "Received")
 
 ## Pending Cash Logic
 
-Base balances come from the latest saved `DailyCashoutEntry.pendingCashBalances`.
-
-Transfers then adjust that base:
+Pending cash is derived from event history using user IDs.
 
 ```text
-person-to-person:
-  source -= amount
-  target += amount
+for each daily cashout:
+  if recordedByUserId exists and matches an active user
+    userBalance[recordedByUserId] += drawerTotal
+  else if recordedBy name exactly matches one active user name
+    userBalance[matchedUserId] += drawerTotal
+  else
+    keep the amount in legacy review only
 
-person-to-bank:
-  source -= amount
-  bankTotal += amount
+for each cash transfer:
+  if fromUserId exists and matches an active user
+    userBalance[fromUserId] -= amount
+  else
+    keep the source side in legacy review only
+
+  if toType = "person":
+    if toUserId exists and matches an active user
+      userBalance[toUserId] += amount
+    else
+      keep the destination side in legacy review only
+
+  if toType = "bank":
+    bankTotal += amount
 ```
+
+Legacy notes:
+
+- old slot-only records do not get silently attached to a newly created login
+- unmatched legacy slot records appear separately for review
+- only exact name evidence is used for automatic legacy cashout matching
 
 ## Daily Cashout Audit Logic
 

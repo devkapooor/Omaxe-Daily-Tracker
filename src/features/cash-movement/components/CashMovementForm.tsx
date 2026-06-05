@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react'
 import type { CashTransfer, DailyCashoutEntry, UserAccount } from '@/domain/appTypes'
 import {
   activeWorkspaceUsers,
-  type CashHolderAssignment,
+  formatDisplayDate,
+  formatDisplayTime,
+  legacyCashHolderLabel,
   type LegacyCashBalance,
   money,
   numberValue,
   type PendingCashUserBalance,
   today,
 } from '@/app/uiHelpers'
-import { formatDisplayDate, formatDisplayTime } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -20,31 +21,24 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 type CashMovementFormProps = {
   currentUserId: string
   currentUserName: string
-  currentHolder: CashTransfer['from'] | null
-  holderAssignments: CashHolderAssignment[]
   users: UserAccount[]
   userBalances: PendingCashUserBalance[]
   legacyBalances: LegacyCashBalance[]
   legacyCashoutEntries: DailyCashoutEntry[]
   legacyTransferEntries: CashTransfer[]
+  migratedCashoutEntries: DailyCashoutEntry[]
   onTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
-}
-
-function holderLabel(holder: CashTransfer['from'], holderAssignments: CashHolderAssignment[]) {
-  if (!holder) return 'Unknown Holder'
-  return holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
 }
 
 export function CashMovementForm({
   currentUserId,
   currentUserName,
-  currentHolder,
-  holderAssignments,
   users,
   userBalances,
   legacyBalances,
   legacyCashoutEntries,
   legacyTransferEntries,
+  migratedCashoutEntries,
   onTransfer,
 }: CashMovementFormProps) {
   const userOptions = useMemo(
@@ -54,10 +48,9 @@ export function CashMovementForm({
           id: user.id,
           name: user.name,
           amount: userBalances.find((entry) => entry.userId === user.id)?.amount ?? 0,
-          holder: holderAssignments.find((assignment) => assignment.userId === user.id)?.holder,
         }))
         .sort((left, right) => left.name.localeCompare(right.name)),
-    [holderAssignments, userBalances, users],
+    [userBalances, users],
   )
 
   const [transferFromUserId, setTransferFromUserId] = useState(currentUserId)
@@ -107,10 +100,9 @@ export function CashMovementForm({
     try {
       await onTransfer({
         date: today(),
-        from: fromUser.holder ?? currentHolder ?? undefined,
         fromUserId: fromUser.id,
         toType: transferTo === 'bank' ? 'bank' : 'person',
-        ...(toUser ? { toUserId: toUser.id, toPerson: toUser.holder ?? undefined } : {}),
+        ...(toUser ? { toUserId: toUser.id } : {}),
         amount: transferAmount,
         reason: reason.trim(),
         createdBy: currentUserName,
@@ -150,7 +142,7 @@ export function CashMovementForm({
           <div className="rounded-[18px] border border-amber-200 bg-amber-50/90 p-4 text-amber-900">
             <p className="text-sm font-bold">Legacy cash records need review</p>
             <p className="mt-1 text-sm">
-              Older cashouts and transfers without user IDs are being kept separate so they do not get silently attached to a new login.
+              Only records with exact user evidence are counted in live balances. Unmatched legacy slot records stay isolated until you review them.
             </p>
             <div className="mt-3 grid gap-2 md:grid-cols-3">
               {legacyBalances
@@ -165,22 +157,32 @@ export function CashMovementForm({
                   </div>
                 ))}
             </div>
+            {migratedCashoutEntries.length > 0 ? (
+              <div className="mt-3 space-y-1 text-xs text-amber-900">
+                <p className="font-bold">Auto-matched legacy cashouts now counted under users</p>
+                {migratedCashoutEntries.slice(-5).reverse().map((entry) => (
+                  <p key={entry.id}>
+                    {formatDisplayDate(entry.date)} | {entry.recordedBy} | {money(entry.drawerTotal ?? entry.remainingBalance)}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {legacyCashoutEntries.length > 0 ? (
               <div className="mt-3 space-y-1 text-xs text-amber-900">
-                <p className="font-bold">Recent legacy cashouts</p>
+                <p className="font-bold">Recent unmatched legacy cashouts</p>
                 {legacyCashoutEntries.slice(0, 5).map((entry) => (
                   <p key={entry.id}>
-                    {formatDisplayDate(entry.date)} | {entry.recordedBy} | {money(entry.drawerTotal ?? entry.remainingBalance)} | {holderLabel(entry.recordedByHolder, holderAssignments)}
+                    {formatDisplayDate(entry.date)} | {entry.recordedBy} | {money(entry.drawerTotal ?? entry.remainingBalance)} | {legacyCashHolderLabel(entry.recordedByHolder)}
                   </p>
                 ))}
               </div>
             ) : null}
             {legacyTransferEntries.length > 0 ? (
               <div className="mt-3 space-y-1 text-xs text-amber-900">
-                <p className="font-bold">Recent legacy transfers</p>
+                <p className="font-bold">Recent unmatched legacy transfers</p>
                 {legacyTransferEntries.slice(-5).reverse().map((entry) => (
                   <p key={entry.id}>
-                    {formatDisplayDate(entry.date)} {formatDisplayTime(entry.createdAt)} | {holderLabel(entry.from, holderAssignments)} to {entry.toType === 'bank' ? 'Bank' : holderLabel(entry.toPerson, holderAssignments)} | {money(entry.amount)}
+                    {formatDisplayDate(entry.date)} {formatDisplayTime(entry.createdAt)} | {legacyCashHolderLabel(entry.from)} to {entry.toType === 'bank' ? 'Bank' : legacyCashHolderLabel(entry.toPerson)} | {money(entry.amount)}
                   </p>
                 ))}
               </div>

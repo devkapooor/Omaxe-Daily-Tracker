@@ -75,13 +75,11 @@ export default function App() {
   const [isPageTransitionPending, startPageTransition] = useTransition()
 
   const {
-    currentHolder,
     dashboardExpenseTotal,
     dashboardLastUpdated,
     dashboardSales,
     averageDailySales,
     directoryOptions,
-    holderAssignments,
     latestClosedDay,
     latestClosedDaySummary,
     monthlyOperationalExpense,
@@ -97,7 +95,6 @@ export default function App() {
     vendorOutstandingByName,
   } = useDashboardMetrics({
     cashTransfers,
-    currentUserId: currentUser?.id,
     dailyCashouts,
     dashboardRange,
     data,
@@ -215,7 +212,6 @@ export default function App() {
         cashTransfers={cashTransfers}
         changeOwnPassword={changeOwnPassword}
         createUserAccount={createUserAccount}
-        currentHolder={currentHolder}
         currentUser={currentUser}
         dailyCashouts={dailyCashouts}
         dashboardExpenseTotal={dashboardExpenseTotal}
@@ -228,7 +224,6 @@ export default function App() {
         deleteUserAccount={deleteUserAccount}
         directoryOptions={directoryOptions}
         ensureNameInDirectory={ensureNameInDirectory}
-        holderAssignments={holderAssignments}
         importLegacyData={importLegacyData}
         isBusy={isBusy}
         isPageLoaderVisible={isPageLoaderVisible}

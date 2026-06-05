@@ -1,5 +1,18 @@
 # Version Log
 
+## Live Update - 2026-06-05
+
+- Deployment: Firebase Hosting - `https://alphahub-f137b.web.app`
+- Summary:
+  - Removed active slot-based cash ownership from runtime money flows and moved cash ownership to Firebase user IDs.
+  - Updated daily cashouts, cash transfers, dashboard balances, logs, and Cash Movement to use user-based identity.
+  - Added user-deletion safeguards so accounts with finance or audit history cannot be removed casually.
+  - Migrated all live cashouts and cash transfers onto user IDs and cleared unresolved legacy cash from the active workspace.
+  - Corrected the reported Pawan mismatch and the incorrect transfer label that showed `Farhan to Dev`.
+- Notes:
+  - This was a live operational upgrade on top of `v1.0.0`, not a new tagged release.
+  - Local backup kept outside git: `docs/backups/cash-identity-migration-2026-06-05T14-41-41-788Z.json`
+
 ## v1.0.0 - 2026-05-19
 
 - Tag: `v1.0.0`

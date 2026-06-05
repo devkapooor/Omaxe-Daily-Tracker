@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { CashHolder, DailyCashoutEntry } from '@/domain/appTypes'
+import type { DailyCashoutEntry } from '@/domain/appTypes'
 import { formatDisplayDate, numberValue, today } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -10,7 +10,6 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 type DailyCashoutFormProps = {
   currentUserId: string
   currentUserName: string
-  currentUserHolder: CashHolder | null
   onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void> | void
 }
 
@@ -44,7 +43,7 @@ const emptyDrawerFormState: DrawerFormState = {
   denom500: '0',
 }
 
-export function DailyCashoutForm({ currentUserId, currentUserName, currentUserHolder, onSave }: DailyCashoutFormProps) {
+export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: DailyCashoutFormProps) {
   const [entryDate, setEntryDate] = useState(today())
   const [cashSale, setCashSale] = useState('0')
   const [upiSale, setUpiSale] = useState('0')
@@ -135,7 +134,6 @@ export function DailyCashoutForm({ currentUserId, currentUserName, currentUserHo
         date: pendingDraft.date,
         recordedBy: currentUserName,
         recordedByUserId: currentUserId,
-        recordedByHolder: currentUserHolder ?? undefined,
         upiSales: pendingDraft.upiSales,
         cashSales: pendingDraft.cashSales,
         returns: 0,
@@ -147,11 +145,6 @@ export function DailyCashoutForm({ currentUserId, currentUserName, currentUserHo
         auditMessage,
         actualCashParticulars: drawerParticulars,
         pendingCashParticulars: `By: ${currentUserName}\nExpected Cash: ${pendingDraft.expectedCash}\nDrawer Total: ${drawerTotal}\nSystem Audit: ${pendingDraft.systemAudit}\nAudit Check: ${auditMessage}`,
-        pendingCashBalances: {
-          dev: 0,
-          arsh: 0,
-          farhan: 0,
-        },
         remainingBalance: drawerTotal,
       })
       setError('')

@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import type { FinanceData } from '@/domain/financeTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LegacyCashHolder, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
 import {
   activeWorkspaceUsers,
-  buildCashHolderAssignments,
   type DashboardRange,
   daysBetweenInclusive,
   daysInMonth,
+  legacyCashHolderLabel,
   type LegacyCashBalance,
+  normalizeName,
   type PendingCashUserBalance,
-  resolveCashHolderForUser,
   shiftDate,
   today,
   uniqNames,
@@ -31,13 +31,11 @@ type UseDashboardMetricsArgs = {
   marginPercentage?: number
   users: UserAccount[]
   vendors: VendorRecord[]
-  currentUserId?: string
 }
 
 export function useDashboardMetrics({
   cashTransfers,
   cashoutFilterDate = today(),
-  currentUserId,
   dailyCashouts,
   dashboardRange,
   data,
@@ -48,14 +46,17 @@ export function useDashboardMetrics({
   users,
   vendors,
 }: UseDashboardMetricsArgs) {
-  const holderAssignments = useMemo(() => buildCashHolderAssignments(users), [users])
   const activeUsers = useMemo(() => activeWorkspaceUsers(users), [users])
-  const activeUserNameById = useMemo(() => new Map(activeUsers.map((user) => [user.id, user.name])), [activeUsers])
-
-  const currentHolder = useMemo(
-    () => (currentUserId ? resolveCashHolderForUser(currentUserId, users) : null),
-    [currentUserId, users],
-  )
+  const activeUserIds = useMemo(() => new Set(activeUsers.map((user) => user.id)), [activeUsers])
+  const activeUsersByNormalizedName = useMemo(() => {
+    const buckets = new Map<string, UserAccount[]>()
+    activeUsers.forEach((user) => {
+      const key = normalizeName(user.name).toLowerCase()
+      if (!key) return
+      buckets.set(key, [...(buckets.get(key) ?? []), user])
+    })
+    return buckets
+  }, [activeUsers])
 
   const directoryOptions = useMemo(() => {
     const derivedPartyNames = [
@@ -186,70 +187,85 @@ export function useDashboardMetrics({
 
   const pendingCashNow = useMemo(() => {
     const userBalanceMap = new Map<string, number>(activeUsers.map((user) => [user.id, 0]))
-    const legacyBalanceMap = new Map<CashTransfer['from'], LegacyCashBalance>()
+    const legacyBalanceMap = new Map<LegacyCashHolder | 'unassigned', LegacyCashBalance>()
     const legacyCashoutEntries: DailyCashoutEntry[] = []
     const legacyTransferEntries: CashTransfer[] = []
+    const migratedCashoutEntries: DailyCashoutEntry[] = []
     let bankTotal = 0
 
-    function ensureLegacyBalance(holder: CashTransfer['from']) {
-      if (!holder) return null
-      const existing = legacyBalanceMap.get(holder)
+    function ensureLegacyBalance(holder?: LegacyCashHolder | 'unassigned') {
+      const resolvedHolder = holder ?? 'unassigned'
+      const existing = legacyBalanceMap.get(resolvedHolder)
       if (existing) return existing
-      const label = holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
       const next: LegacyCashBalance = {
-        holder,
-        label,
+        holder: resolvedHolder,
+        label: legacyCashHolderLabel(resolvedHolder),
         amount: 0,
         cashoutCount: 0,
         transferInCount: 0,
         transferOutCount: 0,
       }
-      legacyBalanceMap.set(holder, next)
+      legacyBalanceMap.set(resolvedHolder, next)
       return next
+    }
+
+    function ensureActiveUserBalance(userId: string, amount: number) {
+      if (!activeUserIds.has(userId)) return false
+      userBalanceMap.set(userId, (userBalanceMap.get(userId) ?? 0) + amount)
+      return true
+    }
+
+    function exactMatchedUserId(rawName: string) {
+      const normalized = normalizeName(rawName).toLowerCase()
+      if (!normalized) return null
+      const matches = activeUsersByNormalizedName.get(normalized) ?? []
+      if (matches.length !== 1) return null
+      return matches[0]?.id ?? null
     }
 
     dailyCashouts.forEach((entry) => {
       const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
-      if (entry.recordedByUserId && activeUserNameById.has(entry.recordedByUserId)) {
-        userBalanceMap.set(entry.recordedByUserId, (userBalanceMap.get(entry.recordedByUserId) ?? 0) + drawerTotal)
+      if (entry.recordedByUserId && ensureActiveUserBalance(entry.recordedByUserId, drawerTotal)) {
+        return
+      }
+
+      const migratedUserId = exactMatchedUserId(entry.recordedBy)
+      if (migratedUserId && ensureActiveUserBalance(migratedUserId, drawerTotal)) {
+        migratedCashoutEntries.push(entry)
         return
       }
 
       const legacyBalance = ensureLegacyBalance(entry.recordedByHolder)
-      if (!legacyBalance) return
       legacyBalance.amount += drawerTotal
       legacyBalance.cashoutCount += 1
       legacyCashoutEntries.push(entry)
     })
 
     cashTransfers.forEach((entry) => {
-      if (entry.fromUserId && activeUserNameById.has(entry.fromUserId)) {
-        userBalanceMap.set(entry.fromUserId, (userBalanceMap.get(entry.fromUserId) ?? 0) - entry.amount)
+      if (entry.fromUserId && ensureActiveUserBalance(entry.fromUserId, -entry.amount)) {
+        // new user-linked source
       } else {
         const legacySource = ensureLegacyBalance(entry.from)
-        if (legacySource) {
-          legacySource.amount -= entry.amount
-          legacySource.transferOutCount += 1
-        }
+        legacySource.amount -= entry.amount
+        legacySource.transferOutCount += 1
         legacyTransferEntries.push(entry)
       }
 
       if (entry.toType === 'person') {
-        if (entry.toUserId && activeUserNameById.has(entry.toUserId)) {
-          userBalanceMap.set(entry.toUserId, (userBalanceMap.get(entry.toUserId) ?? 0) + entry.amount)
-        } else {
-          const legacyDestination = ensureLegacyBalance(entry.toPerson)
-          if (legacyDestination) {
-            legacyDestination.amount += entry.amount
-            legacyDestination.transferInCount += 1
-          }
-          if (!legacyTransferEntries.find((candidate) => candidate.id === entry.id)) {
-            legacyTransferEntries.push(entry)
-          }
+        if (entry.toUserId && ensureActiveUserBalance(entry.toUserId, entry.amount)) {
+          return
         }
-      } else {
-        bankTotal += entry.amount
+
+        const legacyDestination = ensureLegacyBalance(entry.toPerson)
+        legacyDestination.amount += entry.amount
+        legacyDestination.transferInCount += 1
+        if (!legacyTransferEntries.find((candidate) => candidate.id === entry.id)) {
+          legacyTransferEntries.push(entry)
+        }
+        return
       }
+
+      bankTotal += entry.amount
     })
 
     const userBalances: PendingCashUserBalance[] = activeUsers
@@ -267,9 +283,10 @@ export function useDashboardMetrics({
       legacyBalances,
       legacyCashoutEntries,
       legacyTransferEntries,
+      migratedCashoutEntries,
       userBalances,
     }
-  }, [activeUserNameById, activeUsers, cashTransfers, dailyCashouts, holderAssignments])
+  }, [activeUserIds, activeUsers, activeUsersByNormalizedName, cashTransfers, dailyCashouts])
 
   const latestClosedDay = dailyCashouts[0]?.date ?? null
 
@@ -330,7 +347,6 @@ export function useDashboardMetrics({
   }, [dashboardRangeBounds.from, dashboardRangeBounds.to, data.cashouts, data.sales, normalizedLoans])
 
   return {
-    currentHolder,
     dashboardExpenseTotal,
     dashboardLastUpdated,
     dashboardSales,
@@ -338,7 +354,6 @@ export function useDashboardMetrics({
     dailyCashoutUserOptions: uniqNames(dailyCashouts.map((entry) => entry.recordedBy)),
     directoryOptions,
     filteredCashouts,
-    holderAssignments,
     latestClosedDay,
     latestClosedDaySummary,
     monthlyOperationalExpense,
@@ -355,4 +370,3 @@ export function useDashboardMetrics({
     vendorOutstandingByName,
   }
 }
-

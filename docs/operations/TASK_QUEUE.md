@@ -23,6 +23,7 @@ V1 stabilization and disciplined release management for:
 - Directory management is centralized under `Directory`.
 - Expense, vendor payment, purchase, and loan flows are grouped under `Register`.
 - `Payment Planner` merges cheque deductions plus manual planned payments.
+- Cash ownership is now user-ID based for cashouts, transfers, and pending-balance calculations.
 - Logs are centralized under owner-only `Logs`.
 - Stable versions are now tracked with Git tags and release docs.
 - The current production build is passing.
@@ -41,6 +42,7 @@ V1 stabilization and disciplined release management for:
 - [ ] Improve narrow desktop and tablet QA coverage.
 - [ ] Add export or download support where operationally useful.
 - [ ] Evaluate whether `uiHelpers.ts` should be split further without creating churn.
+- [ ] Add a dedicated admin-facing cash identity diagnostics or migration report screen if future live cleanup is needed.
 
 ## Done
 
@@ -56,3 +58,5 @@ V1 stabilization and disciplined release management for:
 - [x] Clean up the source structure into app, features, shared, and store layers.
 - [x] Tag the first stable release as `v1.0.0`.
 - [x] Add release and rollback workflow docs.
+- [x] Replace active slot-based cash ownership with user-ID-based cash ownership.
+- [x] Migrate live cashouts and cash transfers onto user IDs and clear unresolved legacy cash from active operations.

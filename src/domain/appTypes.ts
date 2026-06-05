@@ -31,7 +31,7 @@ export type DailyCashoutEntry = {
   date: string
   recordedBy: string
   recordedByUserId?: string
-  recordedByHolder?: CashHolder
+  recordedByHolder?: LegacyCashHolder
   upiSales: number
   cashSales: number
   returns: number
@@ -43,24 +43,19 @@ export type DailyCashoutEntry = {
   auditMessage?: string
   actualCashParticulars: string
   pendingCashParticulars: string
-  pendingCashBalances?: {
-    dev: number
-    arsh: number
-    farhan: number
-  }
   remainingBalance: number
   createdAt: string
 }
 
-export type CashHolder = 'Dev' | 'Arsh' | 'Farhan'
+export type LegacyCashHolder = 'Dev' | 'Arsh' | 'Farhan'
 
 export type CashTransfer = {
   id: string
   date: string
-  from?: CashHolder
+  from?: LegacyCashHolder
   fromUserId?: string
   toType: 'person' | 'bank'
-  toPerson?: CashHolder
+  toPerson?: LegacyCashHolder
   toUserId?: string
   amount: number
   reason: string

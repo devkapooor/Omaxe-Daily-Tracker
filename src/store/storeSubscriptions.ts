@@ -7,6 +7,7 @@ import {
   ensureSingleStore,
   mapDoc,
   normalizeLoanRecord,
+  type OperationalExpenseBreakdown,
   parseVendorCatalog,
   sortByCreatedAtDesc,
   uniqNames,
@@ -163,7 +164,12 @@ export function setupAppStoreSubscriptions({
       markLoaded('nameDirectory')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', 'appSettings'), (snapshot) => {
-      const data = snapshot.data() as Partial<{ currentBankBalance: unknown; marginPercentage: unknown; monthlyOperationalExpense: unknown }> | undefined
+      const data = snapshot.data() as Partial<{
+        currentBankBalance: unknown
+        marginPercentage: unknown
+        monthlyOperationalExpense: unknown
+        operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
+      }> | undefined
       const currentBankBalance =
         typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
           ? data.currentBankBalance
@@ -176,7 +182,20 @@ export function setupAppStoreSubscriptions({
         typeof data?.marginPercentage === 'number' && data.marginPercentage >= 0
           ? data.marginPercentage
           : defaultAppSettings.marginPercentage
-      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense })
+      const rawBreakdown = data?.operationalExpenseBreakdown
+      const operationalExpenseBreakdown: OperationalExpenseBreakdown = {
+        rent: typeof rawBreakdown?.rent === 'number' && rawBreakdown.rent >= 0 ? rawBreakdown.rent : defaultAppSettings.operationalExpenseBreakdown.rent,
+        electricity: typeof rawBreakdown?.electricity === 'number' && rawBreakdown.electricity >= 0 ? rawBreakdown.electricity : defaultAppSettings.operationalExpenseBreakdown.electricity,
+        maintenance: typeof rawBreakdown?.maintenance === 'number' && rawBreakdown.maintenance >= 0 ? rawBreakdown.maintenance : defaultAppSettings.operationalExpenseBreakdown.maintenance,
+        salaries: typeof rawBreakdown?.salaries === 'number' && rawBreakdown.salaries >= 0 ? rawBreakdown.salaries : defaultAppSettings.operationalExpenseBreakdown.salaries,
+        royalty: typeof rawBreakdown?.royalty === 'number' && rawBreakdown.royalty >= 0 ? rawBreakdown.royalty : defaultAppSettings.operationalExpenseBreakdown.royalty,
+        caFee: typeof rawBreakdown?.caFee === 'number' && rawBreakdown.caFee >= 0 ? rawBreakdown.caFee : defaultAppSettings.operationalExpenseBreakdown.caFee,
+        miscellaneous:
+          typeof rawBreakdown?.miscellaneous === 'number' && rawBreakdown.miscellaneous >= 0
+            ? rawBreakdown.miscellaneous
+            : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
+      }
+      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown })
       markLoaded('appSettings')
     }, onSubscriptionError),
   ]

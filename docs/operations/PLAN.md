@@ -18,7 +18,7 @@ The live app currently supports:
 - shared vendor and party directory management
 - register workflows for expenses, vendor payments, purchases, and owner-only loan entries
 - daily cashout with drawer-audit save flow
-- cash movement tracking between staff holders and bank
+- cash movement tracking between real user accounts and bank
 - payment planning using cheque deductions plus manual planned payouts
 - owner-only logs workspace
 - owner-managed users, password updates, and projection settings
@@ -32,6 +32,7 @@ The live app currently supports:
 
 - keep finance write paths stable
 - keep vendor and loan allocation correctness intact
+- keep user-based cash ownership and balance derivation reliable
 - keep planner deductions aligned with live cheque records
 - keep Firebase-backed sync dependable
 
@@ -60,6 +61,7 @@ The live app currently supports:
 - canonical stable release tag: `v1.0.0`
 - live Hosting URL: `https://alphahub-f137b.web.app`
 - release and rollback workflow now lives under `docs/operations/`
+- live cash records were migrated to user-ID ownership on `2026-06-05`
 
 ## Near-Term Follow-Ups
 

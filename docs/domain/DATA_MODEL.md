@@ -137,7 +137,8 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | id | string | yes | Document ID |
 | date | string | yes | Close date |
 | recordedBy | string | yes | User name |
-| recordedByHolder | `Dev \| Arsh \| Farhan` | no | Resolved holder at save time |
+| recordedByUserId | string | no | Active ownership key for pending cash |
+| recordedByHolder | `Dev \| Arsh \| Farhan` | no | Legacy slot field kept only for pre-user-ID cashouts |
 | upiSales | number | yes | UPI sales |
 | cashSales | number | yes | Cash sales |
 | returns | number | yes | Returns |
@@ -149,7 +150,6 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | auditMessage | string | no | Human-readable audit result |
 | actualCashParticulars | string | yes | Drawer breakdown |
 | pendingCashParticulars | string | yes | Pending-cash note |
-| pendingCashBalances | object | no | `{ dev, arsh, farhan }` balances |
 | remainingBalance | number | yes | Saved final drawer balance |
 | createdAt | string | yes | ISO timestamp |
 
@@ -159,9 +159,11 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | --- | --- | --- | --- |
 | id | string | yes | Document ID |
 | date | string | yes | Transfer date |
-| from | `Dev \| Arsh \| Farhan` | yes | Source holder |
+| fromUserId | string | no | Active source ownership key |
+| from | `Dev \| Arsh \| Farhan` | no | Legacy source slot for pre-user-ID transfers |
 | toType | `person \| bank` | yes | Destination type |
-| toPerson | `Dev \| Arsh \| Farhan` | no | Required for person transfers |
+| toUserId | string | no | Active destination ownership key for person transfers |
+| toPerson | `Dev \| Arsh \| Farhan` | no | Legacy destination slot for pre-user-ID transfers |
 | amount | number | yes | Transfer amount |
 | reason | string | yes | Transfer reason |
 | createdBy | string | yes | Initiator name |
@@ -208,6 +210,19 @@ Current app settings include:
 - `monthlyOperationalExpense`
 - `marginPercentage`
 - `currentBankBalance`
+- `operationalExpenseBreakdown`
+
+`operationalExpenseBreakdown` currently contains:
+
+- `rent`
+- `electricity`
+- `maintenance`
+- `salaries`
+- `royalty`
+- `caFee`
+- `miscellaneous`
+
+`monthlyOperationalExpense` remains stored as the derived total used by the dashboard and projection math.
 
 ### appMetadata/nameDirectory
 
@@ -224,3 +239,4 @@ Current directory metadata includes:
 - `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` together drive vendor outstanding.
 - Planner availability uses `currentBankBalance`, not counter cash.
 - `Cash Movement` records affect pending cash and bank totals; planner records do not.
+- Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.

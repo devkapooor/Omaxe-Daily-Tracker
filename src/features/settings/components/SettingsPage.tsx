@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
 import type { UserAccount } from '@/domain/appTypes'
+import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -16,6 +17,7 @@ type SettingsPageProps = {
   isBusy: boolean
   marginPercentage: number
   monthlyOperationalExpense: number
+  operationalExpenseBreakdown: OperationalExpenseBreakdown
   onCreateUser: (draft: {
     name: string
     email: string
@@ -25,7 +27,7 @@ type SettingsPageProps = {
   }) => Promise<void>
   onDeleteUser: (userId: string) => Promise<void>
   onChangeOwnPassword: (password: string) => Promise<void>
-  onSaveOperationalSettings: (monthlyOperationalExpense: number, marginPercentage: number) => Promise<void>
+  onSaveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number) => Promise<void>
 }
 
 export function SettingsPage({
@@ -34,6 +36,7 @@ export function SettingsPage({
   isBusy,
   marginPercentage,
   monthlyOperationalExpense,
+  operationalExpenseBreakdown,
   onCreateUser,
   onDeleteUser,
   onChangeOwnPassword,
@@ -119,12 +122,22 @@ export function SettingsPage({
   async function updateOperationalSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const amount = Number(form.get('monthlyOperationalExpense') || 0)
+    const nextBreakdown: OperationalExpenseBreakdown = {
+      rent: Number(form.get('rent') || 0),
+      electricity: Number(form.get('electricity') || 0),
+      maintenance: Number(form.get('maintenance') || 0),
+      salaries: Number(form.get('salaries') || 0),
+      royalty: Number(form.get('royalty') || 0),
+      caFee: Number(form.get('caFee') || 0),
+      miscellaneous: Number(form.get('miscellaneous') || 0),
+    }
     const nextMarginPercentage = Number(form.get('marginPercentage') || 0)
 
-    if (!Number.isFinite(amount) || amount < 0) {
-      setError('Monthly operational expense must be zero or more.')
-      return
+    for (const [label, value] of Object.entries(nextBreakdown)) {
+      if (!Number.isFinite(value) || value < 0) {
+        setError(`${label} expense must be zero or more.`)
+        return
+      }
     }
     if (!Number.isFinite(nextMarginPercentage) || nextMarginPercentage < 0 || nextMarginPercentage > 100) {
       setError('Margin percentage must be between 0 and 100.')
@@ -133,11 +146,20 @@ export function SettingsPage({
 
     try {
       setError('')
-      await onSaveOperationalSettings(amount, nextMarginPercentage)
+      await onSaveOperationalSettings(nextBreakdown, nextMarginPercentage)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to update operational settings.')
     }
   }
+
+  const operationalExpenseTotal = useMemo(
+    () => Object.values(operationalExpenseBreakdown).reduce((total, value) => total + value, 0),
+    [operationalExpenseBreakdown],
+  )
+  const displayedOperationalExpenseTotal = useMemo(
+    () => (Object.values(operationalExpenseBreakdown).every((value) => value === 0) ? monthlyOperationalExpense : operationalExpenseTotal),
+    [monthlyOperationalExpense, operationalExpenseBreakdown, operationalExpenseTotal],
+  )
 
   async function deleteUser(userId: string) {
     try {
@@ -204,15 +226,33 @@ export function SettingsPage({
               </CardHeader>
               <CardContent>
                 <form className="grid gap-4 sm:grid-cols-2" onSubmit={updateOperationalSettings}>
-                  <FieldLabel label="Monthly Operational Expense">
+                  <FieldLabel label="Rent">
                     <Input
-                      defaultValue={String(monthlyOperationalExpense)}
-                      name="monthlyOperationalExpense"
+                      defaultValue={String(operationalExpenseBreakdown.rent)}
+                      name="rent"
                       type="number"
                       min="0"
                       step="1"
                       onChange={() => setError('')}
                     />
+                  </FieldLabel>
+                  <FieldLabel label="Electricity">
+                    <Input defaultValue={String(operationalExpenseBreakdown.electricity)} name="electricity" type="number" min="0" step="1" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Maintenance">
+                    <Input defaultValue={String(operationalExpenseBreakdown.maintenance)} name="maintenance" type="number" min="0" step="1" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Salaries">
+                    <Input defaultValue={String(operationalExpenseBreakdown.salaries)} name="salaries" type="number" min="0" step="1" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Royalty">
+                    <Input defaultValue={String(operationalExpenseBreakdown.royalty)} name="royalty" type="number" min="0" step="1" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="CA Fee">
+                    <Input defaultValue={String(operationalExpenseBreakdown.caFee)} name="caFee" type="number" min="0" step="1" onChange={() => setError('')} />
+                  </FieldLabel>
+                  <FieldLabel label="Miscellaneous">
+                    <Input defaultValue={String(operationalExpenseBreakdown.miscellaneous)} name="miscellaneous" type="number" min="0" step="1" onChange={() => setError('')} />
                   </FieldLabel>
                   <FieldLabel label="Margin %">
                     <Input
@@ -225,6 +265,10 @@ export function SettingsPage({
                       onChange={() => setError('')}
                     />
                   </FieldLabel>
+                  <div className="rounded-[18px] border border-border/70 bg-secondary/55 p-4 sm:col-span-2">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Computed Monthly Total</p>
+                    <p className="mt-1 text-lg font-black text-foreground">{displayedOperationalExpenseTotal.toLocaleString('en-IN')}</p>
+                  </div>
                   <div className="sm:col-span-2">
                     <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Projection Settings'}</Button>
                   </div>
@@ -266,7 +310,7 @@ export function SettingsPage({
                     </div>
                     {canManageUsers && user.id !== currentUser.id ? (
                       <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                        <span className="text-sm font-medium text-muted-foreground">Delete removes app access for this user.</span>
+                        <span className="text-sm font-medium text-muted-foreground">Delete removes app access only when no historical money or audit records are tied to this account.</span>
                         <Button variant="destructive" type="button" onClick={() => void deleteUser(user.id)}>
                           Delete
                         </Button>

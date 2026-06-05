@@ -14,7 +14,7 @@ Single-store finance operations app for the AlphaHub workflow.
 - Owner dashboard with projections, balances, and summaries
 - Directory management for vendors and parties
 - Register workflows for expenses, vendor payments, purchases, and owner-only loan entries
-- Cash movement tracking between staff holders and bank
+- Cash movement tracking between real staff user accounts and bank
 - Daily cashout flow with drawer audit details
 - Payment planner with cheque-based deduction schedule and manual planned payouts
 - Owner-only logs workspace for sales, expenses, purchases, payments, loans, daily cashouts, transfers, and settings audit
@@ -76,6 +76,15 @@ Billing sees:
 - Installed launches use standalone display mode like an app shell.
 - This phase is PWA-only. True Android TWA packaging is intentionally deferred.
 - The app remains online-only for business data and authentication.
+
+## Cash Ownership Model
+
+- Active cash ownership is user-account based, not slot based.
+- New daily cashouts save `recordedByUserId`.
+- New cash transfers save `fromUserId` and `toUserId`.
+- Pending counter cash is derived from cashout and transfer history, not from stored slot snapshots.
+- Legacy slot fields remain in Firestore only as compatibility fields for older records.
+- As of `2026-06-05`, the live legacy cash records were migrated onto user IDs and unresolved legacy cash balances were cleared from the active workspace.
 
 ## Local Scripts
 

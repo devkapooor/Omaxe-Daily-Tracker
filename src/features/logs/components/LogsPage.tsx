@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
-import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, money, type CashHolderAssignment, userNameById } from '@/app/uiHelpers'
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, legacyCashHolderLabel, money, userNameById } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutDetailsModal } from '@/features/cashout/components/DailyCashoutDetailsModal'
@@ -18,7 +18,6 @@ type LogsPageProps = {
   loans: LoanEntry[]
   dailyCashouts: DailyCashoutEntry[]
   cashTransfers: CashTransfer[]
-  holderAssignments: CashHolderAssignment[]
   settingsAuditLog: SettingsAuditEntry[]
   users: UserAccount[]
   onDeleteLoan: (loan: LoanEntry) => Promise<void> | void
@@ -113,7 +112,6 @@ export function LogsPage({
   loans,
   dailyCashouts,
   cashTransfers,
-  holderAssignments,
   settingsAuditLog,
   users,
   onDeleteLoan,
@@ -133,23 +131,16 @@ export function LogsPage({
   const [transferSearch, setTransferSearch] = useState('')
   const [auditSearch, setAuditSearch] = useState('')
   const userNames = useMemo(() => userNameById(users), [users])
-  const legacyHolderLabels = useMemo(
-    () =>
-      new Map(
-        holderAssignments.map((assignment) => [assignment.holder, assignment.label] as const),
-      ),
-    [holderAssignments],
-  )
 
   function transferPartyName(entry: CashTransfer, side: 'from' | 'to') {
     if (side === 'from') {
       if (entry.fromUserId && userNames.has(entry.fromUserId)) return userNames.get(entry.fromUserId) ?? 'Unknown User'
-      return `Legacy ${entry.from ? legacyHolderLabels.get(entry.from) ?? entry.from : 'Unassigned'}`
+      return legacyCashHolderLabel(entry.from)
     }
 
     if (entry.toType === 'bank') return 'Bank'
     if (entry.toUserId && userNames.has(entry.toUserId)) return userNames.get(entry.toUserId) ?? 'Unknown User'
-    return `Legacy ${entry.toPerson ? legacyHolderLabels.get(entry.toPerson) ?? entry.toPerson : 'Unassigned'}`
+    return legacyCashHolderLabel(entry.toPerson)
   }
 
   const filteredSales = useMemo(
@@ -237,13 +228,13 @@ export function LogsPage({
         const dateMatch = !transferDate || entry.date === transferDate
         const source = entry.fromUserId && userNames.has(entry.fromUserId)
           ? userNames.get(entry.fromUserId) ?? 'Unknown User'
-          : `Legacy ${entry.from ? legacyHolderLabels.get(entry.from) ?? entry.from : 'Unassigned'}`
+          : legacyCashHolderLabel(entry.from)
         const destination =
           entry.toType === 'bank'
             ? 'Bank'
             : entry.toUserId && userNames.has(entry.toUserId)
               ? userNames.get(entry.toUserId) ?? 'Unknown User'
-              : `Legacy ${entry.toPerson ? legacyHolderLabels.get(entry.toPerson) ?? entry.toPerson : 'Unassigned'}`
+              : legacyCashHolderLabel(entry.toPerson)
         const searchMatch =
           !query ||
           source.toLowerCase().includes(query) ||
@@ -253,7 +244,7 @@ export function LogsPage({
         return dateMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashTransfers, legacyHolderLabels, transferDate, transferSearch, userNames])
+  }, [cashTransfers, transferDate, transferSearch, userNames])
 
   const filteredAudit = useMemo(() => {
     const query = auditSearch.trim().toLowerCase()

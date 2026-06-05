@@ -21,12 +21,23 @@ export const singleStoreId = 'single-store'
 export const defaultMonthlyOperationalExpense = 500000
 export const defaultMarginPercentage = 25
 
+export type OperationalExpenseBreakdown = {
+  rent: number
+  electricity: number
+  maintenance: number
+  salaries: number
+  royalty: number
+  caFee: number
+  miscellaneous: number
+}
+
 export type NameDirectoryType = keyof NameDirectory
 
 export type AppSettings = {
   currentBankBalance: number
   marginPercentage: number
   monthlyOperationalExpense: number
+  operationalExpenseBreakdown: OperationalExpenseBreakdown
 }
 
 export type CreateUserInput = {
@@ -89,6 +100,15 @@ export const defaultAppSettings: AppSettings = {
   currentBankBalance: 0,
   marginPercentage: defaultMarginPercentage,
   monthlyOperationalExpense: defaultMonthlyOperationalExpense,
+  operationalExpenseBreakdown: {
+    rent: 0,
+    electricity: 0,
+    maintenance: 0,
+    salaries: 0,
+    royalty: 0,
+    caFee: 0,
+    miscellaneous: 0,
+  },
 }
 
 export type AppStoreSetters = {

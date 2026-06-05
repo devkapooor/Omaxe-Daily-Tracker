@@ -80,9 +80,48 @@ export function createAuthActions({
   }
 
   async function deleteUserAccount(userId: string, actor: string) {
-    const { users } = getState()
+    const {
+      cashTransfers,
+      dailyCashouts,
+      financeData,
+      plannedPayments,
+      settingsAuditLog,
+      users,
+    } = getState()
     const target = users.find((item) => item.id === userId)
     if (!target || target.role === 'owner') return
+
+    const targetName = normalizeName(target.name).toLowerCase()
+    const referenceReasons = new Set<string>()
+
+    if (dailyCashouts.some((entry) => entry.recordedByUserId === userId)) {
+      referenceReasons.add('daily cashouts linked to this user ID')
+    }
+    if (cashTransfers.some((entry) => entry.fromUserId === userId || entry.toUserId === userId)) {
+      referenceReasons.add('cash transfers linked to this user ID')
+    }
+    if (dailyCashouts.some((entry) => normalizeName(entry.recordedBy).toLowerCase() === targetName)) {
+      referenceReasons.add('cashout history recorded under this user name')
+    }
+    if (cashTransfers.some((entry) => normalizeName(entry.createdBy).toLowerCase() === targetName)) {
+      referenceReasons.add('cash transfer history recorded under this user name')
+    }
+    if (financeData.cashouts.some((entry) => normalizeName(entry.approvedBy).toLowerCase() === targetName)) {
+      referenceReasons.add('expense approvals recorded under this user name')
+    }
+    if (plannedPayments.some((entry) => normalizeName(entry.createdBy).toLowerCase() === targetName)) {
+      referenceReasons.add('planned payments created by this user name')
+    }
+    if (settingsAuditLog.some((entry) => normalizeName(entry.actor).toLowerCase() === targetName)) {
+      referenceReasons.add('settings audit history recorded under this user name')
+    }
+
+    if (referenceReasons.size > 0) {
+      throw new Error(
+        `Delete blocked. ${target.name} still has historical references: ${Array.from(referenceReasons).join(', ')}.`,
+      )
+    }
+
     await deleteDoc(doc(db, 'users', userId))
     await pushSettingsAudit(`User deleted: ${target.name} (${target.role})`, actor)
   }

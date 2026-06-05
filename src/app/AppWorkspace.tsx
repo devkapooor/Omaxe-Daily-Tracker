@@ -11,6 +11,7 @@ import {
   canOpenSettings,
   formatDisplayDate,
   formatDisplayDateTime,
+  legacyCashHolderLabel,
   money,
 } from '@/app/uiHelpers'
 import { AppTopBar } from '@/features/navigation/components/AppTopBar'
@@ -34,9 +35,9 @@ import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
 import { Button } from '@/shared/ui/button'
 import { GlowCard } from '@/shared/ui/spotlight-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
-import type { CashHolderAssignment } from '@/app/uiHelpers'
-import type { CashHolder, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
+import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 
 type AppWorkspaceProps = {
   activePage: Page
@@ -44,6 +45,7 @@ type AppWorkspaceProps = {
     currentBankBalance: number
     marginPercentage: number
     monthlyOperationalExpense: number
+    operationalExpenseBreakdown: OperationalExpenseBreakdown
   }
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
@@ -55,7 +57,6 @@ type AppWorkspaceProps = {
     mobileNumber: string
     role: 'billing' | 'manager'
   }, actor: string) => Promise<unknown>
-  currentHolder: CashHolder | null
   currentUser: AppUser
   dailyCashouts: DailyCashoutEntry[]
   dashboardExpenseTotal: number
@@ -76,7 +77,6 @@ type AppWorkspaceProps = {
     vendors: string[]
   }
   ensureNameInDirectory: (type: 'people' | 'vendors', name: string) => Promise<boolean>
-  holderAssignments: CashHolderAssignment[]
   importLegacyData: () => Promise<boolean>
   isBusy: boolean
   isPageLoaderVisible: boolean
@@ -102,6 +102,7 @@ type AppWorkspaceProps = {
     legacyBalances: LegacyCashBalance[]
     legacyCashoutEntries: DailyCashoutEntry[]
     legacyTransferEntries: CashTransfer[]
+    migratedCashoutEntries: DailyCashoutEntry[]
     userBalances: PendingCashUserBalance[]
   }
   plannedPayments: PlannedPayment[]
@@ -112,7 +113,7 @@ type AppWorkspaceProps = {
   saveCashout: (draft: CashoutDraft) => Promise<void>
   saveDailyCashoutEntry: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
-  saveOperationalSettings: (monthlyOperationalExpense: number, marginPercentage: number, actor: string) => Promise<void>
+  saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   savePlannerBankBalance: (value: number, actor: string) => Promise<void>
@@ -164,7 +165,6 @@ export function AppWorkspace({
   cashTransfers,
   changeOwnPassword,
   createUserAccount,
-  currentHolder,
   currentUser,
   dailyCashouts,
   dashboardExpenseTotal,
@@ -177,7 +177,6 @@ export function AppWorkspace({
   deleteUserAccount,
   directoryOptions,
   ensureNameInDirectory,
-  holderAssignments,
   importLegacyData,
   isBusy,
   isPageLoaderVisible,
@@ -216,11 +215,6 @@ export function AppWorkspace({
   vendors,
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
-  function holderLabel(holder: CashHolder | null | undefined) {
-    if (!holder) return 'Unknown Holder'
-    return holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
-  }
-
   return (
     <main className="mx-auto flex h-[100dvh] w-full max-w-[1800px] overflow-hidden">
       <AppTopBar
@@ -415,7 +409,6 @@ export function AppWorkspace({
           <section className="mt-3 min-h-0 flex-1 overflow-hidden">
             <DailyCashoutForm
               currentUserId={currentUser.id}
-              currentUserHolder={currentHolder}
               currentUserName={currentUser.name}
               onSave={async (draft) => {
                 await saveDailyCashoutEntry(draft)
@@ -433,22 +426,21 @@ export function AppWorkspace({
           <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
               currentUserId={currentUser.id}
-              currentHolder={currentHolder}
               currentUserName={currentUser.name}
-              holderAssignments={holderAssignments}
               legacyBalances={pendingCashNow.legacyBalances}
               legacyCashoutEntries={pendingCashNow.legacyCashoutEntries}
               legacyTransferEntries={pendingCashNow.legacyTransferEntries}
+              migratedCashoutEntries={pendingCashNow.migratedCashoutEntries}
               userBalances={pendingCashNow.userBalances}
               users={users}
               onTransfer={async (draft) => {
                 await saveCashTransfer(draft)
-                const fromName = pendingCashNow.userBalances.find((entry) => entry.userId === draft.fromUserId)?.name ?? holderLabel(draft.from ?? null)
+                const fromName = pendingCashNow.userBalances.find((entry) => entry.userId === draft.fromUserId)?.name ?? legacyCashHolderLabel(draft.from)
                 const toName =
                   draft.toType === 'bank'
                     ? 'Bank'
                     : pendingCashNow.userBalances.find((entry) => entry.userId === draft.toUserId)?.name ??
-                      holderLabel(draft.toPerson ?? null)
+                      legacyCashHolderLabel(draft.toPerson)
                 showToast(
                   `Cash movement saved: ${money(draft.amount)} from ${fromName} to ${toName}`,
                 )
@@ -492,7 +484,6 @@ export function AppWorkspace({
               loans={normalizedLoans}
               dailyCashouts={dailyCashouts}
               cashTransfers={cashTransfers}
-              holderAssignments={holderAssignments}
               settingsAuditLog={settingsAuditLog}
               users={users}
               onDeleteLoan={async (loan) => {
@@ -511,6 +502,7 @@ export function AppWorkspace({
               users={users}
               isBusy={isBusy}
               monthlyOperationalExpense={appSettings.monthlyOperationalExpense}
+              operationalExpenseBreakdown={appSettings.operationalExpenseBreakdown}
               marginPercentage={appSettings.marginPercentage}
               onCreateUser={async (draft) => {
                 await createUserAccount(draft, currentUser.name)
@@ -524,8 +516,8 @@ export function AppWorkspace({
                 await changeOwnPassword(password)
                 showToast('Password updated.')
               }}
-              onSaveOperationalSettings={async (nextMonthlyOperationalExpense, nextMarginPercentage) => {
-                await saveOperationalSettings(nextMonthlyOperationalExpense, nextMarginPercentage, currentUser.name)
+              onSaveOperationalSettings={async (nextOperationalExpenseBreakdown, nextMarginPercentage) => {
+                await saveOperationalSettings(nextOperationalExpenseBreakdown, nextMarginPercentage, currentUser.name)
                 showToast('Operational settings updated.')
               }}
             />

@@ -244,10 +244,8 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await setDoc(doc(db, 'cashTransfers', transfer.id), {
       id: transfer.id,
       date: transfer.date,
-      ...(transfer.from ? { from: transfer.from } : {}),
       ...(transfer.fromUserId ? { fromUserId: transfer.fromUserId } : {}),
       toType: transfer.toType,
-      ...(transfer.toPerson ? { toPerson: transfer.toPerson } : {}),
       ...(transfer.toUserId ? { toUserId: transfer.toUserId } : {}),
       amount: transfer.amount,
       reason: transfer.reason,
