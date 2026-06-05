@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import type { CashHolder, CashTransfer } from '@/domain/appTypes'
+import { useMemo, useState } from 'react'
+import type { CashTransfer, DailyCashoutEntry, UserAccount } from '@/domain/appTypes'
 import {
+  activeWorkspaceUsers,
   type CashHolderAssignment,
+  type LegacyCashBalance,
   money,
   numberValue,
+  type PendingCashUserBalance,
   today,
 } from '@/app/uiHelpers'
+import { formatDisplayDate, formatDisplayTime } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -14,41 +18,64 @@ import { NativeSelect } from '@/shared/ui/native-select'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
 type CashMovementFormProps = {
+  currentUserId: string
   currentUserName: string
-  currentHolder: CashHolder | null
+  currentHolder: CashTransfer['from'] | null
   holderAssignments: CashHolderAssignment[]
-  balances: Record<CashHolder, number>
-  transfers: CashTransfer[]
+  users: UserAccount[]
+  userBalances: PendingCashUserBalance[]
+  legacyBalances: LegacyCashBalance[]
+  legacyCashoutEntries: DailyCashoutEntry[]
+  legacyTransferEntries: CashTransfer[]
   onTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
 }
 
-function labelForHolder(holder: CashHolder, holderAssignments: CashHolderAssignment[]) {
+function holderLabel(holder: CashTransfer['from'], holderAssignments: CashHolderAssignment[]) {
+  if (!holder) return 'Unknown Holder'
   return holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
 }
 
-function displayHolder(holder: CashHolder, holderAssignments: CashHolderAssignment[]) {
-  return labelForHolder(holder, holderAssignments)
-}
-
 export function CashMovementForm({
+  currentUserId,
   currentUserName,
   currentHolder,
   holderAssignments,
-  balances,
-  transfers,
+  users,
+  userBalances,
+  legacyBalances,
+  legacyCashoutEntries,
+  legacyTransferEntries,
   onTransfer,
 }: CashMovementFormProps) {
-  void transfers
-  const [transferFrom, setTransferFrom] = useState<CashHolder | ''>(currentHolder ?? '')
-  const [transferTo, setTransferTo] = useState<CashHolder | 'bank' | ''>('bank')
+  const userOptions = useMemo(
+    () =>
+      activeWorkspaceUsers(users)
+        .map((user) => ({
+          id: user.id,
+          name: user.name,
+          amount: userBalances.find((entry) => entry.userId === user.id)?.amount ?? 0,
+          holder: holderAssignments.find((assignment) => assignment.userId === user.id)?.holder,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [holderAssignments, userBalances, users],
+  )
+
+  const [transferFromUserId, setTransferFromUserId] = useState(currentUserId)
+  const [transferTo, setTransferTo] = useState<string>('bank')
   const [amount, setAmount] = useState('0')
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
 
+  const hasLegacyWarnings =
+    legacyBalances.some((entry) => entry.amount !== 0) ||
+    legacyCashoutEntries.length > 0 ||
+    legacyTransferEntries.length > 0
+
   async function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!transferFrom) {
+    const fromUser = userOptions.find((user) => user.id === transferFromUserId)
+    if (!fromUser) {
       setError('Select the sender.')
       return
     }
@@ -56,18 +83,17 @@ export function CashMovementForm({
       setError('Select the destination.')
       return
     }
-    if (transferTo !== 'bank' && transferTo === transferFrom) {
+    if (transferTo !== 'bank' && transferTo === transferFromUserId) {
       setError('Sender and destination cannot be the same person.')
       return
     }
 
     const transferAmount = numberValue(amount)
-
     if (transferAmount <= 0) {
       setError('Movement amount must be greater than zero.')
       return
     }
-    if (balances[transferFrom] < transferAmount) {
+    if (fromUser.amount < transferAmount) {
       setError('Movement amount cannot exceed the sender pending cash balance.')
       return
     }
@@ -76,18 +102,21 @@ export function CashMovementForm({
       return
     }
 
+    const toUser = transferTo === 'bank' ? null : userOptions.find((user) => user.id === transferTo)
+
     try {
       await onTransfer({
         date: today(),
-        from: transferFrom,
+        from: fromUser.holder ?? currentHolder ?? undefined,
+        fromUserId: fromUser.id,
         toType: transferTo === 'bank' ? 'bank' : 'person',
-        ...(transferTo !== 'bank' ? { toPerson: transferTo } : {}),
+        ...(toUser ? { toUserId: toUser.id, toPerson: toUser.holder ?? undefined } : {}),
         amount: transferAmount,
         reason: reason.trim(),
         createdBy: currentUserName,
         recordType: transferTo === 'bank' ? 'bank-transfer' : 'cash-movement',
       })
-      setTransferFrom(currentHolder ?? '')
+      setTransferFromUserId(currentUserId)
       setTransferTo('bank')
       setAmount('0')
       setReason('')
@@ -104,32 +133,74 @@ export function CashMovementForm({
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {holderAssignments.map((assignment) => (
-            <div key={assignment.holder} className="rounded-[18px] border border-border/70 bg-secondary/55 p-3.5">
+          {userOptions.map((user) => (
+            <div key={user.id} className="rounded-[18px] border border-border/70 bg-secondary/55 p-3.5">
               <span className="block text-xs font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
-                {displayHolder(assignment.holder, holderAssignments)}
+                {user.name}
               </span>
               <strong className="mt-2 block text-xl font-black tracking-tight text-foreground">
-                {money(balances[assignment.holder] ?? 0)}
+                {money(user.amount)}
               </strong>
-              <p className="mt-2 text-xs font-medium text-muted-foreground">Pending counter cash balance available to move</p>
+              <p className="mt-2 text-xs font-medium text-muted-foreground">Pending counter cash balance owned by this login</p>
             </div>
           ))}
         </div>
 
+        {hasLegacyWarnings ? (
+          <div className="rounded-[18px] border border-amber-200 bg-amber-50/90 p-4 text-amber-900">
+            <p className="text-sm font-bold">Legacy cash records need review</p>
+            <p className="mt-1 text-sm">
+              Older cashouts and transfers without user IDs are being kept separate so they do not get silently attached to a new login.
+            </p>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {legacyBalances
+                .filter((entry) => entry.amount !== 0 || entry.cashoutCount > 0 || entry.transferInCount > 0 || entry.transferOutCount > 0)
+                .map((entry) => (
+                  <div key={entry.holder} className="rounded-[16px] border border-amber-200 bg-white/80 p-3">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-amber-700">{entry.label}</p>
+                    <p className="mt-1 text-sm font-bold">{money(entry.amount)}</p>
+                    <p className="mt-1 text-xs text-amber-800">
+                      Cashouts {entry.cashoutCount} | In {entry.transferInCount} | Out {entry.transferOutCount}
+                    </p>
+                  </div>
+                ))}
+            </div>
+            {legacyCashoutEntries.length > 0 ? (
+              <div className="mt-3 space-y-1 text-xs text-amber-900">
+                <p className="font-bold">Recent legacy cashouts</p>
+                {legacyCashoutEntries.slice(0, 5).map((entry) => (
+                  <p key={entry.id}>
+                    {formatDisplayDate(entry.date)} | {entry.recordedBy} | {money(entry.drawerTotal ?? entry.remainingBalance)} | {holderLabel(entry.recordedByHolder, holderAssignments)}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {legacyTransferEntries.length > 0 ? (
+              <div className="mt-3 space-y-1 text-xs text-amber-900">
+                <p className="font-bold">Recent legacy transfers</p>
+                {legacyTransferEntries.slice(-5).reverse().map((entry) => (
+                  <p key={entry.id}>
+                    {formatDisplayDate(entry.date)} {formatDisplayTime(entry.createdAt)} | {holderLabel(entry.from, holderAssignments)} to {entry.toType === 'bank' ? 'Bank' : holderLabel(entry.toPerson, holderAssignments)} | {money(entry.amount)}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <form className="grid gap-3.5 md:grid-cols-2" onSubmit={submitTransfer}>
           <FieldLabel label="From">
             <NativeSelect
-              value={transferFrom}
+              value={transferFromUserId}
               onChange={(event) => {
-                setTransferFrom(event.target.value as CashHolder)
+                setTransferFromUserId(event.target.value)
                 setError('')
               }}
             >
               <option value="">Select user</option>
-              {holderAssignments.map((assignment) => (
-                <option key={assignment.holder} value={assignment.holder}>
-                  {displayHolder(assignment.holder, holderAssignments)}
+              {userOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
                 </option>
               ))}
             </NativeSelect>
@@ -139,14 +210,13 @@ export function CashMovementForm({
             <NativeSelect
               value={transferTo}
               onChange={(event) => {
-                setTransferTo(event.target.value as CashHolder | 'bank')
+                setTransferTo(event.target.value)
                 setError('')
               }}
             >
-              <option value="">Select destination</option>
-              {holderAssignments.map((assignment) => (
-                <option key={assignment.holder} value={assignment.holder}>
-                  {displayHolder(assignment.holder, holderAssignments)}
+              {userOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
                 </option>
               ))}
               <option value="bank">Bank</option>
@@ -185,4 +255,3 @@ export function CashMovementForm({
     </Card>
   )
 }
-

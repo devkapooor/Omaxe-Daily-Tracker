@@ -194,7 +194,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
-    const { dailyCashouts, financeData } = getState()
+    const { financeData } = getState()
     const parsedDrawerTotal = draft.drawerTotal ?? draft.remainingBalance
     const auditDifference = draft.cashAudit - parsedDrawerTotal
     const auditStatus = auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
@@ -204,20 +204,12 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
         : auditDifference < 0
           ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
           : 'Cash matches the system audit.'
-    const latestPendingBalances = dailyCashouts[0]?.pendingCashBalances ?? { dev: 0, arsh: 0, farhan: 0 }
-    const nextPendingBalances = { ...latestPendingBalances }
-    const holder = draft.recordedByHolder
-    if (holder === 'Dev') nextPendingBalances.dev += parsedDrawerTotal
-    if (holder === 'Arsh') nextPendingBalances.arsh += parsedDrawerTotal
-    if (holder === 'Farhan') nextPendingBalances.farhan += parsedDrawerTotal
-
     const entry: DailyCashoutEntry = {
       ...draft,
       drawerTotal: parsedDrawerTotal,
       auditDifference,
       auditStatus,
       auditMessage,
-      pendingCashBalances: nextPendingBalances,
       remainingBalance: parsedDrawerTotal,
       id: `daily-cashout-${crypto.randomUUID()}`,
       createdAt: nowIso(),
@@ -252,9 +244,11 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await setDoc(doc(db, 'cashTransfers', transfer.id), {
       id: transfer.id,
       date: transfer.date,
-      from: transfer.from,
+      ...(transfer.from ? { from: transfer.from } : {}),
+      ...(transfer.fromUserId ? { fromUserId: transfer.fromUserId } : {}),
       toType: transfer.toType,
       ...(transfer.toPerson ? { toPerson: transfer.toPerson } : {}),
+      ...(transfer.toUserId ? { toUserId: transfer.toUserId } : {}),
       amount: transfer.amount,
       reason: transfer.reason,
       createdBy: transfer.createdBy,

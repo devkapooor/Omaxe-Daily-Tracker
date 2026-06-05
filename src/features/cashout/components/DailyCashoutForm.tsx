@@ -8,6 +8,7 @@ import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
 type DailyCashoutFormProps = {
+  currentUserId: string
   currentUserName: string
   currentUserHolder: CashHolder | null
   onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void> | void
@@ -43,7 +44,7 @@ const emptyDrawerFormState: DrawerFormState = {
   denom500: '0',
 }
 
-export function DailyCashoutForm({ currentUserName, currentUserHolder, onSave }: DailyCashoutFormProps) {
+export function DailyCashoutForm({ currentUserId, currentUserName, currentUserHolder, onSave }: DailyCashoutFormProps) {
   const [entryDate, setEntryDate] = useState(today())
   const [cashSale, setCashSale] = useState('0')
   const [upiSale, setUpiSale] = useState('0')
@@ -133,6 +134,7 @@ export function DailyCashoutForm({ currentUserName, currentUserHolder, onSave }:
       await onSave({
         date: pendingDraft.date,
         recordedBy: currentUserName,
+        recordedByUserId: currentUserId,
         recordedByHolder: currentUserHolder ?? undefined,
         upiSales: pendingDraft.upiSales,
         cashSales: pendingDraft.cashSales,

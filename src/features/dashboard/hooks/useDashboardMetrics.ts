@@ -2,10 +2,13 @@ import { useMemo } from 'react'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
 import {
+  activeWorkspaceUsers,
   buildCashHolderAssignments,
   type DashboardRange,
   daysBetweenInclusive,
   daysInMonth,
+  type LegacyCashBalance,
+  type PendingCashUserBalance,
   resolveCashHolderForUser,
   shiftDate,
   today,
@@ -46,6 +49,8 @@ export function useDashboardMetrics({
   vendors,
 }: UseDashboardMetricsArgs) {
   const holderAssignments = useMemo(() => buildCashHolderAssignments(users), [users])
+  const activeUsers = useMemo(() => activeWorkspaceUsers(users), [users])
+  const activeUserNameById = useMemo(() => new Map(activeUsers.map((user) => [user.id, user.name])), [activeUsers])
 
   const currentHolder = useMemo(
     () => (currentUserId ? resolveCashHolderForUser(currentUserId, users) : null),
@@ -179,29 +184,92 @@ export function useDashboardMetrics({
     [vendorOutstandingByName],
   )
 
-  const latestPendingCashBalances = useMemo(() => {
-    const latest = dailyCashouts[0]
-    if (latest?.pendingCashBalances) return latest.pendingCashBalances
-    return { dev: 0, arsh: 0, farhan: 0 }
-  }, [dailyCashouts])
-
   const pendingCashNow = useMemo(() => {
-    const balances = {
-      Dev: latestPendingCashBalances.dev,
-      Arsh: latestPendingCashBalances.arsh,
-      Farhan: latestPendingCashBalances.farhan,
-    }
+    const userBalanceMap = new Map<string, number>(activeUsers.map((user) => [user.id, 0]))
+    const legacyBalanceMap = new Map<CashTransfer['from'], LegacyCashBalance>()
+    const legacyCashoutEntries: DailyCashoutEntry[] = []
+    const legacyTransferEntries: CashTransfer[] = []
     let bankTotal = 0
+
+    function ensureLegacyBalance(holder: CashTransfer['from']) {
+      if (!holder) return null
+      const existing = legacyBalanceMap.get(holder)
+      if (existing) return existing
+      const label = holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
+      const next: LegacyCashBalance = {
+        holder,
+        label,
+        amount: 0,
+        cashoutCount: 0,
+        transferInCount: 0,
+        transferOutCount: 0,
+      }
+      legacyBalanceMap.set(holder, next)
+      return next
+    }
+
+    dailyCashouts.forEach((entry) => {
+      const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
+      if (entry.recordedByUserId && activeUserNameById.has(entry.recordedByUserId)) {
+        userBalanceMap.set(entry.recordedByUserId, (userBalanceMap.get(entry.recordedByUserId) ?? 0) + drawerTotal)
+        return
+      }
+
+      const legacyBalance = ensureLegacyBalance(entry.recordedByHolder)
+      if (!legacyBalance) return
+      legacyBalance.amount += drawerTotal
+      legacyBalance.cashoutCount += 1
+      legacyCashoutEntries.push(entry)
+    })
+
     cashTransfers.forEach((entry) => {
-      balances[entry.from] -= entry.amount
-      if (entry.toType === 'person' && entry.toPerson) {
-        balances[entry.toPerson] += entry.amount
+      if (entry.fromUserId && activeUserNameById.has(entry.fromUserId)) {
+        userBalanceMap.set(entry.fromUserId, (userBalanceMap.get(entry.fromUserId) ?? 0) - entry.amount)
+      } else {
+        const legacySource = ensureLegacyBalance(entry.from)
+        if (legacySource) {
+          legacySource.amount -= entry.amount
+          legacySource.transferOutCount += 1
+        }
+        legacyTransferEntries.push(entry)
+      }
+
+      if (entry.toType === 'person') {
+        if (entry.toUserId && activeUserNameById.has(entry.toUserId)) {
+          userBalanceMap.set(entry.toUserId, (userBalanceMap.get(entry.toUserId) ?? 0) + entry.amount)
+        } else {
+          const legacyDestination = ensureLegacyBalance(entry.toPerson)
+          if (legacyDestination) {
+            legacyDestination.amount += entry.amount
+            legacyDestination.transferInCount += 1
+          }
+          if (!legacyTransferEntries.find((candidate) => candidate.id === entry.id)) {
+            legacyTransferEntries.push(entry)
+          }
+        }
       } else {
         bankTotal += entry.amount
       }
     })
-    return { balances, bankTotal }
-  }, [cashTransfers, latestPendingCashBalances])
+
+    const userBalances: PendingCashUserBalance[] = activeUsers
+      .map((user) => ({
+        userId: user.id,
+        name: user.name,
+        amount: userBalanceMap.get(user.id) ?? 0,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name))
+
+    const legacyBalances = Array.from(legacyBalanceMap.values()).sort((left, right) => left.label.localeCompare(right.label))
+
+    return {
+      bankTotal,
+      legacyBalances,
+      legacyCashoutEntries,
+      legacyTransferEntries,
+      userBalances,
+    }
+  }, [activeUserNameById, activeUsers, cashTransfers, dailyCashouts, holderAssignments])
 
   const latestClosedDay = dailyCashouts[0]?.date ?? null
 

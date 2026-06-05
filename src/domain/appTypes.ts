@@ -30,6 +30,7 @@ export type DailyCashoutEntry = {
   id: string
   date: string
   recordedBy: string
+  recordedByUserId?: string
   recordedByHolder?: CashHolder
   upiSales: number
   cashSales: number
@@ -56,9 +57,11 @@ export type CashHolder = 'Dev' | 'Arsh' | 'Farhan'
 export type CashTransfer = {
   id: string
   date: string
-  from: CashHolder
+  from?: CashHolder
+  fromUserId?: string
   toType: 'person' | 'bank'
   toPerson?: CashHolder
+  toUserId?: string
   amount: number
   reason: string
   createdBy: string

@@ -1,5 +1,4 @@
-import { formatDisplayDate, money, type CashHolderAssignment } from '@/app/uiHelpers'
-import type { CashHolder } from '@/domain/appTypes'
+import { formatDisplayDate, type LegacyCashBalance, money, type PendingCashUserBalance } from '@/app/uiHelpers'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
@@ -15,17 +14,18 @@ type DailyCashoutFinalSummaryPanelProps = {
     cashToHand: number
     transfersToday: number
   }
-  pendingCashBalances: Record<CashHolder, number>
-  holderAssignments: CashHolderAssignment[]
+  userBalances: PendingCashUserBalance[]
+  legacyBalances: LegacyCashBalance[]
 }
 
 export function DailyCashoutFinalSummaryPanel({
   dailyFinalSummary,
-  pendingCashBalances,
-  holderAssignments,
+  userBalances,
+  legacyBalances,
 }: DailyCashoutFinalSummaryPanelProps) {
-  const pendingCashSummary = holderAssignments
-    .map((assignment) => `${assignment.label} ${money(pendingCashBalances[assignment.holder] ?? 0)}`)
+  const pendingCashSummary = userBalances
+    .map((entry) => `${entry.name} ${money(entry.amount)}`)
+    .concat(legacyBalances.filter((entry) => entry.amount !== 0).map((entry) => `Legacy ${entry.label} ${money(entry.amount)}`))
     .join(' | ')
 
   const rows = [

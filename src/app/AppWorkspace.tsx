@@ -5,6 +5,8 @@ import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/a
 import {
   type AppToast,
   type DashboardRange,
+  type LegacyCashBalance,
+  type PendingCashUserBalance,
   canOpenPlanner,
   canOpenSettings,
   formatDisplayDate,
@@ -96,8 +98,11 @@ type AppWorkspaceProps = {
   onLogout: () => void
   onPageChange: (page: Page) => void
   pendingCashNow: {
-    balances: Record<CashHolder, number>
     bankTotal: number
+    legacyBalances: LegacyCashBalance[]
+    legacyCashoutEntries: DailyCashoutEntry[]
+    legacyTransferEntries: CashTransfer[]
+    userBalances: PendingCashUserBalance[]
   }
   plannedPayments: PlannedPayment[]
   projectedMonthlySales: number
@@ -211,7 +216,8 @@ export function AppWorkspace({
   vendors,
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
-  function holderLabel(holder: CashHolder) {
+  function holderLabel(holder: CashHolder | null | undefined) {
+    if (!holder) return 'Unknown Holder'
     return holderAssignments.find((assignment) => assignment.holder === holder)?.label ?? holder
   }
 
@@ -273,16 +279,16 @@ export function AppWorkspace({
             </div>
             <DailyCashoutFinalSummaryPanel
               dailyFinalSummary={latestClosedDaySummary}
-              pendingCashBalances={pendingCashNow.balances}
-              holderAssignments={holderAssignments}
+              userBalances={pendingCashNow.userBalances}
+              legacyBalances={pendingCashNow.legacyBalances}
             />
             <DashboardTables
               cashouts={data.cashouts}
               purchases={data.purchases}
               payments={data.payments}
-              pendingCashBalances={pendingCashNow.balances}
+              userBalances={pendingCashNow.userBalances}
+              legacyBalances={pendingCashNow.legacyBalances}
               pendingCashBankTotal={pendingCashNow.bankTotal}
-              holderAssignments={holderAssignments}
             />
           </section>
         ) : null}
@@ -408,6 +414,7 @@ export function AppWorkspace({
         {activePage === 'cashout' ? (
           <section className="mt-3 min-h-0 flex-1 overflow-hidden">
             <DailyCashoutForm
+              currentUserId={currentUser.id}
               currentUserHolder={currentHolder}
               currentUserName={currentUser.name}
               onSave={async (draft) => {
@@ -425,15 +432,25 @@ export function AppWorkspace({
         {activePage === 'movement' ? (
           <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
+              currentUserId={currentUser.id}
               currentHolder={currentHolder}
               currentUserName={currentUser.name}
               holderAssignments={holderAssignments}
-              balances={pendingCashNow.balances}
-              transfers={cashTransfers}
+              legacyBalances={pendingCashNow.legacyBalances}
+              legacyCashoutEntries={pendingCashNow.legacyCashoutEntries}
+              legacyTransferEntries={pendingCashNow.legacyTransferEntries}
+              userBalances={pendingCashNow.userBalances}
+              users={users}
               onTransfer={async (draft) => {
                 await saveCashTransfer(draft)
+                const fromName = pendingCashNow.userBalances.find((entry) => entry.userId === draft.fromUserId)?.name ?? holderLabel(draft.from ?? null)
+                const toName =
+                  draft.toType === 'bank'
+                    ? 'Bank'
+                    : pendingCashNow.userBalances.find((entry) => entry.userId === draft.toUserId)?.name ??
+                      holderLabel(draft.toPerson ?? null)
                 showToast(
-                  `Cash movement saved: ${money(draft.amount)} from ${holderLabel(draft.from)} to ${draft.toType === 'bank' ? 'Bank' : draft.toPerson ? holderLabel(draft.toPerson) : '-'}`,
+                  `Cash movement saved: ${money(draft.amount)} from ${fromName} to ${toName}`,
                 )
               }}
             />
@@ -448,7 +465,7 @@ export function AppWorkspace({
               expenses={data.cashouts}
               payments={data.payments}
               plannedPayments={plannedPayments}
-              pendingCashBalances={pendingCashNow.balances}
+              pendingCashBalances={Object.fromEntries(pendingCashNow.userBalances.map((entry) => [entry.name, entry.amount]))}
               onSaveBankBalance={async (value) => {
                 await savePlannerBankBalance(value, currentUser.name)
                 showToast('Planner bank balance updated.')
@@ -475,7 +492,9 @@ export function AppWorkspace({
               loans={normalizedLoans}
               dailyCashouts={dailyCashouts}
               cashTransfers={cashTransfers}
+              holderAssignments={holderAssignments}
               settingsAuditLog={settingsAuditLog}
+              users={users}
               onDeleteLoan={async (loan) => {
                 if (!shouldDeleteLoanEntry(loan)) return
                 await deleteLoanEntry(loan.id)

@@ -32,8 +32,27 @@ export type CashHolderAssignment = {
   userId?: string
 }
 
+export type PendingCashUserBalance = {
+  userId: string
+  name: string
+  amount: number
+}
+
+export type LegacyCashBalance = {
+  holder: CashHolder
+  label: string
+  amount: number
+  cashoutCount: number
+  transferInCount: number
+  transferOutCount: number
+}
+
+export function activeWorkspaceUsers(users: UserAccount[]) {
+  return users.filter((user) => !user.disabled && user.approvalStatus !== 'rejected')
+}
+
 export function buildCashHolderAssignments(users: UserAccount[]): CashHolderAssignment[] {
-  const enabledUsers = users.filter((user) => !user.disabled && user.approvalStatus !== 'rejected')
+  const enabledUsers = activeWorkspaceUsers(users)
   const owner = enabledUsers.find((user) => user.role === 'owner')
   const staff = enabledUsers
     .filter((user) => user.role !== 'owner')
@@ -55,6 +74,10 @@ export function buildCashHolderAssignments(users: UserAccount[]): CashHolderAssi
 export function resolveCashHolderForUser(userId: string, users: UserAccount[]) {
   const match = buildCashHolderAssignments(users).find((assignment) => assignment.userId === userId)
   return match?.holder ?? null
+}
+
+export function userNameById(users: UserAccount[]) {
+  return new Map(activeWorkspaceUsers(users).map((user) => [user.id, user.name]))
 }
 
 export function today() {

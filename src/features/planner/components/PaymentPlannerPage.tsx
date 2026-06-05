@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Cashout, Payment } from '@/domain/financeTypes'
-import type { CashHolder, PlannedPayment } from '@/domain/appTypes'
+import type { PlannedPayment } from '@/domain/appTypes'
 import { formatDisplayDate, money, numberValue } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -16,7 +16,7 @@ type PaymentPlannerPageProps = {
   expenses: Cashout[]
   payments: Payment[]
   plannedPayments: PlannedPayment[]
-  pendingCashBalances: Record<CashHolder, number>
+  pendingCashBalances: Record<string, number>
   onSaveBankBalance: (currentBankBalance: number) => Promise<void>
   onSavePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   onDeletePlannedPayment: (paymentId: string) => Promise<void>

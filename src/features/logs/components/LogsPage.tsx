@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
-import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, money } from '@/app/uiHelpers'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, money, type CashHolderAssignment, userNameById } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutDetailsModal } from '@/features/cashout/components/DailyCashoutDetailsModal'
@@ -18,7 +18,9 @@ type LogsPageProps = {
   loans: LoanEntry[]
   dailyCashouts: DailyCashoutEntry[]
   cashTransfers: CashTransfer[]
+  holderAssignments: CashHolderAssignment[]
   settingsAuditLog: SettingsAuditEntry[]
+  users: UserAccount[]
   onDeleteLoan: (loan: LoanEntry) => Promise<void> | void
 }
 
@@ -111,7 +113,9 @@ export function LogsPage({
   loans,
   dailyCashouts,
   cashTransfers,
+  holderAssignments,
   settingsAuditLog,
+  users,
   onDeleteLoan,
 }: LogsPageProps) {
   const [salesDate, setSalesDate] = useState('')
@@ -128,6 +132,25 @@ export function LogsPage({
   const [transferDate, setTransferDate] = useState('')
   const [transferSearch, setTransferSearch] = useState('')
   const [auditSearch, setAuditSearch] = useState('')
+  const userNames = useMemo(() => userNameById(users), [users])
+  const legacyHolderLabels = useMemo(
+    () =>
+      new Map(
+        holderAssignments.map((assignment) => [assignment.holder, assignment.label] as const),
+      ),
+    [holderAssignments],
+  )
+
+  function transferPartyName(entry: CashTransfer, side: 'from' | 'to') {
+    if (side === 'from') {
+      if (entry.fromUserId && userNames.has(entry.fromUserId)) return userNames.get(entry.fromUserId) ?? 'Unknown User'
+      return `Legacy ${entry.from ? legacyHolderLabels.get(entry.from) ?? entry.from : 'Unassigned'}`
+    }
+
+    if (entry.toType === 'bank') return 'Bank'
+    if (entry.toUserId && userNames.has(entry.toUserId)) return userNames.get(entry.toUserId) ?? 'Unknown User'
+    return `Legacy ${entry.toPerson ? legacyHolderLabels.get(entry.toPerson) ?? entry.toPerson : 'Unassigned'}`
+  }
 
   const filteredSales = useMemo(
     () =>
@@ -212,17 +235,25 @@ export function LogsPage({
     return cashTransfers
       .filter((entry) => {
         const dateMatch = !transferDate || entry.date === transferDate
-        const destination = entry.toType === 'bank' ? 'bank' : entry.toPerson ?? ''
+        const source = entry.fromUserId && userNames.has(entry.fromUserId)
+          ? userNames.get(entry.fromUserId) ?? 'Unknown User'
+          : `Legacy ${entry.from ? legacyHolderLabels.get(entry.from) ?? entry.from : 'Unassigned'}`
+        const destination =
+          entry.toType === 'bank'
+            ? 'Bank'
+            : entry.toUserId && userNames.has(entry.toUserId)
+              ? userNames.get(entry.toUserId) ?? 'Unknown User'
+              : `Legacy ${entry.toPerson ? legacyHolderLabels.get(entry.toPerson) ?? entry.toPerson : 'Unassigned'}`
         const searchMatch =
           !query ||
-          entry.from.toLowerCase().includes(query) ||
+          source.toLowerCase().includes(query) ||
           destination.toLowerCase().includes(query) ||
           entry.reason.toLowerCase().includes(query) ||
           entry.createdBy.toLowerCase().includes(query)
         return dateMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashTransfers, transferDate, transferSearch])
+  }, [cashTransfers, legacyHolderLabels, transferDate, transferSearch, userNames])
 
   const filteredAudit = useMemo(() => {
     const query = auditSearch.trim().toLowerCase()
@@ -356,9 +387,10 @@ export function LogsPage({
                 const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
                 return (
                   <LogEntryCard key={entry.id}>
-                    <p className="font-bold">{formatDisplayDate(entry.date)} | {entry.recordedBy}</p>
-                    <p className="text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)} | Credit {money(entry.creditSales)} | Drawer {money(drawerTotal)}</p>
-                    <p className="text-muted-foreground">Audit {entry.auditStatus ?? 'matched'} | Created {formatDisplayDateTime(entry.createdAt)}</p>
+                  <p className="font-bold">{formatDisplayDate(entry.date)} | {entry.recordedBy}</p>
+                  {entry.recordedByUserId ? <p className="text-muted-foreground">User ID linked to current account</p> : <p className="text-muted-foreground">Legacy cashout without user identity</p>}
+                  <p className="text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)} | Credit {money(entry.creditSales)} | Drawer {money(drawerTotal)}</p>
+                  <p className="text-muted-foreground">Audit {entry.auditStatus ?? 'matched'} | Created {formatDisplayDateTime(entry.createdAt)}</p>
                     <button
                       className="mt-2.5 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
                       onClick={() => setSelectedCashout(entry)}
@@ -382,7 +414,7 @@ export function LogsPage({
               {filteredTransfers.map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">
-                    {formatDisplayDate(entry.date)} | {entry.from} to {entry.toType === 'bank' ? 'Bank' : entry.toPerson ?? '-'}
+                    {formatDisplayDate(entry.date)} | {transferPartyName(entry, 'from')} to {transferPartyName(entry, 'to')}
                   </p>
                   <p className="text-muted-foreground">
                     {money(entry.amount)} | {entry.reason} | Cash Movement

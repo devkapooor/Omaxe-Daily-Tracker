@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type { Cashout, Payment } from '@/domain/financeTypes'
-import type { CashHolder } from '@/domain/appTypes'
-import { money, today, type CashHolderAssignment } from '@/app/uiHelpers'
+import { type LegacyCashBalance, money, type PendingCashUserBalance, today } from '@/app/uiHelpers'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
@@ -9,9 +8,9 @@ type DashboardTablesProps = {
   cashouts: Cashout[]
   purchases: { date: string; category: string; purchaseAmount: number }[]
   payments: Payment[]
-  pendingCashBalances: Record<CashHolder, number>
+  userBalances: PendingCashUserBalance[]
+  legacyBalances: LegacyCashBalance[]
   pendingCashBankTotal: number
-  holderAssignments: CashHolderAssignment[]
 }
 
 function DashboardListCard({
@@ -47,9 +46,9 @@ export function DashboardTables({
   cashouts,
   purchases,
   payments,
-  pendingCashBalances,
+  userBalances,
+  legacyBalances,
   pendingCashBankTotal,
-  holderAssignments,
 }: DashboardTablesProps) {
   const month = today().slice(0, 7)
 
@@ -120,10 +119,13 @@ export function DashboardTables({
         title="Pending Cash Particulars"
         empty="No pending cash recorded."
         rows={[
-          ...holderAssignments.map((assignment) => ({
-            label: assignment.label,
-            value: money(pendingCashBalances[assignment.holder] ?? 0),
+          ...userBalances.map((entry) => ({
+            label: entry.name,
+            value: money(entry.amount),
           })),
+          ...legacyBalances
+            .filter((entry) => entry.amount !== 0)
+            .map((entry) => ({ label: `Legacy ${entry.label}`, value: money(entry.amount) })),
           { label: 'Transferred To Bank', value: money(pendingCashBankTotal) },
         ]}
       />
