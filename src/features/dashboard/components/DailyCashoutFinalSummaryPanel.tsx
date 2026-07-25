@@ -37,16 +37,16 @@ export function DailyCashoutFinalSummaryPanel({
   ]
 
   return (
-    <Card>
+    <Card className="border-border/60">
       <CardHeader>
         <SectionHeading
           eyebrow={dailyFinalSummary.date ? `Latest Closed Day - ${formatDisplayDate(dailyFinalSummary.date)}` : 'Latest Closed Day'}
           title="Daily Cashout Final Summary"
         />
       </CardHeader>
-      <CardContent className="space-y-2.5">
+      <CardContent className="space-y-2">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex flex-col gap-1.5 rounded-[18px] border border-border/70 bg-secondary/55 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div key={label} className="flex flex-col gap-1 rounded-[16px] border border-border/60 bg-secondary/45 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm font-medium text-muted-foreground">{label}</span>
             <strong className="text-sm font-bold text-foreground">{value}</strong>
           </div>

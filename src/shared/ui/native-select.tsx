@@ -1,27 +1,43 @@
 import * as React from 'react'
-import { ChevronDown } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
+import { SelectField, type SelectOption } from '@/shared/ui/select-field'
 
 type NativeSelectProps = React.SelectHTMLAttributes<HTMLSelectElement>
 
-const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(({ className, children, ...props }, ref) => {
+function parseOptions(children: React.ReactNode): SelectOption[] {
+  return React.Children.toArray(children).flatMap((child) => {
+    if (!React.isValidElement(child)) return []
+    const optionElement = child as React.ReactElement<{ children?: React.ReactNode; disabled?: boolean; value?: string }>
+    const value = String(optionElement.props.value ?? optionElement.props.children ?? '')
+    const label = typeof optionElement.props.children === 'string' ? optionElement.props.children : value
+    return [
+      {
+        disabled: Boolean(optionElement.props.disabled),
+        label,
+        value,
+      },
+    ]
+  })
+}
+
+function NativeSelect({ children, className, defaultValue, disabled, name, onChange, required, value }: NativeSelectProps) {
+  const options = React.useMemo(() => parseOptions(children), [children])
+
   return (
-    <div className="relative">
-      <select
-        ref={ref}
-        className={cn(
-          'flex h-9 w-full appearance-none rounded-xl border border-input bg-white/85 px-3 py-1.5 pr-9 text-sm text-foreground shadow-sm outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/15 disabled:cursor-not-allowed disabled:opacity-60',
-          className,
-        )}
-        {...props}
-      >
-        {children}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-    </div>
+    <SelectField
+      className={className}
+      defaultValue={typeof defaultValue === 'string' ? defaultValue : undefined}
+      disabled={disabled}
+      name={name}
+      options={options}
+      required={required}
+      searchable
+      value={typeof value === 'string' ? value : undefined}
+      onValueChange={(nextValue) => {
+        onChange?.({ target: { value: nextValue } } as React.ChangeEvent<HTMLSelectElement>)
+      }}
+    />
   )
-})
-NativeSelect.displayName = 'NativeSelect'
+}
 
 export { NativeSelect }
 

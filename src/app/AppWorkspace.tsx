@@ -69,6 +69,7 @@ type AppWorkspaceProps = {
   dashboardRange: DashboardRange
   dashboardSales: number
   data: FinanceData
+  deleteDailyCashoutEntry: (entryId: string) => Promise<void>
   deleteLoanEntry: (loanId: string) => Promise<void>
   deletePlannedPayment: (paymentId: string) => Promise<void>
   deleteUserAccount: (userId: string, actor: string) => Promise<void>
@@ -139,18 +140,15 @@ function formatLastUpdated(value: string | null) {
   return formatDisplayDateTime(value)
 }
 
-function shouldDeleteLoanEntry(loan: LoanEntry) {
+function shouldConfirmAction(title: string, detailLines: string[], warningLine?: string) {
   const lines = [
-    'Delete this loan entry?',
+    title,
     '',
-    `Party: ${loan.personName}`,
-    `Amount: ${money(loan.amount)}`,
-    `Remaining: ${money(loan.remainingAmount)}`,
-    `Loan Date: ${formatDisplayDate(loan.date)}`,
+    ...detailLines,
   ]
 
-  if (loan.paidAmount > 0) {
-    lines.push('', 'Warning: this loan already has repayment applied.')
+  if (warningLine) {
+    lines.push('', warningLine)
   }
 
   lines.push('', 'This action cannot be undone.')
@@ -172,6 +170,7 @@ export function AppWorkspace({
   dashboardRange,
   dashboardSales,
   data,
+  deleteDailyCashoutEntry,
   deleteLoanEntry,
   deletePlannedPayment,
   deleteUserAccount,
@@ -223,11 +222,11 @@ export function AppWorkspace({
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-2 pb-3 pt-18 sm:px-3 xl:px-4 xl:py-3">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-2 pb-3 pt-18 sm:px-3.5 xl:px-5 xl:py-4">
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
-          <div className="mb-2.5 flex flex-col gap-2 rounded-[18px] border border-emerald-200 bg-emerald-50/90 p-3 text-emerald-800 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div className="mb-3 flex flex-col gap-2 rounded-[18px] border border-[#5f4823] bg-[linear-gradient(180deg,rgba(62,45,20,0.92),rgba(42,31,14,0.9))] p-3 text-amber-100 shadow-[0_12px_28px_rgba(0,0,0,0.22)] md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <DatabaseZap className="mt-0.5 h-4 w-4 flex-none" />
               <span className="text-xs font-semibold sm:text-sm">
@@ -237,7 +236,7 @@ export function AppWorkspace({
             <Button
               type="button"
               variant="outline"
-              className="border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100"
+              className="border-[#6e572e] bg-background/70 text-amber-100 hover:bg-accent hover:text-accent-foreground"
               onClick={() => {
                 void importLegacyData().then((imported) => {
                   if (imported) showToast('Legacy browser data imported into Firebase.')
@@ -250,13 +249,13 @@ export function AppWorkspace({
         ) : null}
 
         {toast ? (
-          <div className="fixed right-4 top-20 z-[120] max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-xl sm:text-sm xl:top-22">
+          <div className="fixed right-4 top-20 z-[120] max-w-sm rounded-xl border border-[#5f4823] bg-[linear-gradient(180deg,rgba(49,38,20,0.96),rgba(37,28,15,0.94))] px-3 py-2 text-xs font-semibold text-amber-100 shadow-xl sm:text-sm xl:top-22">
             {toast.message}
           </div>
         ) : null}
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
-          <section className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          <section className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
             <DashboardRangeFilter value={dashboardRange} onChange={setDashboardRange} />
             <MonthlyProjectionPanel
               averageDailySales={averageDailySales}
@@ -264,12 +263,12 @@ export function AppWorkspace({
               monthlyOperationalExpense={monthlyOperationalExpense}
               marginPercentage={marginPercentage}
             />
-            <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-              <SummaryCard label="Sales" value={money(dashboardSales)} meta="Source: Sales records" updated={formatLastUpdated(dashboardLastUpdated.sales)} />
-              <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} meta="Source: Expense register totals" updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
-              <SummaryCard label="Open Loan Balance" value={money(totalLoans)} meta="Source: unpaid remaining loan balances" updated={formatLastUpdated(dashboardLastUpdated.loans)} />
-              <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} meta="Source: all open vendor balances" />
-              <SummaryCard label="Monthly Operational Expenses" value={money(monthlyOperationalExpense)} meta="Source: owner-managed settings" updated={formatLastUpdated(dashboardLastUpdated.fixed)} />
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+              <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
+              <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
+              <SummaryCard label="Open Loan Balance" value={money(totalLoans)} updated={formatLastUpdated(dashboardLastUpdated.loans)} />
+              <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
+              <SummaryCard label="Monthly Operational Expenses" value={money(monthlyOperationalExpense)} updated={formatLastUpdated(dashboardLastUpdated.fixed)} />
             </div>
             <DailyCashoutFinalSummaryPanel
               dailyFinalSummary={latestClosedDaySummary}
@@ -487,9 +486,40 @@ export function AppWorkspace({
               settingsAuditLog={settingsAuditLog}
               users={users}
               onDeleteLoan={async (loan) => {
-                if (!shouldDeleteLoanEntry(loan)) return
-                await deleteLoanEntry(loan.id)
-                showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
+                if (!shouldConfirmAction(
+                  'Delete this loan entry?',
+                  [
+                    `Party: ${loan.personName}`,
+                    `Amount: ${money(loan.amount)}`,
+                    `Remaining: ${money(loan.remainingAmount)}`,
+                    `Loan Date: ${formatDisplayDate(loan.date)}`,
+                  ],
+                  loan.paidAmount > 0 ? 'Warning: this loan already has repayment applied and balances will be recomputed.' : undefined,
+                )) return
+                try {
+                  await deleteLoanEntry(loan.id)
+                  showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
+                } catch (error) {
+                  showToast(error instanceof Error ? error.message : 'Unable to delete this loan entry.')
+                }
+              }}
+              onDeleteDailyCashout={async (entry) => {
+                const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
+                if (!shouldConfirmAction(
+                  'Delete this daily cashout entry?',
+                  [
+                    `Recorded By: ${entry.recordedBy}`,
+                    `Drawer Total: ${money(drawerTotal)}`,
+                    `Date: ${formatDisplayDate(entry.date)}`,
+                  ],
+                  'Warning: linked sales totals for this date will be recalculated.',
+                )) return
+                try {
+                  await deleteDailyCashoutEntry(entry.id)
+                  showToast(`Daily cashout deleted: ${entry.recordedBy} - ${formatDisplayDate(entry.date)}`)
+                } catch (error) {
+                  showToast(error instanceof Error ? error.message : 'Unable to delete this daily cashout entry.')
+                }
               }}
             />
           </section>

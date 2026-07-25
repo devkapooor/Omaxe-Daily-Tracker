@@ -1,0 +1,155 @@
+{
+  "createdAt": "2026-06-03T14:33:21.982Z",
+  "purchases": [
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/purchases/purchase-31882d20-4af1-402c-ae7f-835b4aaf4a9b",
+      "id": "purchase-31882d20-4af1-402c-ae7f-835b4aaf4a9b",
+      "createTime": "2026-05-10T20:50:26.239098Z",
+      "updateTime": "2026-06-03T14:31:42.222909Z",
+      "fields": {
+        "purchaseAmount": 7592,
+        "date": "2026-05-11",
+        "createdAt": "2026-05-10T20:50:27.215Z",
+        "storeId": "single-store",
+        "notes": "",
+        "unpaidAmount": 0,
+        "paidAmount": 7592,
+        "paymentMode": "Credit",
+        "updatedAt": "2026-06-03T14:31:39.587Z",
+        "category": "Harveys",
+        "billNumber": "FY/26-27/0181",
+        "supplierName": "Amelia Enterprises"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/purchases/purchase-e1a5ab30-abb0-4f5d-befd-38c1cd6cc728",
+      "id": "purchase-e1a5ab30-abb0-4f5d-befd-38c1cd6cc728",
+      "createTime": "2026-05-10T15:47:56.508548Z",
+      "updateTime": "2026-06-03T14:31:42.320886Z",
+      "fields": {
+        "storeId": "single-store",
+        "notes": "",
+        "purchaseAmount": 7672,
+        "date": "2026-05-10",
+        "createdAt": "2026-05-10T15:47:55.985Z",
+        "category": "HAVMOR",
+        "updatedAt": "2026-06-03T14:31:39.587Z",
+        "unpaidAmount": 0,
+        "paidAmount": 7672,
+        "paymentMode": "Credit",
+        "supplierName": "The Happy Times",
+        "billNumber": "RG262700330"
+      }
+    }
+  ],
+  "payments": [
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-09f104d7-6a83-4057-ae34-022a85e63f7e",
+      "id": "payment-09f104d7-6a83-4057-ae34-022a85e63f7e",
+      "createTime": "2026-05-10T21:01:57.423924Z",
+      "updateTime": "2026-05-10T21:01:57.423924Z",
+      "fields": {
+        "type": "Paid",
+        "notes": "Stock Purchase - Cheque No. 000875 : Date : 13/05/26",
+        "createdAt": "2026-05-10T21:01:58.411Z",
+        "date": "2026-05-11",
+        "amount": 13654,
+        "updatedAt": "2026-05-10T21:01:58.411Z",
+        "paymentMode": "Bank Transfer",
+        "entryType": "vendor-payment",
+        "storeId": "single-store",
+        "partyName": "Primewest Marketing Pvt Ltd"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-6ec4738a-0180-4163-88e3-87c2808e7784",
+      "id": "payment-6ec4738a-0180-4163-88e3-87c2808e7784",
+      "createTime": "2026-05-10T21:02:20.816477Z",
+      "updateTime": "2026-05-10T21:02:20.816477Z",
+      "fields": {
+        "createdAt": "2026-05-10T21:02:21.823Z",
+        "notes": "Stock Purchase - Cheque NO : 000875 , Date : 16/05/2026",
+        "type": "Paid",
+        "amount": 13654,
+        "date": "2026-05-11",
+        "updatedAt": "2026-05-10T21:02:21.823Z",
+        "storeId": "single-store",
+        "entryType": "vendor-payment",
+        "paymentMode": "Bank Transfer",
+        "partyName": "Primewest Marketing Pvt Ltd"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-7cb69808-8934-4044-b77c-4adccebd0cf8",
+      "id": "payment-7cb69808-8934-4044-b77c-4adccebd0cf8",
+      "createTime": "2026-05-11T11:13:22.786783Z",
+      "updateTime": "2026-05-11T11:13:22.786783Z",
+      "fields": {
+        "date": "2026-05-11",
+        "amount": 5753,
+        "type": "Paid",
+        "notes": "Stock Purchase",
+        "createdAt": "2026-05-11T11:13:22.483Z",
+        "partyName": "Maa Enterprises",
+        "paymentMode": "Bank Transfer",
+        "storeId": "single-store",
+        "entryType": "vendor-payment",
+        "updatedAt": "2026-05-11T11:13:22.483Z"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-b2acdb9d-553e-4591-9ea2-aaa843195d3c",
+      "id": "payment-b2acdb9d-553e-4591-9ea2-aaa843195d3c",
+      "createTime": "2026-05-11T19:17:06.031676Z",
+      "updateTime": "2026-05-11T19:17:06.031676Z",
+      "fields": {
+        "partyName": "Blessings Enterprises",
+        "updatedAt": "2026-05-11T19:17:06.285Z",
+        "entryType": "vendor-payment",
+        "storeId": "single-store",
+        "paymentMode": "Bank Transfer",
+        "amount": 2899,
+        "date": "2026-05-12",
+        "createdAt": "2026-05-11T19:17:06.285Z",
+        "type": "Paid",
+        "notes": "Stock Purchase - Cheque No : 000876 : No Date"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-bfae5162-0183-4282-88b7-aea9b3f40b35",
+      "id": "payment-bfae5162-0183-4282-88b7-aea9b3f40b35",
+      "createTime": "2026-05-11T01:22:14.603506Z",
+      "updateTime": "2026-05-11T01:22:14.603506Z",
+      "fields": {
+        "date": "2026-05-11",
+        "amount": 5307,
+        "type": "Paid",
+        "notes": "Stock Purchase",
+        "createdAt": "2026-05-11T01:22:14.894Z",
+        "partyName": "Hansika Enterprises",
+        "updatedAt": "2026-05-11T01:22:14.894Z",
+        "paymentMode": "Bank Transfer",
+        "entryType": "vendor-payment",
+        "storeId": "single-store"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/payments/payment-df70137a-218d-495c-bddd-4ef5ca456234",
+      "id": "payment-df70137a-218d-495c-bddd-4ef5ca456234",
+      "createTime": "2026-05-11T11:02:03.043233Z",
+      "updateTime": "2026-05-11T11:02:03.043233Z",
+      "fields": {
+        "paymentMode": "Bank Transfer",
+        "storeId": "single-store",
+        "entryType": "vendor-payment",
+        "updatedAt": "2026-05-11T11:02:02.718Z",
+        "partyName": "Vipul Enterprises",
+        "notes": "Stock Purchase - Nestle",
+        "type": "Paid",
+        "createdAt": "2026-05-11T11:02:02.718Z",
+        "date": "2026-05-11",
+        "amount": 8207
+      }
+    }
+  ]
+}

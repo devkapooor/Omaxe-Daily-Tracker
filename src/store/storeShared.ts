@@ -178,6 +178,7 @@ export function normalizeLoanRecord(record: LoanEntry): LoanEntry {
   return {
     ...record,
     personName: normalizeName(record.personName),
+    notes: record.notes?.trim() || undefined,
     amount,
     paidAmount: Math.min(paidAmount, amount),
     remainingAmount,

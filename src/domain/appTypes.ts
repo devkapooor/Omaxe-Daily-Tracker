@@ -16,6 +16,7 @@ export type LoanEntry = {
   id: string
   personName: string
   amount: number
+  notes?: string
   paidAmount: number
   remainingAmount: number
   status: LoanStatus

@@ -1,7 +1,7 @@
-import { deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore'
+import { deleteDoc, deleteField, doc, setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
-import type { CashoutDraft, DailySales, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
+import type { CashoutDraft, DailySales, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, PlannedPayment, VendorRecord } from '@/domain/appTypes'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
@@ -24,7 +24,97 @@ function withoutUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)) as T
 }
 
+function sortByBusinessOrder<T extends { date: string; createdAt: string }>(items: T[]) {
+  return [...items].sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
+}
+
 export function createFinanceActions({ ensureNameInDirectory, getState, setIsBusy }: FinanceActionArgs) {
+  async function syncSalesForDate(date: string, nextDailyCashouts: DailyCashoutEntry[]) {
+    const { financeData } = getState()
+    const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
+    const salesId = salesDocId(singleStoreId, date)
+    const existingSales = financeData.sales.find((sale) => sale.id === salesId)
+
+    if (remainingEntries.length === 0) {
+      if (existingSales) {
+        await deleteDoc(doc(db, 'sales', salesId))
+      }
+      return
+    }
+
+    const cashSales = remainingEntries.reduce((total, entry) => total + entry.cashSales, 0)
+    const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
+    const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
+    const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
+    const cardSales = existingSales?.cardSales ?? 0
+    const bankTransferSales = existingSales?.bankTransferSales ?? 0
+    const timestamp = nowIso()
+
+    await setDoc(doc(db, 'sales', salesId), {
+      id: salesId,
+      storeId: singleStoreId,
+      date,
+      totalSales: cashSales + upiSales + cardSales + bankTransferSales + creditSales,
+      cashSales,
+      upiSales,
+      cardSales,
+      bankTransferSales,
+      creditSales,
+      returnsDiscounts,
+      notes: `Auto-synced from cashout register. ${remainingEntries.map((entry) => entry.actualCashParticulars.trim()).filter(Boolean).join(' | ')}`.trim(),
+      createdAt: existingSales?.createdAt ?? remainingEntries[0]?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    })
+  }
+
+  function recomputeLoansForParty(loans: LoanEntry[], payments: Payment[], partyName: string) {
+    const normalizedPartyName = normalizeName(partyName).toLowerCase()
+    const matchingLoans = sortByBusinessOrder(
+      loans
+        .map((loan) => normalizeLoanRecord(loan))
+        .filter((loan) => loan.personName.toLowerCase() === normalizedPartyName),
+    )
+    const matchingPayments = sortByBusinessOrder(
+      payments.filter(
+        (payment) =>
+          payment.type === 'Paid' &&
+          payment.entryType === 'loan-payment' &&
+          payment.partyName.toLowerCase() === normalizedPartyName,
+      ),
+    )
+
+    const loanState: LoanEntry[] = matchingLoans.map((loan) => ({
+      ...loan,
+      paidAmount: 0,
+      remainingAmount: loan.amount,
+      status: 'Open',
+      settledAt: undefined,
+      updatedAt: loan.updatedAt ?? loan.createdAt,
+    }))
+
+    for (const payment of matchingPayments) {
+      let remainingPayment = payment.amount
+      for (const loan of loanState) {
+        if (remainingPayment <= 0) break
+        if (loan.remainingAmount <= 0) continue
+
+        const applied = Math.min(loan.remainingAmount, remainingPayment)
+        loan.paidAmount += applied
+        loan.remainingAmount -= applied
+        loan.status = loan.remainingAmount > 0 ? 'Open' : 'Settled'
+        loan.settledAt = loan.remainingAmount > 0 ? undefined : payment.updatedAt ?? payment.createdAt
+        loan.updatedAt = payment.updatedAt ?? payment.createdAt
+        remainingPayment -= applied
+      }
+
+      if (remainingPayment > 0) {
+        throw new Error(`Cannot safely recompute loans for ${partyName} because repayment history exceeds the surviving loan balance.`)
+      }
+    }
+
+    return loanState
+  }
+
   async function saveSales(draft: Omit<DailySales, 'id' | 'createdAt' | 'updatedAt'>) {
     const { financeData } = getState()
     const id = salesDocId(draft.storeId, draft.date)
@@ -190,7 +280,28 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
 
   async function deleteLoanEntry(loanId: string) {
     if (!loanId.trim()) throw new Error('Loan id is required.')
-    await deleteDoc(doc(db, 'loans', loanId))
+
+    const { financeData, loans } = getState()
+    const targetLoan = loans.find((loan) => loan.id === loanId)
+    if (!targetLoan) throw new Error('This loan record could not be found.')
+
+    const remainingLoans = loans.filter((loan) => loan.id !== loanId)
+    const recomputedLoans = recomputeLoansForParty(remainingLoans, financeData.payments, targetLoan.personName)
+    const batch = writeBatch(db)
+
+    batch.delete(doc(db, 'loans', loanId))
+    recomputedLoans.forEach((loan) => {
+      batch.update(doc(db, 'loans', loan.id), {
+        paidAmount: loan.paidAmount,
+        remainingAmount: loan.remainingAmount,
+        status: loan.status,
+        updatedAt: loan.updatedAt ?? nowIso(),
+        settledAt: loan.settledAt ?? deleteField(),
+        notes: loan.notes ?? deleteField(),
+      })
+    })
+
+    await batch.commit()
   }
 
   async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
@@ -239,6 +350,65 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     })
   }
 
+  async function deleteExpenseEntry(expenseId: string) {
+    if (!expenseId.trim()) throw new Error('Expense id is required.')
+    await deleteDoc(doc(db, 'cashouts', expenseId))
+  }
+
+  async function deletePurchaseEntry(purchaseId: string) {
+    if (!purchaseId.trim()) throw new Error('Purchase id is required.')
+    await deleteDoc(doc(db, 'purchases', purchaseId))
+  }
+
+  async function deletePaymentEntry(paymentId: string) {
+    if (!paymentId.trim()) throw new Error('Payment id is required.')
+
+    const { financeData, loans } = getState()
+    const targetPayment = financeData.payments.find((payment) => payment.id === paymentId)
+    if (!targetPayment) throw new Error('This payment record could not be found.')
+
+    if (targetPayment.entryType === 'vendor-payment') {
+      throw new Error('Vendor-payment delete is blocked for safety because historical allocation details are not stored on old records.')
+    }
+
+    if (targetPayment.entryType === 'loan-payment') {
+      const remainingPayments = financeData.payments.filter((payment) => payment.id !== paymentId)
+      const recomputedLoans = recomputeLoansForParty(loans, remainingPayments, targetPayment.partyName)
+      const batch = writeBatch(db)
+
+      batch.delete(doc(db, 'payments', paymentId))
+      recomputedLoans.forEach((loan) => {
+        batch.update(doc(db, 'loans', loan.id), {
+          paidAmount: loan.paidAmount,
+          remainingAmount: loan.remainingAmount,
+          status: loan.status,
+          updatedAt: loan.updatedAt ?? nowIso(),
+          settledAt: loan.settledAt ?? deleteField(),
+          notes: loan.notes ?? deleteField(),
+        })
+      })
+
+      await batch.commit()
+      return
+    }
+
+    await deleteDoc(doc(db, 'payments', paymentId))
+  }
+
+  async function deleteDailyCashoutEntry(entryId: string) {
+    if (!entryId.trim()) throw new Error('Daily cashout id is required.')
+
+    const { dailyCashouts } = getState()
+    const targetEntry = dailyCashouts.find((entry) => entry.id === entryId)
+    if (!targetEntry) throw new Error('This daily cashout record could not be found.')
+
+    await deleteDoc(doc(db, 'dailyCashouts', entryId))
+    await syncSalesForDate(
+      targetEntry.date,
+      dailyCashouts.filter((entry) => entry.id !== entryId),
+    )
+  }
+
   async function saveCashTransfer(draft: Omit<CashTransfer, 'id' | 'createdAt'>) {
     const transfer: CashTransfer = { ...draft, id: `cash-transfer-${crypto.randomUUID()}`, createdAt: nowIso() }
     await setDoc(doc(db, 'cashTransfers', transfer.id), {
@@ -277,6 +447,16 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
 
   async function deletePlannedPayment(paymentId: string) {
     await deleteDoc(doc(db, 'plannedPayments', paymentId))
+  }
+
+  async function deleteCashTransferEntry(transferId: string) {
+    if (!transferId.trim()) throw new Error('Cash transfer id is required.')
+    await deleteDoc(doc(db, 'cashTransfers', transferId))
+  }
+
+  async function deleteSettingsAuditEntry(entryId: string) {
+    if (!entryId.trim()) throw new Error('Settings audit id is required.')
+    await deleteDoc(doc(db, 'settingsAudit', entryId))
   }
 
   async function importLegacyData() {
@@ -333,8 +513,14 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   return {
+    deleteCashTransferEntry,
+    deleteDailyCashoutEntry,
+    deleteExpenseEntry,
     deleteLoanEntry,
     deletePlannedPayment,
+    deletePaymentEntry,
+    deletePurchaseEntry,
+    deleteSettingsAuditEntry,
     ensureNameInDirectory,
     importLegacyData,
     saveCashTransfer,

@@ -4,12 +4,12 @@ import { cn } from '@/shared/lib/utils'
 type GlowColor = 'blue' | 'purple' | 'green' | 'red' | 'orange' | 'neutral'
 
 const glowColorMap: Record<GlowColor, { base: number; spread: number }> = {
-  blue: { base: 210, spread: 42 },
-  purple: { base: 275, spread: 38 },
-  green: { base: 126, spread: 24 },
-  red: { base: 8, spread: 24 },
-  orange: { base: 28, spread: 26 },
-  neutral: { base: 132, spread: 12 },
+  blue: { base: 212, spread: 28 },
+  purple: { base: 286, spread: 28 },
+  green: { base: 132, spread: 22 },
+  red: { base: 8, spread: 18 },
+  orange: { base: 32, spread: 18 },
+  neutral: { base: 34, spread: 10 },
 }
 
 const GLOW_STYLE_ID = 'alphahub-glow-card-styles'
@@ -43,10 +43,10 @@ function ensureGlowStyles() {
     }
 
     [data-glow-card="true"]::before {
-      border: 1px solid hsl(var(--glow-hue) 22% 84% / 0.72);
+      border: 1px solid hsl(var(--glow-hue) 24% 42% / 0.78);
       box-shadow:
-        inset 0 1px 0 hsl(0 0% 100% / 0.42),
-        0 14px 32px hsl(140 18% 14% / 0.07);
+        inset 0 1px 0 hsl(0 0% 100% / 0.04),
+        0 18px 42px hsl(0 0% 0% / 0.28);
     }
 
     [data-glow-card="true"]::after {
@@ -54,11 +54,11 @@ function ensureGlowStyles() {
       background:
         radial-gradient(
           circle var(--spotlight-size) at var(--pointer-x) var(--pointer-y),
-          hsl(var(--glow-hue) 88% 92% / 0.28),
-          hsl(var(--glow-hue) 82% 88% / 0.12) 26%,
+          hsl(var(--glow-hue) 94% 72% / 0.2),
+          hsl(var(--glow-hue) 84% 58% / 0.08) 26%,
           transparent 66%
         );
-      mix-blend-mode: screen;
+      mix-blend-mode: lighten;
     }
 
     [data-glow-card="false"]::after {
@@ -66,7 +66,7 @@ function ensureGlowStyles() {
       background:
         radial-gradient(
           circle var(--spotlight-size) at 24% 20%,
-          hsl(var(--glow-hue) 74% 92% / 0.22),
+          hsl(var(--glow-hue) 88% 68% / 0.12),
           transparent 62%
         );
     }
@@ -157,7 +157,7 @@ function GlowCard({
       ref={cardRef}
       data-glow-card={canInteract ? 'true' : 'false'}
       className={cn(
-        'rounded-[18px] border border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(255,255,255,0.8))] text-card-foreground backdrop-blur-xl',
+        'rounded-[20px] border border-transparent bg-[linear-gradient(180deg,rgba(30,31,35,0.96),rgba(22,23,26,0.94))] text-card-foreground backdrop-blur-xl',
         className,
       )}
       style={mergedStyle}

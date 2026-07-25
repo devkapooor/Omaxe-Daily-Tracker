@@ -121,6 +121,7 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | id | string | yes | Document ID |
 | personName | string | yes | Lender or counterparty |
 | amount | number | yes | Original amount |
+| notes | string | no | Optional reason or context captured when the loan is created |
 | paidAmount | number | yes | Repaid so far |
 | remainingAmount | number | yes | Open balance |
 | status | `Open \| Settled` | yes | Repayment state |
@@ -240,3 +241,5 @@ Current directory metadata includes:
 - Planner availability uses `currentBankBalance`, not counter cash.
 - `Cash Movement` records affect pending cash and bank totals; planner records do not.
 - Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.
+- Loan notes are additive and optional; historical loan documents can omit them.
+- `Sales` log rows remain read-only because they are derived from daily cashout history.

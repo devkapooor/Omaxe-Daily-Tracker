@@ -280,17 +280,17 @@ export function PaymentPlannerPage({
               <p className="text-sm font-medium text-muted-foreground">No upcoming cheque deductions or manual plans yet.</p>
             ) : null}
             {groupedSchedule.map((group) => (
-              <GlowCard key={group.date} className="bg-[linear-gradient(180deg,rgba(245,248,242,0.92),rgba(242,246,239,0.82))] p-3.5" spotlightSize={180}>
+              <GlowCard key={group.date} className="p-3.5" spotlightSize={180}>
                 <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Deduction Date</p>
+                    <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[#c5a56a]">Deduction Date</p>
                     <p className="text-base font-black text-foreground">{formatDisplayDate(group.date)}</p>
                   </div>
                   <Badge variant="outline">Total {money(group.totalAmount)}</Badge>
                 </div>
                 <div className="space-y-2.5">
                   {group.items.map((item) => (
-                    <GlowCard key={item.id} className="rounded-[16px] p-3.5 text-sm text-foreground" spotlightSize={160}>
+                    <GlowCard key={item.id} className="rounded-[18px] p-3.5 text-sm text-foreground" spotlightSize={160}>
                       <div className="flex flex-wrap items-start justify-between gap-2.5">
                         <div className="space-y-1">
                           <p className="font-bold">{item.title}</p>

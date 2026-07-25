@@ -5,13 +5,13 @@ export function AppBackground({ children }: PropsWithChildren) {
     <div className="relative min-h-screen overflow-x-clip bg-background">
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(70,130,180,0.42),transparent_32%),radial-gradient(circle_at_88%_16%,rgba(118,165,206,0.32),transparent_26%)] blur-[84px]"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(220,157,58,0.24),transparent_28%),radial-gradient(circle_at_18%_12%,rgba(171,121,36,0.18),transparent_22%)] blur-[92px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,249,145,0.5),transparent_44%)] opacity-80 mix-blend-multiply"
+        className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,191,73,0.08),transparent_42%)] opacity-90"
       />
-      <div className="relative z-10 min-h-screen bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(255,255,255,0.86))]">
+      <div className="relative z-10 min-h-screen bg-[linear-gradient(180deg,rgba(22,22,24,0.82),rgba(17,17,19,0.92))]">
         {children}
       </div>
     </div>

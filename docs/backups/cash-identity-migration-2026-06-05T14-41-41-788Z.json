@@ -1,0 +1,1865 @@
+{
+  "createdAt": "2026-06-05T14:41:41.789Z",
+  "users": [
+    {
+      "id": "OlwIPmx8vicaaINRRsx6lZmXWNi2",
+      "approvalStatus": "approved",
+      "mobileNumber": "7054165496",
+      "email": "palpawan2125@gmail.com",
+      "name": "Pawan",
+      "disabled": false,
+      "role": "billing",
+      "createdAt": "2026-06-04T17:51:45.961Z"
+    },
+    {
+      "id": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "role": "owner",
+      "createdAt": "2026-05-08T20:16:01.240Z",
+      "name": "Dev Kapoor",
+      "email": "devkapoor.1917@gmail.com",
+      "disabled": false
+    },
+    {
+      "id": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "email": "ayaan6270@gmail.com",
+      "name": "Farhan",
+      "disabled": false,
+      "role": "manager",
+      "createdAt": "2026-05-10T00:46:46.273Z",
+      "approvalStatus": "approved",
+      "mobileNumber": "9170017888"
+    }
+  ],
+  "cashouts": [
+    {
+      "id": "daily-cashout-97559889-e179-40f9-8f6a-75b6d8a7ec39",
+      "creditSales": 30,
+      "cashAudit": 18009,
+      "cashSales": 25642,
+      "actualCashParticulars": "500 x 32 = 16000\n200 x 4 = 800\n100 x 24 = 2400\n50 x 7 = 350\n20 x 0 = 0\n10 x 0 = 0\nChange = 0\nTotal = 19550",
+      "remainingBalance": 19690,
+      "upiSales": 56533,
+      "createdAt": "2026-05-10T01:01:07.379Z",
+      "date": "2026-05-01",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 19690\nSystem Audit: 18009",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 19690,
+        "farhan": 0
+      },
+      "recordedBy": "Dev Kapoor",
+      "recordedByHolder": "Dev",
+      "returns": 0
+    },
+    {
+      "id": "daily-cashout-ae90c68a-d8fa-48ef-9cc1-0d5bae548190",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 19196\nSystem Audit: 19196",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 38886,
+        "arsh": 0,
+        "farhan": 0
+      },
+      "returns": 0,
+      "recordedByHolder": "Dev",
+      "cashSales": 19996,
+      "cashAudit": 19196,
+      "creditSales": 75,
+      "remainingBalance": 19196,
+      "actualCashParticulars": "500 x 30 = 15000\n200 x 11 = 2200\n100 x 22 = 2200\n50 x 6 = 300\n20 x 2 = 40\n10 x 1 = 10\nChange = 0\nTotal = 19750",
+      "upiSales": 49071,
+      "createdAt": "2026-05-10T01:02:32.702Z",
+      "date": "2026-05-02"
+    },
+    {
+      "id": "daily-cashout-73aec72c-6c04-4438-940b-457a87b82987",
+      "date": "2026-05-03",
+      "upiSales": 50192,
+      "createdAt": "2026-05-10T01:03:16.304Z",
+      "remainingBalance": 24051,
+      "actualCashParticulars": "500 x 41 = 20500\n200 x 0 = 0\n100 x 33 = 3300\n50 x 7 = 350\n20 x 0 = 0\n10 x 1 = 10\nChange = 0\nTotal = 24160",
+      "cashSales": 24051,
+      "cashAudit": 24052,
+      "creditSales": 1630,
+      "returns": 0,
+      "recordedByHolder": "Dev",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 62937,
+        "arsh": 0,
+        "farhan": 0
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 24051\nSystem Audit: 24052"
+    },
+    {
+      "id": "daily-cashout-aff3585b-7863-43cd-bf3b-bb7f1f0365b2",
+      "cashAudit": 11923,
+      "creditSales": 52,
+      "cashSales": 22815,
+      "actualCashParticulars": "500 x 19 = 9500\n200 x 1 = 200\n100 x 30 = 3000\n50 x 7 = 350\n20 x 2 = 40\n10 x 2 = 20\nChange = 0\nTotal = 13110",
+      "remainingBalance": 12402,
+      "createdAt": "2026-05-10T01:04:00.736Z",
+      "upiSales": 68700,
+      "date": "2026-05-04",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 12402\nSystem Audit: 11923",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 75339,
+        "arsh": 0,
+        "farhan": 0
+      },
+      "returns": 0,
+      "recordedByHolder": "Dev"
+    },
+    {
+      "id": "daily-cashout-963eea13-62b3-4518-ae22-5b68b61c2fd3",
+      "actualCashParticulars": "500 x 22 = 11000\n200 x 10 = 2000\n100 x 30 = 3000\n50 x 6 = 300\n20 x 0 = 0\n10 x 0 = 0\nChange = 100\nTotal = 16400",
+      "remainingBalance": 15958,
+      "creditSales": 575,
+      "cashAudit": 15799,
+      "cashSales": 28893,
+      "date": "2026-05-05",
+      "createdAt": "2026-05-10T01:04:48.739Z",
+      "upiSales": 33051,
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 15958\nSystem Audit: 15799",
+      "returns": 0,
+      "recordedByHolder": "Dev",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 91297,
+        "arsh": 0,
+        "farhan": 0
+      }
+    },
+    {
+      "id": "daily-cashout-04bdbc4a-3cf6-407d-a4be-945c10787752",
+      "date": "2026-05-06",
+      "createdAt": "2026-05-10T01:05:50.307Z",
+      "upiSales": 41836,
+      "actualCashParticulars": "500 x 49 = 24500\n200 x 1 = 200\n100 x 9 = 900\n50 x 3 = 150\n20 x 5 = 100\n10 x 0 = 0\nChange = 0\nTotal = 25850",
+      "remainingBalance": 25453,
+      "cashAudit": 25453,
+      "creditSales": 185,
+      "cashSales": 25803,
+      "returns": 0,
+      "recordedByHolder": "Dev",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "farhan": 0,
+        "dev": 116750,
+        "arsh": 0
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 25453\nSystem Audit: 25453"
+    },
+    {
+      "id": "daily-cashout-76f1ebff-a148-4d7c-8d73-212da80bf1b8",
+      "cashAudit": 11868,
+      "creditSales": 510,
+      "cashSales": 22096,
+      "actualCashParticulars": "500 x 21 = 10500\n200 x 2 = 400\n100 x 6 = 600\n50 x 1 = 50\n20 x 26 = 520\n10 x 25 = 250\nChange = 0\nTotal = 12320",
+      "remainingBalance": 11938,
+      "upiSales": 33531,
+      "createdAt": "2026-05-10T01:07:22.092Z",
+      "date": "2026-05-07",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 11938\nSystem Audit: 11868",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 128688,
+        "farhan": 0
+      },
+      "returns": 0,
+      "recordedByHolder": "Dev"
+    },
+    {
+      "id": "daily-cashout-ef779f48-9396-433c-8a68-ac0491bd0698",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 21485\nSystem Audit: 21494",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "pendingCashBalances": {
+        "farhan": 0,
+        "arsh": 0,
+        "dev": 150173
+      },
+      "recordedBy": "Dev Kapoor",
+      "remainingBalance": 21485,
+      "actualCashParticulars": "500 x 38 = 19000\n200 x 0 = 0\n100 x 30 = 3000\n50 x 7 = 350\n20 x 3 = 60\n10 x 8 = 80\nChange = 0\nTotal = 22490",
+      "cashSales": 22739,
+      "creditSales": 500,
+      "cashAudit": 21494,
+      "date": "2026-05-08",
+      "upiSales": 58873,
+      "createdAt": "2026-05-10T01:08:11.944Z"
+    },
+    {
+      "id": "daily-cashout-2bb4fca3-bdd1-4c1b-a204-3306213efd43",
+      "actualCashParticulars": "500 x 51 = 25500\n200 x 2 = 400\n100 x 17 = 1700\n50 x 1 = 50\n20 x 0 = 0\n10 x 0 = 0\nChange = 0\nTotal = 27650",
+      "remainingBalance": 26394,
+      "cashAudit": 25950,
+      "creditSales": 525,
+      "cashSales": 26394,
+      "date": "2026-05-09",
+      "upiSales": 45988,
+      "createdAt": "2026-05-10T01:09:00.924Z",
+      "pendingCashParticulars": "By: Dev Kapoor\nCash Difference: 26394\nSystem Audit: 25950",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "pendingCashBalances": {
+        "farhan": 0,
+        "arsh": 0,
+        "dev": 176567
+      },
+      "recordedBy": "Dev Kapoor"
+    },
+    {
+      "id": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+      "auditDifference": -605,
+      "auditMessage": "Cash is more by 605, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 28501\nDrawer Total: 31106\nSystem Audit: 30501\nAudit Check: Cash is more by 605, probably wrong billings.",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 207673,
+        "arsh": 0,
+        "farhan": 0
+      },
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "creditSales": 300,
+      "cashAudit": 30501,
+      "cashSales": 28501,
+      "actualCashParticulars": "500 x 46 = 23000\n200 x 14 = 2800\n100 x 49 = 4900\n50 x 8 = 400\n20 x 0 = 0\n10 x 0 = 0\nChange = 6\nTotal = 31106",
+      "remainingBalance": 31106,
+      "drawerTotal": 31106,
+      "createdAt": "2026-05-10T18:33:47.841Z",
+      "upiSales": 44139,
+      "date": "2026-05-10"
+    },
+    {
+      "id": "daily-cashout-b257d998-3886-4ced-a7f7-700ecbefb185",
+      "date": "2026-05-11",
+      "createdAt": "2026-05-11T18:37:31.644Z",
+      "upiSales": 33476,
+      "remainingBalance": 19450,
+      "actualCashParticulars": "500 x 21 = 10500\n200 x 7 = 1400\n100 x 75 = 7500\n50 x 1 = 50\n20 x 0 = 0\n10 x 0 = 0\nChange = 0\nTotal = 19450",
+      "drawerTotal": 19450,
+      "cashSales": 27036,
+      "creditSales": 190,
+      "cashAudit": 19125,
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 227123,
+        "arsh": 0,
+        "farhan": 0
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 19125\nDrawer Total: 19450\nSystem Audit: 19125\nAudit Check: Cash is more by 325, probably wrong billings.",
+      "auditDifference": -325,
+      "auditMessage": "Cash is more by 325, probably wrong billings."
+    },
+    {
+      "id": "daily-cashout-0d2b1397-9108-45c3-a9e3-cb014ce10cca",
+      "createdAt": "2026-05-12T20:53:04.347Z",
+      "upiSales": 31660,
+      "date": "2026-05-12",
+      "cashAudit": 14417,
+      "creditSales": 520,
+      "cashSales": 18492,
+      "actualCashParticulars": "500 x 31 = 15500\n200 x 1 = 200\n100 x 1 = 100\n50 x 0 = 0\n20 x 0 = 0\n10 x 0 = 0\nChange = 0\nTotal = 15800",
+      "remainingBalance": 15800,
+      "drawerTotal": 15800,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 242923,
+        "farhan": 0
+      },
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "auditDifference": -1383,
+      "auditMessage": "Cash is more by 1383, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 14852\nDrawer Total: 15800\nSystem Audit: 14417\nAudit Check: Cash is more by 1383, probably wrong billings."
+    },
+    {
+      "id": "daily-cashout-9931e048-6c8e-441e-9af6-7b3beed51fb3",
+      "date": "2026-05-13",
+      "createdAt": "2026-05-13T18:31:53.299Z",
+      "upiSales": 31600,
+      "remainingBalance": 23350,
+      "actualCashParticulars": "500 x 36 = 18000\n200 x 4 = 800\n100 x 44 = 4400\n50 x 3 = 150\n20 x 0 = 0\n10 x 0 = 0\nChange = 0\nTotal = 23350",
+      "drawerTotal": 23350,
+      "cashSales": 22963,
+      "creditSales": 801,
+      "cashAudit": 22963,
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 266273,
+        "farhan": 0
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 22963\nDrawer Total: 23350\nSystem Audit: 22963\nAudit Check: Cash is more by 387, probably wrong billings.",
+      "auditDifference": -387,
+      "auditMessage": "Cash is more by 387, probably wrong billings."
+    },
+    {
+      "id": "daily-cashout-7cc988fd-ce3e-4df6-ae87-0252e02892b1",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 284569,
+        "farhan": 0
+      },
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditMessage": "Cash is more by 962, probably wrong billings.",
+      "auditDifference": -962,
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 17415\nDrawer Total: 18296\nSystem Audit: 17334\nAudit Check: Cash is more by 962, probably wrong billings.",
+      "createdAt": "2026-05-14T18:32:46.091Z",
+      "upiSales": 32623,
+      "date": "2026-05-14",
+      "creditSales": 1135,
+      "cashAudit": 17334,
+      "cashSales": 21688,
+      "actualCashParticulars": "500 x 28 = 14000\n200 x 8 = 1600\n100 x 23 = 2300\n50 x 7 = 350\n20 x 2 = 40\n10 x 0 = 0\nChange = 6\nTotal = 18296",
+      "remainingBalance": 18296,
+      "drawerTotal": 18296
+    },
+    {
+      "id": "daily-cashout-e33da990-afa2-4986-8ee9-0fdb888807f2",
+      "upiSales": 43305,
+      "createdAt": "2026-05-15T18:39:24.080Z",
+      "date": "2026-05-15",
+      "cashAudit": 20820,
+      "creditSales": 76,
+      "cashSales": 20835,
+      "drawerTotal": 22350,
+      "actualCashParticulars": "500 x 34 = 17000\n200 x 5 = 1000\n100 x 43 = 4300\n50 x 0 = 0\n20 x 0 = 0\n10 x 0 = 0\nChange = 50\nTotal = 22350",
+      "remainingBalance": 22350,
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 284569,
+        "farhan": 22350
+      },
+      "recordedByHolder": "Farhan",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditDifference": -1530,
+      "auditMessage": "Cash is more by 1530, probably wrong billings.",
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 20835\nDrawer Total: 22350\nSystem Audit: 20820\nAudit Check: Cash is more by 1530, probably wrong billings."
+    },
+    {
+      "id": "daily-cashout-ec357d88-eefd-492b-af60-236a32d3fa27",
+      "creditSales": 360,
+      "cashAudit": 35513,
+      "cashSales": 35671,
+      "actualCashParticulars": "500 x 62 = 31000\n200 x 7 = 1400\n100 x 33 = 3300\n50 x 3 = 150\n20 x 1 = 20\n10 x 0 = 0\nChange = 0\nTotal = 35870",
+      "remainingBalance": 35870,
+      "drawerTotal": 35870,
+      "createdAt": "2026-05-16T18:33:34.516Z",
+      "upiSales": 58818,
+      "date": "2026-05-16",
+      "auditDifference": -357,
+      "auditMessage": "Cash is more by 357, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 35671\nDrawer Total: 35870\nSystem Audit: 35513\nAudit Check: Cash is more by 357, probably wrong billings.",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "arsh": 0,
+        "dev": 320439
+      },
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "recordedByHolder": "Dev"
+    },
+    {
+      "id": "daily-cashout-a24a20dd-c886-4a3f-8b0c-6d0222ac9766",
+      "auditDifference": -4,
+      "auditMessage": "Cash is more by 4, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 37176\nDrawer Total: 37180\nSystem Audit: 37176\nAudit Check: Cash is more by 4, probably wrong billings.",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 357619,
+        "farhan": 22350
+      },
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "creditSales": 478,
+      "cashAudit": 37176,
+      "cashSales": 37366,
+      "drawerTotal": 37180,
+      "actualCashParticulars": "500 x 57 = 28500\n200 x 15 = 3000\n100 x 53 = 5300\n50 x 0 = 0\n20 x 6 = 120\n10 x 26 = 260\nChange = 0\nTotal = 37180",
+      "remainingBalance": 37180,
+      "createdAt": "2026-05-17T19:04:55.019Z",
+      "upiSales": 60959,
+      "date": "2026-05-17"
+    },
+    {
+      "id": "daily-cashout-bfebc461-2fbb-4e91-92dd-8d520168d273",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 26432\nDrawer Total: 27390\nSystem Audit: 26263\nAudit Check: Cash is more by 1127, probably wrong billings.",
+      "auditDifference": -1127,
+      "auditMessage": "Cash is more by 1127, probably wrong billings.",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "dev": 385009,
+        "arsh": 0
+      },
+      "recordedBy": "Dev Kapoor",
+      "remainingBalance": 27390,
+      "actualCashParticulars": "500 x 37 = 18500\n200 x 7 = 1400\n100 x 73 = 7300\n50 x 3 = 150\n20 x 0 = 0\n10 x 4 = 40\nChange = 0\nTotal = 27390",
+      "drawerTotal": 27390,
+      "cashSales": 26432,
+      "creditSales": 400,
+      "cashAudit": 26263,
+      "date": "2026-05-18",
+      "upiSales": 52163,
+      "createdAt": "2026-05-18T18:33:07.394Z"
+    },
+    {
+      "id": "daily-cashout-dc4e887b-162c-407d-98a1-5e1d595f86dd",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "recordedByHolder": "Dev",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 409779,
+        "arsh": 0,
+        "farhan": 22350
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 26802\nDrawer Total: 24770\nSystem Audit: 0\nAudit Check: Cash is more by 24770, probably wrong billings.",
+      "auditDifference": -24770,
+      "auditMessage": "Cash is more by 24770, probably wrong billings.",
+      "date": "2026-05-19",
+      "createdAt": "2026-05-19T18:32:38.744Z",
+      "upiSales": 43118,
+      "remainingBalance": 24770,
+      "actualCashParticulars": "500 x 39 = 19500\n200 x 2 = 400\n100 x 42 = 4200\n50 x 1 = 50\n20 x 7 = 140\n10 x 48 = 480\nChange = 0\nTotal = 24770",
+      "drawerTotal": 24770,
+      "cashSales": 26802,
+      "creditSales": 279,
+      "cashAudit": 0
+    },
+    {
+      "id": "daily-cashout-9e2cf442-ff0d-4c89-942f-6642cf776421",
+      "creditSales": 580,
+      "cashAudit": 32315,
+      "cashSales": 35965,
+      "actualCashParticulars": "500 x 46 = 23000\n200 x 5 = 1000\n100 x 43 = 4300\n50 x 0 = 0\n20 x 18 = 360\n10 x 100 = 1000\nChange = 0\nTotal = 29660",
+      "remainingBalance": 29660,
+      "drawerTotal": 29660,
+      "upiSales": 44996,
+      "createdAt": "2026-05-20T18:34:43.981Z",
+      "date": "2026-05-20",
+      "auditMessage": "WARNING: Cash is less by 2655.",
+      "auditDifference": 2655,
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 32315\nDrawer Total: 29660\nSystem Audit: 32315\nAudit Check: WARNING: Cash is less by 2655.",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "arsh": 0,
+        "dev": 439439
+      },
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-less"
+    },
+    {
+      "id": "daily-cashout-f6c1ffc9-9c37-4ba9-856b-a499b848d30f",
+      "remainingBalance": 29823,
+      "actualCashParticulars": "500 x 29 = 14500\n200 x 31 = 6200\n100 x 81 = 8100\n50 x 3 = 150\n20 x 41 = 820\n10 x 3 = 30\nChange = 23\nTotal = 29823",
+      "drawerTotal": 29823,
+      "cashSales": 28728,
+      "creditSales": 290,
+      "cashAudit": 29128,
+      "date": "2026-05-21",
+      "createdAt": "2026-05-21T18:33:29.693Z",
+      "upiSales": 53621,
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 28638\nDrawer Total: 29823\nSystem Audit: 29128\nAudit Check: Cash is more by 695, probably wrong billings.",
+      "auditDifference": -695,
+      "auditMessage": "Cash is more by 695, probably wrong billings.",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 0,
+        "dev": 469262,
+        "farhan": 22350
+      }
+    },
+    {
+      "id": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+      "recordedByHolder": "Arsh",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "arsh": 34056,
+        "dev": 469262,
+        "farhan": 22350
+      },
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 33045\nDrawer Total: 34056\nSystem Audit: 33155\nAudit Check: Cash is more by 901, probably wrong billings.",
+      "auditDifference": -901,
+      "auditMessage": "Cash is more by 901, probably wrong billings.",
+      "date": "2026-05-23",
+      "upiSales": 46292,
+      "createdAt": "2026-05-22T18:42:59.157Z",
+      "remainingBalance": 34056,
+      "actualCashParticulars": "500 x 56 = 28000\n200 x 7 = 1400\n100 x 33 = 3300\n50 x 7 = 350\n20 x 2 = 40\n10 x 39 = 390\nChange = 576\nTotal = 34056",
+      "drawerTotal": 34056,
+      "cashSales": 33045,
+      "cashAudit": 33155,
+      "creditSales": 356
+    },
+    {
+      "id": "daily-cashout-ae5fbc6a-251c-4c6c-8df4-fb546176ead0",
+      "drawerTotal": 33646,
+      "actualCashParticulars": "500 x 51 = 25500\n200 x 22 = 4400\n100 x 37 = 3700\n50 x 0 = 0\n20 x 0 = 0\n10 x 0 = 0\nChange = 46\nTotal = 33646",
+      "remainingBalance": 33646,
+      "creditSales": 1228,
+      "cashAudit": 0,
+      "cashSales": 33778,
+      "date": "2026-05-22",
+      "createdAt": "2026-05-23T18:37:59.909Z",
+      "upiSales": 51130,
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 33383\nDrawer Total: 33646\nSystem Audit: 0\nAudit Check: Cash is more by 33646, probably wrong billings.",
+      "auditDifference": -33646,
+      "auditMessage": "Cash is more by 33646, probably wrong billings.",
+      "recordedByHolder": "Arsh",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "arsh": 67702,
+        "dev": 469262
+      }
+    },
+    {
+      "id": "daily-cashout-706b1e1a-f47f-4030-bef3-e74bd665e545",
+      "auditDifference": -886,
+      "auditMessage": "Cash is more by 886, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 37938\nDrawer Total: 38845\nSystem Audit: 37959\nAudit Check: Cash is more by 886, probably wrong billings.",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 67702,
+        "dev": 508107,
+        "farhan": 22350
+      },
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "creditSales": 135,
+      "cashAudit": 37959,
+      "cashSales": 37938,
+      "drawerTotal": 38845,
+      "actualCashParticulars": "500 x 70 = 35000\n200 x 3 = 600\n100 x 20 = 2000\n50 x 14 = 700\n20 x 27 = 540\n10 x 0 = 0\nChange = 5\nTotal = 38845",
+      "remainingBalance": 38845,
+      "createdAt": "2026-05-24T18:32:22.129Z",
+      "upiSales": 64441,
+      "date": "2026-05-24"
+    },
+    {
+      "id": "daily-cashout-f6410140-652f-4689-9a3a-02a92949c192",
+      "upiSales": 39083,
+      "createdAt": "2026-05-25T17:43:09.781Z",
+      "date": "2026-05-25",
+      "creditSales": 415,
+      "cashAudit": 27761,
+      "cashSales": 29171,
+      "drawerTotal": 27810,
+      "actualCashParticulars": "500 x 24 = 12000\n200 x 45 = 9000\n100 x 61 = 6100\n50 x 0 = 0\n20 x 6 = 120\n10 x 57 = 570\nChange = 20\nTotal = 27810",
+      "remainingBalance": 27810,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 67702,
+        "dev": 535917,
+        "farhan": 22350
+      },
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditMessage": "Cash is more by 49, probably wrong billings.",
+      "auditDifference": -49,
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 27761\nDrawer Total: 27810\nSystem Audit: 27761\nAudit Check: Cash is more by 49, probably wrong billings."
+    },
+    {
+      "id": "daily-cashout-4520ca1f-3ec8-4448-bc93-f705918f54cb",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 67702,
+        "dev": 562737,
+        "farhan": 22350
+      },
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "auditDifference": -892,
+      "auditMessage": "Cash is more by 892, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 25077\nDrawer Total: 26820\nSystem Audit: 25928\nAudit Check: Cash is more by 892, probably wrong billings.",
+      "createdAt": "2026-05-26T17:35:24.130Z",
+      "upiSales": 41786,
+      "date": "2026-05-26",
+      "cashSales": 29426,
+      "creditSales": 1555,
+      "cashAudit": 25928,
+      "drawerTotal": 26820,
+      "remainingBalance": 26820,
+      "actualCashParticulars": "500 x 44 = 22000\n200 x 13 = 2600\n100 x 15 = 1500\n50 x 0 = 0\n20 x 13 = 260\n10 x 46 = 460\nChange = 0\nTotal = 26820"
+    },
+    {
+      "id": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+      "creditSales": 415,
+      "cashAudit": 14438,
+      "cashSales": 20922,
+      "drawerTotal": 14395,
+      "actualCashParticulars": "500 x 19 = 9500\n200 x 3 = 600\n100 x 32 = 3200\n50 x 2 = 100\n20 x 13 = 260\n10 x 56 = 560\nChange = 175\nTotal = 14395",
+      "remainingBalance": 14395,
+      "createdAt": "2026-05-27T18:32:46.661Z",
+      "upiSales": 38180,
+      "date": "2026-05-27",
+      "auditDifference": 43,
+      "auditMessage": "WARNING: Cash is less by 43.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 13315\nDrawer Total: 14395\nSystem Audit: 14438\nAudit Check: WARNING: Cash is less by 43.",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "dev": 577132,
+        "arsh": 67702
+      },
+      "recordedBy": "Dev Kapoor",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-less"
+    },
+    {
+      "id": "daily-cashout-75c71831-78b5-4f98-a59b-aaa90b91ae17",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "dev": 607714,
+        "arsh": 67702
+      },
+      "recordedBy": "Dev Kapoor",
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditDifference": -2065,
+      "auditMessage": "Cash is more by 2065, probably wrong billings.",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 28517\nDrawer Total: 30582\nSystem Audit: 28517\nAudit Check: Cash is more by 2065, probably wrong billings.",
+      "upiSales": 47118,
+      "createdAt": "2026-05-28T19:05:52.752Z",
+      "date": "2026-05-28",
+      "cashSales": 28517,
+      "creditSales": 1589,
+      "cashAudit": 28517,
+      "remainingBalance": 30582,
+      "actualCashParticulars": "500 x 54 = 27000\n200 x 5 = 1000\n100 x 23 = 2300\n50 x 0 = 0\n20 x 3 = 60\n10 x 8 = 80\nChange = 142\nTotal = 30582",
+      "drawerTotal": 30582
+    },
+    {
+      "id": "daily-cashout-0c4fbd76-80e9-4d6a-8ab8-37eac0d0ffd0",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 24209\nDrawer Total: 24800\nSystem Audit: 24209\nAudit Check: Cash is more by 591, probably wrong billings.",
+      "auditDifference": -591,
+      "auditMessage": "Cash is more by 591, probably wrong billings.",
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "dev": 632514,
+        "arsh": 67702,
+        "farhan": 22350
+      },
+      "remainingBalance": 24800,
+      "actualCashParticulars": "500 x 41 = 20500\n200 x 2 = 400\n100 x 27 = 2700\n50 x 4 = 200\n20 x 32 = 640\n10 x 35 = 350\nChange = 10\nTotal = 24800",
+      "drawerTotal": 24800,
+      "cashSales": 24209,
+      "creditSales": 560,
+      "cashAudit": 24209,
+      "date": "2026-05-29",
+      "createdAt": "2026-05-29T18:32:36.735Z",
+      "upiSales": 47591
+    },
+    {
+      "id": "daily-cashout-a5bcf470-bc20-47a1-8c52-3e697d3d2176",
+      "createdAt": "2026-05-30T18:41:25.353Z",
+      "upiSales": 60398,
+      "date": "2026-05-31",
+      "creditSales": 726,
+      "cashAudit": 15226,
+      "cashSales": 33883,
+      "actualCashParticulars": "500 x 19 = 9500\n200 x 2 = 400\n100 x 31 = 3100\n50 x 1 = 50\n20 x 1 = 20\n10 x 0 = 0\nChange = 0\nTotal = 13070",
+      "remainingBalance": 13070,
+      "drawerTotal": 13070,
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "dev": 632514,
+        "arsh": 80772,
+        "farhan": 22350
+      },
+      "returns": 0,
+      "auditStatus": "cash-less",
+      "recordedByHolder": "Arsh",
+      "auditDifference": 2156,
+      "auditMessage": "WARNING: Cash is less by 2156.",
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 13351\nDrawer Total: 13070\nSystem Audit: 15226\nAudit Check: WARNING: Cash is less by 2156."
+    },
+    {
+      "id": "daily-cashout-d6f56664-b2aa-4054-8037-9dbf59aeb84d",
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "dev": 632514,
+        "arsh": 117342
+      },
+      "recordedByHolder": "Arsh",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditMessage": "Cash is more by 36570, probably wrong billings.",
+      "auditDifference": -36570,
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 36203\nDrawer Total: 36570\nSystem Audit: 0\nAudit Check: Cash is more by 36570, probably wrong billings.",
+      "upiSales": 64872,
+      "createdAt": "2026-05-31T18:35:06.276Z",
+      "date": "2026-05-31",
+      "creditSales": 590,
+      "cashAudit": 0,
+      "cashSales": 36303,
+      "actualCashParticulars": "500 x 69 = 34500\n200 x 2 = 400\n100 x 13 = 1300\n50 x 5 = 250\n20 x 0 = 0\n10 x 12 = 120\nChange = 0\nTotal = 36570",
+      "remainingBalance": 36570,
+      "drawerTotal": 36570
+    },
+    {
+      "id": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+      "recordedBy": "Farhan",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "arsh": 131639,
+        "dev": 632514
+      },
+      "recordedByHolder": "Arsh",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditMessage": "Cash is more by 239, probably wrong billings.",
+      "auditDifference": -239,
+      "pendingCashParticulars": "By: Farhan\nExpected Cash: 14058\nDrawer Total: 14297\nSystem Audit: 14058\nAudit Check: Cash is more by 239, probably wrong billings.",
+      "upiSales": 55866,
+      "createdAt": "2026-06-01T18:30:52.550Z",
+      "date": "2026-06-01",
+      "creditSales": 650,
+      "cashAudit": 14058,
+      "cashSales": 28239,
+      "drawerTotal": 14297,
+      "actualCashParticulars": "500 x 26 = 13000\n200 x 1 = 200\n100 x 7 = 700\n50 x 2 = 100\n20 x 0 = 0\n10 x 26 = 260\nChange = 37\nTotal = 14297",
+      "remainingBalance": 14297
+    },
+    {
+      "id": "daily-cashout-7b7e7901-6a63-46fe-b119-dc1e6a3cb9a1",
+      "recordedByHolder": "Dev",
+      "auditStatus": "cash-more",
+      "returns": 0,
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "arsh": 131639,
+        "dev": 660081,
+        "farhan": 22350
+      },
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 27522\nDrawer Total: 27567\nSystem Audit: 27522\nAudit Check: Cash is more by 45, probably wrong billings.",
+      "auditDifference": -45,
+      "auditMessage": "Cash is more by 45, probably wrong billings.",
+      "date": "2026-06-02",
+      "createdAt": "2026-06-02T18:31:27.535Z",
+      "upiSales": 48654,
+      "drawerTotal": 27567,
+      "actualCashParticulars": "500 x 45 = 22500\n200 x 9 = 1800\n100 x 21 = 2100\n50 x 7 = 350\n20 x 18 = 360\n10 x 29 = 290\nChange = 167\nTotal = 27567",
+      "remainingBalance": 27567,
+      "cashAudit": 27522,
+      "creditSales": 20,
+      "cashSales": 27522
+    },
+    {
+      "id": "daily-cashout-9922987a-cc16-4393-8b9b-ba1a72f65d8c",
+      "pendingCashParticulars": "By: Dev Kapoor\nExpected Cash: 34603\nDrawer Total: 35527\nSystem Audit: 34703\nAudit Check: Cash is more by 824, probably wrong billings.",
+      "auditMessage": "Cash is more by 824, probably wrong billings.",
+      "auditDifference": -824,
+      "recordedByHolder": "Dev",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "recordedBy": "Dev Kapoor",
+      "pendingCashBalances": {
+        "farhan": 22350,
+        "dev": 695608,
+        "arsh": 131639
+      },
+      "drawerTotal": 35527,
+      "actualCashParticulars": "500 x 56 = 28000\n200 x 14 = 2800\n100 x 36 = 3600\n50 x 16 = 800\n20 x 10 = 200\n10 x 4 = 40\nChange = 87\nTotal = 35527",
+      "remainingBalance": 35527,
+      "creditSales": 270,
+      "cashAudit": 34703,
+      "cashSales": 34843,
+      "date": "2026-06-03",
+      "upiSales": 54171,
+      "createdAt": "2026-06-03T18:30:06.806Z"
+    },
+    {
+      "id": "daily-cashout-3c8f29c4-0506-4bb7-9b33-70781a36c8eb",
+      "recordedBy": "Pawan",
+      "pendingCashBalances": {
+        "arsh": 131639,
+        "dev": 695608,
+        "farhan": 50940
+      },
+      "recordedByHolder": "Farhan",
+      "returns": 0,
+      "auditStatus": "cash-more",
+      "auditMessage": "Cash is more by 151, probably wrong billings.",
+      "auditDifference": -151,
+      "pendingCashParticulars": "By: Pawan\nExpected Cash: 28564\nDrawer Total: 28590\nSystem Audit: 28439\nAudit Check: Cash is more by 151, probably wrong billings.",
+      "upiSales": 50396,
+      "createdAt": "2026-06-04T18:31:32.973Z",
+      "date": "2026-06-04",
+      "cashSales": 34664,
+      "creditSales": 731,
+      "cashAudit": 28439,
+      "remainingBalance": 28590,
+      "actualCashParticulars": "500 x 49 = 24500\n200 x 7 = 1400\n100 x 22 = 2200\n50 x 9 = 450\n20 x 2 = 40\n10 x 0 = 0\nChange = 0\nTotal = 28590",
+      "drawerTotal": 28590
+    }
+  ],
+  "transfers": [
+    {
+      "id": "cash-transfer-bc0bc284-bdad-42c1-a79f-92d1e989f630",
+      "toPerson": "Arsh",
+      "reason": "Adjustment",
+      "amount": 2650,
+      "createdAt": "2026-05-10T01:09:26.723Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "from": "Dev",
+      "date": "2026-05-10"
+    },
+    {
+      "id": "cash-transfer-3e0f05fe-5516-4418-bb56-7db5ed4754b4",
+      "from": "Dev",
+      "date": "2026-05-10",
+      "toType": "person",
+      "createdAt": "2026-05-10T01:09:35.058Z",
+      "createdBy": "Dev Kapoor",
+      "amount": 40,
+      "toPerson": "Farhan",
+      "reason": "Adjustment"
+    },
+    {
+      "id": "cash-transfer-86dd4a67-6110-416e-b1e6-63dc3d46628b",
+      "from": "Dev",
+      "date": "2026-05-10",
+      "reason": "Cash deposited to bank",
+      "toType": "bank",
+      "createdAt": "2026-05-10T01:40:14.070Z",
+      "createdBy": "Dev Kapoor",
+      "amount": 173877
+    },
+    {
+      "id": "cash-transfer-0ff1c91b-005f-4d03-a2fe-cb74ab7412ea",
+      "from": "Dev",
+      "date": "2026-05-11",
+      "reason": "Adjustment",
+      "amount": 9253,
+      "createdAt": "2026-05-10T19:09:26.601Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank"
+    },
+    {
+      "id": "cash-transfer-742e10a4-7763-4378-8076-bb7924f2205f",
+      "amount": 2650,
+      "toType": "person",
+      "createdAt": "2026-05-11T01:33:22.577Z",
+      "createdBy": "Arsh",
+      "date": "2026-05-11",
+      "from": "Arsh",
+      "reason": "Given to Dev",
+      "toPerson": "Dev"
+    },
+    {
+      "id": "cash-transfer-c12f9597-42df-413e-8bf4-671ab15acfa7",
+      "toType": "bank",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-11T02:46:21.049Z",
+      "amount": 21500,
+      "reason": "Bank deposit",
+      "date": "2026-05-11",
+      "from": "Dev"
+    },
+    {
+      "id": "cash-transfer-59ecc9aa-4745-42ad-a3d9-0a3d2b45b398",
+      "amount": 2000,
+      "toType": "bank",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-11T02:49:31.567Z",
+      "from": "Dev",
+      "reason": "Bank Deposit",
+      "date": "2026-05-11"
+    },
+    {
+      "id": "cash-transfer-adfc9166-3845-4180-80c3-10307c3989d6",
+      "amount": 20100,
+      "createdAt": "2026-05-11T19:36:20.239Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank",
+      "from": "Dev",
+      "date": "2026-05-12",
+      "reason": "Bank Deposit"
+    },
+    {
+      "id": "cash-transfer-e8708981-2d91-4615-bc3d-8117e125ecf1",
+      "date": "2026-05-14",
+      "from": "Dev",
+      "createdAt": "2026-05-13T18:58:43.550Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "amount": 1000,
+      "reason": "Cash Given to farhan for drawer",
+      "toPerson": "Farhan"
+    },
+    {
+      "id": "cash-transfer-e776dd04-e6b7-4ec9-adcc-4c43a98a969e",
+      "from": "Dev",
+      "date": "2026-05-14",
+      "reason": "Bank Deposit",
+      "toType": "bank",
+      "createdAt": "2026-05-13T19:43:53.224Z",
+      "createdBy": "Dev Kapoor",
+      "amount": 19300
+    },
+    {
+      "id": "cash-transfer-2cbaf209-9003-41a3-a02d-cfaabab73eaa",
+      "createdBy": "Farhan",
+      "createdAt": "2026-05-15T21:04:26.245Z",
+      "toType": "person",
+      "amount": 23350,
+      "date": "2026-05-16",
+      "from": "Farhan",
+      "reason": "hh",
+      "toPerson": "Dev"
+    },
+    {
+      "id": "cash-transfer-03746aa1-3502-4806-8c0f-e2f1be0d2c6a",
+      "amount": 1,
+      "recordType": "cash-movement",
+      "createdAt": "2026-05-18T23:29:52.803Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "from": "Arsh",
+      "date": "2026-05-19",
+      "toPerson": "Dev",
+      "reason": "1"
+    },
+    {
+      "id": "cash-transfer-801aa1b4-5870-4141-af7d-7c9955643a8f",
+      "toPerson": "Arsh",
+      "reason": "z",
+      "amount": 1,
+      "recordType": "cash-movement",
+      "createdAt": "2026-05-18T23:38:17.144Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "from": "Dev",
+      "date": "2026-05-19"
+    },
+    {
+      "id": "cash-transfer-d8cba7f7-86c0-4038-89d0-a49dd750a455",
+      "from": "Dev",
+      "date": "2026-05-20",
+      "amount": 66500,
+      "recordType": "bank-transfer",
+      "createdAt": "2026-05-19T23:39:47.235Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank",
+      "reason": "Deposit"
+    },
+    {
+      "id": "cash-transfer-f0109934-828c-4970-a764-33b79e2ab676",
+      "reason": "cash deposit on 21st Morning",
+      "date": "2026-05-22",
+      "from": "Dev",
+      "amount": 28000,
+      "recordType": "bank-transfer",
+      "createdAt": "2026-05-21T19:08:05.062Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank"
+    },
+    {
+      "id": "cash-transfer-bac19a49-2cb9-4959-94ef-c77afe4806f0",
+      "from": "Arsh",
+      "date": "2026-05-23",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-22T20:32:02.426Z",
+      "toType": "person",
+      "recordType": "cash-movement",
+      "amount": 34056,
+      "toPerson": "Dev",
+      "reason": "Received"
+    },
+    {
+      "id": "cash-transfer-ca8c06eb-48e5-42f8-83e5-c2d06b15a73b",
+      "from": "Arsh",
+      "date": "2026-05-25",
+      "toType": "person",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-24T18:48:32.233Z",
+      "recordType": "cash-movement",
+      "amount": 28000,
+      "toPerson": "Dev",
+      "reason": "500*56"
+    },
+    {
+      "id": "cash-transfer-35220003-2fe4-43ed-8b3b-8fd1dd805a49",
+      "toPerson": "Dev",
+      "reason": "200*22 notes",
+      "recordType": "cash-movement",
+      "amount": 4400,
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-24T18:50:11.562Z",
+      "toType": "person",
+      "from": "Arsh",
+      "date": "2026-05-25"
+    },
+    {
+      "id": "cash-transfer-ed9bfa48-bda3-4cc2-b401-1d6f12d820eb",
+      "from": "Arsh",
+      "date": "2026-05-25",
+      "createdAt": "2026-05-24T18:50:32.930Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "recordType": "cash-movement",
+      "amount": 1200,
+      "toPerson": "Dev",
+      "reason": "100*12 note"
+    },
+    {
+      "id": "cash-transfer-ff99f02e-b9b7-438d-9890-f6984f01ecaf",
+      "from": "Dev",
+      "date": "2026-05-25",
+      "recordType": "bank-transfer",
+      "amount": 94000,
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-25T12:43:54.769Z",
+      "toType": "bank",
+      "reason": "Deposit"
+    },
+    {
+      "id": "cash-transfer-a5651252-a634-4667-91fe-a41d2478e581",
+      "toType": "bank",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-25T12:44:02.548Z",
+      "recordType": "bank-transfer",
+      "amount": 3500,
+      "from": "Dev",
+      "date": "2026-05-25",
+      "reason": "Dep"
+    },
+    {
+      "id": "cash-transfer-f150cd4a-9d35-4f94-a174-fdfc1cf095eb",
+      "amount": 11400,
+      "recordType": "bank-transfer",
+      "createdAt": "2026-05-27T16:53:21.870Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank",
+      "date": "2026-05-27",
+      "from": "Dev",
+      "reason": "DEPOSIT"
+    },
+    {
+      "id": "cash-transfer-9d8c7bdb-32e7-4bda-b6d1-bb71d448875b",
+      "reason": "DEPOSIT",
+      "date": "2026-05-27",
+      "from": "Dev",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-27T16:53:33.589Z",
+      "toType": "bank",
+      "recordType": "bank-transfer",
+      "amount": 76500
+    },
+    {
+      "id": "cash-transfer-fc333a0c-02f4-4ad3-8609-624bf1510ebe",
+      "reason": "DEPOSIT",
+      "toType": "bank",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-27T16:53:51.173Z",
+      "recordType": "bank-transfer",
+      "amount": 29400,
+      "date": "2026-05-27",
+      "from": "Dev"
+    },
+    {
+      "id": "cash-transfer-c70e1c66-9ef0-4865-9196-1eb5b8cd91a6",
+      "createdAt": "2026-05-27T16:53:57.925Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "bank",
+      "recordType": "bank-transfer",
+      "amount": 50500,
+      "date": "2026-05-27",
+      "from": "Dev",
+      "reason": "DEPOSIT"
+    },
+    {
+      "id": "cash-transfer-baaf8fa0-1727-4fc4-a9ed-3f7b87959639",
+      "toType": "bank",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-05-27T18:33:50.987Z",
+      "recordType": "bank-transfer",
+      "amount": 52800,
+      "date": "2026-05-28",
+      "from": "Dev",
+      "reason": "Deposit"
+    },
+    {
+      "id": "cash-transfer-c906f242-94d2-4a7b-b294-20ed55c02e68",
+      "toPerson": "Arsh",
+      "reason": "Remote Cashout By Dev, Cash with Pawan",
+      "toType": "person",
+      "createdAt": "2026-05-29T18:35:38.335Z",
+      "createdBy": "Dev Kapoor",
+      "recordType": "cash-movement",
+      "amount": 24800,
+      "from": "Dev",
+      "date": "2026-05-30"
+    },
+    {
+      "id": "cash-transfer-dc660929-bf69-4771-b1e8-4b9353924243",
+      "reason": "Deposited By Pawan",
+      "toType": "bank",
+      "createdAt": "2026-05-29T21:10:42.822Z",
+      "createdBy": "Dev Kapoor",
+      "recordType": "bank-transfer",
+      "amount": 23800,
+      "from": "Arsh",
+      "date": "2026-05-30"
+    },
+    {
+      "id": "cash-transfer-1c23ef1d-e7c5-4600-acef-4f53bf216647",
+      "reason": "Deposited By Shaddy",
+      "from": "Arsh",
+      "date": "2026-06-01",
+      "createdBy": "Dev Kapoor",
+      "createdAt": "2026-06-01T11:28:58.069Z",
+      "toType": "bank",
+      "recordType": "bank-transfer",
+      "amount": 44400
+    },
+    {
+      "id": "cash-transfer-91b35c33-0ae4-4506-a7a0-aee50081cf05",
+      "toPerson": "Dev",
+      "reason": "Transferred to Dev",
+      "from": "Arsh",
+      "date": "2026-06-02",
+      "createdAt": "2026-06-01T18:40:07.674Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "recordType": "cash-movement",
+      "amount": 13000
+    },
+    {
+      "id": "cash-transfer-e61f1f97-c5da-4010-8f70-5a5472ef0948",
+      "toPerson": "Dev",
+      "reason": "Taken By Dev",
+      "recordType": "cash-movement",
+      "amount": 1319,
+      "toType": "person",
+      "createdAt": "2026-06-02T20:19:47.517Z",
+      "createdBy": "Dev Kapoor",
+      "from": "Arsh",
+      "date": "2026-06-03"
+    },
+    {
+      "id": "cash-transfer-0a09cded-7c06-4fa3-86f8-f3bef6ce7c62",
+      "toPerson": "Dev",
+      "reason": "Shaddy Cash Adjustment ( transferred to salary payout on cashout )",
+      "recordType": "cash-movement",
+      "amount": 6100,
+      "createdAt": "2026-06-04T15:38:36.823Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "from": "Arsh",
+      "date": "2026-06-04"
+    },
+    {
+      "id": "cash-transfer-08423a88-a9a6-438f-837b-315849e42b9d",
+      "reason": "dev",
+      "toPerson": "Dev",
+      "createdAt": "2026-06-04T18:34:42.887Z",
+      "createdBy": "Dev Kapoor",
+      "toType": "person",
+      "recordType": "cash-movement",
+      "amount": 27100,
+      "date": "2026-06-05",
+      "from": "Farhan"
+    }
+  ],
+  "cashoutUpdates": [
+    {
+      "id": "daily-cashout-97559889-e179-40f9-8f6a-75b6d8a7ec39",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-ae90c68a-d8fa-48ef-9cc1-0d5bae548190",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-73aec72c-6c04-4438-940b-457a87b82987",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-aff3585b-7863-43cd-bf3b-bb7f1f0365b2",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-963eea13-62b3-4518-ae22-5b68b61c2fd3",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-04bdbc4a-3cf6-407d-a4be-945c10787752",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-76f1ebff-a148-4d7c-8d73-212da80bf1b8",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-ef779f48-9396-433c-8a68-ac0491bd0698",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-2bb4fca3-bdd1-4c1b-a204-3306213efd43",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-b257d998-3886-4ced-a7f7-700ecbefb185",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-0d2b1397-9108-45c3-a9e3-cb014ce10cca",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-9931e048-6c8e-441e-9af6-7b3beed51fb3",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-7cc988fd-ce3e-4df6-ae87-0252e02892b1",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-e33da990-afa2-4986-8ee9-0fdb888807f2",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Farhan"
+    },
+    {
+      "id": "daily-cashout-ec357d88-eefd-492b-af60-236a32d3fa27",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-a24a20dd-c886-4a3f-8b0c-6d0222ac9766",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-bfebc461-2fbb-4e91-92dd-8d520168d273",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-dc4e887b-162c-407d-98a1-5e1d595f86dd",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-9e2cf442-ff0d-4c89-942f-6642cf776421",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-f6c1ffc9-9c37-4ba9-856b-a499b848d30f",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Arsh"
+    },
+    {
+      "id": "daily-cashout-ae5fbc6a-251c-4c6c-8df4-fb546176ead0",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Arsh"
+    },
+    {
+      "id": "daily-cashout-706b1e1a-f47f-4030-bef3-e74bd665e545",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-f6410140-652f-4689-9a3a-02a92949c192",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-4520ca1f-3ec8-4448-bc93-f705918f54cb",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-75c71831-78b5-4f98-a59b-aaa90b91ae17",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-0c4fbd76-80e9-4d6a-8ab8-37eac0d0ffd0",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-a5bcf470-bc20-47a1-8c52-3e697d3d2176",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Arsh"
+    },
+    {
+      "id": "daily-cashout-d6f56664-b2aa-4054-8037-9dbf59aeb84d",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Arsh"
+    },
+    {
+      "id": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+      "recordedByUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "recordedBy": "Farhan",
+      "holder": "Arsh"
+    },
+    {
+      "id": "daily-cashout-7b7e7901-6a63-46fe-b119-dc1e6a3cb9a1",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-9922987a-cc16-4393-8b9b-ba1a72f65d8c",
+      "recordedByUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "recordedBy": "Dev Kapoor",
+      "holder": "Dev"
+    },
+    {
+      "id": "daily-cashout-3c8f29c4-0506-4bb7-9b33-70781a36c8eb",
+      "recordedByUserId": "OlwIPmx8vicaaINRRsx6lZmXWNi2",
+      "recordedBy": "Pawan",
+      "holder": "Farhan"
+    }
+  ],
+  "transferUpdates": [
+    {
+      "id": "cash-transfer-bc0bc284-bdad-42c1-a79f-92d1e989f630",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-2bb4fca3-bdd1-4c1b-a204-3306213efd43",
+        "diffHours": 0.01
+      },
+      "toUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "toResolvedName": "Farhan",
+      "toEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+        "diffHours": 305.56
+      }
+    },
+    {
+      "id": "cash-transfer-3e0f05fe-5516-4418-bb56-7db5ed4754b4",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-2bb4fca3-bdd1-4c1b-a204-3306213efd43",
+        "diffHours": 0.01
+      },
+      "toUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "toResolvedName": "Farhan",
+      "toEvidence": {
+        "holder": "Farhan",
+        "cashoutId": "daily-cashout-e33da990-afa2-4986-8ee9-0fdb888807f2",
+        "diffHours": 137.5
+      }
+    },
+    {
+      "id": "cash-transfer-86dd4a67-6110-416e-b1e6-63dc3d46628b",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-2bb4fca3-bdd1-4c1b-a204-3306213efd43",
+        "diffHours": 0.52
+      }
+    },
+    {
+      "id": "cash-transfer-0ff1c91b-005f-4d03-a2fe-cb74ab7412ea",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+        "diffHours": 0.59
+      }
+    },
+    {
+      "id": "cash-transfer-742e10a4-7763-4378-8076-bb7924f2205f",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+        "diffHours": 281.16
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+        "diffHours": 6.99
+      }
+    },
+    {
+      "id": "cash-transfer-c12f9597-42df-413e-8bf4-671ab15acfa7",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+        "diffHours": 8.21
+      }
+    },
+    {
+      "id": "cash-transfer-59ecc9aa-4745-42ad-a3d9-0a3d2b45b398",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-b45c3882-657b-46f7-aeed-2cdee56d0a00",
+        "diffHours": 8.26
+      }
+    },
+    {
+      "id": "cash-transfer-adfc9166-3845-4180-80c3-10307c3989d6",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-b257d998-3886-4ced-a7f7-700ecbefb185",
+        "diffHours": 0.98
+      }
+    },
+    {
+      "id": "cash-transfer-e8708981-2d91-4615-bc3d-8117e125ecf1",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-9931e048-6c8e-441e-9af6-7b3beed51fb3",
+        "diffHours": 0.45
+      },
+      "toUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "toResolvedName": "Farhan",
+      "toEvidence": {
+        "holder": "Farhan",
+        "cashoutId": "daily-cashout-e33da990-afa2-4986-8ee9-0fdb888807f2",
+        "diffHours": 47.68
+      }
+    },
+    {
+      "id": "cash-transfer-e776dd04-e6b7-4ec9-adcc-4c43a98a969e",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-9931e048-6c8e-441e-9af6-7b3beed51fb3",
+        "diffHours": 1.2
+      }
+    },
+    {
+      "id": "cash-transfer-2cbaf209-9003-41a3-a02d-cfaabab73eaa",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Farhan",
+        "cashoutId": "daily-cashout-e33da990-afa2-4986-8ee9-0fdb888807f2",
+        "diffHours": 2.42
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-ec357d88-eefd-492b-af60-236a32d3fa27",
+        "diffHours": 21.49
+      }
+    },
+    {
+      "id": "cash-transfer-03746aa1-3502-4806-8c0f-e2f1be0d2c6a",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+        "diffHours": 91.22
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-bfebc461-2fbb-4e91-92dd-8d520168d273",
+        "diffHours": 4.95
+      }
+    },
+    {
+      "id": "cash-transfer-801aa1b4-5870-4141-af7d-7c9955643a8f",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-bfebc461-2fbb-4e91-92dd-8d520168d273",
+        "diffHours": 5.09
+      },
+      "toUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "toResolvedName": "Farhan",
+      "toEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+        "diffHours": 91.08
+      }
+    },
+    {
+      "id": "cash-transfer-d8cba7f7-86c0-4038-89d0-a49dd750a455",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-dc4e887b-162c-407d-98a1-5e1d595f86dd",
+        "diffHours": 5.12
+      }
+    },
+    {
+      "id": "cash-transfer-f0109934-828c-4970-a764-33b79e2ab676",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-f6c1ffc9-9c37-4ba9-856b-a499b848d30f",
+        "diffHours": 0.58
+      }
+    },
+    {
+      "id": "cash-transfer-bac19a49-2cb9-4959-94ef-c77afe4806f0",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-8d5ed1b3-23bb-4131-9cd1-cbc2270c62a3",
+        "diffHours": 1.82
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-f6c1ffc9-9c37-4ba9-856b-a499b848d30f",
+        "diffHours": 25.98
+      }
+    },
+    {
+      "id": "cash-transfer-ca8c06eb-48e5-42f8-83e5-c2d06b15a73b",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-ae5fbc6a-251c-4c6c-8df4-fb546176ead0",
+        "diffHours": 24.18
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-706b1e1a-f47f-4030-bef3-e74bd665e545",
+        "diffHours": 0.27
+      }
+    },
+    {
+      "id": "cash-transfer-35220003-2fe4-43ed-8b3b-8fd1dd805a49",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-ae5fbc6a-251c-4c6c-8df4-fb546176ead0",
+        "diffHours": 24.2
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-706b1e1a-f47f-4030-bef3-e74bd665e545",
+        "diffHours": 0.3
+      }
+    },
+    {
+      "id": "cash-transfer-ed9bfa48-bda3-4cc2-b401-1d6f12d820eb",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-ae5fbc6a-251c-4c6c-8df4-fb546176ead0",
+        "diffHours": 24.21
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-706b1e1a-f47f-4030-bef3-e74bd665e545",
+        "diffHours": 0.3
+      }
+    },
+    {
+      "id": "cash-transfer-ff99f02e-b9b7-438d-9890-f6984f01ecaf",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-f6410140-652f-4689-9a3a-02a92949c192",
+        "diffHours": 4.99
+      }
+    },
+    {
+      "id": "cash-transfer-a5651252-a634-4667-91fe-a41d2478e581",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-f6410140-652f-4689-9a3a-02a92949c192",
+        "diffHours": 4.99
+      }
+    },
+    {
+      "id": "cash-transfer-f150cd4a-9d35-4f94-a174-fdfc1cf095eb",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+        "diffHours": 1.66
+      }
+    },
+    {
+      "id": "cash-transfer-9d8c7bdb-32e7-4bda-b6d1-bb71d448875b",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+        "diffHours": 1.65
+      }
+    },
+    {
+      "id": "cash-transfer-fc333a0c-02f4-4ad3-8609-624bf1510ebe",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+        "diffHours": 1.65
+      }
+    },
+    {
+      "id": "cash-transfer-c70e1c66-9ef0-4865-9196-1eb5b8cd91a6",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+        "diffHours": 1.65
+      }
+    },
+    {
+      "id": "cash-transfer-baaf8fa0-1727-4fc4-a9ed-3f7b87959639",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-181a7aba-9bb8-4f83-bda5-9c5904c8ac80",
+        "diffHours": 0.02
+      }
+    },
+    {
+      "id": "cash-transfer-c906f242-94d2-4a7b-b294-20ed55c02e68",
+      "fromUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "fromResolvedName": "Dev Kapoor",
+      "fromEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-0c4fbd76-80e9-4d6a-8ab8-37eac0d0ffd0",
+        "diffHours": 0.05
+      },
+      "toUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "toResolvedName": "Farhan",
+      "toEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-a5bcf470-bc20-47a1-8c52-3e697d3d2176",
+        "diffHours": 24.1
+      }
+    },
+    {
+      "id": "cash-transfer-dc660929-bf69-4771-b1e8-4b9353924243",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-a5bcf470-bc20-47a1-8c52-3e697d3d2176",
+        "diffHours": 21.51
+      }
+    },
+    {
+      "id": "cash-transfer-1c23ef1d-e7c5-4600-acef-4f53bf216647",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+        "diffHours": 7.03
+      }
+    },
+    {
+      "id": "cash-transfer-91b35c33-0ae4-4506-a7a0-aee50081cf05",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+        "diffHours": 0.15
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-7b7e7901-6a63-46fe-b119-dc1e6a3cb9a1",
+        "diffHours": 23.86
+      }
+    },
+    {
+      "id": "cash-transfer-e61f1f97-c5da-4010-8f70-5a5472ef0948",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+        "diffHours": 25.82
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-7b7e7901-6a63-46fe-b119-dc1e6a3cb9a1",
+        "diffHours": 1.81
+      }
+    },
+    {
+      "id": "cash-transfer-0a09cded-7c06-4fa3-86f8-f3bef6ce7c62",
+      "fromUserId": "tBRORRgSKgWT4FzeLoKspKidDsB2",
+      "fromResolvedName": "Farhan",
+      "fromEvidence": {
+        "holder": "Arsh",
+        "cashoutId": "daily-cashout-71a3a6b0-09de-492d-9ade-11fb880c7168",
+        "diffHours": 69.13
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-9922987a-cc16-4393-8b9b-ba1a72f65d8c",
+        "diffHours": 21.14
+      }
+    },
+    {
+      "id": "cash-transfer-08423a88-a9a6-438f-837b-315849e42b9d",
+      "fromUserId": "OlwIPmx8vicaaINRRsx6lZmXWNi2",
+      "fromResolvedName": "Pawan",
+      "fromEvidence": {
+        "holder": "Farhan",
+        "cashoutId": "daily-cashout-3c8f29c4-0506-4bb7-9b33-70781a36c8eb",
+        "diffHours": 0.05
+      },
+      "toUserId": "S1wiydUj1SS9Ggxgt9gvy9MZqvs1",
+      "toResolvedName": "Dev Kapoor",
+      "toEvidence": {
+        "holder": "Dev",
+        "cashoutId": "daily-cashout-9922987a-cc16-4393-8b9b-ba1a72f65d8c",
+        "diffHours": 24.08
+      }
+    }
+  ]
+}

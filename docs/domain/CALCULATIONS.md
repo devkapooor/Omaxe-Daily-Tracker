@@ -193,12 +193,33 @@ apply payment across remainingAmount until exhausted
 reject if payment exceeds total open balance
 ```
 
+Deletion behavior:
+
+```text
+if a loan-payment record is deleted:
+  remove that payment
+  recompute the selected party's loan ledger from surviving loans + surviving loan-payment history oldest-first
+
+if a loan record is deleted:
+  remove that loan
+  recompute the selected party's remaining loans against surviving loan-payment history
+  block the delete if the surviving loans cannot absorb that repayment history
+```
+
 ### Vendor Payment
 
 ```text
 apply against vendor openingOutstandingRemaining first when present
 then apply against open purchases oldest first
 reject if payment exceeds total open vendor outstanding
+```
+
+Deletion note:
+
+```text
+historical vendor-payment deletes are safety-blocked
+because old records do not store enough allocation provenance
+to rebuild purchase-level paid/unpaid state without risking live totals
 ```
 
 ## Payment Planner Logic
@@ -226,6 +247,15 @@ Planner notes:
 - counter cash is shown for reference only
 - planner records do not alter pending cash balances
 - planner does not currently ingest loan-repayment cheques
+
+## Daily Cashout Delete Resync
+
+```text
+if a daily cashout entry is deleted:
+  remove the entry
+  recompute that date's auto-synced sales row from surviving daily cashouts for the same date
+  if no daily cashouts remain for the date, delete the sales row
+```
 
 ## Dashboard Tables
 

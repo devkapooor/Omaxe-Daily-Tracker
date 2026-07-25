@@ -21,6 +21,7 @@ type LogsPageProps = {
   settingsAuditLog: SettingsAuditEntry[]
   users: UserAccount[]
   onDeleteLoan: (loan: LoanEntry) => Promise<void> | void
+  onDeleteDailyCashout: (entry: DailyCashoutEntry) => Promise<void> | void
 }
 
 type LogCardProps = {
@@ -30,8 +31,8 @@ type LogCardProps = {
 }
 
 type FilterBarProps = {
-  dateValue?: string
-  onDateChange?: (value: string) => void
+  monthValue?: string
+  onMonthChange?: (value: string) => void
   searchValue?: string
   searchPlaceholder?: string
   onSearchChange?: (value: string) => void
@@ -40,23 +41,29 @@ type FilterBarProps = {
 function LogCard({ eyebrow, title, children }: LogCardProps) {
   return (
     <Card className="flex flex-col xl:h-full xl:min-h-0">
-      <CardHeader className="pb-2.5">
+      <CardHeader className="pb-3">
         <SectionHeading eyebrow={eyebrow} title={title} />
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3 xl:min-h-0 xl:overflow-hidden">{children}</CardContent>
+      <CardContent className="flex flex-1 flex-col gap-3.5 xl:min-h-0 xl:overflow-hidden">{children}</CardContent>
     </Card>
   )
 }
 
-function FilterBar({ dateValue, onDateChange, searchValue, searchPlaceholder, onSearchChange }: FilterBarProps) {
-  if (!onDateChange && !onSearchChange) return null
+function formatDisplayMonth(value: string) {
+  const [year, month] = value.split('-')
+  if (!year || !month) return value
+  return `${month}/${year}`
+}
+
+function FilterBar({ monthValue, onMonthChange, searchValue, searchPlaceholder, onSearchChange }: FilterBarProps) {
+  if (!onMonthChange && !onSearchChange) return null
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      {onDateChange ? (
-        <FieldLabel label="Date">
+      {onMonthChange ? (
+        <FieldLabel label="Month">
           <div className="space-y-1">
-            <Input type="date" value={dateValue} onChange={(event) => onDateChange(event.target.value)} />
-            {dateValue ? <p className="text-[11px] font-semibold text-muted-foreground">Showing: {formatDisplayDate(dateValue)}</p> : null}
+            <Input type="month" value={monthValue} onChange={(event) => onMonthChange(event.target.value)} />
+            {monthValue ? <p className="text-[11px] font-semibold text-muted-foreground">Showing: {formatDisplayMonth(monthValue)}</p> : null}
           </div>
         </FieldLabel>
       ) : (
@@ -101,7 +108,15 @@ function ChequeMeta({
 }
 
 function LogEntryCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[16px] border border-border/70 bg-secondary/55 p-3.5 text-sm text-foreground">{children}</div>
+  return <div className="rounded-[18px] border border-border/70 bg-[linear-gradient(180deg,rgba(31,32,36,0.96),rgba(24,25,29,0.92))] p-3.5 text-sm text-foreground shadow-[0_12px_28px_rgba(0,0,0,0.16)]">{children}</div>
+}
+
+function DeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" variant="destructive" size="sm" onClick={onClick}>
+      Delete
+    </Button>
+  )
 }
 
 export function LogsPage({
@@ -115,19 +130,20 @@ export function LogsPage({
   settingsAuditLog,
   users,
   onDeleteLoan,
+  onDeleteDailyCashout,
 }: LogsPageProps) {
-  const [salesDate, setSalesDate] = useState('')
-  const [expenseDate, setExpenseDate] = useState('')
+  const [salesMonth, setSalesMonth] = useState('')
+  const [expenseMonth, setExpenseMonth] = useState('')
   const [expenseSearch, setExpenseSearch] = useState('')
-  const [purchaseDate, setPurchaseDate] = useState('')
+  const [purchaseMonth, setPurchaseMonth] = useState('')
   const [purchaseSearch, setPurchaseSearch] = useState('')
-  const [paymentDate, setPaymentDate] = useState('')
+  const [paymentMonth, setPaymentMonth] = useState('')
   const [paymentSearch, setPaymentSearch] = useState('')
   const [loanSearch, setLoanSearch] = useState('')
-  const [cashoutDate, setCashoutDate] = useState('')
+  const [cashoutMonth, setCashoutMonth] = useState('')
   const [cashoutSearch, setCashoutSearch] = useState('')
   const [selectedCashout, setSelectedCashout] = useState<DailyCashoutEntry | null>(null)
-  const [transferDate, setTransferDate] = useState('')
+  const [transferMonth, setTransferMonth] = useState('')
   const [transferSearch, setTransferSearch] = useState('')
   const [auditSearch, setAuditSearch] = useState('')
   const userNames = useMemo(() => userNameById(users), [users])
@@ -146,47 +162,47 @@ export function LogsPage({
   const filteredSales = useMemo(
     () =>
       sales
-        .filter((entry) => !salesDate || entry.date === salesDate)
+        .filter((entry) => !salesMonth || entry.date.slice(0, 7) === salesMonth)
         .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt)),
-    [sales, salesDate],
+    [sales, salesMonth],
   )
 
   const filteredExpenses = useMemo(() => {
     const query = expenseSearch.trim().toLowerCase()
     return expenses
       .filter((entry) => {
-        const dateMatch = !expenseDate || entry.date === expenseDate
+        const monthMatch = !expenseMonth || entry.date.slice(0, 7) === expenseMonth
         const searchMatch =
           !query ||
           entry.paidTo.toLowerCase().includes(query) ||
           entry.category.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return dateMatch && searchMatch
+        return monthMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [expenseDate, expenseSearch, expenses])
+  }, [expenseMonth, expenseSearch, expenses])
 
   const filteredPurchases = useMemo(() => {
     const query = purchaseSearch.trim().toLowerCase()
     return purchases
       .filter((entry) => {
-        const dateMatch = !purchaseDate || entry.date === purchaseDate
+        const monthMatch = !purchaseMonth || entry.date.slice(0, 7) === purchaseMonth
         const searchMatch =
           !query ||
           entry.supplierName.toLowerCase().includes(query) ||
           entry.billNumber.toLowerCase().includes(query) ||
           entry.category.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return dateMatch && searchMatch
+        return monthMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [purchaseDate, purchaseSearch, purchases])
+  }, [purchaseMonth, purchaseSearch, purchases])
 
   const filteredPayments = useMemo(() => {
     const query = paymentSearch.trim().toLowerCase()
     return payments
       .filter((entry) => {
-        const dateMatch = !paymentDate || entry.date === paymentDate
+        const monthMatch = !paymentMonth || entry.date.slice(0, 7) === paymentMonth
         const entryType = entry.entryType ?? 'general'
         const searchMatch =
           !query ||
@@ -194,10 +210,10 @@ export function LogsPage({
           entry.type.toLowerCase().includes(query) ||
           entryType.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return dateMatch && searchMatch
+        return monthMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [paymentDate, paymentSearch, payments])
+  }, [paymentMonth, paymentSearch, payments])
 
   const filteredLoans = useMemo(() => {
     const query = loanSearch.trim().toLowerCase()
@@ -210,22 +226,22 @@ export function LogsPage({
     const query = cashoutSearch.trim().toLowerCase()
     return dailyCashouts
       .filter((entry) => {
-        const dateMatch = !cashoutDate || entry.date === cashoutDate
+        const monthMatch = !cashoutMonth || entry.date.slice(0, 7) === cashoutMonth
         const searchMatch =
           !query ||
           entry.recordedBy.toLowerCase().includes(query) ||
           (entry.auditStatus ?? '').toLowerCase().includes(query) ||
           entry.actualCashParticulars.toLowerCase().includes(query)
-        return dateMatch && searchMatch
+        return monthMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashoutDate, cashoutSearch, dailyCashouts])
+  }, [cashoutMonth, cashoutSearch, dailyCashouts])
 
   const filteredTransfers = useMemo(() => {
     const query = transferSearch.trim().toLowerCase()
     return cashTransfers
       .filter((entry) => {
-        const dateMatch = !transferDate || entry.date === transferDate
+        const monthMatch = !transferMonth || entry.date.slice(0, 7) === transferMonth
         const source = entry.fromUserId && userNames.has(entry.fromUserId)
           ? userNames.get(entry.fromUserId) ?? 'Unknown User'
           : legacyCashHolderLabel(entry.from)
@@ -241,10 +257,10 @@ export function LogsPage({
           destination.toLowerCase().includes(query) ||
           entry.reason.toLowerCase().includes(query) ||
           entry.createdBy.toLowerCase().includes(query)
-        return dateMatch && searchMatch
+        return monthMatch && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashTransfers, transferDate, transferSearch, userNames])
+  }, [cashTransfers, transferMonth, transferSearch, userNames])
 
   const filteredAudit = useMemo(() => {
     const query = auditSearch.trim().toLowerCase()
@@ -254,7 +270,7 @@ export function LogsPage({
   }, [auditSearch, settingsAuditLog])
 
   return (
-    <section className="grid gap-3 xl:min-h-0 xl:overflow-hidden">
+    <section className="grid gap-3.5 xl:min-h-0 xl:overflow-hidden">
       <Tabs defaultValue="sales" className="grid gap-2.5 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
         <TabsList className="min-h-11 grid-cols-8">
           <TabsTrigger value="sales">Sales</TabsTrigger>
@@ -269,7 +285,7 @@ export function LogsPage({
 
         <TabsContent value="sales" className="min-h-0">
           <LogCard eyebrow="Logs" title="Sales">
-            <FilterBar dateValue={salesDate} onDateChange={setSalesDate} />
+            <FilterBar monthValue={salesMonth} onMonthChange={setSalesMonth} />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredSales.length === 0 ? <EmptyState message="No sales recorded yet." /> : null}
               {filteredSales.map((entry) => (
@@ -288,7 +304,7 @@ export function LogsPage({
 
         <TabsContent value="expenses" className="min-h-0">
           <LogCard eyebrow="Logs" title="Expenses">
-            <FilterBar dateValue={expenseDate} onDateChange={setExpenseDate} searchValue={expenseSearch} onSearchChange={setExpenseSearch} searchPlaceholder="Paid to, category, notes" />
+            <FilterBar monthValue={expenseMonth} onMonthChange={setExpenseMonth} searchValue={expenseSearch} onSearchChange={setExpenseSearch} searchPlaceholder="Paid to, category, notes" />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredExpenses.length === 0 ? <EmptyState message="No expenses recorded yet." /> : null}
               {filteredExpenses.map((entry) => (
@@ -305,7 +321,7 @@ export function LogsPage({
 
         <TabsContent value="purchases" className="min-h-0">
           <LogCard eyebrow="Logs" title="Purchases">
-            <FilterBar dateValue={purchaseDate} onDateChange={setPurchaseDate} searchValue={purchaseSearch} onSearchChange={setPurchaseSearch} searchPlaceholder="Vendor, bill number, category" />
+            <FilterBar monthValue={purchaseMonth} onMonthChange={setPurchaseMonth} searchValue={purchaseSearch} onSearchChange={setPurchaseSearch} searchPlaceholder="Vendor, bill number, category" />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPurchases.length === 0 ? <EmptyState message="No purchases recorded yet." /> : null}
               {filteredPurchases.map((entry) => (
@@ -322,7 +338,7 @@ export function LogsPage({
 
         <TabsContent value="payments" className="min-h-0">
           <LogCard eyebrow="Logs" title="Payments">
-            <FilterBar dateValue={paymentDate} onDateChange={setPaymentDate} searchValue={paymentSearch} onSearchChange={setPaymentSearch} searchPlaceholder="Party, type, notes" />
+            <FilterBar monthValue={paymentMonth} onMonthChange={setPaymentMonth} searchValue={paymentSearch} onSearchChange={setPaymentSearch} searchPlaceholder="Party, type, notes" />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPayments.length === 0 ? <EmptyState message="No payments recorded yet." /> : null}
               {filteredPayments.map((entry) => (
@@ -350,10 +366,9 @@ export function LogsPage({
                     <div className="space-y-2">
                       <p className="font-bold">{entry.personName}</p>
                       <p className="text-muted-foreground">Status {entry.status}</p>
+                      {entry.notes ? <p className="text-muted-foreground">{entry.notes}</p> : null}
                     </div>
-                    <Button type="button" variant="destructive" size="sm" onClick={() => void onDeleteLoan(entry)}>
-                      Delete Loan
-                    </Button>
+                    <DeleteButton onClick={() => void onDeleteLoan(entry)} />
                   </div>
                   <div className="grid gap-2 text-muted-foreground md:grid-cols-2 xl:grid-cols-3">
                     <p>Loan Date {formatDisplayDate(entry.date)}</p>
@@ -371,13 +386,17 @@ export function LogsPage({
 
         <TabsContent value="dailyCashouts" className="min-h-0">
           <LogCard eyebrow="Logs" title="Daily Cashouts">
-            <FilterBar dateValue={cashoutDate} onDateChange={setCashoutDate} searchValue={cashoutSearch} onSearchChange={setCashoutSearch} searchPlaceholder="Recorded by or audit status" />
+            <FilterBar monthValue={cashoutMonth} onMonthChange={setCashoutMonth} searchValue={cashoutSearch} onSearchChange={setCashoutSearch} searchPlaceholder="Recorded by or audit status" />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredDailyCashouts.length === 0 ? <EmptyState message="No daily cashouts recorded yet." /> : null}
               {filteredDailyCashouts.map((entry) => {
                 const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
                 return (
                   <LogEntryCard key={entry.id}>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily Cashout</div>
+                    <DeleteButton onClick={() => void onDeleteDailyCashout(entry)} />
+                  </div>
                   <p className="font-bold">{formatDisplayDate(entry.date)} | {entry.recordedBy}</p>
                   {entry.recordedByUserId ? <p className="text-muted-foreground">User ID linked to current account</p> : <p className="text-muted-foreground">Legacy cashout without user identity</p>}
                   <p className="text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)} | Credit {money(entry.creditSales)} | Drawer {money(drawerTotal)}</p>
@@ -399,7 +418,7 @@ export function LogsPage({
 
         <TabsContent value="cashTransfers" className="min-h-0">
           <LogCard eyebrow="Logs" title="Cash Transfers">
-            <FilterBar dateValue={transferDate} onDateChange={setTransferDate} searchValue={transferSearch} onSearchChange={setTransferSearch} searchPlaceholder="From, destination, reason" />
+            <FilterBar monthValue={transferMonth} onMonthChange={setTransferMonth} searchValue={transferSearch} onSearchChange={setTransferSearch} searchPlaceholder="From, destination, reason" />
             <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredTransfers.length === 0 ? <EmptyState message="No cash transfers recorded yet." /> : null}
               {filteredTransfers.map((entry) => (

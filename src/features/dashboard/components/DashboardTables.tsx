@@ -25,14 +25,14 @@ function DashboardListCard({
   rows: Array<{ label: string; value: string }>
 }) {
   return (
-    <Card>
+    <Card className="border-border/60">
       <CardHeader>
         <SectionHeading eyebrow={eyebrow} title={title} />
       </CardHeader>
-      <CardContent className="space-y-2.5">
+      <CardContent className="space-y-2">
         {rows.length === 0 && <p className="text-sm font-medium text-muted-foreground">{empty}</p>}
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3 rounded-[18px] border border-border/70 bg-secondary/55 px-3.5 py-3">
+          <div key={row.label} className="flex items-center justify-between gap-3 rounded-[16px] border border-border/60 bg-secondary/45 px-3 py-2.5">
             <span className="text-sm font-medium text-muted-foreground">{row.label}</span>
             <strong className="text-sm font-bold text-foreground">{row.value}</strong>
           </div>
@@ -89,7 +89,7 @@ export function DashboardTables({
   }, [month, payments])
 
   return (
-    <section className="grid gap-3 xl:grid-cols-2">
+    <section className="grid gap-2.5 xl:grid-cols-2">
       <DashboardListCard
         eyebrow="Month Table"
         title="Expenses By Category"

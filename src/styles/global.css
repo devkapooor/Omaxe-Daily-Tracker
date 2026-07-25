@@ -4,25 +4,25 @@
 
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --color-background: #fcfbf4;
-  --color-foreground: #101312;
-  --color-card: #ffffff;
-  --color-card-foreground: #101312;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #101312;
-  --color-primary: #0f1720;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f2f5ef;
-  --color-secondary-foreground: #18201b;
-  --color-muted: #eef2eb;
-  --color-muted-foreground: #607168;
-  --color-accent: #edf6ef;
-  --color-accent-foreground: #16311d;
-  --color-destructive: #be3434;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #d9ddd7;
-  --color-input: #d9ddd7;
-  --color-ring: #36c365;
+  --color-background: #101113;
+  --color-foreground: #f4efe6;
+  --color-card: #17181b;
+  --color-card-foreground: #f5f2eb;
+  --color-popover: #1b1c20;
+  --color-popover-foreground: #f5f2eb;
+  --color-primary: #d8a048;
+  --color-primary-foreground: #18120a;
+  --color-secondary: #202126;
+  --color-secondary-foreground: #ebe6db;
+  --color-muted: #1a1b1f;
+  --color-muted-foreground: #a9a191;
+  --color-accent: #2d2519;
+  --color-accent-foreground: #f6e7ca;
+  --color-destructive: #c94b45;
+  --color-destructive-foreground: #fff8f6;
+  --color-border: #2f3137;
+  --color-input: #2f3137;
+  --color-ring: #f1b556;
   --radius-sm: 0.5rem;
   --radius-md: 0.875rem;
   --radius-lg: 1.5rem;
@@ -43,6 +43,10 @@
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(circle at 14% 10%, rgba(240, 181, 86, 0.1), transparent 18%),
+      radial-gradient(circle at top right, rgba(152, 111, 40, 0.12), transparent 24%),
+      linear-gradient(180deg, #17181a 0%, #101113 100%);
   }
 
   button {

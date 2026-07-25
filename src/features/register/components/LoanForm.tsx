@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { Textarea } from '@/shared/ui/textarea'
 
 type LoanFormProps = {
   peopleOptions: string[]
@@ -26,6 +27,7 @@ export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
     const amount = numberValue(form.get('amount'))
     const date = String(form.get('date') || '')
     const payoff = String(form.get('promisedPayoffDate') || '')
+    const notes = String(form.get('notes') || '').trim()
 
     if (!normalizedPersonName) {
       setError('Choose a party from the saved list.')
@@ -46,6 +48,7 @@ export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
         amount,
         date,
         promisedPayoffDate: payoff,
+        ...(notes ? { notes } : {}),
       })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save the loan.')
@@ -104,6 +107,14 @@ export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
                 setError('')
               }}
               required
+            />
+          </FieldLabel>
+
+          <FieldLabel className="md:col-span-2" label="Reason / Notes">
+            <Textarea
+              name="notes"
+              placeholder="Why was this loan taken? Add any context you want to remember later."
+              onChange={() => setError('')}
             />
           </FieldLabel>
 

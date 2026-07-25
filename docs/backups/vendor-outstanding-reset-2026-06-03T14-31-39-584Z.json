@@ -1,0 +1,391 @@
+{
+  "createdAt": "2026-06-03T14:31:39.584Z",
+  "vendorOpeningTotalBefore": 565883,
+  "purchaseUnpaidTotalBefore": 15264,
+  "vendors": [
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-0db726cd-fd6b-479b-9c00-87fea80dee07",
+      "id": "vendor-0db726cd-fd6b-479b-9c00-87fea80dee07",
+      "createTime": "2026-05-10T01:27:00.461649Z",
+      "updateTime": "2026-05-10T20:49:53.580906Z",
+      "fields": {
+        "companiesProvided": "Harveys, NonStop",
+        "updatedAt": "2026-05-10T20:49:54.367Z",
+        "id": "vendor-0db726cd-fd6b-479b-9c00-87fea80dee07",
+        "createdAt": "2026-05-10T01:27:00.100Z",
+        "contact": "9161666633",
+        "openingOutstanding": 42215,
+        "name": "Amelia Enterprises",
+        "ownerName": "Shalu Kapoor",
+        "openingOutstandingRemaining": 42215,
+        "address": "Jankipuram",
+        "notes": "Harveys : 25%\nNon Stop : 42.5 Per Pc"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-222b9de3-e265-4a99-93a1-0966d57ba1dd",
+      "id": "vendor-222b9de3-e265-4a99-93a1-0966d57ba1dd",
+      "createTime": "2026-05-11T19:16:37.868248Z",
+      "updateTime": "2026-05-11T19:17:06.031676Z",
+      "fields": {
+        "name": "Blessings Enterprises",
+        "openingOutstanding": 2899,
+        "openingOutstandingRemaining": 0,
+        "notes": "",
+        "address": "Indira Nagar",
+        "ownerName": "Shivam Mishra (Salesman)",
+        "companiesProvided": "Girnar Tea",
+        "createdAt": "2026-05-11T19:16:37.878Z",
+        "contact": "8881640744",
+        "updatedAt": "2026-05-11T19:17:06.285Z",
+        "id": "vendor-222b9de3-e265-4a99-93a1-0966d57ba1dd"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-2c6336b9-d52e-4a1e-a6bb-fb1b92ad990f",
+      "id": "vendor-2c6336b9-d52e-4a1e-a6bb-fb1b92ad990f",
+      "createTime": "2026-05-10T15:56:37.267788Z",
+      "updateTime": "2026-05-10T15:56:37.267788Z",
+      "fields": {
+        "name": "Avadh Enterprises",
+        "openingOutstanding": 10000,
+        "ownerName": "Ketan (Salesman)",
+        "openingOutstandingRemaining": 10000,
+        "address": "Arjunganj",
+        "notes": "",
+        "companiesProvided": "Pepsi",
+        "updatedAt": "2026-05-10T15:56:36.698Z",
+        "id": "vendor-2c6336b9-d52e-4a1e-a6bb-fb1b92ad990f",
+        "createdAt": "2026-05-10T15:56:36.698Z",
+        "contact": "6307476218"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-51c4f335-f174-412d-b4e8-76ead7b41b9f",
+      "id": "vendor-51c4f335-f174-412d-b4e8-76ead7b41b9f",
+      "createTime": "2026-05-11T11:00:51.397658Z",
+      "updateTime": "2026-06-03T13:47:10.212353Z",
+      "fields": {
+        "openingOutstanding": 27099,
+        "name": "Vipul Enterprises",
+        "openingOutstandingRemaining": 18892,
+        "address": "Arjunganj",
+        "notes": "",
+        "ownerName": "Vipul Khandelwal",
+        "companiesProvided": "Nestle , Dabur, Durex, Manforce, Himalaya etc.",
+        "createdAt": "2026-05-11T11:00:50.976Z",
+        "contact": "7408434007",
+        "updatedAt": "2026-06-03T13:47:09.924Z",
+        "id": "vendor-51c4f335-f174-412d-b4e8-76ead7b41b9f"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-52565a56-4c4d-44a7-906e-60bf44b92997",
+      "id": "vendor-52565a56-4c4d-44a7-906e-60bf44b92997",
+      "createTime": "2026-05-10T19:06:48.203938Z",
+      "updateTime": "2026-05-11T01:22:14.603506Z",
+      "fields": {
+        "companiesProvided": "MOM",
+        "updatedAt": "2026-05-11T01:22:14.894Z",
+        "id": "vendor-52565a56-4c4d-44a7-906e-60bf44b92997",
+        "contact": "7985881746",
+        "createdAt": "2026-05-10T19:06:48.707Z",
+        "openingOutstanding": 10462,
+        "name": "Hansika Enterprises",
+        "ownerName": "Harshit (Salesman)",
+        "openingOutstandingRemaining": 5155,
+        "notes": "",
+        "address": "Nishat Ganj"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-55fa491b-ba5b-4a5c-a1f8-ee752a52b3b4",
+      "id": "vendor-55fa491b-ba5b-4a5c-a1f8-ee752a52b3b4",
+      "createTime": "2026-05-11T19:08:53.888423Z",
+      "updateTime": "2026-05-11T19:08:53.888423Z",
+      "fields": {
+        "openingOutstandingRemaining": 70650,
+        "notes": "",
+        "address": "1/132, Rajni Khand, Sarada Nagar, Lucknow",
+        "ownerName": "Dinesh Mishra",
+        "name": "Manorama Agencies",
+        "openingOutstanding": 70650,
+        "createdAt": "2026-05-11T19:08:53.943Z",
+        "contact": "7007217671",
+        "updatedAt": "2026-05-11T19:08:53.943Z",
+        "id": "vendor-55fa491b-ba5b-4a5c-a1f8-ee752a52b3b4",
+        "companiesProvided": "Jewel Farmer, Nuttoz"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-5d10d656-7663-4f3a-84c9-ae0338d08fe6",
+      "id": "vendor-5d10d656-7663-4f3a-84c9-ae0338d08fe6",
+      "createTime": "2026-05-10T15:51:45.005518Z",
+      "updateTime": "2026-05-10T15:51:45.005518Z",
+      "fields": {
+        "name": "Ritesh Enterprises",
+        "openingOutstanding": 25040,
+        "ownerName": "Vikas (Salesman)",
+        "notes": "",
+        "address": "643/178C, Khadri, Sitapur Road",
+        "openingOutstandingRemaining": 25040,
+        "companiesProvided": "Marlboro",
+        "id": "vendor-5d10d656-7663-4f3a-84c9-ae0338d08fe6",
+        "updatedAt": "2026-05-10T15:51:44.460Z",
+        "createdAt": "2026-05-10T15:51:44.460Z",
+        "contact": "7617040420"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-77c2db95-0a54-4050-b233-9ef9ab3eb289",
+      "id": "vendor-77c2db95-0a54-4050-b233-9ef9ab3eb289",
+      "createTime": "2026-05-17T01:28:15.623374Z",
+      "updateTime": "2026-05-17T01:28:15.623374Z",
+      "fields": {
+        "companiesProvided": "Snickers, Lotte",
+        "contact": "9452990185",
+        "createdAt": "2026-05-17T01:28:15.405Z",
+        "id": "vendor-77c2db95-0a54-4050-b233-9ef9ab3eb289",
+        "updatedAt": "2026-05-17T01:28:15.405Z",
+        "name": "Mamta Ayurvedic Agencies",
+        "openingOutstanding": 35386,
+        "notes": "",
+        "address": "Indra Nagar",
+        "openingOutstandingRemaining": 35386,
+        "ownerName": "Kamal (Salesman)"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-7d6048b3-b07b-493c-8f6a-de79ad850160",
+      "id": "vendor-7d6048b3-b07b-493c-8f6a-de79ad850160",
+      "createTime": "2026-05-10T15:55:30.633311Z",
+      "updateTime": "2026-05-10T15:55:30.633311Z",
+      "fields": {
+        "companiesProvided": "GUBB",
+        "createdAt": "2026-05-10T15:55:30.090Z",
+        "contact": "8887983018",
+        "updatedAt": "2026-05-10T15:55:30.090Z",
+        "id": "vendor-7d6048b3-b07b-493c-8f6a-de79ad850160",
+        "name": "Jai Maa Laxmi Agency",
+        "openingOutstanding": 9876,
+        "openingOutstandingRemaining": 9876,
+        "address": "Rajajipuram",
+        "notes": "",
+        "ownerName": "Vinay (Salesman)"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-869eba25-fa0f-4045-b0f6-d8bf11cd52f0",
+      "id": "vendor-869eba25-fa0f-4045-b0f6-d8bf11cd52f0",
+      "createTime": "2026-05-10T15:50:42.456881Z",
+      "updateTime": "2026-05-10T15:50:42.456881Z",
+      "fields": {
+        "name": "SLMG Beverages Pvt Ltd",
+        "openingOutstanding": 184572,
+        "openingOutstandingRemaining": 184572,
+        "address": "Vibhuti Khand",
+        "notes": "",
+        "ownerName": "Adarsh ( Salesman )",
+        "companiesProvided": "Coca Cola",
+        "contact": "9935541585",
+        "createdAt": "2026-05-10T15:50:40.963Z",
+        "updatedAt": "2026-05-10T15:50:40.963Z",
+        "id": "vendor-869eba25-fa0f-4045-b0f6-d8bf11cd52f0"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-87ca4aee-215f-4e90-8445-9b458224de00",
+      "id": "vendor-87ca4aee-215f-4e90-8445-9b458224de00",
+      "createTime": "2026-05-10T15:23:38.736397Z",
+      "updateTime": "2026-05-10T21:02:20.816477Z",
+      "fields": {
+        "name": "Primewest Marketing Pvt Ltd",
+        "openingOutstanding": 52397,
+        "ownerName": "Pawan ( Salesman )",
+        "address": "Mohiballapur, Gomti Nagar",
+        "notes": "",
+        "openingOutstandingRemaining": 25089,
+        "companiesProvided": "Pepsico, Lays, UC",
+        "id": "vendor-87ca4aee-215f-4e90-8445-9b458224de00",
+        "updatedAt": "2026-05-10T21:02:21.823Z",
+        "createdAt": "2026-05-10T15:23:38.047Z",
+        "contact": "7054165496"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-913ec642-8310-4a12-83cc-08085456781f",
+      "id": "vendor-913ec642-8310-4a12-83cc-08085456781f",
+      "createTime": "2026-05-10T15:46:27.720701Z",
+      "updateTime": "2026-05-10T15:46:45.276696Z",
+      "fields": {
+        "openingOutstandingRemaining": 5521,
+        "notes": "",
+        "address": "ARJUNGANJ",
+        "ownerName": "karan( Salesman )",
+        "openingOutstanding": 5521,
+        "name": "The Happy Times",
+        "createdAt": "2026-05-10T15:46:27.123Z",
+        "contact": "8896646212",
+        "updatedAt": "2026-05-10T15:46:44.922Z",
+        "id": "vendor-913ec642-8310-4a12-83cc-08085456781f",
+        "companiesProvided": "HAVMOR"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-9439505d-6dde-4a20-a731-e233befd928a",
+      "id": "vendor-9439505d-6dde-4a20-a731-e233befd928a",
+      "createTime": "2026-05-11T19:09:46.539728Z",
+      "updateTime": "2026-05-11T19:09:46.539728Z",
+      "fields": {
+        "companiesProvided": "Snackman",
+        "id": "vendor-9439505d-6dde-4a20-a731-e233befd928a",
+        "updatedAt": "2026-05-11T19:09:46.782Z",
+        "createdAt": "2026-05-11T19:09:46.782Z",
+        "contact": "7007217671",
+        "name": "Shanti Traders",
+        "openingOutstanding": 18194,
+        "ownerName": "Dinesh Mishra",
+        "address": "Rajni Khand, Sharda Nagar",
+        "notes": "",
+        "openingOutstandingRemaining": 18194
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-9f5c402b-2c3e-40e5-a1d0-bc104e7a3e25",
+      "id": "vendor-9f5c402b-2c3e-40e5-a1d0-bc104e7a3e25",
+      "createTime": "2026-05-10T15:53:10.452173Z",
+      "updateTime": "2026-05-10T15:53:10.452173Z",
+      "fields": {
+        "companiesProvided": "Campa",
+        "createdAt": "2026-05-10T15:53:09.972Z",
+        "contact": "9555432370",
+        "id": "vendor-9f5c402b-2c3e-40e5-a1d0-bc104e7a3e25",
+        "updatedAt": "2026-05-10T15:53:09.972Z",
+        "name": "Steel Point",
+        "openingOutstanding": 8225,
+        "notes": "",
+        "address": "Para, Lucknow",
+        "openingOutstandingRemaining": 8225,
+        "ownerName": "Sharda (Salesman)"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-afd8c5ed-dbf0-49ca-b70c-92a01f182105",
+      "id": "vendor-afd8c5ed-dbf0-49ca-b70c-92a01f182105",
+      "createTime": "2026-05-11T19:19:01.489828Z",
+      "updateTime": "2026-05-11T19:19:01.489828Z",
+      "fields": {
+        "ownerName": "Mindset",
+        "notes": "",
+        "address": "Naubasta Kala, Chinhat",
+        "openingOutstandingRemaining": 13386,
+        "openingOutstanding": 13386,
+        "name": "Mindset Trading OPC Pvt Ltd",
+        "id": "vendor-afd8c5ed-dbf0-49ca-b70c-92a01f182105",
+        "updatedAt": "2026-05-11T19:19:01.543Z",
+        "createdAt": "2026-05-11T19:19:01.543Z",
+        "contact": "9990843661",
+        "companiesProvided": "Avaska, Nourish You"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-b291723b-7f30-40dd-a9a9-4259d78974cb",
+      "id": "vendor-b291723b-7f30-40dd-a9a9-4259d78974cb",
+      "createTime": "2026-05-10T15:54:21.024824Z",
+      "updateTime": "2026-05-10T15:54:21.024824Z",
+      "fields": {
+        "address": "Indira Nagar",
+        "notes": "",
+        "openingOutstandingRemaining": 6140,
+        "ownerName": "Vandana (Sales)",
+        "name": "M/S Fresh N'Frozen Marketing Company",
+        "openingOutstanding": 6140,
+        "contact": "9936064608",
+        "createdAt": "2026-05-10T15:54:20.584Z",
+        "id": "vendor-b291723b-7f30-40dd-a9a9-4259d78974cb",
+        "updatedAt": "2026-05-10T15:54:20.584Z",
+        "companiesProvided": "Dras ICE"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-bb900fbc-e883-4b8d-b1ba-4abf98287102",
+      "id": "vendor-bb900fbc-e883-4b8d-b1ba-4abf98287102",
+      "createTime": "2026-05-11T11:10:23.215143Z",
+      "updateTime": "2026-05-11T11:13:22.786783Z",
+      "fields": {
+        "updatedAt": "2026-05-11T11:13:22.483Z",
+        "id": "vendor-bb900fbc-e883-4b8d-b1ba-4abf98287102",
+        "createdAt": "2026-05-11T11:10:22.774Z",
+        "contact": "6307677017",
+        "companiesProvided": "Hersheys",
+        "ownerName": "Aditya",
+        "openingOutstandingRemaining": 8337,
+        "address": "Indira Nagar",
+        "notes": "",
+        "name": "Maa Enterprises",
+        "openingOutstanding": 14090
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/vendors/vendor-c557be82-9670-4c45-974d-4f01ff1e4737",
+      "id": "vendor-c557be82-9670-4c45-974d-4f01ff1e4737",
+      "createTime": "2026-05-10T01:52:16.073689Z",
+      "updateTime": "2026-05-10T15:48:32.527525Z",
+      "fields": {
+        "openingOutstanding": 79205,
+        "name": "Edge Enterprises",
+        "openingOutstandingRemaining": 79205,
+        "address": "Lucknow",
+        "notes": "25% Base Margin on all brands",
+        "ownerName": "Alok",
+        "companiesProvided": "Max Protein, Jabsons, Coolberg, Cornitos, Evocus",
+        "createdAt": "2026-05-10T01:52:15.802Z",
+        "contact": "9559556468",
+        "updatedAt": "2026-05-10T15:48:32.224Z",
+        "id": "vendor-c557be82-9670-4c45-974d-4f01ff1e4737"
+      }
+    }
+  ],
+  "purchases": [
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/purchases/purchase-31882d20-4af1-402c-ae7f-835b4aaf4a9b",
+      "id": "purchase-31882d20-4af1-402c-ae7f-835b4aaf4a9b",
+      "createTime": "2026-05-10T20:50:26.239098Z",
+      "updateTime": "2026-05-10T20:50:26.239098Z",
+      "fields": {
+        "storeId": "single-store",
+        "unpaidAmount": 7592,
+        "createdAt": "2026-05-10T20:50:27.215Z",
+        "paidAmount": 0,
+        "billNumber": "FY/26-27/0181",
+        "updatedAt": "2026-05-10T20:50:27.215Z",
+        "category": "Harveys",
+        "purchaseAmount": 7592,
+        "supplierName": "Amelia Enterprises",
+        "paymentMode": "Credit",
+        "notes": "",
+        "date": "2026-05-11"
+      }
+    },
+    {
+      "name": "projects/alphahub-f137b/databases/(default)/documents/purchases/purchase-e1a5ab30-abb0-4f5d-befd-38c1cd6cc728",
+      "id": "purchase-e1a5ab30-abb0-4f5d-befd-38c1cd6cc728",
+      "createTime": "2026-05-10T15:47:56.508548Z",
+      "updateTime": "2026-05-10T15:47:56.508548Z",
+      "fields": {
+        "createdAt": "2026-05-10T15:47:55.985Z",
+        "storeId": "single-store",
+        "unpaidAmount": 7672,
+        "paidAmount": 0,
+        "updatedAt": "2026-05-10T15:47:55.985Z",
+        "billNumber": "RG262700330",
+        "notes": "",
+        "date": "2026-05-10",
+        "purchaseAmount": 7672,
+        "category": "HAVMOR",
+        "paymentMode": "Credit",
+        "supplierName": "The Happy Times"
+      }
+    }
+  ]
+}

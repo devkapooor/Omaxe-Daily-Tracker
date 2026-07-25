@@ -11,7 +11,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'grid w-full auto-cols-fr grid-flow-col items-center gap-0.75 rounded-lg border border-border/80 bg-white/75 p-0.75 text-muted-foreground shadow-sm',
+      'grid w-full auto-cols-fr grid-flow-col items-center gap-1 rounded-2xl border border-border/80 bg-[linear-gradient(180deg,rgba(28,29,33,0.95),rgba(23,24,28,0.92))] p-1 text-muted-foreground shadow-[0_12px_28px_rgba(0,0,0,0.2)]',
       className,
     )}
     {...props}
@@ -26,7 +26,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex min-h-7 items-center justify-center rounded-md px-1.75 py-1.25 text-[11px] leading-none font-semibold whitespace-nowrap tracking-[-0.01em] transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-sm min-w-0',
+      'inline-flex min-h-8 items-center justify-center rounded-xl px-2.5 py-1.5 text-[11px] leading-none font-semibold whitespace-nowrap tracking-[0.02em] transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=active]:bg-[linear-gradient(180deg,#e0aa53,#c98c2c)] data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_8px_18px_rgba(0,0,0,0.2)] min-w-0',
       className,
     )}
     {...props}
