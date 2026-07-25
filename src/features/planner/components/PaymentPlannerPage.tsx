@@ -175,15 +175,15 @@ export function PaymentPlannerPage({
   }
 
   return (
-    <section className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-      <div className="grid min-h-0 gap-3">
-        <div className="grid gap-2.5 sm:grid-cols-2">
+    <section className="grid min-h-0 flex-1 gap-2 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid min-h-0 gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <Card>
             <CardHeader className="pb-3">
               <SectionHeading eyebrow="Funds" title="Current Bank Balance" />
             </CardHeader>
             <CardContent>
-              <form className="grid gap-3" onSubmit={submitBankBalance}>
+              <form className="grid gap-2.5" onSubmit={submitBankBalance}>
                 <FieldLabel label="Available Bank Balance">
                   <Input
                     type="number"
@@ -206,8 +206,8 @@ export function PaymentPlannerPage({
               <SectionHeading eyebrow="Reference" title="Counter Cash Snapshot" />
             </CardHeader>
             <CardContent className="space-y-1.5">
-              <p className="text-xl font-black tracking-tight text-foreground">{money(totalCounterCash)}</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[1.2rem] font-black tracking-tight text-foreground">{money(totalCounterCash)}</p>
+              <p className="text-[12px] text-muted-foreground">
                 Counter cash is shown for reference from the cashout and cash movement records. Planner availability is checked only against bank balance.
               </p>
             </CardContent>
@@ -219,7 +219,7 @@ export function PaymentPlannerPage({
             <SectionHeading eyebrow="Manual Plan" title="Add Planned Deduction" />
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
-            <form className="grid gap-3.5 md:grid-cols-2" onSubmit={submitManualPlan}>
+            <form className="grid gap-2.5 md:grid-cols-2" onSubmit={submitManualPlan}>
               <FieldLabel label="Title / Payee">
                 <Input
                   value={title}
@@ -275,23 +275,23 @@ export function PaymentPlannerPage({
           <SectionHeading eyebrow="Schedule" title="Upcoming Deductions" />
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-hidden">
-          <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+          <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
             {groupedSchedule.length === 0 ? (
-              <p className="text-sm font-medium text-muted-foreground">No upcoming cheque deductions or manual plans yet.</p>
+              <p className="text-[12px] font-medium text-muted-foreground">No upcoming cheque deductions or manual plans yet.</p>
             ) : null}
             {groupedSchedule.map((group) => (
-              <GlowCard key={group.date} className="p-3.5" spotlightSize={180}>
-                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+              <GlowCard key={group.date} className="p-2.5" spotlightSize={160}>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-[#c5a56a]">Deduction Date</p>
-                    <p className="text-base font-black text-foreground">{formatDisplayDate(group.date)}</p>
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#c5a56a]">Deduction Date</p>
+                    <p className="text-[13px] font-black text-foreground">{formatDisplayDate(group.date)}</p>
                   </div>
                   <Badge variant="outline">Total {money(group.totalAmount)}</Badge>
                 </div>
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {group.items.map((item) => (
-                    <GlowCard key={item.id} className="rounded-[18px] p-3.5 text-sm text-foreground" spotlightSize={160}>
-                      <div className="flex flex-wrap items-start justify-between gap-2.5">
+                    <GlowCard key={item.id} className="rounded-[16px] p-2.5 text-[12px] text-foreground" spotlightSize={140}>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="space-y-1">
                           <p className="font-bold">{item.title}</p>
                           <p className="text-muted-foreground">
@@ -309,13 +309,13 @@ export function PaymentPlannerPage({
                           <Badge variant={item.status === 'deficit' ? 'destructive' : 'outline'}>
                             {item.status === 'deficit' ? 'Funds Not Available' : 'Funds Available'}
                           </Badge>
-                          <p className="mt-2 text-xs font-medium text-muted-foreground">
+                          <p className="mt-1.5 text-[10px] font-medium text-muted-foreground">
                             Running balance {money(item.runningBalanceAfter)}
                           </p>
                         </div>
                       </div>
                       {item.source === 'manual-plan' ? (
-                        <div className="mt-3">
+                        <div className="mt-2">
                           <Button variant="outline" size="sm" onClick={() => void onDeletePlannedPayment(item.id)}>
                             Delete Manual Plan
                           </Button>

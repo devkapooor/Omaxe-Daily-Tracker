@@ -46,7 +46,7 @@ function ensureGlowStyles() {
       border: 1px solid hsl(var(--glow-hue) 24% 42% / 0.78);
       box-shadow:
         inset 0 1px 0 hsl(0 0% 100% / 0.04),
-        0 18px 42px hsl(0 0% 0% / 0.28);
+        0 9px 20px hsl(0 0% 0% / 0.2);
     }
 
     [data-glow-card="true"]::after {
@@ -153,11 +153,11 @@ function GlowCard({
   }
 
   return (
-    <div
+        <div
       ref={cardRef}
       data-glow-card={canInteract ? 'true' : 'false'}
       className={cn(
-        'rounded-[20px] border border-transparent bg-[linear-gradient(180deg,rgba(30,31,35,0.96),rgba(22,23,26,0.94))] text-card-foreground backdrop-blur-xl',
+        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(30,31,35,0.96),rgba(22,23,26,0.94))] text-card-foreground backdrop-blur-xl',
         className,
       )}
       style={mergedStyle}

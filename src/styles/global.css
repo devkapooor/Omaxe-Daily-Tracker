@@ -36,6 +36,19 @@
 
   html {
     @apply scroll-smooth;
+    font-size: 16px;
+  }
+
+  @media (min-width: 1024px) {
+    html {
+      font-size: 12.5px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    html {
+      font-size: 12px;
+    }
   }
 
   body {
@@ -60,7 +73,7 @@
   input,
   textarea,
   select {
-    @apply text-base md:text-sm;
+    @apply text-sm;
   }
 
   #root {

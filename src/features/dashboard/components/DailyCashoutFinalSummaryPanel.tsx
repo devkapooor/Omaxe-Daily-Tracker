@@ -44,11 +44,11 @@ export function DailyCashoutFinalSummaryPanel({
           title="Daily Cashout Final Summary"
         />
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-1">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex flex-col gap-1 rounded-[16px] border border-border/60 bg-secondary/45 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-sm font-medium text-muted-foreground">{label}</span>
-            <strong className="text-sm font-bold text-foreground">{value}</strong>
+          <div key={label} className="flex flex-col gap-0.75 rounded-[12px] border border-border/60 bg-secondary/45 px-2.5 py-1.75 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
+            <strong className="text-[12px] font-bold text-foreground">{value}</strong>
           </div>
         ))}
       </CardContent>

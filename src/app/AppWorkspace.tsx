@@ -215,18 +215,18 @@ export function AppWorkspace({
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-[1800px] overflow-hidden">
+    <main className="mx-auto flex h-[100dvh] w-full max-w-[1320px] overflow-hidden">
       <AppTopBar
         currentUser={currentUser}
         activePage={activePage}
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-2 pb-3 pt-18 sm:px-3.5 xl:px-5 xl:py-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-1 pb-1.25 pt-13 sm:px-1.5 xl:px-2 xl:py-1.75">
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
-          <div className="mb-3 flex flex-col gap-2 rounded-[18px] border border-[#5f4823] bg-[linear-gradient(180deg,rgba(62,45,20,0.92),rgba(42,31,14,0.9))] p-3 text-amber-100 shadow-[0_12px_28px_rgba(0,0,0,0.22)] md:flex-row md:items-center md:justify-between">
+          <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] border border-[#5f4823] bg-[linear-gradient(180deg,rgba(62,45,20,0.92),rgba(42,31,14,0.9))] p-2.5 text-amber-100 shadow-[0_10px_22px_rgba(0,0,0,0.2)] md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <DatabaseZap className="mt-0.5 h-4 w-4 flex-none" />
               <span className="text-xs font-semibold sm:text-sm">
@@ -249,13 +249,13 @@ export function AppWorkspace({
         ) : null}
 
         {toast ? (
-          <div className="fixed right-4 top-20 z-[120] max-w-sm rounded-xl border border-[#5f4823] bg-[linear-gradient(180deg,rgba(49,38,20,0.96),rgba(37,28,15,0.94))] px-3 py-2 text-xs font-semibold text-amber-100 shadow-xl sm:text-sm xl:top-22">
+          <div className="fixed right-3 top-18 z-[120] max-w-sm rounded-xl border border-[#5f4823] bg-[linear-gradient(180deg,rgba(49,38,20,0.96),rgba(37,28,15,0.94))] px-3 py-2 text-xs font-semibold text-amber-100 shadow-xl sm:text-sm xl:top-18">
             {toast.message}
           </div>
         ) : null}
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
-          <section className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+          <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             <DashboardRangeFilter value={dashboardRange} onChange={setDashboardRange} />
             <MonthlyProjectionPanel
               averageDailySales={averageDailySales}
@@ -263,7 +263,7 @@ export function AppWorkspace({
               monthlyOperationalExpense={monthlyOperationalExpense}
               marginPercentage={marginPercentage}
             />
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
               <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
               <SummaryCard label="Open Loan Balance" value={money(totalLoans)} updated={formatLastUpdated(dashboardLastUpdated.loans)} />
@@ -287,7 +287,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'cashout' ? (
-          <section className="mb-3">
+          <section className="mb-2.5">
             <GlowCard className="w-full px-3.5 py-2.5 shadow-[0_10px_22px_rgba(24,32,27,0.06)]">
               <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">
                 {latestClosedDay ? `Latest Closed Day Expenses - ${formatDisplayDate(latestClosedDay)}` : 'Today Expenses'}
@@ -300,7 +300,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'directory' ? (
-          <section className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="mt-1.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <DirectoryPage
               currentUserRole={currentUser.role}
               isBusy={isBusy}
@@ -325,9 +325,9 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'expense' ? (
-          <section className="grid min-h-0 flex-1 gap-3 overflow-hidden">
-            <Tabs defaultValue="expenses" className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
-              <TabsList className={currentUser.role === 'owner' ? 'min-h-11 grid-cols-4' : 'min-h-11 grid-cols-3'}>
+          <section className="grid min-h-0 flex-1 gap-2.5 overflow-hidden">
+            <Tabs defaultValue="expenses" className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden">
+              <TabsList className={currentUser.role === 'owner' ? 'min-h-9 grid-cols-4' : 'min-h-9 grid-cols-3'}>
                 <TabsTrigger value="expenses">Expenses</TabsTrigger>
                 <TabsTrigger value="vendor-payments">Vendor Payments</TabsTrigger>
                 <TabsTrigger value="purchases">Purchases</TabsTrigger>
@@ -335,13 +335,13 @@ export function AppWorkspace({
               </TabsList>
 
               <TabsContent value="expenses" className="min-h-0">
-                <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                <div className="grid min-h-0 gap-2.5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
                   <ExpenseForm currentUser={currentUser} onSave={async (draft) => {
                     await saveCashout(draft)
                     showToast(`Expense saved: ${draft.category} - ${money(draft.amount)}`)
                   }} />
-                  <aside className="grid content-start gap-3">
-                    <section className="grid gap-3 sm:grid-cols-2">
+                  <aside className="grid content-start gap-2.5">
+                    <section className="grid gap-2.5 sm:grid-cols-2">
                       <SummaryCard label="Today Expense" value={money(todayCashout)} />
                       <SummaryCard label="Today Payments (Net)" value={money(todayPaymentReceived - todayPaymentPaid)} />
                     </section>
@@ -371,8 +371,8 @@ export function AppWorkspace({
 
               {currentUser.role === 'owner' ? (
                 <TabsContent value="loans" className="min-h-0">
-                  <Tabs defaultValue="loan-taken" className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
-                    <TabsList className="min-h-11 grid-cols-2">
+                  <Tabs defaultValue="loan-taken" className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden">
+                    <TabsList className="min-h-9 grid-cols-2">
                       <TabsTrigger value="loan-taken">Loan Taken</TabsTrigger>
                       <TabsTrigger value="loan-repayment">Loan Repayment</TabsTrigger>
                     </TabsList>
@@ -405,7 +405,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'cashout' ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
             <DailyCashoutForm
               currentUserId={currentUser.id}
               currentUserName={currentUser.name}
@@ -422,7 +422,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'movement' ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
               currentUserId={currentUser.id}
               currentUserName={currentUser.name}
@@ -449,7 +449,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'planner' && canOpenPlanner(currentUser.role) ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
             <PaymentPlannerPage
               currentBankBalance={appSettings.currentBankBalance}
               currentUserName={currentUser.name}
@@ -474,7 +474,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'logs' && currentUser.role === 'owner' ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <LogsPage
               sales={data.sales}
               expenses={data.cashouts}
@@ -526,7 +526,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'settings' && canOpenSettings(currentUser.role) ? (
-          <section className="mt-3 min-h-0 flex-1 overflow-hidden">
+          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
             <SettingsPage
               currentUser={currentUser}
               users={users}

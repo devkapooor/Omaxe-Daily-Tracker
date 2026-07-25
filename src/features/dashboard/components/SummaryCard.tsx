@@ -10,10 +10,10 @@ export function SummaryCard({
   updated?: string
 }) {
   return (
-    <GlowCard className="p-3.5">
-      <span className="block text-xs font-extrabold uppercase tracking-[0.2em] text-[#c5a56a] sm:text-[13px]">{label}</span>
-      <strong className="mt-2 block text-lg font-black tracking-[-0.02em] text-foreground sm:text-xl">{value}</strong>
-      {updated ? <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/90">{updated}</p> : null}
+    <GlowCard className="p-2.5">
+      <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#c5a56a] sm:text-[11px]">{label}</span>
+      <strong className="mt-1 block text-[1.3rem] font-black tracking-[-0.03em] text-foreground sm:text-[1.55rem]">{value}</strong>
+      {updated ? <p className="mt-0.75 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/90">{updated}</p> : null}
     </GlowCard>
   )
 }

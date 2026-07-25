@@ -44,7 +44,7 @@ function LogCard({ eyebrow, title, children }: LogCardProps) {
       <CardHeader className="pb-3">
         <SectionHeading eyebrow={eyebrow} title={title} />
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3.5 xl:min-h-0 xl:overflow-hidden">{children}</CardContent>
+      <CardContent className="flex flex-1 flex-col gap-2.5 xl:min-h-0 xl:overflow-hidden">{children}</CardContent>
     </Card>
   )
 }
@@ -58,7 +58,7 @@ function formatDisplayMonth(value: string) {
 function FilterBar({ monthValue, onMonthChange, searchValue, searchPlaceholder, onSearchChange }: FilterBarProps) {
   if (!onMonthChange && !onSearchChange) return null
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid gap-2 md:grid-cols-2">
       {onMonthChange ? (
         <FieldLabel label="Month">
           <div className="space-y-1">
@@ -79,7 +79,7 @@ function FilterBar({ monthValue, onMonthChange, searchValue, searchPlaceholder, 
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <p className="text-sm font-medium text-muted-foreground">{message}</p>
+  return <p className="text-[12px] font-medium text-muted-foreground">{message}</p>
 }
 
 function compareDateDesc(left: string, right: string) {
@@ -108,7 +108,7 @@ function ChequeMeta({
 }
 
 function LogEntryCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[18px] border border-border/70 bg-[linear-gradient(180deg,rgba(31,32,36,0.96),rgba(24,25,29,0.92))] p-3.5 text-sm text-foreground shadow-[0_12px_28px_rgba(0,0,0,0.16)]">{children}</div>
+  return <div className="rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(31,32,36,0.96),rgba(24,25,29,0.92))] p-2.5 text-[12px] text-foreground shadow-[0_10px_20px_rgba(0,0,0,0.14)]">{children}</div>
 }
 
 function DeleteButton({ onClick }: { onClick: () => void }) {
@@ -270,9 +270,9 @@ export function LogsPage({
   }, [auditSearch, settingsAuditLog])
 
   return (
-    <section className="grid gap-3.5 xl:min-h-0 xl:overflow-hidden">
-      <Tabs defaultValue="sales" className="grid gap-2.5 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
-        <TabsList className="min-h-11 grid-cols-8">
+    <section className="grid gap-2.5 xl:min-h-0 xl:overflow-hidden">
+      <Tabs defaultValue="sales" className="grid gap-2 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+        <TabsList className="min-h-9 grid-cols-8">
           <TabsTrigger value="sales">Sales</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
@@ -286,7 +286,7 @@ export function LogsPage({
         <TabsContent value="sales" className="min-h-0">
           <LogCard eyebrow="Logs" title="Sales">
             <FilterBar monthValue={salesMonth} onMonthChange={setSalesMonth} />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredSales.length === 0 ? <EmptyState message="No sales recorded yet." /> : null}
               {filteredSales.map((entry) => (
                 <LogEntryCard key={entry.id}>
@@ -305,7 +305,7 @@ export function LogsPage({
         <TabsContent value="expenses" className="min-h-0">
           <LogCard eyebrow="Logs" title="Expenses">
             <FilterBar monthValue={expenseMonth} onMonthChange={setExpenseMonth} searchValue={expenseSearch} onSearchChange={setExpenseSearch} searchPlaceholder="Paid to, category, notes" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredExpenses.length === 0 ? <EmptyState message="No expenses recorded yet." /> : null}
               {filteredExpenses.map((entry) => (
                 <LogEntryCard key={entry.id}>
@@ -322,7 +322,7 @@ export function LogsPage({
         <TabsContent value="purchases" className="min-h-0">
           <LogCard eyebrow="Logs" title="Purchases">
             <FilterBar monthValue={purchaseMonth} onMonthChange={setPurchaseMonth} searchValue={purchaseSearch} onSearchChange={setPurchaseSearch} searchPlaceholder="Vendor, bill number, category" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPurchases.length === 0 ? <EmptyState message="No purchases recorded yet." /> : null}
               {filteredPurchases.map((entry) => (
                 <LogEntryCard key={entry.id}>
@@ -339,7 +339,7 @@ export function LogsPage({
         <TabsContent value="payments" className="min-h-0">
           <LogCard eyebrow="Logs" title="Payments">
             <FilterBar monthValue={paymentMonth} onMonthChange={setPaymentMonth} searchValue={paymentSearch} onSearchChange={setPaymentSearch} searchPlaceholder="Party, type, notes" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPayments.length === 0 ? <EmptyState message="No payments recorded yet." /> : null}
               {filteredPayments.map((entry) => (
                 <LogEntryCard key={entry.id}>
@@ -358,11 +358,11 @@ export function LogsPage({
         <TabsContent value="loans" className="min-h-0">
           <LogCard eyebrow="Logs" title="Loans">
             <FilterBar searchValue={loanSearch} onSearchChange={setLoanSearch} searchPlaceholder="Person or status" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredLoans.length === 0 ? <EmptyState message="No loans recorded yet." /> : null}
               {filteredLoans.map((entry) => (
                 <LogEntryCard key={entry.id}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-2">
                       <p className="font-bold">{entry.personName}</p>
                       <p className="text-muted-foreground">Status {entry.status}</p>
@@ -387,7 +387,7 @@ export function LogsPage({
         <TabsContent value="dailyCashouts" className="min-h-0">
           <LogCard eyebrow="Logs" title="Daily Cashouts">
             <FilterBar monthValue={cashoutMonth} onMonthChange={setCashoutMonth} searchValue={cashoutSearch} onSearchChange={setCashoutSearch} searchPlaceholder="Recorded by or audit status" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredDailyCashouts.length === 0 ? <EmptyState message="No daily cashouts recorded yet." /> : null}
               {filteredDailyCashouts.map((entry) => {
                 const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
@@ -402,7 +402,7 @@ export function LogsPage({
                   <p className="text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)} | Credit {money(entry.creditSales)} | Drawer {money(drawerTotal)}</p>
                   <p className="text-muted-foreground">Audit {entry.auditStatus ?? 'matched'} | Created {formatDisplayDateTime(entry.createdAt)}</p>
                     <button
-                      className="mt-2.5 text-sm font-semibold text-primary transition-colors hover:text-primary/80"
+                      className="mt-2 text-[12px] font-semibold text-primary transition-colors hover:text-primary/80"
                       onClick={() => setSelectedCashout(entry)}
                       type="button"
                     >
@@ -419,7 +419,7 @@ export function LogsPage({
         <TabsContent value="cashTransfers" className="min-h-0">
           <LogCard eyebrow="Logs" title="Cash Transfers">
             <FilterBar monthValue={transferMonth} onMonthChange={setTransferMonth} searchValue={transferSearch} onSearchChange={setTransferSearch} searchPlaceholder="From, destination, reason" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredTransfers.length === 0 ? <EmptyState message="No cash transfers recorded yet." /> : null}
               {filteredTransfers.map((entry) => (
                 <LogEntryCard key={entry.id}>
@@ -439,7 +439,7 @@ export function LogsPage({
         <TabsContent value="settingsAudit" className="min-h-0">
           <LogCard eyebrow="Logs" title="Settings Audit">
             <FilterBar searchValue={auditSearch} onSearchChange={setAuditSearch} searchPlaceholder="Actor or action" />
-            <div className="space-y-2.5 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
+            <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredAudit.length === 0 ? <EmptyState message="No settings activity recorded yet." /> : null}
               {filteredAudit.map((entry) => (
                 <LogEntryCard key={entry.id}>
