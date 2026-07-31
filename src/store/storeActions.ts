@@ -66,7 +66,7 @@ export function createAppStoreActions({ getState, setAuthError, setIsBusy }: Cre
     return true
   }
 
-  const settingsActions = createSettingsActions({ pushSettingsAudit })
+  const settingsActions = createSettingsActions({ getState, pushSettingsAudit })
   const financeActions = createFinanceActions({ getState, setIsBusy, ensureNameInDirectory })
   const authActions = createAuthActions({ getState, setAuthError, setIsBusy, ensureNameInDirectory, pushSettingsAudit })
 

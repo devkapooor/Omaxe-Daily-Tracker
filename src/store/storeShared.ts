@@ -10,6 +10,7 @@ import type {
   DailyCashoutEntry,
   LoanStatus,
   LoanEntry,
+  MonthlyReportMeta,
   NameDirectory,
   PlannedPayment,
   SettingsAuditEntry,
@@ -60,6 +61,7 @@ export type LoadedCollections = Record<
   | 'dailyCashouts'
   | 'cashTransfers'
   | 'plannedPayments'
+  | 'monthlyReports'
   | 'settingsAudit'
   | 'nameDirectory'
   | 'appSettings',
@@ -78,6 +80,7 @@ export const initialLoadedCollections: LoadedCollections = {
   dailyCashouts: false,
   cashTransfers: false,
   plannedPayments: false,
+  monthlyReports: false,
   settingsAudit: false,
   nameDirectory: false,
   appSettings: false,
@@ -119,6 +122,7 @@ export type AppStoreSetters = {
   setIsBusy: Dispatch<SetStateAction<boolean>>
   setLoadedCollections: Dispatch<SetStateAction<LoadedCollections>>
   setLoans: Dispatch<SetStateAction<LoanEntry[]>>
+  setMonthlyReports: Dispatch<SetStateAction<MonthlyReportMeta[]>>
   setNameDirectory: Dispatch<SetStateAction<NameDirectory>>
   setPlannedPayments: Dispatch<SetStateAction<PlannedPayment[]>>
   setAppSettings: Dispatch<SetStateAction<AppSettings>>
@@ -235,6 +239,7 @@ export type StoreCollectionState = {
   financeData: FinanceData
   loadedCollections: LoadedCollections
   loans: LoanEntry[]
+  monthlyReports: MonthlyReportMeta[]
   nameDirectory: NameDirectory
   plannedPayments: PlannedPayment[]
   settingsAuditLog: SettingsAuditEntry[]

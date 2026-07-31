@@ -1,7 +1,7 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
-import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { MonthlyReportMeta, Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
 import {
   type AppToast,
   type DashboardRange,
@@ -20,6 +20,7 @@ import { DailyCashoutForm } from '@/features/cashout/components/DailyCashoutForm
 import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
+import { MonthlyReportsPage } from '@/features/monthly-reports/components/MonthlyReportsPage'
 import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlannerPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { ExpenseForm } from '@/features/register/components/ExpenseForm'
@@ -94,6 +95,7 @@ type AppWorkspaceProps = {
     transfersToday: number
   }
   marginPercentage: number
+  monthlyReports: MonthlyReportMeta[]
   monthlyOperationalExpense: number
   normalizedLoans: LoanEntry[]
   onLogout: () => void
@@ -114,6 +116,7 @@ type AppWorkspaceProps = {
   saveCashout: (draft: CashoutDraft) => Promise<void>
   saveDailyCashoutEntry: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
+  saveMonthlyReportMargin: (month: string, marginPercentage: number, actor: string) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
@@ -182,6 +185,7 @@ export function AppWorkspace({
   latestClosedDay,
   latestClosedDaySummary,
   marginPercentage,
+  monthlyReports,
   monthlyOperationalExpense,
   normalizedLoans,
   onLogout,
@@ -195,6 +199,7 @@ export function AppWorkspace({
   saveCashout,
   saveDailyCashoutEntry,
   saveLoanEntry,
+  saveMonthlyReportMargin,
   saveOperationalSettings,
   savePayment,
   savePlannedPayment,
@@ -284,6 +289,23 @@ export function AppWorkspace({
               pendingCashBankTotal={pendingCashNow.bankTotal}
             />
           </section>
+        ) : null}
+
+        {activePage === 'monthlyReports' && currentUser.role === 'owner' ? (
+          <MonthlyReportsPage
+            cashTransfers={cashTransfers}
+            currentUserName={currentUser.name}
+            dailyCashouts={dailyCashouts}
+            data={data}
+            defaultMarginPercentage={marginPercentage}
+            loans={normalizedLoans}
+            monthlyReports={monthlyReports}
+            totalLoans={totalLoans}
+            totalVendorOutstanding={totalVendorOutstanding}
+            vendors={vendors}
+            onSaveMonthlyMargin={saveMonthlyReportMargin}
+            onToast={showToast}
+          />
         ) : null}
 
         {activePage === 'cashout' ? (

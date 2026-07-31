@@ -69,6 +69,10 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    match /monthlyReports/{documentId} {
+      allow read, write: if isStaff();
+    }
+
     match /settingsAudit/{documentId} {
       allow read, write: if isStaff();
     }

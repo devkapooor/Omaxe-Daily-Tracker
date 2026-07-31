@@ -24,6 +24,7 @@ import type {
   CashTransfer,
   DailyCashoutEntry,
   LoanEntry,
+  MonthlyReportMeta,
   NameDirectory,
   PlannedPayment,
   SettingsAuditEntry,
@@ -38,6 +39,7 @@ type SetupSubscriptionsArgs = Pick<
   | 'setFinanceData'
   | 'setLoadedCollections'
   | 'setLoans'
+  | 'setMonthlyReports'
   | 'setAppSettings'
   | 'setNameDirectory'
   | 'setPlannedPayments'
@@ -55,6 +57,7 @@ export function setupAppStoreSubscriptions({
   setFinanceData,
   setLoadedCollections,
   setLoans,
+  setMonthlyReports,
   setAppSettings,
   setNameDirectory,
   setPlannedPayments,
@@ -150,6 +153,10 @@ export function setupAppStoreSubscriptions({
     onSnapshot(query(collection(db, 'plannedPayments'), orderBy('date', 'asc')), (snapshot) => {
       setPlannedPayments(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<PlannedPayment, 'id'>)))
       markLoaded('plannedPayments')
+    }, onSubscriptionError),
+    onSnapshot(query(collection(db, 'monthlyReports'), orderBy('month', 'desc')), (snapshot) => {
+      setMonthlyReports(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<MonthlyReportMeta, 'id'>)))
+      markLoaded('monthlyReports')
     }, onSubscriptionError),
     onSnapshot(query(collection(db, 'settingsAudit'), orderBy('createdAt', 'desc')), (snapshot) => {
       setSettingsAuditLog(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<SettingsAuditEntry, 'id'>)).slice(0, 25))

@@ -181,7 +181,7 @@ export function uniqNames(values: string[]) {
 
 export function resolveActivePage(role: string, activePage: Page) {
   if (role === 'owner') return activePage
-  if (activePage === 'dashboard' || activePage === 'logs') return 'expense'
+  if (activePage === 'dashboard' || activePage === 'logs' || activePage === 'monthlyReports') return 'expense'
   if (activePage === 'planner' && role === 'billing') return 'expense'
   return activePage
 }

@@ -1,12 +1,13 @@
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
-import type { OperationalExpenseBreakdown } from '@/store/storeShared'
+import { nowIso, type OperationalExpenseBreakdown, type StoreCollectionState } from '@/store/storeShared'
 
 type SettingsActionArgs = {
+  getState: () => StoreCollectionState
   pushSettingsAudit: (action: string, actor: string) => Promise<void>
 }
 
-export function createSettingsActions({ pushSettingsAudit }: SettingsActionArgs) {
+export function createSettingsActions({ getState, pushSettingsAudit }: SettingsActionArgs) {
   async function saveOperationalSettings(operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) {
     for (const [label, value] of Object.entries(operationalExpenseBreakdown)) {
       if (!Number.isFinite(value) || value < 0) {
@@ -39,7 +40,33 @@ export function createSettingsActions({ pushSettingsAudit }: SettingsActionArgs)
     await pushSettingsAudit(`Planner bank balance updated: ${currentBankBalance}`, actor)
   }
 
+  async function saveMonthlyReportMargin(month: string, marginPercentage: number, actor: string) {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new Error('Month must be in YYYY-MM format.')
+    }
+    if (!Number.isFinite(marginPercentage) || marginPercentage < 0 || marginPercentage > 100) {
+      throw new Error('Margin percentage must be between 0 and 100.')
+    }
+
+    const existing = getState().monthlyReports.find((entry) => entry.month === month)
+    const timestamp = nowIso()
+
+    await setDoc(
+      doc(db, 'monthlyReports', month),
+      {
+        month,
+        marginPercentage,
+        createdAt: existing?.createdAt ?? timestamp,
+        updatedAt: timestamp,
+        updatedBy: actor,
+      },
+      { merge: true },
+    )
+    await pushSettingsAudit(`Monthly report margin updated: ${month} -> ${marginPercentage}%`, actor)
+  }
+
   return {
+    saveMonthlyReportMargin,
     saveOperationalSettings,
     savePlannerBankBalance,
   }

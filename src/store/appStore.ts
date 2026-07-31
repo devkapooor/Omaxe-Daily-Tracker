@@ -7,6 +7,7 @@ import type {
   CashTransfer,
   DailyCashoutEntry,
   LoanEntry,
+  MonthlyReportMeta,
   NameDirectory,
   PlannedPayment,
   SettingsAuditEntry,
@@ -42,6 +43,7 @@ export function useAppStore() {
   const [dailyCashouts, setDailyCashouts] = useState<DailyCashoutEntry[]>([])
   const [cashTransfers, setCashTransfers] = useState<CashTransfer[]>([])
   const [plannedPayments, setPlannedPayments] = useState<PlannedPayment[]>([])
+  const [monthlyReports, setMonthlyReports] = useState<MonthlyReportMeta[]>([])
   const [settingsAuditLog, setSettingsAuditLog] = useState<SettingsAuditEntry[]>([])
   const [isBusy, setIsBusy] = useState(false)
   const [canStartSubscriptions, setCanStartSubscriptions] = useState(false)
@@ -77,6 +79,7 @@ export function useAppStore() {
       setDailyCashouts([])
       setCashTransfers([])
       setPlannedPayments([])
+      setMonthlyReports([])
       setSettingsAuditLog([])
       setCanStartSubscriptions(!nextUser)
     })
@@ -183,6 +186,7 @@ export function useAppStore() {
       setAppSettings,
       setLoadedCollections,
       setLoans,
+      setMonthlyReports,
       setNameDirectory,
       setPlannedPayments,
       onSubscriptionError: handleSubscriptionError,
@@ -289,6 +293,7 @@ export function useAppStore() {
       appSettings,
       loadedCollections,
       loans,
+      monthlyReports,
       nameDirectory,
       plannedPayments,
       settingsAuditLog,
@@ -321,6 +326,7 @@ export function useAppStore() {
     importLegacyData: actions.importLegacyData,
     isBusy,
     loans,
+    monthlyReports,
     plannedPayments,
     profileLoaded: loadedCollections.users,
     renamePartyInDirectory: actions.renamePartyInDirectory,
@@ -332,6 +338,7 @@ export function useAppStore() {
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
     saveLoanEntry: actions.saveLoanEntry,
+    saveMonthlyReportMargin: actions.saveMonthlyReportMargin,
     saveOperationalSettings: actions.saveOperationalSettings,
     savePayment: actions.savePayment,
     savePurchase: actions.savePurchase,

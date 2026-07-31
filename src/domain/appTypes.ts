@@ -8,7 +8,7 @@ export type UserAccount = AppUser & {
   disabled?: boolean
 }
 
-export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'monthlyReports' | 'logs' | 'settings'
 
 export type LoanStatus = 'Open' | 'Settled'
 
@@ -81,6 +81,15 @@ export type SettingsAuditEntry = {
   action: string
   actor: string
   createdAt: string
+}
+
+export type MonthlyReportMeta = {
+  id: string
+  month: string
+  marginPercentage: number
+  createdAt: string
+  updatedAt: string
+  updatedBy: string
 }
 
 export type VendorRecord = {
