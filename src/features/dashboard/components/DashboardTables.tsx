@@ -1,16 +1,16 @@
-import { useMemo } from 'react'
-import type { Cashout, Payment } from '@/domain/financeTypes'
-import { type LegacyCashBalance, money, type PendingCashUserBalance, today } from '@/app/uiHelpers'
+import type { LabelAmountRow } from '@/domain/workspaceMetrics'
+import { type LegacyCashBalance, money, type PendingCashUserBalance } from '@/app/uiHelpers'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
 type DashboardTablesProps = {
-  cashouts: Cashout[]
-  purchases: { date: string; category: string; purchaseAmount: number }[]
-  payments: Payment[]
+  expenseByCategory: LabelAmountRow[]
+  monthlyPurchaseTotal: number
+  paymentByMode: LabelAmountRow[]
   userBalances: PendingCashUserBalance[]
   legacyBalances: LegacyCashBalance[]
   pendingCashBankTotal: number
+  vendorPaymentTotal: number
 }
 
 function DashboardListCard({
@@ -43,58 +43,21 @@ function DashboardListCard({
 }
 
 export function DashboardTables({
-  cashouts,
-  purchases,
-  payments,
+  expenseByCategory,
+  monthlyPurchaseTotal,
+  paymentByMode,
   userBalances,
   legacyBalances,
   pendingCashBankTotal,
+  vendorPaymentTotal,
 }: DashboardTablesProps) {
-  const month = today().slice(0, 7)
-
-  const expenseByCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    cashouts
-      .filter((entry) => entry.date.slice(0, 7) === month)
-      .forEach((entry) => map.set(entry.category, (map.get(entry.category) ?? 0) + entry.amount))
-    return Array.from(map.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount)
-  }, [cashouts, month])
-
-  const monthlyPurchaseTotal = useMemo(
-    () =>
-      purchases
-        .filter((entry) => entry.date.slice(0, 7) === month)
-        .reduce((total, entry) => total + entry.purchaseAmount, 0),
-    [month, purchases],
-  )
-
-  const vendorPaymentTotal = useMemo(
-    () =>
-      payments
-        .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid' && (entry.entryType ?? 'vendor-payment') === 'vendor-payment')
-        .reduce((total, entry) => total + entry.amount, 0),
-    [month, payments],
-  )
-
-  const paymentByMode = useMemo(() => {
-    const map = new Map<string, number>()
-    payments
-      .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid' && (entry.entryType ?? 'vendor-payment') === 'vendor-payment')
-      .forEach((entry) => map.set(entry.paymentMode, (map.get(entry.paymentMode) ?? 0) + entry.amount))
-    return Array.from(map.entries())
-      .map(([mode, amount]) => ({ mode, amount }))
-      .sort((a, b) => b.amount - a.amount)
-  }, [month, payments])
-
   return (
     <section className="grid gap-1.5 xl:grid-cols-2">
       <DashboardListCard
         eyebrow="Month Table"
         title="Expenses By Category"
         empty="No category expenses this month."
-        rows={expenseByCategory.map((row) => ({ label: row.category, value: money(row.amount) }))}
+        rows={expenseByCategory.map((row) => ({ label: row.label, value: money(row.amount) }))}
       />
 
       <DashboardListCard
@@ -111,7 +74,7 @@ export function DashboardTables({
         eyebrow="Month Table"
         title="Vendor Payment By Mode"
         empty="No vendor payment entries this month."
-        rows={paymentByMode.map((row) => ({ label: row.mode, value: money(row.amount) }))}
+        rows={paymentByMode.map((row) => ({ label: row.label, value: money(row.amount) }))}
       />
 
       <DashboardListCard

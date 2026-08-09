@@ -42,7 +42,6 @@ export default function App() {
     importLegacyData,
     isBusy,
     loans,
-    monthlyReports,
     nameDirectory,
     plannedPayments,
     profileLoaded,
@@ -54,6 +53,7 @@ export default function App() {
     signOutCurrentUser,
     users,
     vendors,
+    workspaceMetrics,
     ensureNameInDirectory,
     saveCashTransfer,
     saveCashout,
@@ -82,31 +82,33 @@ export default function App() {
     dashboardLastUpdated,
     dashboardSales,
     averageDailySales,
+    dashboardTables,
     directoryOptions,
     latestClosedDay,
     latestClosedDaySummary,
     monthlyOperationalExpense,
+    monthlyReportMetrics,
     marginPercentage,
     normalizedLoans,
+    openLoanCount,
     pendingCashNow,
+    plannerMetrics,
     projectedMonthlySales,
+    projectedProfit,
+    projectedLoss,
     totalVendorOutstanding,
     todayCashout,
-    todayPaymentPaid,
-    todayPaymentReceived,
+    todayPaymentNet,
     totalLoans,
     vendorOutstandingByName,
   } = useDashboardMetrics({
-    cashTransfers,
-    dailyCashouts,
     dashboardRange,
     data,
     loans,
     nameDirectory,
-    monthlyOperationalExpense: appSettings.monthlyOperationalExpense,
-    marginPercentage: appSettings.marginPercentage,
     users,
     vendors,
+    workspaceMetrics,
   })
 
   useEffect(() => {
@@ -235,13 +237,17 @@ export default function App() {
         latestClosedDaySummary={latestClosedDaySummary}
         marginPercentage={marginPercentage}
         monthlyOperationalExpense={monthlyOperationalExpense}
-        monthlyReports={monthlyReports}
+        monthlyReportMetrics={monthlyReportMetrics}
         normalizedLoans={normalizedLoans}
+        openLoanCount={openLoanCount}
         onLogout={() => void signOutCurrentUser()}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}
+        plannerMetrics={plannerMetrics}
         plannedPayments={plannedPayments}
         projectedMonthlySales={projectedMonthlySales}
+        projectedProfit={projectedProfit}
+        projectedLoss={projectedLoss}
         renamePartyInDirectory={renamePartyInDirectory}
         saveCashTransfer={saveCashTransfer}
         saveCashout={saveCashout}
@@ -259,14 +265,14 @@ export default function App() {
         showToast={showToast}
         toast={toast}
         todayCashout={todayCashout}
-        todayPaymentPaid={todayPaymentPaid}
-        todayPaymentReceived={todayPaymentReceived}
+        todayPaymentNet={todayPaymentNet}
         totalLoans={totalLoans}
         totalVendorOutstanding={totalVendorOutstanding}
         users={users}
         savedPartyNames={nameDirectory.people}
         vendors={vendors}
         vendorOutstandingByName={vendorOutstandingByName}
+        dashboardTables={dashboardTables}
       />
     </AppBackground>
   )

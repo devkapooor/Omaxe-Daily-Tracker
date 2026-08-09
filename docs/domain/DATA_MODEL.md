@@ -8,6 +8,7 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 
 - `src/domain/financeTypes.ts`
 - `src/domain/appTypes.ts`
+- `src/domain/workspaceMetrics.ts`
 
 ## Primary Finance Records
 
@@ -232,10 +233,31 @@ Current directory metadata includes:
 - `people`
 - `vendors`
 
+### appMetadata/workspaceMetrics
+
+Current shared derived snapshot includes:
+
+- `generatedForDate`
+- `updatedAt`
+- `dashboardRanges.yesterday`
+- `dashboardRanges.mtd`
+- `registerToday`
+- `projections`
+- `latestClosedDaySummary`
+- `liabilities`
+- `vendorOutstandingByName`
+- `pendingCash`
+- `dashboardTables`
+- `planner`
+- `monthlyReports`
+
+This document is the shared read model for dashboard, planner, pending-cash, and monthly-report displays. It is derived from the primary finance collections and app metadata, then written back to Firestore so all clients read the same summarized values.
+
 ## Storage Notes
 
 - Firebase Authentication stores credentials.
 - Firestore stores app records and app metadata.
+- `appMetadata/workspaceMetrics` stores the shared derived read model used by the main finance dashboards and planner views.
 - Legacy browser-only data can still be imported once.
 - `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` together drive vendor outstanding.
 - Planner availability uses `currentBankBalance`, not counter cash.
@@ -243,3 +265,4 @@ Current directory metadata includes:
 - Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.
 - Loan notes are additive and optional; historical loan documents can omit them.
 - `Sales` log rows remain read-only because they are derived from daily cashout history.
+- `workspaceMetrics` is derived data, not the canonical input record set. The canonical write records remain collections such as `sales`, `cashouts`, `payments`, `purchases`, `dailyCashouts`, `cashTransfers`, `loans`, and metadata documents such as `appSettings`.

@@ -8,9 +8,10 @@ If any displayed summary, projection, or allocation rule changes, update this fi
 
 Most current derived summary logic lives in:
 
-- `src/features/dashboard/hooks/useDashboardMetrics.ts`
-- `src/features/dashboard/components/DashboardTables.tsx`
-- `src/features/planner/components/PaymentPlannerPage.tsx`
+- `src/store/deriveWorkspaceMetrics.ts`
+- `appMetadata/workspaceMetrics`
+
+Page components now consume the shared Firestore snapshot instead of recomputing the primary finance summaries in-page.
 
 ## Date Model
 
@@ -32,21 +33,21 @@ mtd       -> from = first day of current month, to = today
 ### Dashboard Sales
 
 ```text
-dashboardSales =
+workspaceMetrics.dashboardRanges[range].sales =
 sum(sale.totalSales where sale.date is within selected range)
 ```
 
 ### Dashboard Expense Total
 
 ```text
-dashboardExpenseTotal =
+workspaceMetrics.dashboardRanges[range].expenses =
 sum(cashout.amount where cashout.date is within selected range)
 ```
 
 ### Open Loan Balance
 
 ```text
-totalLoans =
+workspaceMetrics.liabilities.totalLoans =
 sum(normalizedLoan.remainingAmount for all loans)
 ```
 
@@ -57,7 +58,7 @@ vendorOutstandingByName =
 vendor.openingOutstandingRemaining
 + sum(purchase.unpaidAmount for matching vendor)
 
-totalVendorOutstanding =
+workspaceMetrics.liabilities.totalVendorOutstanding =
 sum(all vendorOutstandingByName values)
 ```
 
@@ -72,6 +73,9 @@ mtdSales = sum(sale.totalSales from monthStart through latestRecordedSalesDate)
 completedDays = inclusive days between monthStart and latestRecordedSalesDate
 averageDailySales = mtdSales / completedDays
 projectedMonthlySales = averageDailySales * daysInMonth(latestRecordedSalesDate)
+projectedMarginValue = projectedMonthlySales * (marginPercentage / 100)
+projectedProfit = max(projectedMarginValue - monthlyOperationalExpense, 0)
+projectedLoss = max(monthlyOperationalExpense - projectedMarginValue, 0)
 ```
 
 ### Projection Settings
@@ -122,18 +126,21 @@ sum(cashTransfer.amount where cashTransfer.date = latestClosedDay)
 ### Today Expense
 
 ```text
-todayCashout =
+workspaceMetrics.registerToday.cashout =
 sum(cashout.amount where cashout.date = today)
 ```
 
 ### Today Payments
 
 ```text
-todayPaymentPaid =
+workspaceMetrics.registerToday.paymentPaid =
 sum(payment.amount where payment.date = today and payment.type = "Paid")
 
-todayPaymentReceived =
+workspaceMetrics.registerToday.paymentReceived =
 sum(payment.amount where payment.date = today and payment.type = "Received")
+
+workspaceMetrics.registerToday.paymentNet =
+todayPaymentReceived - todayPaymentPaid
 ```
 
 ## Pending Cash Logic
@@ -247,6 +254,7 @@ Planner notes:
 - counter cash is shown for reference only
 - planner records do not alter pending cash balances
 - planner does not currently ingest loan-repayment cheques
+- the grouped schedule and running balances are persisted into `workspaceMetrics.planner`
 
 ## Daily Cashout Delete Resync
 
@@ -265,4 +273,4 @@ Current tables include monthly grouped views such as:
 - purchase total vs vendor payment total
 - payment mode breakdown for paid payments
 
-These are read models only and do not write back to Firestore.
+These are persisted into `workspaceMetrics.dashboardTables` so the dashboard reads one shared summarized snapshot across clients.

@@ -1,7 +1,8 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
-import type { MonthlyReportMeta, Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
   type DashboardRange,
@@ -69,6 +70,7 @@ type AppWorkspaceProps = {
   }
   dashboardRange: DashboardRange
   dashboardSales: number
+  dashboardTables: WorkspaceMetrics['dashboardTables']
   data: FinanceData
   deleteDailyCashoutEntry: (entryId: string) => Promise<void>
   deleteLoanEntry: (loanId: string) => Promise<void>
@@ -95,9 +97,13 @@ type AppWorkspaceProps = {
     transfersToday: number
   }
   marginPercentage: number
-  monthlyReports: MonthlyReportMeta[]
   monthlyOperationalExpense: number
   normalizedLoans: LoanEntry[]
+  monthlyReportMetrics: WorkspaceMetrics['monthlyReports']
+  openLoanCount: number
+  plannerMetrics: WorkspaceMetrics['planner']
+  projectedLoss: number
+  projectedProfit: number
   onLogout: () => void
   onPageChange: (page: Page) => void
   pendingCashNow: {
@@ -107,6 +113,7 @@ type AppWorkspaceProps = {
     legacyTransferEntries: CashTransfer[]
     migratedCashoutEntries: DailyCashoutEntry[]
     userBalances: PendingCashUserBalance[]
+    totalCounterCash: number
   }
   plannedPayments: PlannedPayment[]
   projectedMonthlySales: number
@@ -128,8 +135,7 @@ type AppWorkspaceProps = {
   showToast: (message: string) => void
   toast: AppToast | null
   todayCashout: number
-  todayPaymentPaid: number
-  todayPaymentReceived: number
+  todayPaymentNet: number
   totalLoans: number
   totalVendorOutstanding: number
   users: UserAccount[]
@@ -172,6 +178,7 @@ export function AppWorkspace({
   dashboardLastUpdated,
   dashboardRange,
   dashboardSales,
+  dashboardTables,
   data,
   deleteDailyCashoutEntry,
   deleteLoanEntry,
@@ -185,9 +192,13 @@ export function AppWorkspace({
   latestClosedDay,
   latestClosedDaySummary,
   marginPercentage,
-  monthlyReports,
   monthlyOperationalExpense,
   normalizedLoans,
+  monthlyReportMetrics,
+  openLoanCount,
+  plannerMetrics,
+  projectedLoss,
+  projectedProfit,
   onLogout,
   onPageChange,
   pendingCashNow,
@@ -211,8 +222,7 @@ export function AppWorkspace({
   showToast,
   toast,
   todayCashout,
-  todayPaymentPaid,
-  todayPaymentReceived,
+  todayPaymentNet,
   totalLoans,
   totalVendorOutstanding,
   users,
@@ -265,8 +275,9 @@ export function AppWorkspace({
             <MonthlyProjectionPanel
               averageDailySales={averageDailySales}
               projectedMonthlySales={projectedMonthlySales}
-              monthlyOperationalExpense={monthlyOperationalExpense}
               marginPercentage={marginPercentage}
+              projectedProfit={projectedProfit}
+              projectedLoss={projectedLoss}
             />
             <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
@@ -281,28 +292,22 @@ export function AppWorkspace({
               legacyBalances={pendingCashNow.legacyBalances}
             />
             <DashboardTables
-              cashouts={data.cashouts}
-              purchases={data.purchases}
-              payments={data.payments}
+              expenseByCategory={dashboardTables.expenseByCategory}
               userBalances={pendingCashNow.userBalances}
               legacyBalances={pendingCashNow.legacyBalances}
+              monthlyPurchaseTotal={dashboardTables.monthlyPurchaseTotal}
+              paymentByMode={dashboardTables.paymentByMode}
               pendingCashBankTotal={pendingCashNow.bankTotal}
+              vendorPaymentTotal={dashboardTables.vendorPaymentTotal}
             />
           </section>
         ) : null}
 
         {activePage === 'monthlyReports' && currentUser.role === 'owner' ? (
           <MonthlyReportsPage
-            cashTransfers={cashTransfers}
             currentUserName={currentUser.name}
-            dailyCashouts={dailyCashouts}
-            data={data}
-            defaultMarginPercentage={marginPercentage}
-            loans={normalizedLoans}
-            monthlyReports={monthlyReports}
-            totalLoans={totalLoans}
-            totalVendorOutstanding={totalVendorOutstanding}
-            vendors={vendors}
+            monthlyReportMetrics={monthlyReportMetrics}
+            openLoanCount={openLoanCount}
             onSaveMonthlyMargin={saveMonthlyReportMargin}
             onToast={showToast}
           />
@@ -365,7 +370,7 @@ export function AppWorkspace({
                   <aside className="grid content-start gap-2.5">
                     <section className="grid gap-2.5 sm:grid-cols-2">
                       <SummaryCard label="Today Expense" value={money(todayCashout)} />
-                      <SummaryCard label="Today Payments (Net)" value={money(todayPaymentReceived - todayPaymentPaid)} />
+                      <SummaryCard label="Today Payments (Net)" value={money(todayPaymentNet)} />
                     </section>
                   </aside>
                 </div>
@@ -475,10 +480,9 @@ export function AppWorkspace({
             <PaymentPlannerPage
               currentBankBalance={appSettings.currentBankBalance}
               currentUserName={currentUser.name}
-              expenses={data.cashouts}
-              payments={data.payments}
+              groupedSchedule={plannerMetrics.groupedSchedule}
               plannedPayments={plannedPayments}
-              pendingCashBalances={Object.fromEntries(pendingCashNow.userBalances.map((entry) => [entry.name, entry.amount]))}
+              totalCounterCash={plannerMetrics.totalCounterCash}
               onSaveBankBalance={async (value) => {
                 await savePlannerBankBalance(value, currentUser.name)
                 showToast('Planner bank balance updated.')

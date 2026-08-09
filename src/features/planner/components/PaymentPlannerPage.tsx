@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import type { Cashout, Payment } from '@/domain/financeTypes'
+import { useState } from 'react'
 import type { PlannedPayment } from '@/domain/appTypes'
+import type { PlannerScheduleGroupSnapshot } from '@/domain/workspaceMetrics'
 import { formatDisplayDate, money, numberValue } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -13,32 +13,20 @@ import { Textarea } from '@/shared/ui/textarea'
 
 type PaymentPlannerPageProps = {
   currentBankBalance: number
-  expenses: Cashout[]
-  payments: Payment[]
   plannedPayments: PlannedPayment[]
-  pendingCashBalances: Record<string, number>
+  groupedSchedule: PlannerScheduleGroupSnapshot[]
+  totalCounterCash: number
   onSaveBankBalance: (currentBankBalance: number) => Promise<void>
   onSavePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   onDeletePlannedPayment: (paymentId: string) => Promise<void>
   currentUserName: string
 }
 
-type PlannerItem = {
-  id: string
-  amount: number
-  date: string
-  note: string
-  source: 'expense-cheque' | 'vendor-cheque' | 'manual-plan'
-  title: string
-  chequeNumber?: string
-}
-
 export function PaymentPlannerPage({
   currentBankBalance,
-  expenses,
-  payments,
   plannedPayments,
-  pendingCashBalances,
+  groupedSchedule,
+  totalCounterCash,
   onSaveBankBalance,
   onSavePlannedPayment,
   onDeletePlannedPayment,
@@ -50,82 +38,6 @@ export function PaymentPlannerPage({
   const [amount, setAmount] = useState('0')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
-
-  const totalCounterCash = useMemo(
-    () => Object.values(pendingCashBalances).reduce((total, value) => total + value, 0),
-    [pendingCashBalances],
-  )
-
-  const plannerItems = useMemo<PlannerItem[]>(() => {
-    const chequeExpenses = expenses
-      .filter((entry) => entry.paymentMode === 'Cheque' && entry.chequePayDate)
-      .map((entry) => ({
-        id: `expense-${entry.id}`,
-        amount: entry.amount,
-        date: entry.chequePayDate!,
-        note: entry.notes,
-        source: 'expense-cheque' as const,
-        title: entry.paidTo,
-        chequeNumber: entry.chequeNumber,
-      }))
-
-    const vendorCheques = payments
-      .filter((entry) => entry.paymentMode === 'Cheque' && entry.type === 'Paid' && entry.entryType === 'vendor-payment' && entry.chequePayDate)
-      .map((entry) => ({
-        id: `payment-${entry.id}`,
-        amount: entry.amount,
-        date: entry.chequePayDate!,
-        note: entry.notes,
-        source: 'vendor-cheque' as const,
-        title: entry.partyName,
-        chequeNumber: entry.chequeNumber,
-      }))
-
-    const manualPlans = plannedPayments.map((entry) => ({
-      id: entry.id,
-      amount: entry.amount,
-      date: entry.date,
-      note: entry.notes,
-      source: 'manual-plan' as const,
-      title: entry.title,
-    }))
-
-    return [...chequeExpenses, ...vendorCheques, ...manualPlans].sort((a, b) => {
-      const dateSort = a.date.localeCompare(b.date)
-      if (dateSort !== 0) return dateSort
-      return a.title.localeCompare(b.title)
-    })
-  }, [expenses, payments, plannedPayments])
-
-  const groupedSchedule = useMemo(() => {
-    let runningBalance = currentBankBalance
-    const groups: Array<{
-      date: string
-      items: Array<PlannerItem & { runningBalanceAfter: number; status: 'available' | 'deficit' }>
-      totalAmount: number
-    }> = []
-
-    plannerItems.forEach((item) => {
-      runningBalance -= item.amount
-      const status: 'available' | 'deficit' = runningBalance >= 0 ? 'available' : 'deficit'
-      const lastGroup = groups[groups.length - 1]
-      const enriched = { ...item, runningBalanceAfter: runningBalance, status }
-
-      if (lastGroup && lastGroup.date === item.date) {
-        lastGroup.items.push(enriched)
-        lastGroup.totalAmount += item.amount
-        return
-      }
-
-      groups.push({
-        date: item.date,
-        items: [enriched],
-        totalAmount: item.amount,
-      })
-    })
-
-    return groups
-  }, [currentBankBalance, plannerItems])
 
   async function submitBankBalance(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -276,7 +188,7 @@ export function PaymentPlannerPage({
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-hidden">
           <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
-            {groupedSchedule.length === 0 ? (
+            {groupedSchedule.length === 0 && plannedPayments.length === 0 ? (
               <p className="text-[12px] font-medium text-muted-foreground">No upcoming cheque deductions or manual plans yet.</p>
             ) : null}
             {groupedSchedule.map((group) => (

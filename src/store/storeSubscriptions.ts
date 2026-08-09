@@ -31,6 +31,7 @@ import type {
   UserAccount,
   VendorRecord,
 } from '../domain/appTypes'
+import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
 
 type SetupSubscriptionsArgs = Pick<
   AppStoreSetters,
@@ -46,6 +47,7 @@ type SetupSubscriptionsArgs = Pick<
   | 'setSettingsAuditLog'
   | 'setUsers'
   | 'setVendors'
+  | 'setWorkspaceMetrics'
 > & {
   onSubscriptionError: (error: unknown) => void
   vendorFallbackLoadedRef: MutableRefObject<boolean>
@@ -64,6 +66,7 @@ export function setupAppStoreSubscriptions({
   setSettingsAuditLog,
   setUsers,
   setVendors,
+  setWorkspaceMetrics,
   onSubscriptionError,
   vendorFallbackLoadedRef,
 }: SetupSubscriptionsArgs) {
@@ -204,6 +207,15 @@ export function setupAppStoreSubscriptions({
       }
       setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown })
       markLoaded('appSettings')
+    }, onSubscriptionError),
+    onSnapshot(doc(db, 'appMetadata', 'workspaceMetrics'), (snapshot) => {
+      const data = snapshot.data()
+      if (!data || typeof data !== 'object') {
+        markLoaded('workspaceMetrics')
+        return
+      }
+      setWorkspaceMetrics(data as WorkspaceMetrics)
+      markLoaded('workspaceMetrics')
     }, onSubscriptionError),
   ]
 

@@ -4,21 +4,18 @@ import { GlowCard } from '@/shared/ui/spotlight-card'
 type MonthlyProjectionPanelProps = {
   averageDailySales: number
   projectedMonthlySales: number
-  monthlyOperationalExpense: number
   marginPercentage: number
+  projectedProfit: number
+  projectedLoss: number
 }
 
 export function MonthlyProjectionPanel({
   averageDailySales,
   projectedMonthlySales,
-  monthlyOperationalExpense,
   marginPercentage,
+  projectedProfit,
+  projectedLoss,
 }: MonthlyProjectionPanelProps) {
-  const projectedMarginValue = projectedMonthlySales * (marginPercentage / 100)
-  const breakEvenDelta = projectedMarginValue - monthlyOperationalExpense
-  const projectedProfit = breakEvenDelta > 0 ? breakEvenDelta : 0
-  const projectedLoss = breakEvenDelta < 0 ? Math.abs(breakEvenDelta) : 0
-
   return (
     <section className="grid gap-1.5 lg:grid-cols-2">
       <GlowCard className="p-3">

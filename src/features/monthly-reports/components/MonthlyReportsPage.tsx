@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react'
 import { formatDisplayDateTime, money } from '@/app/uiHelpers'
-import type { MonthlyReportMeta } from '@/domain/appTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
-import type { FinanceData } from '@/domain/financeTypes'
-import { useMonthlyReportMetrics } from '@/features/monthly-reports/hooks/useMonthlyReportMetrics'
+import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
@@ -11,16 +8,9 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 import { cn } from '@/shared/lib/utils'
 
 type MonthlyReportsPageProps = {
-  data: FinanceData
-  cashTransfers: CashTransfer[]
   currentUserName: string
-  dailyCashouts: DailyCashoutEntry[]
-  defaultMarginPercentage: number
-  loans: LoanEntry[]
-  monthlyReports: MonthlyReportMeta[]
-  totalLoans: number
-  totalVendorOutstanding: number
-  vendors: VendorRecord[]
+  monthlyReportMetrics: WorkspaceMetrics['monthlyReports']
+  openLoanCount: number
   onSaveMonthlyMargin: (month: string, marginPercentage: number, actor: string) => Promise<void>
   onToast: (message: string) => void
 }
@@ -71,38 +61,21 @@ function ListCard({
 }
 
 export function MonthlyReportsPage({
-  cashTransfers,
   currentUserName,
-  dailyCashouts,
-  data,
-  defaultMarginPercentage,
-  loans,
-  monthlyReports,
+  monthlyReportMetrics,
   onSaveMonthlyMargin,
   onToast,
-  totalLoans,
-  totalVendorOutstanding,
-  vendors,
+  openLoanCount,
 }: MonthlyReportsPageProps) {
-  const { defaultSelectedMonth, detailsByMonth, months, openLoanCount, summaries } = useMonthlyReportMetrics({
-    cashTransfers,
-    dailyCashouts,
-    data,
-    defaultMarginPercentage,
-    loans,
-    monthlyReports,
-    totalLoans,
-    totalVendorOutstanding,
-    vendors,
-  })
+  const { defaultSelectedMonth, detailsByMonth, months, summaries } = monthlyReportMetrics
   const [selectedMonth, setSelectedMonth] = useState<string | null>(defaultSelectedMonth)
   const [editedMarginMonth, setEditedMarginMonth] = useState<string | null>(null)
   const [editedMarginValue, setEditedMarginValue] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const effectiveSelectedMonth = selectedMonth && detailsByMonth.has(selectedMonth) ? selectedMonth : defaultSelectedMonth
+  const effectiveSelectedMonth = selectedMonth && detailsByMonth[selectedMonth] ? selectedMonth : defaultSelectedMonth
   const selectedDetail = useMemo(
-    () => (effectiveSelectedMonth ? detailsByMonth.get(effectiveSelectedMonth) ?? null : null),
+    () => (effectiveSelectedMonth ? detailsByMonth[effectiveSelectedMonth] ?? null : null),
     [detailsByMonth, effectiveSelectedMonth],
   )
   const marginInput = selectedDetail
@@ -272,7 +245,7 @@ export function MonthlyReportsPage({
                 eyebrow="Expense Mix"
                 title="Expenses By Category"
                 empty="No cashout expenses recorded for this month."
-                rows={selectedDetail.expenseByCategory.map((row) => ({ label: row.category, value: money(row.amount) }))}
+                rows={selectedDetail.expenseByCategory.map((row) => ({ label: row.label, value: money(row.amount) }))}
               />
 
               <ListCard

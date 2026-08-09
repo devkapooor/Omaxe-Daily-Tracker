@@ -19,6 +19,7 @@ import {
   defaultAppSettings,
   emptyFinanceData,
   emptyNameDirectory,
+  emptyWorkspaceMetrics,
   ensureSingleStore,
   initialLoadedCollections,
   nowIso,
@@ -27,6 +28,7 @@ import {
 import { setupAppStoreSubscriptions } from './storeSubscriptions'
 import { seedData } from './seedData'
 import { readLegacyImportPayload } from './legacyLocalData'
+import { deriveWorkspaceMetrics } from './deriveWorkspaceMetrics'
 
 export function useAppStore() {
   const [networkTick, setNetworkTick] = useState(0)
@@ -45,11 +47,13 @@ export function useAppStore() {
   const [plannedPayments, setPlannedPayments] = useState<PlannedPayment[]>([])
   const [monthlyReports, setMonthlyReports] = useState<MonthlyReportMeta[]>([])
   const [settingsAuditLog, setSettingsAuditLog] = useState<SettingsAuditEntry[]>([])
+  const [workspaceMetrics, setWorkspaceMetrics] = useState(emptyWorkspaceMetrics)
   const [isBusy, setIsBusy] = useState(false)
   const [canStartSubscriptions, setCanStartSubscriptions] = useState(false)
   const bootstrappedOwnerRef = useRef<string | null>(null)
   const localBypassAttemptedRef = useRef(false)
   const vendorFallbackLoadedRef = useRef(false)
+  const metricsSyncInFlightRef = useRef(false)
 
   useEffect(() => {
     function handleNetworkChange() {
@@ -81,6 +85,7 @@ export function useAppStore() {
       setPlannedPayments([])
       setMonthlyReports([])
       setSettingsAuditLog([])
+      setWorkspaceMetrics(emptyWorkspaceMetrics)
       setCanStartSubscriptions(!nextUser)
     })
   }, [])
@@ -193,6 +198,7 @@ export function useAppStore() {
       setSettingsAuditLog,
       setUsers,
       setVendors,
+      setWorkspaceMetrics,
       vendorFallbackLoadedRef,
     })
   }, [authUser, canStartSubscriptions])
@@ -249,6 +255,55 @@ export function useAppStore() {
     void seedDefaultStore()
   }, [authUser, financeData.stores.length, loadedCollections.stores])
 
+  useEffect(() => {
+    async function syncWorkspaceMetrics() {
+      if (!authUser || !canStartSubscriptions) return
+      if (!Object.entries(loadedCollections).every(([key, value]) => key === 'workspaceMetrics' || value)) return
+      if (metricsSyncInFlightRef.current) return
+
+      const nextMetrics = deriveWorkspaceMetrics({
+        appSettings,
+        cashTransfers,
+        dailyCashouts,
+        financeData,
+        loans,
+        monthlyReports,
+        plannedPayments,
+        users,
+        vendors,
+      })
+      const currentComparable = JSON.stringify({ ...workspaceMetrics, updatedAt: null })
+      const nextComparable = JSON.stringify({ ...nextMetrics, updatedAt: null })
+      if (currentComparable === nextComparable) return
+
+      metricsSyncInFlightRef.current = true
+      try {
+        await setDoc(doc(db, 'appMetadata', 'workspaceMetrics'), {
+          ...nextMetrics,
+          updatedAt: nowIso(),
+        })
+      } finally {
+        metricsSyncInFlightRef.current = false
+      }
+    }
+
+    void syncWorkspaceMetrics()
+  }, [
+    appSettings,
+    authUser,
+    canStartSubscriptions,
+    cashTransfers,
+    dailyCashouts,
+    financeData,
+    loadedCollections,
+    loans,
+    monthlyReports,
+    plannedPayments,
+    users,
+    vendors,
+    workspaceMetrics,
+  ])
+
   const canImportLegacyData = useMemo(() => {
     if (!authUser || !collectionsReady) return false
     const legacyPayload = readLegacyImportPayload()
@@ -297,6 +352,7 @@ export function useAppStore() {
       nameDirectory,
       plannedPayments,
       settingsAuditLog,
+      workspaceMetrics,
       users,
       vendors,
     }),
@@ -349,6 +405,7 @@ export function useAppStore() {
     signOutCurrentUser: actions.signOutCurrentUser,
     users,
     vendors,
+    workspaceMetrics,
     deletePurchaseEntry: actions.deletePurchaseEntry,
     deleteSettingsAuditEntry: actions.deleteSettingsAuditEntry,
     ensureNameInDirectory: actions.ensureNameInDirectory,

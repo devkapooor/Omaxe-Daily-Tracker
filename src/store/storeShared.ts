@@ -17,6 +17,7 @@ import type {
   UserAccount,
   VendorRecord,
 } from '../domain/appTypes'
+import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
 
 export const singleStoreId = 'single-store'
 export const defaultMonthlyOperationalExpense = 500000
@@ -64,7 +65,8 @@ export type LoadedCollections = Record<
   | 'monthlyReports'
   | 'settingsAudit'
   | 'nameDirectory'
-  | 'appSettings',
+  | 'appSettings'
+  | 'workspaceMetrics',
   boolean
 >
 
@@ -84,6 +86,7 @@ export const initialLoadedCollections: LoadedCollections = {
   settingsAudit: false,
   nameDirectory: false,
   appSettings: false,
+  workspaceMetrics: false,
 }
 
 export const emptyFinanceData: FinanceData = {
@@ -114,6 +117,87 @@ export const defaultAppSettings: AppSettings = {
   },
 }
 
+export const emptyWorkspaceMetrics: WorkspaceMetrics = {
+  updatedAt: null,
+  generatedForDate: '',
+  dashboardRanges: {
+    yesterday: {
+      from: '',
+      to: '',
+      sales: 0,
+      expenses: 0,
+      salesLastUpdated: null,
+      expensesLastUpdated: null,
+    },
+    mtd: {
+      from: '',
+      to: '',
+      sales: 0,
+      expenses: 0,
+      salesLastUpdated: null,
+      expensesLastUpdated: null,
+    },
+  },
+  registerToday: {
+    cashout: 0,
+    paymentPaid: 0,
+    paymentReceived: 0,
+    paymentNet: 0,
+  },
+  projections: {
+    averageDailySales: 0,
+    projectedMonthlySales: 0,
+    monthlyOperationalExpense: defaultMonthlyOperationalExpense,
+    marginPercentage: defaultMarginPercentage,
+    projectedMarginValue: 0,
+    projectedProfit: 0,
+    projectedLoss: 0,
+  },
+  latestClosedDaySummary: {
+    date: null,
+    totalSales: 0,
+    cashSales: 0,
+    upiSales: 0,
+    creditSales: 0,
+    returns: 0,
+    cashExpenses: 0,
+    cashToHand: 0,
+    transfersToday: 0,
+  },
+  liabilities: {
+    totalLoans: 0,
+    totalVendorOutstanding: 0,
+    openLoanCount: 0,
+  },
+  vendorOutstandingByName: {},
+  pendingCash: {
+    bankTotal: 0,
+    legacyBalances: [],
+    legacyCashoutEntries: [],
+    legacyTransferEntries: [],
+    migratedCashoutEntries: [],
+    userBalances: [],
+    totalCounterCash: 0,
+  },
+  dashboardTables: {
+    month: '',
+    expenseByCategory: [],
+    monthlyPurchaseTotal: 0,
+    vendorPaymentTotal: 0,
+    paymentByMode: [],
+  },
+  planner: {
+    totalCounterCash: 0,
+    groupedSchedule: [],
+  },
+  monthlyReports: {
+    months: [],
+    defaultSelectedMonth: null,
+    summaries: [],
+    detailsByMonth: {},
+  },
+}
+
 export type AppStoreSetters = {
   setAuthError: Dispatch<SetStateAction<string | null>>
   setCashTransfers: Dispatch<SetStateAction<CashTransfer[]>>
@@ -129,6 +213,7 @@ export type AppStoreSetters = {
   setSettingsAuditLog: Dispatch<SetStateAction<SettingsAuditEntry[]>>
   setUsers: Dispatch<SetStateAction<UserAccount[]>>
   setVendors: Dispatch<SetStateAction<VendorRecord[]>>
+  setWorkspaceMetrics: Dispatch<SetStateAction<WorkspaceMetrics>>
 }
 
 export function sortByCreatedAtDesc<T extends { createdAt: string }>(items: T[]) {
@@ -245,4 +330,5 @@ export type StoreCollectionState = {
   settingsAuditLog: SettingsAuditEntry[]
   users: UserAccount[]
   vendors: VendorRecord[]
+  workspaceMetrics: WorkspaceMetrics
 }
