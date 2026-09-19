@@ -21,7 +21,6 @@ import { DailyCashoutForm } from '@/features/cashout/components/DailyCashoutForm
 import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
-import { MonthlyReportsPage } from '@/features/monthly-reports/components/MonthlyReportsPage'
 import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlannerPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { ExpenseForm } from '@/features/register/components/ExpenseForm'
@@ -99,7 +98,6 @@ type AppWorkspaceProps = {
   marginPercentage: number
   monthlyOperationalExpense: number
   normalizedLoans: LoanEntry[]
-  monthlyReportMetrics: WorkspaceMetrics['monthlyReports']
   openLoanCount: number
   plannerMetrics: WorkspaceMetrics['planner']
   projectedLoss: number
@@ -123,7 +121,6 @@ type AppWorkspaceProps = {
   saveCashout: (draft: CashoutDraft) => Promise<void>
   saveDailyCashoutEntry: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
-  saveMonthlyReportMargin: (month: string, marginPercentage: number, actor: string) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
@@ -194,7 +191,6 @@ export function AppWorkspace({
   marginPercentage,
   monthlyOperationalExpense,
   normalizedLoans,
-  monthlyReportMetrics,
   openLoanCount,
   plannerMetrics,
   projectedLoss,
@@ -210,7 +206,6 @@ export function AppWorkspace({
   saveCashout,
   saveDailyCashoutEntry,
   saveLoanEntry,
-  saveMonthlyReportMargin,
   saveOperationalSettings,
   savePayment,
   savePlannedPayment,
@@ -301,16 +296,6 @@ export function AppWorkspace({
               vendorPaymentTotal={dashboardTables.vendorPaymentTotal}
             />
           </section>
-        ) : null}
-
-        {activePage === 'monthlyReports' && currentUser.role === 'owner' ? (
-          <MonthlyReportsPage
-            currentUserName={currentUser.name}
-            monthlyReportMetrics={monthlyReportMetrics}
-            openLoanCount={openLoanCount}
-            onSaveMonthlyMargin={saveMonthlyReportMargin}
-            onToast={showToast}
-          />
         ) : null}
 
         {activePage === 'cashout' ? (

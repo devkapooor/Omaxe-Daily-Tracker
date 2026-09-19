@@ -8,7 +8,7 @@ export type UserAccount = AppUser & {
   disabled?: boolean
 }
 
-export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'monthlyReports' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'logs' | 'settings'
 
 export type LoanStatus = 'Open' | 'Settled'
 

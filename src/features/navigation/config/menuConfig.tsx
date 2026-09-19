@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   LogOut,
   Logs,
-  CalendarDays,
   ReceiptText,
   Settings,
   Users,
@@ -38,8 +37,6 @@ export function pageTitle(page: Page) {
       return 'Cash Movement'
     case 'planner':
       return 'Payment Planner'
-    case 'monthlyReports':
-      return 'Monthly Reports'
     case 'logs':
       return 'Logs'
     case 'settings':
@@ -116,15 +113,6 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
   }
 
   if (currentUser.role === 'owner') {
-    items.push({
-      icon: <CalendarDays className="size-4 shrink-0" />,
-      label: 'Monthly Reports',
-      page: 'monthlyReports',
-      gradient: '',
-      hoverClass: '',
-      activeClass: 'bg-secondary text-foreground',
-      action: 'page',
-    })
     items.push({
       icon: <Logs className="size-4 shrink-0" />,
       label: 'Logs',

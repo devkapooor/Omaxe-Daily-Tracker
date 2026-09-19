@@ -17,7 +17,7 @@ import { AppBackground } from '@/shared/ui/background-components'
 const ACTIVE_PAGE_STORAGE_KEY = 'alphahub.active-page'
 
 function isPage(value: string | null): value is Page {
-  return value === 'dashboard' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'monthlyReports' || value === 'logs' || value === 'settings'
+  return value === 'dashboard' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'logs' || value === 'settings'
 }
 
 export default function App() {
@@ -59,7 +59,6 @@ export default function App() {
     saveCashout,
     saveDailyCashoutEntry,
     saveLoanEntry,
-    saveMonthlyReportMargin,
     saveOperationalSettings,
     savePayment,
     savePurchase,
@@ -87,7 +86,6 @@ export default function App() {
     latestClosedDay,
     latestClosedDaySummary,
     monthlyOperationalExpense,
-    monthlyReportMetrics,
     marginPercentage,
     normalizedLoans,
     openLoanCount,
@@ -237,7 +235,6 @@ export default function App() {
         latestClosedDaySummary={latestClosedDaySummary}
         marginPercentage={marginPercentage}
         monthlyOperationalExpense={monthlyOperationalExpense}
-        monthlyReportMetrics={monthlyReportMetrics}
         normalizedLoans={normalizedLoans}
         openLoanCount={openLoanCount}
         onLogout={() => void signOutCurrentUser()}
@@ -253,7 +250,6 @@ export default function App() {
         saveCashout={saveCashout}
         saveDailyCashoutEntry={saveDailyCashoutEntry}
         saveLoanEntry={saveLoanEntry}
-        saveMonthlyReportMargin={saveMonthlyReportMargin}
         saveOperationalSettings={saveOperationalSettings}
         savePayment={savePayment}
         savePlannedPayment={savePlannedPayment}
