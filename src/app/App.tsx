@@ -88,7 +88,6 @@ export default function App() {
     monthlyOperationalExpense,
     marginPercentage,
     normalizedLoans,
-    openLoanCount,
     pendingCashNow,
     plannerMetrics,
     projectedMonthlySales,
@@ -236,7 +235,6 @@ export default function App() {
         marginPercentage={marginPercentage}
         monthlyOperationalExpense={monthlyOperationalExpense}
         normalizedLoans={normalizedLoans}
-        openLoanCount={openLoanCount}
         onLogout={() => void signOutCurrentUser()}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}

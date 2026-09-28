@@ -98,7 +98,6 @@ type AppWorkspaceProps = {
   marginPercentage: number
   monthlyOperationalExpense: number
   normalizedLoans: LoanEntry[]
-  openLoanCount: number
   plannerMetrics: WorkspaceMetrics['planner']
   projectedLoss: number
   projectedProfit: number
@@ -191,7 +190,6 @@ export function AppWorkspace({
   marginPercentage,
   monthlyOperationalExpense,
   normalizedLoans,
-  openLoanCount,
   plannerMetrics,
   projectedLoss,
   projectedProfit,
