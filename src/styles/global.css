@@ -2,6 +2,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@keyframes aurora {
+  from {
+    background-position: 50% 50%, 50% 50%;
+  }
+
+  to {
+    background-position: 350% 50%, 350% 50%;
+  }
+}
+
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --color-background: #101113;

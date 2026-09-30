@@ -13,6 +13,7 @@ import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LoginScreen } from '@/features/auth/components/LoginScreen'
 import { OfflineScreen } from '@/features/auth/components/OfflineScreen'
 import { AppBackground } from '@/shared/ui/background-components'
+import { AuroraBackground } from '@/shared/ui/aurora-background'
 
 const ACTIVE_PAGE_STORAGE_KEY = 'alphahub.active-page'
 
@@ -88,7 +89,6 @@ export default function App() {
     monthlyOperationalExpense,
     marginPercentage,
     normalizedLoans,
-    openLoanCount,
     pendingCashNow,
     plannerMetrics,
     projectedMonthlySales,
@@ -177,7 +177,7 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <AppBackground>
+      <AuroraBackground>
         <LoginScreen
           authError={authError}
           isBusy={isBusy}
@@ -186,7 +186,7 @@ export default function App() {
             setToast(null)
           }}
         />
-      </AppBackground>
+      </AuroraBackground>
     )
   }
 
@@ -236,7 +236,6 @@ export default function App() {
         marginPercentage={marginPercentage}
         monthlyOperationalExpense={monthlyOperationalExpense}
         normalizedLoans={normalizedLoans}
-        openLoanCount={openLoanCount}
         onLogout={() => void signOutCurrentUser()}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}

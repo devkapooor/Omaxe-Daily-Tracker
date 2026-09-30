@@ -32,6 +32,7 @@ import { DailyCashoutFinalSummaryPanel } from '@/features/dashboard/components/D
 import { DashboardRangeFilter } from '@/features/dashboard/components/DashboardRangeFilter'
 import { DashboardTables } from '@/features/dashboard/components/DashboardTables'
 import { MonthlyProjectionPanel } from '@/features/dashboard/components/MonthlyProjectionPanel'
+import { MonthlyCashCollectedCard } from '@/features/dashboard/components/MonthlyCashCollectedCard'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
 import { Button } from '@/shared/ui/button'
 import { GlowCard } from '@/shared/ui/spotlight-card'
@@ -98,7 +99,6 @@ type AppWorkspaceProps = {
   marginPercentage: number
   monthlyOperationalExpense: number
   normalizedLoans: LoanEntry[]
-  openLoanCount: number
   plannerMetrics: WorkspaceMetrics['planner']
   projectedLoss: number
   projectedProfit: number
@@ -191,7 +191,6 @@ export function AppWorkspace({
   marginPercentage,
   monthlyOperationalExpense,
   normalizedLoans,
-  openLoanCount,
   plannerMetrics,
   projectedLoss,
   projectedProfit,
@@ -274,6 +273,7 @@ export function AppWorkspace({
               projectedProfit={projectedProfit}
               projectedLoss={projectedLoss}
             />
+            <MonthlyCashCollectedCard dailyCashouts={dailyCashouts} />
             <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
               <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
