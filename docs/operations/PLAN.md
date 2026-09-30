@@ -4,6 +4,8 @@
 
 Code, docs, and release notes must move together. Any change to auth, navigation, storage, structure, deployment, or product behavior should update the affected markdown files in the same pass.
 
+Existing production financial records are immutable during development, testing, deployment, migration, and upgrade work. Production checks are read-only; mutation tests must use the Firebase Emulator Suite or isolated non-production data. A production record may change only through a deliberate action by an authorized user in an approved live workflow.
+
 ## Current Goal
 
 Keep the tagged V1 AlphaHub baseline stable while improving maintainability, release discipline, and operational clarity.

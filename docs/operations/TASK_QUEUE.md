@@ -2,6 +2,8 @@
 
 Use this file as the live execution queue and status board for the current AlphaHub baseline.
 
+The approved future upgrade sequence is maintained in [PLANNED_UPGRADES.md](./PLANNED_UPGRADES.md).
+
 ## Current Phase
 
 V1 stabilization and disciplined release management for:
@@ -36,11 +38,9 @@ V1 stabilization and disciplined release management for:
 
 ## Backlog
 
-- [ ] Add edit and delete flows for key finance records.
-- [ ] Add stronger reusable validation helpers across forms.
-- [ ] Add critical-path tests for finance summaries, payment allocation, and planner calculations.
+- [ ] Deliver the approved upgrade batch in `PLANNED_UPGRADES.md`.
+- [ ] Add stronger reusable validation helpers as part of the relevant approved workflow upgrades.
 - [ ] Improve narrow desktop and tablet QA coverage.
-- [ ] Add export or download support where operationally useful.
 - [ ] Evaluate whether `uiHelpers.ts` should be split further without creating churn.
 - [ ] Add a dedicated admin-facing cash identity diagnostics or migration report screen if future live cleanup is needed.
 

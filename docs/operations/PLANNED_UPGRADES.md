@@ -1,0 +1,93 @@
+# Planned Upgrades
+
+This is the master planning sheet for approved AlphaHub upgrades. Update the status and implementation notes here as each upgrade moves through design, development, verification, and release.
+
+## Delivery Rules
+
+- Never modify, delete, migrate, backfill, or replace existing production financial records during development, testing, deployment, or upgrade work.
+- Treat production verification as read-only. Run every mutation test in the Firebase Emulator Suite or against clearly isolated non-production data.
+- Allow production records to change only through a deliberate action by an authorized user in an approved live financial workflow; never run automated correction or cleanup writes against live data.
+- Document how an upgrade preserves existing production data before implementation begins.
+- Verify Firebase Spark compatibility before implementation. If any part requires Blaze, stop and document the reason, operating cost, and Spark alternative before requesting a separate decision.
+- Deploy Firestore rules before UI changes that depend on tighter permissions.
+- Keep implementation commits focused and update operational documentation with each release.
+- Use non-destructive verification against production data; use tests or emulator coverage for mutation and permission scenarios.
+
+## Approved Upgrade Batch
+
+| ID | Upgrade | Priority | Planned release | Plan requirement | Status | Blaze required |
+| --- | --- | --- | --- | --- | --- | --- |
+| UP-001 | Permission hardening | Critical | Release 1 | Enforce owner, manager, and billing capabilities in Firestore rules; protect immutable identity and audit fields; add rules tests. | Planned | No |
+| UP-002 | Audited finance record corrections | Critical | Release 2 | Add owner-controlled correction or deletion flows for expenses, purchases, vendor payments, loans, and cash transfers, with before/after snapshots and reasons. | Planned | No |
+| UP-003 | Operations Action Centre | High | Release 3 | Add a separate workspace for missing cashouts, pending correction requests, upcoming cheques, and overdue planned payments without adding dashboard clutter. | Planned | No |
+| UP-004 | Export Centre | High | Release 3 | Allow owner-filtered CSV downloads for sales, expenses, purchases, payments, cashouts, and cash movements, including the applied date range. | Planned | No |
+| UP-005 | Automated finance and permission tests | Critical | Releases 1-3 | Cover dashboard totals, cash balances, payment allocation, correction workflows, date boundaries, and Firestore role enforcement. | Planned | No |
+| UP-006 | Bounded and filtered Logs loading | High | Release 1 | Default Logs to the latest 7 days; provide 15, 30, and 90 day presets plus a custom date range; query only the active tab and paginate older records instead of downloading all history. | Planned | No |
+
+## Implementation Readiness
+
+| Upgrade | Readiness | Next implementation step |
+| --- | --- | --- |
+| UP-001 Permission hardening | Ready for implementation | Capture the current role-action matrix, add Firestore emulator tests, then deploy rules before dependent UI changes. |
+| UP-005 Automated finance and permission tests | Ready for implementation with UP-001 | Establish the emulator test harness and add permission and calculation regression coverage without touching production data. |
+| UP-006 Bounded and filtered Logs loading | Ready for implementation after query design validation | Separate Logs queries from shared calculation subscriptions, confirm required indexes, then add range filters and pagination. |
+| UP-002 Audited finance record corrections | Planned after Release 1 | Finalize per-record correction invariants and build only after hardened permissions and tests are in place. |
+| UP-003 Operations Action Centre | Planned after Release 2 | Define missing and overdue rules using read-only derived data. |
+| UP-004 Export Centre | Planned after Release 2 | Finalize export columns and role visibility; exports remain client-side and read-only. |
+
+## Acceptance Criteria
+
+### UP-001 Permission Hardening
+
+- Firestore rules match the capabilities exposed to each role in the UI.
+- Staff cannot directly update or delete protected financial records outside approved workflows.
+- Audit history cannot be changed or deleted by ordinary staff.
+- Emulator tests prove allowed and denied operations for owner, manager, billing, disabled, and unauthenticated users.
+
+### UP-002 Audited Finance Record Corrections
+
+- Every correction records the actor, reason, timestamp, before snapshot, and resulting values.
+- Owner approval is required where staff request a correction.
+- Related balances and allocations are recalculated atomically.
+- Stale revisions and duplicate pending requests are rejected safely.
+
+### UP-003 Operations Action Centre
+
+- The page highlights missing recent cashouts, pending correction requests, upcoming cheques, and overdue planned payments.
+- Each item links to the existing workflow where it can be resolved.
+- The dashboard remains focused on monthly performance and current financial position.
+
+### UP-004 Export Centre
+
+- Exports respect collection, date range, and visible filters.
+- Currency values, dates, record IDs, and audit identity fields are included in a consistent format.
+- Exporting does not alter Firestore data and works on desktop and mobile browsers.
+
+### UP-005 Automated Tests
+
+- Domain calculations and high-risk financial actions have deterministic tests.
+- Firestore rules have emulator coverage before deployment.
+- Build, source ESLint, tests, and production smoke checks are required for each release.
+
+### UP-006 Bounded and Filtered Logs Loading
+
+- Opening Logs loads only the active tab and defaults to the latest 7 calendar days in Asia/Kolkata.
+- Presets for 15, 30, and 90 days and a custom start/end range are available on every log tab.
+- Older records load through pagination or an explicit `Load more` action; changing tabs does not eagerly query every tab.
+- Search operates within the loaded date range and clearly displays the active range and result count.
+- Current dashboard, cash, vendor, loan, and planner calculations remain complete and unchanged; any shared data dependency is separated from the bounded Logs query before global subscriptions are reduced.
+- Required Firestore indexes are documented and deployed with the feature.
+
+## Release Order
+
+1. Release 1: UP-001, the first UP-005 rules tests, and UP-006.
+2. Release 2: UP-002 with its remaining correction and calculation tests from UP-005.
+3. Release 3: UP-003 and UP-004 with end-to-end regression coverage.
+
+## Deferred Suggestions
+
+These are not part of the approved batch and require a future decision:
+
+- Vendor payment aging with bill due dates and overdue balances.
+- Customer credit ledger with customer-level sales, collections, and outstanding balances.
+- Bundle splitting and expanded tablet or narrow-desktop QA beyond work required by the approved upgrades.

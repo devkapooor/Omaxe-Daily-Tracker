@@ -2,6 +2,12 @@
 
 Single-store finance operations app for the AlphaHub workflow.
 
+## Production Data Safety Rule
+
+Existing production financial records must never be modified, deleted, migrated, backfilled, or replaced as a side effect of development, testing, deployment, or an upgrade. Production verification is read-only. Any test that writes data must use the Firebase Emulator Suite or clearly isolated non-production data.
+
+Only a deliberate action by an authorized user through an approved live financial workflow may change a production record. Every future upgrade must document and verify that it preserves existing production data before implementation begins.
+
 ## Current Baseline
 
 - Stable release tag: `v1.0.0`
