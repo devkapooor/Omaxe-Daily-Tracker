@@ -1,5 +1,20 @@
 # Version Log
 
+## Live Update - 2026-10-01
+
+- Commit: `ed1b933`
+- Deployment: Firebase Hosting and Firestore Rules - `https://alphahub-f137b.web.app`
+- Summary:
+  - Hardened Firestore access for owner, manager, billing, disabled, and unauthenticated users.
+  - Restricted billing cash movements to the signed-in holder while preserving manager and owner operations.
+  - Added emulator-only permission tests covering eight allow and deny scenarios.
+  - Added adaptive Logs ranges for 7, 15, 30, and 90 days plus custom dates and incremental loading.
+  - Formalized shared viewport-responsive layouts rather than device-specific implementations.
+- Verification:
+  - Unit tests, source ESLint, production build, and Firestore emulator rules tests passed.
+  - Production smoke testing was read-only and confirmed the deployed asset bundle returned HTTP 200.
+  - No production financial records were modified, migrated, backfilled, or used as test data.
+
 ## Live Update - 2026-06-05
 
 - Deployment: Firebase Hosting - `https://alphahub-f137b.web.app`

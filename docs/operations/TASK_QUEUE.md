@@ -46,6 +46,9 @@ V1 stabilization and disciplined release management for:
 
 ## Done
 
+- [x] Deploy Release 1 permission hardening with emulator-tested role enforcement.
+- [x] Add adaptive 7, 15, 30, and 90 day Logs ranges with custom dates and incremental loading.
+- [x] Establish viewport-driven responsive layout rules instead of device-specific implementations.
 - [x] Move the app to Firebase-first live data flow.
 - [x] Replace public signup with owner-created staff accounts.
 - [x] Consolidate navigation around dashboard, directory, register, cashout, movement, planner, logs, and settings.
