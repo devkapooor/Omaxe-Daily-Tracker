@@ -269,7 +269,7 @@ export function AppWorkspace({
               projectedProfit={projectedProfit}
               projectedLoss={projectedLoss}
             />
-            <MonthlyCashCollectedCard cashTransfers={cashTransfers} dailyCashouts={dailyCashouts} users={users} />
+            <MonthlyCashCollectedCard dailyCashouts={dailyCashouts} />
             <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
               <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
