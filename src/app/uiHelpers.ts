@@ -7,6 +7,7 @@ export type AppToast = {
 }
 
 export type DashboardRange = 'yesterday' | 'mtd'
+export type DashboardMonthOffset = 0 | 1 | 2
 export type MovementHistoryRange = 'today' | DashboardRange | 'custom'
 export const IST_TIMEZONE = 'Asia/Kolkata'
 

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/appStore'
 import { isLocalAuthBypassEnabled } from '@/shared/lib/firebase'
 import {
   type AppToast,
-  type DashboardRange,
+  type DashboardMonthOffset,
   resolveActivePage,
 } from '@/app/uiHelpers'
 import { useDashboardMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -72,34 +72,28 @@ export default function App() {
     const storedPage = window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY)
     return isPage(storedPage) ? storedPage : 'dashboard'
   })
-  const [dashboardRange, setDashboardRange] = useState<DashboardRange>('yesterday')
+  const [dashboardMonthOffset, setDashboardMonthOffset] = useState<DashboardMonthOffset>(0)
   const [toast, setToast] = useState<AppToast | null>(null)
   const [isPageLoaderVisible, setIsPageLoaderVisible] = useState(false)
   const [isPageTransitionPending, startPageTransition] = useTransition()
 
   const {
-    dashboardExpenseTotal,
-    dashboardLastUpdated,
-    dashboardSales,
-    averageDailySales,
+    monthlyPerformance,
     directoryOptions,
     latestClosedDay,
     latestClosedDaySummary,
-    monthlyOperationalExpense,
     marginPercentage,
     normalizedLoans,
     pendingCashNow,
     plannerMetrics,
-    projectedMonthlySales,
-    projectedProfit,
-    projectedLoss,
     totalVendorOutstanding,
     todayCashout,
     todayPaymentNet,
     totalLoans,
     vendorOutstandingByName,
   } = useDashboardMetrics({
-    dashboardRange,
+    dashboardMonthOffset,
+    dailyCashouts,
     data,
     loans,
     nameDirectory,
@@ -209,17 +203,13 @@ export default function App() {
       <AppWorkspace
         activePage={resolvedActivePage}
         appSettings={appSettings}
-        averageDailySales={averageDailySales}
         canImportLegacyData={canImportLegacyData}
         cashTransfers={cashTransfers}
         changeOwnPassword={changeOwnPassword}
         createUserAccount={createUserAccount}
         currentUser={currentUser}
         dailyCashouts={dailyCashouts}
-        dashboardExpenseTotal={dashboardExpenseTotal}
-        dashboardLastUpdated={dashboardLastUpdated}
-        dashboardRange={dashboardRange}
-        dashboardSales={dashboardSales}
+        dashboardMonthOffset={dashboardMonthOffset}
         data={data}
         deleteDailyCashoutEntry={deleteDailyCashoutEntry}
         deleteLoanEntry={deleteLoanEntry}
@@ -233,16 +223,13 @@ export default function App() {
         latestClosedDay={latestClosedDay}
         latestClosedDaySummary={latestClosedDaySummary}
         marginPercentage={marginPercentage}
-        monthlyOperationalExpense={monthlyOperationalExpense}
+        monthlyPerformance={monthlyPerformance}
         normalizedLoans={normalizedLoans}
         onLogout={() => void signOutCurrentUser()}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}
         plannerMetrics={plannerMetrics}
         plannedPayments={plannedPayments}
-        projectedMonthlySales={projectedMonthlySales}
-        projectedProfit={projectedProfit}
-        projectedLoss={projectedLoss}
         renamePartyInDirectory={renamePartyInDirectory}
         saveCashTransfer={saveCashTransfer}
         saveCashout={saveCashout}
@@ -254,7 +241,7 @@ export default function App() {
         savePlannerBankBalance={savePlannerBankBalance}
         savePurchase={savePurchase}
         saveVendor={saveVendor}
-        setDashboardRange={setDashboardRange}
+        setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}
         showToast={showToast}
         toast={toast}

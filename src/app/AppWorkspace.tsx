@@ -5,13 +5,12 @@ import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/a
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
-  type DashboardRange,
+  type DashboardMonthOffset,
   type LegacyCashBalance,
   type PendingCashUserBalance,
   canOpenPlanner,
   canOpenSettings,
   formatDisplayDate,
-  formatDisplayDateTime,
   legacyCashHolderLabel,
   money,
 } from '@/app/uiHelpers'
@@ -30,8 +29,8 @@ import { PurchaseForm } from '@/features/register/components/PurchaseForm'
 import { VendorPaymentForm } from '@/features/register/components/VendorPaymentForm'
 import { DashboardRangeFilter } from '@/features/dashboard/components/DashboardRangeFilter'
 import { MonthlyProjectionPanel } from '@/features/dashboard/components/MonthlyProjectionPanel'
-import { MonthlyCashCollectedCard } from '@/features/dashboard/components/MonthlyCashCollectedCard'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
+import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
 import { GlowCard } from '@/shared/ui/spotlight-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
@@ -59,15 +58,7 @@ type AppWorkspaceProps = {
   }, actor: string) => Promise<unknown>
   currentUser: AppUser
   dailyCashouts: DailyCashoutEntry[]
-  dashboardExpenseTotal: number
-  dashboardLastUpdated: {
-    sales: string | null
-    expenses: string | null
-    loans: string | null
-    fixed: string | null
-  }
-  dashboardRange: DashboardRange
-  dashboardSales: number
+  dashboardMonthOffset: DashboardMonthOffset
   data: FinanceData
   deleteDailyCashoutEntry: (entryId: string) => Promise<void>
   deleteLoanEntry: (loanId: string) => Promise<void>
@@ -94,11 +85,9 @@ type AppWorkspaceProps = {
     transfersToday: number
   }
   marginPercentage: number
-  monthlyOperationalExpense: number
+  monthlyPerformance: MonthlyPerformanceMetrics
   normalizedLoans: LoanEntry[]
   plannerMetrics: WorkspaceMetrics['planner']
-  projectedLoss: number
-  projectedProfit: number
   onLogout: () => void
   onPageChange: (page: Page) => void
   pendingCashNow: {
@@ -111,7 +100,6 @@ type AppWorkspaceProps = {
     totalCounterCash: number
   }
   plannedPayments: PlannedPayment[]
-  projectedMonthlySales: number
   renamePartyInDirectory: (previousName: string, nextName: string) => Promise<boolean>
   savedPartyNames: string[]
   saveCashTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
@@ -124,7 +112,7 @@ type AppWorkspaceProps = {
   savePlannerBankBalance: (value: number, actor: string) => Promise<void>
   savePurchase: (draft: PurchaseDraft) => Promise<void>
   saveVendor: (vendor: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  setDashboardRange: Dispatch<SetStateAction<DashboardRange>>
+  setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
   showToast: (message: string) => void
   toast: AppToast | null
@@ -135,12 +123,6 @@ type AppWorkspaceProps = {
   users: UserAccount[]
   vendors: VendorRecord[]
   vendorOutstandingByName: Map<string, number>
-  averageDailySales: number
-}
-
-function formatLastUpdated(value: string | null) {
-  if (!value) return 'No updates'
-  return formatDisplayDateTime(value)
 }
 
 function shouldConfirmAction(title: string, detailLines: string[], warningLine?: string) {
@@ -161,17 +143,13 @@ function shouldConfirmAction(title: string, detailLines: string[], warningLine?:
 export function AppWorkspace({
   activePage,
   appSettings,
-  averageDailySales,
   canImportLegacyData,
   cashTransfers,
   changeOwnPassword,
   createUserAccount,
   currentUser,
   dailyCashouts,
-  dashboardExpenseTotal,
-  dashboardLastUpdated,
-  dashboardRange,
-  dashboardSales,
+  dashboardMonthOffset,
   data,
   deleteDailyCashoutEntry,
   deleteLoanEntry,
@@ -185,16 +163,13 @@ export function AppWorkspace({
   latestClosedDay,
   latestClosedDaySummary,
   marginPercentage,
-  monthlyOperationalExpense,
+  monthlyPerformance,
   normalizedLoans,
   plannerMetrics,
-  projectedLoss,
-  projectedProfit,
   onLogout,
   onPageChange,
   pendingCashNow,
   plannedPayments,
-  projectedMonthlySales,
   renamePartyInDirectory,
   savedPartyNames,
   saveCashTransfer,
@@ -207,7 +182,7 @@ export function AppWorkspace({
   savePlannerBankBalance,
   savePurchase,
   saveVendor,
-  setDashboardRange,
+  setDashboardMonthOffset,
   settingsAuditLog,
   showToast,
   toast,
@@ -261,21 +236,23 @@ export function AppWorkspace({
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
           <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-            <DashboardRangeFilter value={dashboardRange} onChange={setDashboardRange} />
+            <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">Monthly Performance</span>
+                <strong className="mt-0.5 block text-lg font-black text-foreground">{monthlyPerformance.monthLabel}</strong>
+              </div>
+              <DashboardRangeFilter value={dashboardMonthOffset} onChange={setDashboardMonthOffset} />
+            </div>
             <MonthlyProjectionPanel
-              averageDailySales={averageDailySales}
-              projectedMonthlySales={projectedMonthlySales}
+              performance={monthlyPerformance}
               marginPercentage={marginPercentage}
-              projectedProfit={projectedProfit}
-              projectedLoss={projectedLoss}
             />
-            <MonthlyCashCollectedCard dailyCashouts={dailyCashouts} />
-            <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
-              <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
-              <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
-              <SummaryCard label="Open Loan Balance" value={money(totalLoans)} updated={formatLastUpdated(dashboardLastUpdated.loans)} />
-              <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
-              <SummaryCard label="Monthly Operational Expenses" value={money(monthlyOperationalExpense)} updated={formatLastUpdated(dashboardLastUpdated.fixed)} />
+            <div>
+              <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Current Financial Position</span>
+              <div className="grid gap-1.5 md:grid-cols-2">
+                <SummaryCard label="Open Loan Balance" value={money(totalLoans)} />
+                <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
+              </div>
             </div>
           </section>
         ) : null}
