@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { calculateCashoutAudit, drawerTotalFromDenominations, formatDrawerParticulars } from '@/domain/cashoutCorrections'
 
 type DailyCashoutFormProps = {
   currentUserId: string
@@ -62,14 +63,16 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
   const cashExpenseValue = numberValue(cashExpense)
   const systemAuditValue = numberValue(systemAudit)
   const expectedCash = cashSaleValue - cashExpenseValue
-  const drawerTotal =
-    numberValue(drawerState.denom500) * 500 +
-    numberValue(drawerState.denom200) * 200 +
-    numberValue(drawerState.denom100) * 100 +
-    numberValue(drawerState.denom50) * 50 +
-    numberValue(drawerState.denom20) * 20 +
-    numberValue(drawerState.denom10) * 10 +
-    numberValue(drawerState.change)
+  const drawerDenominations = {
+    denom500: numberValue(drawerState.denom500),
+    denom200: numberValue(drawerState.denom200),
+    denom100: numberValue(drawerState.denom100),
+    denom50: numberValue(drawerState.denom50),
+    denom20: numberValue(drawerState.denom20),
+    denom10: numberValue(drawerState.denom10),
+    change: numberValue(drawerState.change),
+  }
+  const drawerTotal = drawerTotalFromDenominations(drawerDenominations)
 
   function resetForm() {
     setEntryDate(today())
@@ -107,26 +110,8 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
     event.preventDefault()
     if (!pendingDraft) return
 
-    const auditDifference = pendingDraft.systemAudit - drawerTotal
-    const auditStatus =
-      auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
-    const auditMessage =
-      auditDifference > 0
-        ? `WARNING: Cash is less by ${auditDifference}.`
-        : auditDifference < 0
-          ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
-          : 'Cash matches the system audit.'
-
-    const drawerParticulars = [
-      `500 x ${numberValue(drawerState.denom500)} = ${numberValue(drawerState.denom500) * 500}`,
-      `200 x ${numberValue(drawerState.denom200)} = ${numberValue(drawerState.denom200) * 200}`,
-      `100 x ${numberValue(drawerState.denom100)} = ${numberValue(drawerState.denom100) * 100}`,
-      `50 x ${numberValue(drawerState.denom50)} = ${numberValue(drawerState.denom50) * 50}`,
-      `20 x ${numberValue(drawerState.denom20)} = ${numberValue(drawerState.denom20) * 20}`,
-      `10 x ${numberValue(drawerState.denom10)} = ${numberValue(drawerState.denom10) * 10}`,
-      `Change = ${numberValue(drawerState.change)}`,
-      `Total = ${drawerTotal}`,
-    ].join('\n')
+    const { auditDifference, auditMessage, auditStatus } = calculateCashoutAudit(pendingDraft.systemAudit, drawerTotal)
+    const drawerParticulars = formatDrawerParticulars(drawerDenominations)
 
     setIsSaving(true)
     try {
@@ -140,15 +125,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
         creditSales: pendingDraft.creditSales,
         cashExpense: pendingDraft.cashExpense,
         cashAudit: pendingDraft.systemAudit,
-        drawerDenominations: {
-          denom500: numberValue(drawerState.denom500),
-          denom200: numberValue(drawerState.denom200),
-          denom100: numberValue(drawerState.denom100),
-          denom50: numberValue(drawerState.denom50),
-          denom20: numberValue(drawerState.denom20),
-          denom10: numberValue(drawerState.denom10),
-          change: numberValue(drawerState.change),
-        },
+        drawerDenominations,
         drawerTotal,
         auditDifference,
         auditStatus,

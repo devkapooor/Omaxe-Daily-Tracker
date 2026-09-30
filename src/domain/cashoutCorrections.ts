@@ -26,6 +26,31 @@ export function drawerTotalFromDenominations(denominations: DrawerDenominations)
   )
 }
 
+export function calculateCashoutAudit(cashAudit: number, drawerTotal: number) {
+  const auditDifference = cashAudit - drawerTotal
+  const auditStatus = auditDifference > 0 ? 'cash-less' as const : auditDifference < 0 ? 'cash-more' as const : 'matched' as const
+  const auditMessage = auditDifference > 0
+    ? `WARNING: Cash is less by ${auditDifference}.`
+    : auditDifference < 0
+      ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
+      : 'Cash matches the system audit.'
+  return { auditDifference, auditMessage, auditStatus }
+}
+
+export function formatDrawerParticulars(denominations: DrawerDenominations) {
+  const drawerTotal = drawerTotalFromDenominations(denominations)
+  return [
+    `500 x ${denominations.denom500} = ${denominations.denom500 * 500}`,
+    `200 x ${denominations.denom200} = ${denominations.denom200 * 200}`,
+    `100 x ${denominations.denom100} = ${denominations.denom100 * 100}`,
+    `50 x ${denominations.denom50} = ${denominations.denom50 * 50}`,
+    `20 x ${denominations.denom20} = ${denominations.denom20 * 20}`,
+    `10 x ${denominations.denom10} = ${denominations.denom10 * 10}`,
+    `Change = ${denominations.change}`,
+    `Total = ${drawerTotal}`,
+  ].join('\n')
+}
+
 export function normalizeCorrectionValues(values: CashoutCorrectionValues): CashoutCorrectionValues {
   return {
     cashSales: nonNegative(values.cashSales),
@@ -44,6 +69,24 @@ export function normalizeCorrectionValues(values: CashoutCorrectionValues): Cash
       change: nonNegative(values.drawerDenominations.change),
     },
   }
+}
+
+export function cashoutCorrectionValuesEqual(left: CashoutCorrectionValues, right: CashoutCorrectionValues) {
+  const a = normalizeCorrectionValues(left)
+  const b = normalizeCorrectionValues(right)
+  return a.cashSales === b.cashSales &&
+    a.upiSales === b.upiSales &&
+    a.creditSales === b.creditSales &&
+    a.returns === b.returns &&
+    a.cashExpense === b.cashExpense &&
+    a.cashAudit === b.cashAudit &&
+    a.drawerDenominations.denom500 === b.drawerDenominations.denom500 &&
+    a.drawerDenominations.denom200 === b.drawerDenominations.denom200 &&
+    a.drawerDenominations.denom100 === b.drawerDenominations.denom100 &&
+    a.drawerDenominations.denom50 === b.drawerDenominations.denom50 &&
+    a.drawerDenominations.denom20 === b.drawerDenominations.denom20 &&
+    a.drawerDenominations.denom10 === b.drawerDenominations.denom10 &&
+    a.drawerDenominations.change === b.drawerDenominations.change
 }
 
 function parseLineNumber(text: string, pattern: RegExp) {
@@ -101,25 +144,9 @@ export function cashoutEntryFromCorrection(
 ): DailyCashoutEntry {
   const values = normalizeCorrectionValues(rawValues)
   const drawerTotal = drawerTotalFromDenominations(values.drawerDenominations)
-  const auditDifference = values.cashAudit - drawerTotal
-  const auditStatus = auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
-  const auditMessage =
-    auditDifference > 0
-      ? `WARNING: Cash is less by ${auditDifference}.`
-      : auditDifference < 0
-        ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
-        : 'Cash matches the system audit.'
+  const { auditDifference, auditMessage, auditStatus } = calculateCashoutAudit(values.cashAudit, drawerTotal)
   const denominations = values.drawerDenominations
-  const actualCashParticulars = [
-    `500 x ${denominations.denom500} = ${denominations.denom500 * 500}`,
-    `200 x ${denominations.denom200} = ${denominations.denom200 * 200}`,
-    `100 x ${denominations.denom100} = ${denominations.denom100 * 100}`,
-    `50 x ${denominations.denom50} = ${denominations.denom50 * 50}`,
-    `20 x ${denominations.denom20} = ${denominations.denom20 * 20}`,
-    `10 x ${denominations.denom10} = ${denominations.denom10 * 10}`,
-    `Change = ${denominations.change}`,
-    `Total = ${drawerTotal}`,
-  ].join('\n')
+  const actualCashParticulars = formatDrawerParticulars(denominations)
 
   return {
     ...entry,

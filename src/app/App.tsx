@@ -14,8 +14,7 @@ import { LoginScreen } from '@/features/auth/components/LoginScreen'
 import { OfflineScreen } from '@/features/auth/components/OfflineScreen'
 import { AppBackground } from '@/shared/ui/background-components'
 import { AuroraBackground } from '@/shared/ui/aurora-background'
-
-const ACTIVE_PAGE_STORAGE_KEY = 'alphahub.active-page'
+import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
 
 function isPage(value: string | null): value is Page {
   return value === 'dashboard' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'logs' || value === 'settings'
@@ -123,7 +122,7 @@ export default function App() {
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), 3000)
+    const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS)
     return () => clearTimeout(timer)
   }, [toast])
 

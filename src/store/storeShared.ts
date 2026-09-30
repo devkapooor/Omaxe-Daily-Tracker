@@ -202,6 +202,7 @@ export const emptyWorkspaceMetrics: WorkspaceMetrics = {
 export type AppStoreSetters = {
   setAuthError: Dispatch<SetStateAction<string | null>>
   setCashTransfers: Dispatch<SetStateAction<CashTransfer[]>>
+  setCashoutCorrectionRequests: Dispatch<SetStateAction<CashoutCorrectionRequest[]>>
   setDailyCashouts: Dispatch<SetStateAction<DailyCashoutEntry[]>>
   setFinanceData: Dispatch<SetStateAction<FinanceData>>
   setIsBusy: Dispatch<SetStateAction<boolean>>

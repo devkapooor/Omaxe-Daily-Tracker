@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
-import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db, isLocalAuthBypassEnabled, localBypassCredentials } from '../shared/lib/firebase'
 import type { AppUser, FinanceData } from '../domain/financeTypes'
 import type {
@@ -26,7 +26,7 @@ import {
   nowIso,
   type LoadedCollections,
 } from './storeShared'
-import { setupAppStoreSubscriptions } from './storeSubscriptions'
+import { setupAppStoreSubscriptions, setupCashoutCorrectionSubscription } from './storeSubscriptions'
 import { seedData } from './seedData'
 import { readLegacyImportPayload } from './legacyLocalData'
 import { deriveWorkspaceMetrics } from './deriveWorkspaceMetrics'
@@ -218,20 +218,9 @@ export function useAppStore() {
   useEffect(() => {
     if (!currentUser) return
 
-    const requestsRef = collection(db, 'cashoutCorrectionRequests')
-    const requestsQuery = currentUser.role === 'owner'
-      ? requestsRef
-      : query(requestsRef, where('requestedByUserId', '==', currentUser.id))
-
-    return onSnapshot(
-      requestsQuery,
-      (snapshot) => {
-        setCashoutCorrectionRequests(
-          snapshot.docs
-            .map((item) => ({ id: item.id, ...item.data() }) as CashoutCorrectionRequest)
-            .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-        )
-      },
+    return setupCashoutCorrectionSubscription(
+      currentUser,
+      setCashoutCorrectionRequests,
       (error) => setAuthError(error instanceof Error ? error.message : 'Unable to load cashout correction requests.'),
     )
   }, [currentUser])

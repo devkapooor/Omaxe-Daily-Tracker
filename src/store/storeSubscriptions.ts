@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { collection, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../shared/lib/firebase'
 import type { AppStoreSetters, LoadedCollections } from './storeShared'
 import {
@@ -21,6 +21,7 @@ import type {
   Store,
 } from '../domain/financeTypes'
 import type {
+  CashoutCorrectionRequest,
   CashTransfer,
   DailyCashoutEntry,
   LoanEntry,
@@ -31,6 +32,7 @@ import type {
   UserAccount,
   VendorRecord,
 } from '../domain/appTypes'
+import type { AppUser } from '../domain/financeTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
 
 type SetupSubscriptionsArgs = Pick<
@@ -51,6 +53,25 @@ type SetupSubscriptionsArgs = Pick<
 > & {
   onSubscriptionError: (error: unknown) => void
   vendorFallbackLoadedRef: MutableRefObject<boolean>
+}
+
+export function setupCashoutCorrectionSubscription(
+  currentUser: AppUser,
+  setRequests: AppStoreSetters['setCashoutCorrectionRequests'],
+  onSubscriptionError: (error: unknown) => void,
+) {
+  const requestsRef = collection(db, 'cashoutCorrectionRequests')
+  const requestsQuery = currentUser.role === 'owner'
+    ? requestsRef
+    : query(requestsRef, where('requestedByUserId', '==', currentUser.id))
+
+  return onSnapshot(requestsQuery, (snapshot) => {
+    setRequests(
+      snapshot.docs
+        .map((item) => mapDoc(item.id, item.data() as Omit<CashoutCorrectionRequest, 'id'>))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    )
+  }, onSubscriptionError)
 }
 
 export function setupAppStoreSubscriptions({

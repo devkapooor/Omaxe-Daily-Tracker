@@ -16,29 +16,22 @@ import {
 } from '@/app/uiHelpers'
 import { AppTopBar } from '@/features/navigation/components/AppTopBar'
 import { CashMovementForm } from '@/features/cash-movement/components/CashMovementForm'
-import { DailyCashoutForm } from '@/features/cashout/components/DailyCashoutForm'
-import { CashoutCorrectionPanel } from '@/features/cashout/components/CashoutCorrectionPanel'
+import { CashoutPage } from '@/features/cashout/components/CashoutPage'
 import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
 import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlannerPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
-import { ExpenseForm } from '@/features/register/components/ExpenseForm'
-import { LoanForm } from '@/features/register/components/LoanForm'
-import { LoanRepaymentForm } from '@/features/register/components/LoanRepaymentForm'
-import { PurchaseForm } from '@/features/register/components/PurchaseForm'
-import { VendorPaymentForm } from '@/features/register/components/VendorPaymentForm'
-import { DashboardRangeFilter } from '@/features/dashboard/components/DashboardRangeFilter'
-import { MonthlyProjectionPanel } from '@/features/dashboard/components/MonthlyProjectionPanel'
-import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
+import { RegisterPage } from '@/features/register/components/RegisterPage'
+import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
-import { GlowCard } from '@/shared/ui/spotlight-card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { drawerTotalFromDenominations } from '@/domain/cashoutCorrections'
+import { ToastHost } from '@/shared/ui/toast-host'
+import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
 type AppWorkspaceProps = {
   activePage: Page
@@ -133,21 +126,6 @@ type AppWorkspaceProps = {
   vendorOutstandingByName: Map<string, number>
 }
 
-function shouldConfirmAction(title: string, detailLines: string[], warningLine?: string) {
-  const lines = [
-    title,
-    '',
-    ...detailLines,
-  ]
-
-  if (warningLine) {
-    lines.push('', warningLine)
-  }
-
-  lines.push('', 'This action cannot be undone.')
-  return window.confirm(lines.join('\n'))
-}
-
 export function AppWorkspace({
   activePage,
   appSettings,
@@ -208,6 +186,7 @@ export function AppWorkspace({
   vendors,
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
+  const confirmation = useConfirmationDialog()
   return (
     <main className="mx-auto flex h-[100dvh] w-full max-w-[1320px] overflow-hidden">
       <AppTopBar
@@ -242,46 +221,17 @@ export function AppWorkspace({
           </div>
         ) : null}
 
-        {toast ? (
-          <div className="fixed right-3 top-18 z-[120] max-w-sm rounded-xl border border-[#5f4823] bg-[linear-gradient(180deg,rgba(49,38,20,0.96),rgba(37,28,15,0.94))] px-3 py-2 text-xs font-semibold text-amber-100 shadow-xl sm:text-sm xl:top-18">
-            {toast.message}
-          </div>
-        ) : null}
+        <ToastHost toast={toast} />
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
-          <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-            <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">Monthly Performance</span>
-                <strong className="mt-0.5 block text-lg font-black text-foreground">{monthlyPerformance.monthLabel}</strong>
-              </div>
-              <DashboardRangeFilter value={dashboardMonthOffset} onChange={setDashboardMonthOffset} />
-            </div>
-            <MonthlyProjectionPanel
-              performance={monthlyPerformance}
-              marginPercentage={marginPercentage}
-            />
-            <div>
-              <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Current Financial Position</span>
-              <div className="grid gap-1.5 md:grid-cols-2">
-                <SummaryCard label="Open Loan Balance" value={money(totalLoans)} />
-                <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {activePage === 'cashout' ? (
-          <section className="mb-2.5">
-            <GlowCard className="w-full px-3.5 py-2.5 shadow-[0_10px_22px_rgba(24,32,27,0.06)]">
-              <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">
-                {latestClosedDay ? `Latest Closed Day Expenses - ${formatDisplayDate(latestClosedDay)}` : 'Today Expenses'}
-              </span>
-              <strong className="mt-1.5 block text-lg font-black tracking-tight text-foreground">
-                {money(latestClosedDaySummary.cashExpenses)}
-              </strong>
-            </GlowCard>
-          </section>
+          <DashboardPage
+            marginPercentage={marginPercentage}
+            monthOffset={dashboardMonthOffset}
+            performance={monthlyPerformance}
+            setMonthOffset={setDashboardMonthOffset}
+            totalLoans={totalLoans}
+            totalVendorOutstanding={totalVendorOutstanding}
+          />
         ) : null}
 
         {activePage === 'directory' ? (
@@ -310,125 +260,33 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'expense' ? (
-          <section className="grid min-h-0 flex-1 gap-2.5 overflow-hidden">
-            <Tabs defaultValue="expenses" className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden">
-              <TabsList className={currentUser.role === 'owner' ? 'min-h-9 grid-cols-4' : 'min-h-9 grid-cols-3'}>
-                <TabsTrigger value="expenses">Expenses</TabsTrigger>
-                <TabsTrigger value="vendor-payments">Vendor Payments</TabsTrigger>
-                <TabsTrigger value="purchases">Purchases</TabsTrigger>
-                {currentUser.role === 'owner' ? <TabsTrigger value="loans">Loans</TabsTrigger> : null}
-              </TabsList>
-
-              <TabsContent value="expenses" className="min-h-0">
-                <div className="grid min-h-0 gap-2.5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-                  <ExpenseForm currentUser={currentUser} onSave={async (draft) => {
-                    await saveCashout(draft)
-                    showToast(`Expense saved: ${draft.category} - ${money(draft.amount)}`)
-                  }} />
-                  <aside className="grid content-start gap-2.5">
-                    <section className="grid gap-2.5 sm:grid-cols-2">
-                      <SummaryCard label="Today Expense" value={money(todayCashout)} />
-                      <SummaryCard label="Today Payments (Net)" value={money(todayPaymentNet)} />
-                    </section>
-                  </aside>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="vendor-payments" className="min-h-0">
-                <VendorPaymentForm vendorOptions={directoryOptions.vendors} onSave={async (draft) => {
-                  await ensureNameInDirectory(draft.entryType === 'vendor-payment' ? 'vendors' : 'people', draft.partyName)
-                  await savePayment(draft)
-                  showToast(
-                    draft.entryType === 'loan-payment'
-                      ? `Loan payment saved: ${draft.partyName} - ${money(draft.amount)}`
-                      : `Vendor payment saved: ${draft.partyName} - ${money(draft.amount)}`,
-                  )
-                }} />
-              </TabsContent>
-
-              <TabsContent value="purchases" className="min-h-0">
-                <PurchaseForm vendorOptions={directoryOptions.vendors} onSave={async (draft) => {
-                  await ensureNameInDirectory('vendors', draft.supplierName)
-                  await savePurchase(draft)
-                  showToast(`Purchase saved: ${draft.supplierName} - ${money(draft.purchaseAmount)}`)
-                }} />
-              </TabsContent>
-
-              {currentUser.role === 'owner' ? (
-                <TabsContent value="loans" className="min-h-0">
-                  <Tabs defaultValue="loan-taken" className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden">
-                    <TabsList className="min-h-9 grid-cols-2">
-                      <TabsTrigger value="loan-taken">Loan Taken</TabsTrigger>
-                      <TabsTrigger value="loan-repayment">Loan Repayment</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="loan-taken" className="min-h-0">
-                      <LoanForm
-                        peopleOptions={directoryOptions.party}
-                        onSave={async (draft) => {
-                          await saveLoanEntry(draft)
-                          showToast(`Loan saved: ${draft.personName} - ${money(draft.amount)}`)
-                        }}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="loan-repayment" className="min-h-0">
-                      <LoanRepaymentForm
-                        peopleOptions={directoryOptions.party}
-                        onSave={async (draft) => {
-                          await ensureNameInDirectory(draft.entryType === 'vendor-payment' ? 'vendors' : 'people', draft.partyName)
-                          await savePayment(draft)
-                          showToast(`Loan payment saved: ${draft.partyName} - ${money(draft.amount)}`)
-                        }}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                </TabsContent>
-              ) : null}
-            </Tabs>
-          </section>
+          <RegisterPage
+            currentUser={currentUser}
+            ensureName={ensureNameInDirectory}
+            partyOptions={directoryOptions.party}
+            saveExpense={saveCashout}
+            saveLoan={saveLoanEntry}
+            savePayment={savePayment}
+            savePurchase={savePurchase}
+            showToast={showToast}
+            todayExpense={todayCashout}
+            todayPaymentNet={todayPaymentNet}
+            vendorOptions={directoryOptions.vendors}
+          />
         ) : null}
-
         {activePage === 'cashout' ? (
-          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
-            <Tabs defaultValue="new" className="flex h-full min-h-0 flex-col">
-              <TabsList className="mb-1 min-h-9 grid-cols-2">
-                <TabsTrigger value="new">New Cashout</TabsTrigger>
-                <TabsTrigger value="corrections">Corrections</TabsTrigger>
-              </TabsList>
-              <TabsContent value="new" className="min-h-0 flex-1">
-                <DailyCashoutForm
-                  currentUserId={currentUser.id}
-                  currentUserName={currentUser.name}
-                  onSave={async (draft) => {
-                    await saveDailyCashoutEntry(draft)
-                    showToast(
-                      draft.auditStatus === 'matched'
-                        ? `Cashout + Sales saved. Drawer total: ${money(draft.drawerTotal ?? draft.remainingBalance)}`
-                        : `${draft.auditMessage} Drawer total saved: ${money(draft.drawerTotal ?? draft.remainingBalance)}`,
-                    )
-                  }}
-                />
-              </TabsContent>
-              <TabsContent value="corrections" className="min-h-0 flex-1">
-                <CashoutCorrectionPanel
-                  currentUser={currentUser}
-                  dailyCashouts={dailyCashouts}
-                  requests={cashoutCorrectionRequests}
-                  onSubmit={async (entry, values, reason) => {
-                    await submitCashoutCorrectionRequest(entry.id, values, reason, currentUser)
-                    showToast('Correction request submitted for owner approval.')
-                  }}
-                  onWithdraw={async (requestId) => {
-                    await withdrawCashoutCorrectionRequest(requestId, currentUser)
-                    showToast('Correction request withdrawn.')
-                  }}
-                />
-              </TabsContent>
-            </Tabs>
-          </section>
+          <CashoutPage
+            correctionRequests={cashoutCorrectionRequests}
+            currentUser={currentUser}
+            dailyCashouts={dailyCashouts}
+            latestClosedDay={latestClosedDay}
+            latestClosedDayExpenses={latestClosedDaySummary.cashExpenses}
+            onSave={saveDailyCashoutEntry}
+            onSubmitCorrection={submitCashoutCorrectionRequest}
+            onWithdrawCorrection={withdrawCashoutCorrectionRequest}
+            showToast={showToast}
+          />
         ) : null}
-
         {activePage === 'movement' ? (
           <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
@@ -494,16 +352,17 @@ export function AppWorkspace({
               settingsAuditLog={settingsAuditLog}
               users={users}
               onDeleteLoan={async (loan) => {
-                if (!shouldConfirmAction(
-                  'Delete this loan entry?',
-                  [
+                if (!await confirmation.confirm({
+                  title: 'Delete this loan entry?',
+                  details: [
                     `Party: ${loan.personName}`,
                     `Amount: ${money(loan.amount)}`,
                     `Remaining: ${money(loan.remainingAmount)}`,
                     `Loan Date: ${formatDisplayDate(loan.date)}`,
                   ],
-                  loan.paidAmount > 0 ? 'Warning: this loan already has repayment applied and balances will be recomputed.' : undefined,
-                )) return
+                  warning: loan.paidAmount > 0 ? 'Warning: this loan already has repayment applied and balances will be recomputed.' : 'This action cannot be undone.',
+                  confirmLabel: 'Delete Loan',
+                })) return
                 try {
                   await deleteLoanEntry(loan.id)
                   showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
@@ -513,15 +372,16 @@ export function AppWorkspace({
               }}
               onDeleteDailyCashout={async (entry) => {
                 const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
-                if (!shouldConfirmAction(
-                  'Delete this daily cashout entry?',
-                  [
+                if (!await confirmation.confirm({
+                  title: 'Delete this daily cashout entry?',
+                  details: [
                     `Recorded By: ${entry.recordedBy}`,
                     `Drawer Total: ${money(drawerTotal)}`,
                     `Date: ${formatDisplayDate(entry.date)}`,
                   ],
-                  'Warning: linked sales totals for this date will be recalculated.',
-                )) return
+                  warning: 'Warning: linked sales totals for this date will be recalculated. This action cannot be undone.',
+                  confirmLabel: 'Delete Cashout',
+                })) return
                 try {
                   await deleteDailyCashoutEntry(entry.id)
                   showToast(`Daily cashout deleted: ${entry.recordedBy} - ${formatDisplayDate(entry.date)}`)
@@ -533,7 +393,12 @@ export function AppWorkspace({
                 const currentEntry = dailyCashouts.find((entry) => entry.id === request.cashoutId)
                 const currentDrawer = currentEntry?.drawerTotal ?? currentEntry?.remainingBalance ?? 0
                 const proposedDrawer = drawerTotalFromDenominations(request.proposed.drawerDenominations)
-                if (!window.confirm(`Approve this correction?\n\nCash Movement balance impact: ${money(proposedDrawer - currentDrawer)}\n\nThe linked sales totals will be recalculated.`)) return
+                if (!await confirmation.confirm({
+                  title: 'Approve this correction?',
+                  details: [`Cash Movement balance impact: ${money(proposedDrawer - currentDrawer)}`],
+                  warning: 'The linked sales totals will be recalculated.',
+                  confirmLabel: 'Approve Correction',
+                })) return
                 try {
                   await approveCashoutCorrectionRequest(request.id, currentUser)
                   showToast(`Cashout correction approved: ${request.recordedBy}`)
@@ -585,6 +450,7 @@ export function AppWorkspace({
             />
           </section>
         ) : null}
+        {confirmation.dialog}
       </div>
     </main>
   )
