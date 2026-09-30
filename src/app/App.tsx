@@ -82,7 +82,6 @@ export default function App() {
     dashboardLastUpdated,
     dashboardSales,
     averageDailySales,
-    dashboardTables,
     directoryOptions,
     latestClosedDay,
     latestClosedDaySummary,
@@ -267,7 +266,6 @@ export default function App() {
         savedPartyNames={nameDirectory.people}
         vendors={vendors}
         vendorOutstandingByName={vendorOutstandingByName}
-        dashboardTables={dashboardTables}
       />
     </AppBackground>
   )

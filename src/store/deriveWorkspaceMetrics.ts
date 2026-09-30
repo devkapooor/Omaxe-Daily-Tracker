@@ -48,7 +48,7 @@ function deriveDashboardRangeSummary(financeData: FinanceData, from: string, to:
   }
 }
 
-function derivePendingCash(users: UserAccount[], dailyCashouts: DailyCashoutEntry[], cashTransfers: CashTransfer[]): PendingCashSnapshot {
+export function derivePendingCash(users: UserAccount[], dailyCashouts: DailyCashoutEntry[], cashTransfers: CashTransfer[]): PendingCashSnapshot {
   const activeUsers = activeWorkspaceUsers(users)
   const activeUserIds = new Set(activeUsers.map((user) => user.id))
   const activeUsersByNormalizedName = new Map<string, UserAccount[]>()

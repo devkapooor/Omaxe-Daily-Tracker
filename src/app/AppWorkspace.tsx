@@ -28,9 +28,7 @@ import { LoanForm } from '@/features/register/components/LoanForm'
 import { LoanRepaymentForm } from '@/features/register/components/LoanRepaymentForm'
 import { PurchaseForm } from '@/features/register/components/PurchaseForm'
 import { VendorPaymentForm } from '@/features/register/components/VendorPaymentForm'
-import { DailyCashoutFinalSummaryPanel } from '@/features/dashboard/components/DailyCashoutFinalSummaryPanel'
 import { DashboardRangeFilter } from '@/features/dashboard/components/DashboardRangeFilter'
-import { DashboardTables } from '@/features/dashboard/components/DashboardTables'
 import { MonthlyProjectionPanel } from '@/features/dashboard/components/MonthlyProjectionPanel'
 import { MonthlyCashCollectedCard } from '@/features/dashboard/components/MonthlyCashCollectedCard'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
@@ -70,7 +68,6 @@ type AppWorkspaceProps = {
   }
   dashboardRange: DashboardRange
   dashboardSales: number
-  dashboardTables: WorkspaceMetrics['dashboardTables']
   data: FinanceData
   deleteDailyCashoutEntry: (entryId: string) => Promise<void>
   deleteLoanEntry: (loanId: string) => Promise<void>
@@ -175,7 +172,6 @@ export function AppWorkspace({
   dashboardLastUpdated,
   dashboardRange,
   dashboardSales,
-  dashboardTables,
   data,
   deleteDailyCashoutEntry,
   deleteLoanEntry,
@@ -273,7 +269,7 @@ export function AppWorkspace({
               projectedProfit={projectedProfit}
               projectedLoss={projectedLoss}
             />
-            <MonthlyCashCollectedCard dailyCashouts={dailyCashouts} />
+            <MonthlyCashCollectedCard cashTransfers={cashTransfers} dailyCashouts={dailyCashouts} users={users} />
             <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Sales" value={money(dashboardSales)} updated={formatLastUpdated(dashboardLastUpdated.sales)} />
               <SummaryCard label="Expenses" value={money(dashboardExpenseTotal)} updated={formatLastUpdated(dashboardLastUpdated.expenses)} />
@@ -281,20 +277,6 @@ export function AppWorkspace({
               <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
               <SummaryCard label="Monthly Operational Expenses" value={money(monthlyOperationalExpense)} updated={formatLastUpdated(dashboardLastUpdated.fixed)} />
             </div>
-            <DailyCashoutFinalSummaryPanel
-              dailyFinalSummary={latestClosedDaySummary}
-              userBalances={pendingCashNow.userBalances}
-              legacyBalances={pendingCashNow.legacyBalances}
-            />
-            <DashboardTables
-              expenseByCategory={dashboardTables.expenseByCategory}
-              userBalances={pendingCashNow.userBalances}
-              legacyBalances={pendingCashNow.legacyBalances}
-              monthlyPurchaseTotal={dashboardTables.monthlyPurchaseTotal}
-              paymentByMode={dashboardTables.paymentByMode}
-              pendingCashBankTotal={pendingCashNow.bankTotal}
-              vendorPaymentTotal={dashboardTables.vendorPaymentTotal}
-            />
           </section>
         ) : null}
 
