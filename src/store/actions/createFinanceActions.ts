@@ -1,8 +1,10 @@
-import { deleteDoc, deleteField, doc, setDoc, writeBatch } from 'firebase/firestore'
+import { deleteDoc, deleteField, doc, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
-import type { CashoutDraft, DailySales, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, PlannedPayment, VendorRecord } from '@/domain/appTypes'
+import type { AppUser, CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
+import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, PlannedPayment, VendorRecord } from '@/domain/appTypes'
+import { cashoutEntryFromCorrection, correctionValuesFromEntry, normalizeCorrectionValues } from '@/domain/cashoutCorrections'
+import { shiftDate, today } from '@/app/uiHelpers'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
   normalizeLoanRecord,
@@ -29,6 +31,40 @@ function sortByBusinessOrder<T extends { date: string; createdAt: string }>(item
 }
 
 export function createFinanceActions({ ensureNameInDirectory, getState, setIsBusy }: FinanceActionArgs) {
+  function writeSalesSyncToBatch(batch: WriteBatch, date: string, nextDailyCashouts: DailyCashoutEntry[], financeData: FinanceData) {
+    const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
+    const salesId = salesDocId(singleStoreId, date)
+    const existingSales = financeData.sales.find((sale) => sale.id === salesId)
+
+    if (remainingEntries.length === 0) {
+      if (existingSales) batch.delete(doc(db, 'sales', salesId))
+      return
+    }
+
+    const cashSales = remainingEntries.reduce((total, entry) => total + entry.cashSales, 0)
+    const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
+    const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
+    const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
+    const cardSales = existingSales?.cardSales ?? 0
+    const bankTransferSales = existingSales?.bankTransferSales ?? 0
+    const timestamp = nowIso()
+    batch.set(doc(db, 'sales', salesId), {
+      id: salesId,
+      storeId: singleStoreId,
+      date,
+      totalSales: cashSales + upiSales + cardSales + bankTransferSales + creditSales,
+      cashSales,
+      upiSales,
+      cardSales,
+      bankTransferSales,
+      creditSales,
+      returnsDiscounts,
+      notes: `Auto-synced from cashout register. ${remainingEntries.map((entry) => entry.actualCashParticulars.trim()).filter(Boolean).join(' | ')}`.trim(),
+      createdAt: existingSales?.createdAt ?? remainingEntries[0]?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    })
+  }
+
   async function syncSalesForDate(date: string, nextDailyCashouts: DailyCashoutEntry[]) {
     const { financeData } = getState()
     const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
@@ -324,6 +360,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       remainingBalance: parsedDrawerTotal,
       id: `daily-cashout-${crypto.randomUUID()}`,
       createdAt: nowIso(),
+      revision: 1,
     }
     await setDoc(doc(db, 'dailyCashouts', entry.id), entry)
 
@@ -407,6 +444,171 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       targetEntry.date,
       dailyCashouts.filter((entry) => entry.id !== entryId),
     )
+  }
+
+  function findCashoutForCorrection(cashoutId: string) {
+    const entry = getState().dailyCashouts.find((candidate) => candidate.id === cashoutId)
+    if (!entry) throw new Error('This daily cashout record could not be found.')
+    return entry
+  }
+
+  function validateCorrectionReason(reason: string) {
+    const normalizedReason = normalizeName(reason)
+    if (normalizedReason.length < 5) throw new Error('Please enter a correction reason of at least 5 characters.')
+    return normalizedReason
+  }
+
+  function validateOwner(actor: AppUser) {
+    if (actor.role !== 'owner') throw new Error('Only the owner can change a saved cashout.')
+  }
+
+  function validateCorrectionChanges(entry: DailyCashoutEntry, proposed: CashoutCorrectionValues) {
+    const before = correctionValuesFromEntry(entry)
+    const normalizedProposed = normalizeCorrectionValues(proposed)
+    if (JSON.stringify(before) === JSON.stringify(normalizedProposed)) {
+      throw new Error('No financial values were changed.')
+    }
+    return { before, proposed: normalizedProposed }
+  }
+
+  async function submitCashoutCorrectionRequest(
+    cashoutId: string,
+    proposed: CashoutCorrectionValues,
+    reason: string,
+    actor: AppUser,
+  ) {
+    const state = getState()
+    const entry = findCashoutForCorrection(cashoutId)
+    if (entry.recordedByUserId !== actor.id) throw new Error('You can request corrections only for your own cashouts.')
+    if (entry.date < shiftDate(today(), -6) || entry.date > today()) {
+      throw new Error('Staff correction requests are limited to cashouts from the last 7 calendar days.')
+    }
+    if (state.cashoutCorrectionRequests.some((request) => request.cashoutId === cashoutId && request.status === 'pending')) {
+      throw new Error('A correction request is already pending for this cashout.')
+    }
+
+    const values = validateCorrectionChanges(entry, proposed)
+    const timestamp = nowIso()
+    const id = `cashout-correction-${crypto.randomUUID()}`
+    const request: CashoutCorrectionRequest = {
+      id,
+      cashoutId: entry.id,
+      cashoutDate: entry.date,
+      recordedBy: entry.recordedBy,
+      ...(entry.recordedByUserId ? { recordedByUserId: entry.recordedByUserId } : {}),
+      sourceRevision: entry.revision ?? 1,
+      before: values.before,
+      proposed: values.proposed,
+      reason: validateCorrectionReason(reason),
+      requestedByUserId: actor.id,
+      requestedBy: actor.name,
+      requestType: 'staff-request',
+      status: 'pending',
+      createdAt: timestamp,
+    }
+    await setDoc(doc(db, 'cashoutCorrectionRequests', id), request)
+  }
+
+  async function applyCashoutCorrection(
+    request: CashoutCorrectionRequest,
+    actor: AppUser,
+    reviewReason?: string,
+  ) {
+    validateOwner(actor)
+    const state = getState()
+    const entry = findCashoutForCorrection(request.cashoutId)
+    if (request.status !== 'pending') throw new Error('This correction request is no longer pending.')
+    if ((entry.revision ?? 1) !== request.sourceRevision || JSON.stringify(correctionValuesFromEntry(entry)) !== JSON.stringify(request.before)) {
+      throw new Error('This cashout changed after the request was submitted. Ask staff to submit a new correction request.')
+    }
+
+    const timestamp = nowIso()
+    const correctedEntry = cashoutEntryFromCorrection(entry, request.proposed, actor.name, timestamp)
+    const nextEntries = state.dailyCashouts.map((candidate) => candidate.id === entry.id ? correctedEntry : candidate)
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
+    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData)
+    batch.update(doc(db, 'cashoutCorrectionRequests', request.id), {
+      status: 'approved',
+      reviewedAt: timestamp,
+      reviewedByUserId: actor.id,
+      reviewedBy: actor.name,
+      reviewReason: normalizeName(reviewReason ?? 'Approved by owner.'),
+    })
+    await batch.commit()
+  }
+
+  async function approveCashoutCorrectionRequest(requestId: string, actor: AppUser) {
+    const request = getState().cashoutCorrectionRequests.find((candidate) => candidate.id === requestId)
+    if (!request) throw new Error('This correction request could not be found.')
+    await applyCashoutCorrection(request, actor)
+  }
+
+  async function rejectCashoutCorrectionRequest(requestId: string, reason: string, actor: AppUser) {
+    validateOwner(actor)
+    const request = getState().cashoutCorrectionRequests.find((candidate) => candidate.id === requestId)
+    if (!request || request.status !== 'pending') throw new Error('This correction request is no longer pending.')
+    await setDoc(doc(db, 'cashoutCorrectionRequests', request.id), {
+      status: 'rejected',
+      reviewedAt: nowIso(),
+      reviewedByUserId: actor.id,
+      reviewedBy: actor.name,
+      reviewReason: validateCorrectionReason(reason),
+    }, { merge: true })
+  }
+
+  async function withdrawCashoutCorrectionRequest(requestId: string, actor: AppUser) {
+    const request = getState().cashoutCorrectionRequests.find((candidate) => candidate.id === requestId)
+    if (!request || request.status !== 'pending') throw new Error('This correction request is no longer pending.')
+    if (request.requestedByUserId !== actor.id) throw new Error('You can withdraw only your own correction request.')
+    await setDoc(doc(db, 'cashoutCorrectionRequests', request.id), {
+      status: 'withdrawn',
+      reviewedAt: nowIso(),
+      reviewedByUserId: actor.id,
+      reviewedBy: actor.name,
+      reviewReason: 'Withdrawn by requester.',
+    }, { merge: true })
+  }
+
+  async function editDailyCashoutEntry(
+    cashoutId: string,
+    proposed: CashoutCorrectionValues,
+    reason: string,
+    actor: AppUser,
+  ) {
+    validateOwner(actor)
+    const state = getState()
+    const entry = findCashoutForCorrection(cashoutId)
+    const values = validateCorrectionChanges(entry, proposed)
+    const timestamp = nowIso()
+    const requestId = `cashout-correction-${crypto.randomUUID()}`
+    const request: CashoutCorrectionRequest = {
+      id: requestId,
+      cashoutId: entry.id,
+      cashoutDate: entry.date,
+      recordedBy: entry.recordedBy,
+      ...(entry.recordedByUserId ? { recordedByUserId: entry.recordedByUserId } : {}),
+      sourceRevision: entry.revision ?? 1,
+      before: values.before,
+      proposed: values.proposed,
+      reason: validateCorrectionReason(reason),
+      requestedByUserId: actor.id,
+      requestedBy: actor.name,
+      requestType: 'owner-edit',
+      status: 'approved',
+      createdAt: timestamp,
+      reviewedAt: timestamp,
+      reviewedByUserId: actor.id,
+      reviewedBy: actor.name,
+      reviewReason: 'Direct owner correction.',
+    }
+    const correctedEntry = cashoutEntryFromCorrection(entry, request.proposed, actor.name, timestamp)
+    const nextEntries = state.dailyCashouts.map((candidate) => candidate.id === entry.id ? correctedEntry : candidate)
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
+    batch.set(doc(db, 'cashoutCorrectionRequests', requestId), request)
+    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData)
+    await batch.commit()
   }
 
   async function saveCashTransfer(draft: Omit<CashTransfer, 'id' | 'createdAt'>) {
@@ -513,6 +715,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   return {
+    approveCashoutCorrectionRequest,
     deleteCashTransferEntry,
     deleteDailyCashoutEntry,
     deleteExpenseEntry,
@@ -521,6 +724,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     deletePaymentEntry,
     deletePurchaseEntry,
     deleteSettingsAuditEntry,
+    editDailyCashoutEntry,
     ensureNameInDirectory,
     importLegacyData,
     saveCashTransfer,
@@ -532,5 +736,8 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     savePurchase,
     saveSales,
     saveVendor,
+    submitCashoutCorrectionRequest,
+    rejectCashoutCorrectionRequest,
+    withdrawCashoutCorrectionRequest,
   }
 }

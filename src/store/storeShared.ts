@@ -7,6 +7,7 @@ import type {
 } from '../domain/financeTypes'
 import type {
   CashTransfer,
+  CashoutCorrectionRequest,
   DailyCashoutEntry,
   LoanStatus,
   LoanEntry,
@@ -320,6 +321,7 @@ export function ensureSingleStore(stores: Store[]) {
 export type StoreCollectionState = {
   appSettings: AppSettings
   cashTransfers: CashTransfer[]
+  cashoutCorrectionRequests: CashoutCorrectionRequest[]
   dailyCashouts: DailyCashoutEntry[]
   financeData: FinanceData
   loadedCollections: LoadedCollections

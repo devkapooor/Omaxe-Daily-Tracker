@@ -178,6 +178,23 @@ Legacy notes:
 - unmatched legacy slot records appear separately for review
 - only exact name evidence is used for automatic legacy cashout matching
 
+## Daily Cashout Corrections
+
+Approved corrections keep the cashout date and recorder identity fixed and recalculate:
+
+```text
+drawerTotal =
+  500 * denom500 + 200 * denom200 + 100 * denom100
+  + 50 * denom50 + 20 * denom20 + 10 * denom10 + change
+
+remainingBalance = drawerTotal
+auditDifference = cashAudit - drawerTotal
+expectedCash = cashSales - cashExpense
+revision = previous revision + 1
+```
+
+Approval also rebuilds the linked `DailySales` document from every daily cashout on the same business date. A request is stale and cannot be approved when its source revision or before snapshot no longer matches the current cashout.
+
 ## Daily Cashout Audit Logic
 
 ```text

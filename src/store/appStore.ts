@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore'
 import { auth, db, isLocalAuthBypassEnabled, localBypassCredentials } from '../shared/lib/firebase'
 import type { AppUser, FinanceData } from '../domain/financeTypes'
 import type {
   CashTransfer,
+  CashoutCorrectionRequest,
   DailyCashoutEntry,
   LoanEntry,
   MonthlyReportMeta,
@@ -44,6 +45,7 @@ export function useAppStore() {
   const [loans, setLoans] = useState<LoanEntry[]>([])
   const [dailyCashouts, setDailyCashouts] = useState<DailyCashoutEntry[]>([])
   const [cashTransfers, setCashTransfers] = useState<CashTransfer[]>([])
+  const [cashoutCorrectionRequests, setCashoutCorrectionRequests] = useState<CashoutCorrectionRequest[]>([])
   const [plannedPayments, setPlannedPayments] = useState<PlannedPayment[]>([])
   const [monthlyReports, setMonthlyReports] = useState<MonthlyReportMeta[]>([])
   const [settingsAuditLog, setSettingsAuditLog] = useState<SettingsAuditEntry[]>([])
@@ -82,6 +84,7 @@ export function useAppStore() {
       setLoans([])
       setDailyCashouts([])
       setCashTransfers([])
+      setCashoutCorrectionRequests([])
       setPlannedPayments([])
       setMonthlyReports([])
       setSettingsAuditLog([])
@@ -211,6 +214,27 @@ export function useAppStore() {
     if (!profile || profile.disabled) return null
     return { id: profile.id, name: profile.name, role: profile.role }
   }, [authUser, users])
+
+  useEffect(() => {
+    if (!currentUser) return
+
+    const requestsRef = collection(db, 'cashoutCorrectionRequests')
+    const requestsQuery = currentUser.role === 'owner'
+      ? requestsRef
+      : query(requestsRef, where('requestedByUserId', '==', currentUser.id))
+
+    return onSnapshot(
+      requestsQuery,
+      (snapshot) => {
+        setCashoutCorrectionRequests(
+          snapshot.docs
+            .map((item) => ({ id: item.id, ...item.data() }) as CashoutCorrectionRequest)
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+        )
+      },
+      (error) => setAuthError(error instanceof Error ? error.message : 'Unable to load cashout correction requests.'),
+    )
+  }, [currentUser])
 
   useEffect(() => {
     async function bootstrapFirstOwner() {
@@ -343,6 +367,7 @@ export function useAppStore() {
   const actions = createAppStoreActions({
     getState: () => ({
       cashTransfers,
+      cashoutCorrectionRequests,
       dailyCashouts,
       financeData,
       appSettings,
@@ -366,6 +391,7 @@ export function useAppStore() {
     appSettings,
     canImportLegacyData,
     cashTransfers,
+    cashoutCorrectionRequests,
     changeOwnPassword: actions.changeOwnPassword,
     collectionsReady,
     createUserAccount: actions.createUserAccount,
@@ -393,6 +419,11 @@ export function useAppStore() {
     saveCashTransfer: actions.saveCashTransfer,
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
+    submitCashoutCorrectionRequest: actions.submitCashoutCorrectionRequest,
+    approveCashoutCorrectionRequest: actions.approveCashoutCorrectionRequest,
+    rejectCashoutCorrectionRequest: actions.rejectCashoutCorrectionRequest,
+    withdrawCashoutCorrectionRequest: actions.withdrawCashoutCorrectionRequest,
+    editDailyCashoutEntry: actions.editDailyCashoutEntry,
     saveLoanEntry: actions.saveLoanEntry,
     saveMonthlyReportMargin: actions.saveMonthlyReportMargin,
     saveOperationalSettings: actions.saveOperationalSettings,

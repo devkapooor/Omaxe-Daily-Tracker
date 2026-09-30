@@ -57,9 +57,13 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Cash Sales" value={money(entry.cashSales)} />
           <DetailBlock label="UPI Sales" value={money(entry.upiSales)} />
           <DetailBlock label="Credit Sales" value={money(entry.creditSales)} />
+          <DetailBlock label="Returns" value={money(entry.returns)} />
+          <DetailBlock label="Cash Expense" value={money(entry.cashExpense ?? 0)} />
           <DetailBlock label="System Audit" value={money(entry.cashAudit)} />
           <DetailBlock label="Drawer Total" value={money(drawerTotal)} />
           <DetailBlock label="Remaining Balance" value={money(entry.remainingBalance)} />
+          <DetailBlock label="Revision" value={String(entry.revision ?? 1)} />
+          {entry.updatedAt ? <DetailBlock label="Last Corrected" value={`${formatDisplayDateTime(entry.updatedAt)} by ${entry.updatedBy ?? 'Owner'}`} /> : null}
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Audit Status" value={auditMessage} />
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Drawer Particulars" value={entry.actualCashParticulars} />
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Pending Cash Particulars" value={entry.pendingCashParticulars} />

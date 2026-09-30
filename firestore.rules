@@ -58,7 +58,40 @@ service cloud.firestore {
     }
 
     match /dailyCashouts/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isOwner() || (
+        isStaff() &&
+        request.resource.data.recordedByUserId == request.auth.uid
+      );
+      allow update, delete: if isOwner();
+    }
+
+    match /cashoutCorrectionRequests/{documentId} {
+      allow read: if isOwner() || (
+        isStaff() &&
+        resource.data.requestedByUserId == request.auth.uid
+      );
+      allow create: if isOwner() || (
+        isStaff() &&
+        request.resource.data.requestedByUserId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.requestType == 'staff-request' &&
+        get(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.cashoutId)).data.recordedByUserId == request.auth.uid
+      );
+      allow update: if isOwner() || (
+        isStaff() &&
+        resource.data.requestedByUserId == request.auth.uid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'withdrawn' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'reviewedAt',
+          'reviewedByUserId',
+          'reviewedBy',
+          'reviewReason'
+        ])
+      );
+      allow delete: if false;
     }
 
     match /cashTransfers/{documentId} {

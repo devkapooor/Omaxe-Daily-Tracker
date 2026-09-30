@@ -29,6 +29,7 @@ export default function App() {
     appSettings,
     canImportLegacyData,
     cashTransfers,
+    cashoutCorrectionRequests,
     changeOwnPassword,
     collectionsReady,
     createUserAccount,
@@ -38,6 +39,7 @@ export default function App() {
     deleteDailyCashoutEntry,
     deleteLoanEntry,
     deleteUserAccount,
+    editDailyCashoutEntry,
     hasAuthenticatedSession,
     hasWorkspaceAccess,
     importLegacyData,
@@ -59,6 +61,10 @@ export default function App() {
     saveCashTransfer,
     saveCashout,
     saveDailyCashoutEntry,
+    submitCashoutCorrectionRequest,
+    approveCashoutCorrectionRequest,
+    rejectCashoutCorrectionRequest,
+    withdrawCashoutCorrectionRequest,
     saveLoanEntry,
     saveOperationalSettings,
     savePayment,
@@ -205,6 +211,7 @@ export default function App() {
         appSettings={appSettings}
         canImportLegacyData={canImportLegacyData}
         cashTransfers={cashTransfers}
+        cashoutCorrectionRequests={cashoutCorrectionRequests}
         changeOwnPassword={changeOwnPassword}
         createUserAccount={createUserAccount}
         currentUser={currentUser}
@@ -215,6 +222,7 @@ export default function App() {
         deleteLoanEntry={deleteLoanEntry}
         deletePlannedPayment={deletePlannedPayment}
         deleteUserAccount={deleteUserAccount}
+        editDailyCashoutEntry={editDailyCashoutEntry}
         directoryOptions={directoryOptions}
         ensureNameInDirectory={ensureNameInDirectory}
         importLegacyData={importLegacyData}
@@ -234,6 +242,10 @@ export default function App() {
         saveCashTransfer={saveCashTransfer}
         saveCashout={saveCashout}
         saveDailyCashoutEntry={saveDailyCashoutEntry}
+        submitCashoutCorrectionRequest={submitCashoutCorrectionRequest}
+        approveCashoutCorrectionRequest={approveCashoutCorrectionRequest}
+        rejectCashoutCorrectionRequest={rejectCashoutCorrectionRequest}
+        withdrawCashoutCorrectionRequest={withdrawCashoutCorrectionRequest}
         saveLoanEntry={saveLoanEntry}
         saveOperationalSettings={saveOperationalSettings}
         savePayment={savePayment}

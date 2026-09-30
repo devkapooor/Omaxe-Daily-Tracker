@@ -17,6 +17,7 @@ import {
 import { AppTopBar } from '@/features/navigation/components/AppTopBar'
 import { CashMovementForm } from '@/features/cash-movement/components/CashMovementForm'
 import { DailyCashoutForm } from '@/features/cashout/components/DailyCashoutForm'
+import { CashoutCorrectionPanel } from '@/features/cashout/components/CashoutCorrectionPanel'
 import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
@@ -34,9 +35,10 @@ import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDa
 import { Button } from '@/shared/ui/button'
 import { GlowCard } from '@/shared/ui/spotlight-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
+import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
+import { drawerTotalFromDenominations } from '@/domain/cashoutCorrections'
 
 type AppWorkspaceProps = {
   activePage: Page
@@ -48,6 +50,7 @@ type AppWorkspaceProps = {
   }
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
+  cashoutCorrectionRequests: CashoutCorrectionRequest[]
   changeOwnPassword: (password: string) => Promise<void>
   createUserAccount: (draft: {
     name: string
@@ -64,6 +67,7 @@ type AppWorkspaceProps = {
   deleteLoanEntry: (loanId: string) => Promise<void>
   deletePlannedPayment: (paymentId: string) => Promise<void>
   deleteUserAccount: (userId: string, actor: string) => Promise<void>
+  editDailyCashoutEntry: (cashoutId: string, proposed: CashoutCorrectionValues, reason: string, actor: AppUser) => Promise<void>
   directoryOptions: {
     party: string[]
     vendors: string[]
@@ -105,6 +109,10 @@ type AppWorkspaceProps = {
   saveCashTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
   saveCashout: (draft: CashoutDraft) => Promise<void>
   saveDailyCashoutEntry: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void>
+  submitCashoutCorrectionRequest: (cashoutId: string, proposed: CashoutCorrectionValues, reason: string, actor: AppUser) => Promise<void>
+  approveCashoutCorrectionRequest: (requestId: string, actor: AppUser) => Promise<void>
+  rejectCashoutCorrectionRequest: (requestId: string, reason: string, actor: AppUser) => Promise<void>
+  withdrawCashoutCorrectionRequest: (requestId: string, actor: AppUser) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
@@ -145,6 +153,7 @@ export function AppWorkspace({
   appSettings,
   canImportLegacyData,
   cashTransfers,
+  cashoutCorrectionRequests,
   changeOwnPassword,
   createUserAccount,
   currentUser,
@@ -155,6 +164,7 @@ export function AppWorkspace({
   deleteLoanEntry,
   deletePlannedPayment,
   deleteUserAccount,
+  editDailyCashoutEntry,
   directoryOptions,
   ensureNameInDirectory,
   importLegacyData,
@@ -175,6 +185,10 @@ export function AppWorkspace({
   saveCashTransfer,
   saveCashout,
   saveDailyCashoutEntry,
+  submitCashoutCorrectionRequest,
+  approveCashoutCorrectionRequest,
+  rejectCashoutCorrectionRequest,
+  withdrawCashoutCorrectionRequest,
   saveLoanEntry,
   saveOperationalSettings,
   savePayment,
@@ -377,18 +391,41 @@ export function AppWorkspace({
 
         {activePage === 'cashout' ? (
           <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
-            <DailyCashoutForm
-              currentUserId={currentUser.id}
-              currentUserName={currentUser.name}
-              onSave={async (draft) => {
-                await saveDailyCashoutEntry(draft)
-                showToast(
-                  draft.auditStatus === 'matched'
-                    ? `Cashout + Sales saved. Drawer total: ${money(draft.drawerTotal ?? draft.remainingBalance)}`
-                    : `${draft.auditMessage} Drawer total saved: ${money(draft.drawerTotal ?? draft.remainingBalance)}`,
-                )
-              }}
-            />
+            <Tabs defaultValue="new" className="flex h-full min-h-0 flex-col">
+              <TabsList className="mb-1 min-h-9 grid-cols-2">
+                <TabsTrigger value="new">New Cashout</TabsTrigger>
+                <TabsTrigger value="corrections">Corrections</TabsTrigger>
+              </TabsList>
+              <TabsContent value="new" className="min-h-0 flex-1">
+                <DailyCashoutForm
+                  currentUserId={currentUser.id}
+                  currentUserName={currentUser.name}
+                  onSave={async (draft) => {
+                    await saveDailyCashoutEntry(draft)
+                    showToast(
+                      draft.auditStatus === 'matched'
+                        ? `Cashout + Sales saved. Drawer total: ${money(draft.drawerTotal ?? draft.remainingBalance)}`
+                        : `${draft.auditMessage} Drawer total saved: ${money(draft.drawerTotal ?? draft.remainingBalance)}`,
+                    )
+                  }}
+                />
+              </TabsContent>
+              <TabsContent value="corrections" className="min-h-0 flex-1">
+                <CashoutCorrectionPanel
+                  currentUser={currentUser}
+                  dailyCashouts={dailyCashouts}
+                  requests={cashoutCorrectionRequests}
+                  onSubmit={async (entry, values, reason) => {
+                    await submitCashoutCorrectionRequest(entry.id, values, reason, currentUser)
+                    showToast('Correction request submitted for owner approval.')
+                  }}
+                  onWithdraw={async (requestId) => {
+                    await withdrawCashoutCorrectionRequest(requestId, currentUser)
+                    showToast('Correction request withdrawn.')
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
           </section>
         ) : null}
 
@@ -453,6 +490,7 @@ export function AppWorkspace({
               loans={normalizedLoans}
               dailyCashouts={dailyCashouts}
               cashTransfers={cashTransfers}
+              cashoutCorrectionRequests={cashoutCorrectionRequests}
               settingsAuditLog={settingsAuditLog}
               users={users}
               onDeleteLoan={async (loan) => {
@@ -490,6 +528,30 @@ export function AppWorkspace({
                 } catch (error) {
                   showToast(error instanceof Error ? error.message : 'Unable to delete this daily cashout entry.')
                 }
+              }}
+              onApproveCashoutCorrection={async (request) => {
+                const currentEntry = dailyCashouts.find((entry) => entry.id === request.cashoutId)
+                const currentDrawer = currentEntry?.drawerTotal ?? currentEntry?.remainingBalance ?? 0
+                const proposedDrawer = drawerTotalFromDenominations(request.proposed.drawerDenominations)
+                if (!window.confirm(`Approve this correction?\n\nCash Movement balance impact: ${money(proposedDrawer - currentDrawer)}\n\nThe linked sales totals will be recalculated.`)) return
+                try {
+                  await approveCashoutCorrectionRequest(request.id, currentUser)
+                  showToast(`Cashout correction approved: ${request.recordedBy}`)
+                } catch (error) {
+                  showToast(error instanceof Error ? error.message : 'Unable to approve this correction.')
+                }
+              }}
+              onRejectCashoutCorrection={async (request, reason) => {
+                try {
+                  await rejectCashoutCorrectionRequest(request.id, reason, currentUser)
+                  showToast(`Cashout correction rejected: ${request.recordedBy}`)
+                } catch (error) {
+                  showToast(error instanceof Error ? error.message : 'Unable to reject this correction.')
+                }
+              }}
+              onEditDailyCashout={async (entry, values, reason) => {
+                await editDailyCashoutEntry(entry.id, values, reason, currentUser)
+                showToast(`Cashout corrected: ${entry.recordedBy} - ${formatDisplayDate(entry.date)}`)
               }}
             />
           </section>

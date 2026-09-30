@@ -38,6 +38,8 @@ export type DailyCashoutEntry = {
   returns: number
   creditSales: number
   cashAudit: number
+  cashExpense?: number
+  drawerDenominations?: DrawerDenominations
   drawerTotal?: number
   auditDifference?: number
   auditStatus?: 'matched' | 'cash-less' | 'cash-more'
@@ -46,6 +48,50 @@ export type DailyCashoutEntry = {
   pendingCashParticulars: string
   remainingBalance: number
   createdAt: string
+  updatedAt?: string
+  updatedBy?: string
+  revision?: number
+}
+
+export type DrawerDenominations = {
+  denom500: number
+  denom200: number
+  denom100: number
+  denom50: number
+  denom20: number
+  denom10: number
+  change: number
+}
+
+export type CashoutCorrectionValues = {
+  cashSales: number
+  upiSales: number
+  creditSales: number
+  returns: number
+  cashExpense: number
+  cashAudit: number
+  drawerDenominations: DrawerDenominations
+}
+
+export type CashoutCorrectionRequest = {
+  id: string
+  cashoutId: string
+  cashoutDate: string
+  recordedBy: string
+  recordedByUserId?: string
+  sourceRevision: number
+  before: CashoutCorrectionValues
+  proposed: CashoutCorrectionValues
+  reason: string
+  requestedByUserId: string
+  requestedBy: string
+  requestType: 'staff-request' | 'owner-edit'
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
+  createdAt: string
+  reviewedAt?: string
+  reviewedByUserId?: string
+  reviewedBy?: string
+  reviewReason?: string
 }
 
 export type LegacyCashHolder = 'Dev' | 'Arsh' | 'Farhan'

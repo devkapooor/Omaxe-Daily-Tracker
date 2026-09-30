@@ -146,6 +146,8 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | returns | number | yes | Returns |
 | creditSales | number | yes | Credit sales |
 | cashAudit | number | yes | System audit amount |
+| cashExpense | number | no | Structured cash expense used to calculate expected cash on current records |
+| drawerDenominations | object | no | Structured counts for 500/200/100/50/20/10 notes plus change |
 | drawerTotal | number | no | Final drawer count |
 | auditDifference | number | no | `cashAudit - drawerTotal` |
 | auditStatus | `matched \| cash-less \| cash-more` | no | Audit classification |
@@ -154,6 +156,26 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | pendingCashParticulars | string | yes | Pending-cash note |
 | remainingBalance | number | yes | Saved final drawer balance |
 | createdAt | string | yes | ISO timestamp |
+| updatedAt | string | no | Latest approved correction timestamp |
+| updatedBy | string | no | Owner name that applied the latest correction |
+| revision | number | no | Optimistic correction revision; legacy records default to revision 1 |
+
+### CashoutCorrectionRequest
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| id | string | yes | Document ID |
+| cashoutId | string | yes | Target daily cashout |
+| cashoutDate | string | yes | Locked business date copied for review |
+| recordedBy / recordedByUserId | string | yes/no | Locked recorder identity |
+| sourceRevision | number | yes | Revision that the request was based on |
+| before / proposed | object | yes | Structured financial and denomination snapshots |
+| reason | string | yes | Staff or owner correction reason |
+| requestedByUserId / requestedBy | string | yes | Requester identity |
+| requestType | `staff-request \| owner-edit` | yes | Approval request or direct owner correction |
+| status | `pending \| approved \| rejected \| withdrawn` | yes | Append-only correction lifecycle |
+| createdAt | string | yes | Request timestamp |
+| reviewedAt / reviewedBy / reviewReason | string | no | Review outcome metadata |
 
 ### CashTransfer
 
