@@ -14,6 +14,8 @@ import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 type DailyCashoutLogTabProps = {
   correctionRequests: CashoutCorrectionRequest[]
   entries: DailyCashoutEntry[]
+  visibleCount: number
+  onLoadMore: () => void
   onApproveCorrection: (request: CashoutCorrectionRequest) => Promise<void> | void
   onDelete: (entry: DailyCashoutEntry) => Promise<void> | void
   onEdit: (entry: DailyCashoutEntry, values: CashoutCorrectionValues, reason: string) => Promise<void> | void
@@ -23,13 +25,14 @@ type DailyCashoutLogTabProps = {
 export function DailyCashoutLogTab({
   correctionRequests,
   entries,
+  visibleCount,
+  onLoadMore,
   onApproveCorrection,
   onDelete,
   onEdit,
   onRejectCorrection,
 }: DailyCashoutLogTabProps) {
   const confirmation = useConfirmationDialog()
-  const [month, setMonth] = useState('')
   const [search, setSearch] = useState('')
   const [selectedEntry, setSelectedEntry] = useState<DailyCashoutEntry | null>(null)
   const [editingEntry, setEditingEntry] = useState<DailyCashoutEntry | null>(null)
@@ -39,13 +42,12 @@ export function DailyCashoutLogTab({
     const query = search.trim().toLowerCase()
     return entries
       .filter((entry) => {
-        const monthMatch = !month || entry.date.slice(0, 7) === month
         const searchMatch = !query || entry.recordedBy.toLowerCase().includes(query) ||
           (entry.auditStatus ?? '').toLowerCase().includes(query) || entry.actualCashParticulars.toLowerCase().includes(query)
-        return monthMatch && searchMatch
+        return searchMatch
       })
       .sort((left, right) => right.date.localeCompare(left.date) || (right.createdAt ?? '').localeCompare(left.createdAt ?? ''))
-  }, [entries, month, search])
+  }, [entries, search])
 
   return (
     <Card className="flex flex-col xl:h-full xl:min-h-0">
@@ -98,19 +100,16 @@ export function DailyCashoutLogTab({
           </div>
         ) : null}
 
-        <div className="grid gap-2 md:grid-cols-2">
-          <FieldLabel label="Month"><Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></FieldLabel>
-          <FieldLabel label="Search"><Input value={search} placeholder="Recorded by or audit status" onChange={(event) => setSearch(event.target.value)} /></FieldLabel>
-        </div>
+        <FieldLabel label="Search"><Input value={search} placeholder="Recorded by or audit status" onChange={(event) => setSearch(event.target.value)} /></FieldLabel>
         <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
           {filteredEntries.length === 0 ? <p className="text-[12px] font-medium text-muted-foreground">No daily cashouts recorded yet.</p> : null}
-          {filteredEntries.map((entry) => {
+          {filteredEntries.slice(0, visibleCount).map((entry) => {
             const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
             return (
               <div key={entry.id} className="rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(31,32,36,0.96),rgba(24,25,29,0.92))] p-2.5 text-[12px] text-foreground shadow-[0_10px_20px_rgba(0,0,0,0.14)]">
-                <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Daily Cashout</div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => setEditingEntry(entry)}>Edit</Button>
                     <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(entry)}>Delete</Button>
                   </div>
@@ -123,6 +122,7 @@ export function DailyCashoutLogTab({
               </div>
             )
           })}
+          {visibleCount < filteredEntries.length ? <Button type="button" variant="outline" className="w-full" onClick={onLoadMore}>Load more ({filteredEntries.length - visibleCount} remaining)</Button> : null}
         </div>
         <DailyCashoutDetailsModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
         {editingEntry ? <CashoutCorrectionForm entry={editingEntry} mode="owner-edit" onClose={() => setEditingEntry(null)} onSubmit={(values, reason) => onEdit(editingEntry, values, reason)} /> : null}

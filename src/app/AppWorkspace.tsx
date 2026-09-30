@@ -292,6 +292,7 @@ export function AppWorkspace({
             <CashMovementForm
               currentUserId={currentUser.id}
               currentUserName={currentUser.name}
+              currentUserRole={currentUser.role}
               legacyBalances={pendingCashNow.legacyBalances}
               legacyCashoutEntries={pendingCashNow.legacyCashoutEntries}
               legacyTransferEntries={pendingCashNow.legacyTransferEntries}

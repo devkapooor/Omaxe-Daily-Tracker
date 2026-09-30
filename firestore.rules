@@ -10,51 +10,185 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isOwner() {
-      return isSignedIn() && userDoc().data.role == 'owner' && userDoc().data.disabled != true;
+    function isStaff() {
+      return isSignedIn() &&
+        userDoc().data.disabled != true &&
+        userDoc().data.role in ['owner', 'manager', 'billing'];
     }
 
-    function isStaff() {
-      return isSignedIn() && userDoc().data.disabled != true;
+    function isOwner() {
+      return isStaff() && userDoc().data.role == 'owner';
+    }
+
+    function isManagerOrOwner() {
+      return isStaff() && userDoc().data.role in ['owner', 'manager'];
+    }
+
+    function isBilling() {
+      return isStaff() && userDoc().data.role == 'billing';
+    }
+
+    function isNonNegativeNumber(value) {
+      return value is number && value >= 0;
+    }
+
+    function hasDocumentId(data, documentId) {
+      return !data.keys().hasAny(['id']) || data.id == documentId;
+    }
+
+    function validSales(data, documentId) {
+      return hasDocumentId(data, documentId) &&
+        data.storeId is string &&
+        data.date is string &&
+        isNonNegativeNumber(data.totalSales) &&
+        isNonNegativeNumber(data.cashSales) &&
+        isNonNegativeNumber(data.upiSales) &&
+        isNonNegativeNumber(data.cardSales) &&
+        isNonNegativeNumber(data.bankTransferSales) &&
+        isNonNegativeNumber(data.creditSales) &&
+        isNonNegativeNumber(data.returnsDiscounts) &&
+        data.totalSales == data.cashSales + data.upiSales + data.cardSales + data.bankTransferSales + data.creditSales &&
+        data.createdAt is string &&
+        data.updatedAt is string;
+    }
+
+    function validPurchaseCreate(data, documentId) {
+      return hasDocumentId(data, documentId) &&
+        data.storeId is string &&
+        data.date is string &&
+        data.supplierName is string &&
+        isNonNegativeNumber(data.purchaseAmount) &&
+        isNonNegativeNumber(data.paidAmount) &&
+        isNonNegativeNumber(data.unpaidAmount) &&
+        data.paidAmount + data.unpaidAmount == data.purchaseAmount &&
+        data.createdAt is string &&
+        data.updatedAt is string;
+    }
+
+    function isVendorPaymentAllocation() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidAmount', 'unpaidAmount', 'updatedAt']) &&
+        request.resource.data.paidAmount >= resource.data.paidAmount &&
+        request.resource.data.unpaidAmount <= resource.data.unpaidAmount &&
+        request.resource.data.unpaidAmount >= 0 &&
+        request.resource.data.paidAmount + request.resource.data.unpaidAmount == resource.data.purchaseAmount;
+    }
+
+    function isOpeningBalanceAllocation() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openingOutstandingRemaining', 'updatedAt']) &&
+        request.resource.data.openingOutstandingRemaining is number &&
+        request.resource.data.openingOutstandingRemaining >= 0 &&
+        request.resource.data.openingOutstandingRemaining <= resource.data.openingOutstandingRemaining;
+    }
+
+    function isVendorDirectoryUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name',
+        'ownerName',
+        'contact',
+        'address',
+        'companiesProvided',
+        'notes',
+        'updatedAt'
+      ]) && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validCashTransferCreate(data, documentId) {
+      return hasDocumentId(data, documentId) &&
+        data.date is string &&
+        data.fromUserId is string &&
+        data.toType in ['person', 'bank'] &&
+        isNonNegativeNumber(data.amount) &&
+        data.amount > 0 &&
+        data.reason is string &&
+        data.reason.size() > 0 &&
+        data.createdBy is string &&
+        data.createdAt is string &&
+        (data.toType == 'bank' || (data.toUserId is string && data.toUserId != data.fromUserId));
     }
 
     match /users/{userId} {
       allow read: if isStaff() || (isSignedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isOwner();
+    }
+
+    match /appMetadata/nameDirectory {
+      allow read, write: if isStaff();
+    }
+
+    match /appMetadata/vendorCatalog {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+
+    match /appMetadata/appSettings {
+      allow read: if isStaff();
       allow create: if isOwner();
-      allow update: if isOwner();
-      allow delete: if isOwner();
+      allow update: if isOwner() || (
+        isManagerOrOwner() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentBankBalance']) &&
+        isNonNegativeNumber(request.resource.data.currentBankBalance)
+      );
+      allow delete: if false;
+    }
+
+    match /appMetadata/workspaceMetrics {
+      allow read: if isStaff();
+      allow write: if isOwner();
     }
 
     match /appMetadata/{documentId} {
-      allow read, write: if isStaff();
+      allow read, write: if isOwner();
     }
 
     match /stores/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow write: if isOwner();
     }
 
     match /sales/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff() && validSales(request.resource.data, documentId);
+      allow update: if isStaff() &&
+        validSales(request.resource.data, documentId) &&
+        request.resource.data.storeId == resource.data.storeId &&
+        request.resource.data.date == resource.data.date &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner();
     }
 
     match /purchases/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff() && validPurchaseCreate(request.resource.data, documentId);
+      allow update: if isOwner() || (isStaff() && isVendorPaymentAllocation());
+      allow delete: if isOwner();
     }
 
     match /vendors/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isOwner() || (isStaff() && (isOpeningBalanceAllocation() || isVendorDirectoryUpdate()));
+      allow delete: if isOwner();
     }
 
     match /cashouts/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isOwner();
     }
 
     match /payments/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff() && (
+        !request.resource.data.keys().hasAny(['entryType']) ||
+        request.resource.data.entryType != 'loan-payment' ||
+        isOwner()
+      );
+      allow update, delete: if isOwner();
     }
 
     match /loans/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow write: if isOwner();
     }
 
     match /dailyCashouts/{documentId} {
@@ -95,19 +229,30 @@ service cloud.firestore {
     }
 
     match /cashTransfers/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if validCashTransferCreate(request.resource.data, documentId) && (
+        isManagerOrOwner() || (isBilling() && request.resource.data.fromUserId == request.auth.uid)
+      );
+      allow update, delete: if isOwner();
     }
 
     match /plannedPayments/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create, update, delete: if isManagerOrOwner();
     }
 
     match /monthlyReports/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow write: if isOwner();
     }
 
     match /settingsAudit/{documentId} {
-      allow read, write: if isStaff();
+      allow read: if isOwner();
+      allow create: if isManagerOrOwner() &&
+        request.resource.data.actor == userDoc().data.name &&
+        request.resource.data.action is string &&
+        request.resource.data.createdAt is string;
+      allow update, delete: if false;
     }
   }
 }

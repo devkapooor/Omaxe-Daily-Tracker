@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import { collection, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { collection, doc, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../shared/lib/firebase'
 import type { AppStoreSetters, LoadedCollections } from './storeShared'
 import {
@@ -51,6 +51,7 @@ type SetupSubscriptionsArgs = Pick<
   | 'setVendors'
   | 'setWorkspaceMetrics'
 > & {
+  currentUserRole: AppUser['role']
   onSubscriptionError: (error: unknown) => void
   vendorFallbackLoadedRef: MutableRefObject<boolean>
 }
@@ -88,6 +89,7 @@ export function setupAppStoreSubscriptions({
   setUsers,
   setVendors,
   setWorkspaceMetrics,
+  currentUserRole,
   onSubscriptionError,
   vendorFallbackLoadedRef,
 }: SetupSubscriptionsArgs) {
@@ -182,10 +184,6 @@ export function setupAppStoreSubscriptions({
       setMonthlyReports(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<MonthlyReportMeta, 'id'>)))
       markLoaded('monthlyReports')
     }, onSubscriptionError),
-    onSnapshot(query(collection(db, 'settingsAudit'), orderBy('createdAt', 'desc')), (snapshot) => {
-      setSettingsAuditLog(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<SettingsAuditEntry, 'id'>)).slice(0, 25))
-      markLoaded('settingsAudit')
-    }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', 'nameDirectory'), (snapshot) => {
       const data = snapshot.data() as Partial<NameDirectory> | undefined
       setNameDirectory({
@@ -239,6 +237,18 @@ export function setupAppStoreSubscriptions({
       markLoaded('workspaceMetrics')
     }, onSubscriptionError),
   ]
+
+  if (currentUserRole === 'owner') {
+    unsubscribers.push(
+      onSnapshot(query(collection(db, 'settingsAudit'), orderBy('createdAt', 'desc'), limit(25)), (snapshot) => {
+        setSettingsAuditLog(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<SettingsAuditEntry, 'id'>)))
+        markLoaded('settingsAudit')
+      }, onSubscriptionError),
+    )
+  } else {
+    setSettingsAuditLog([])
+    markLoaded('settingsAudit')
+  }
 
   return () => {
     unsubscribers.forEach((unsubscribe) => unsubscribe())

@@ -17,20 +17,20 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 
 | ID | Upgrade | Priority | Planned release | Plan requirement | Status | Blaze required |
 | --- | --- | --- | --- | --- | --- | --- |
-| UP-001 | Permission hardening | Critical | Release 1 | Enforce owner, manager, and billing capabilities in Firestore rules; protect immutable identity and audit fields; add rules tests. | Planned | No |
+| UP-001 | Permission hardening | Critical | Release 1 | Enforce owner, manager, and billing capabilities in Firestore rules; protect immutable identity and audit fields; add rules tests. | Implemented - pending deployment | No |
 | UP-002 | Audited finance record corrections | Critical | Release 2 | Add owner-controlled correction or deletion flows for expenses, purchases, vendor payments, loans, and cash transfers, with before/after snapshots and reasons. | Planned | No |
 | UP-003 | Operations Action Centre | High | Release 3 | Add a separate workspace for missing cashouts, pending correction requests, upcoming cheques, and overdue planned payments without adding dashboard clutter. | Planned | No |
 | UP-004 | Export Centre | High | Release 3 | Allow owner-filtered CSV downloads for sales, expenses, purchases, payments, cashouts, and cash movements, including the applied date range. | Planned | No |
-| UP-005 | Automated finance and permission tests | Critical | Releases 1-3 | Cover dashboard totals, cash balances, payment allocation, correction workflows, date boundaries, and Firestore role enforcement. | Planned | No |
-| UP-006 | Bounded and filtered Logs loading | High | Release 1 | Default Logs to the latest 7 days; provide 15, 30, and 90 day presets plus a custom date range; query only the active tab and paginate older records instead of downloading all history. | Planned | No |
+| UP-005 | Automated finance and permission tests | Critical | Releases 1-3 | Cover dashboard totals, cash balances, payment allocation, correction workflows, date boundaries, and Firestore role enforcement. | Release 1 coverage implemented | No |
+| UP-006 | Bounded and filtered Logs loading | High | Release 1 | Default Logs to the latest 7 days; provide 15, 30, and 90 day presets plus a custom date range; query only the active tab and paginate older records instead of downloading all history. | Implemented - pending deployment | No |
 
 ## Implementation Readiness
 
 | Upgrade | Readiness | Next implementation step |
 | --- | --- | --- |
-| UP-001 Permission hardening | Ready for implementation | Capture the current role-action matrix, add Firestore emulator tests, then deploy rules before dependent UI changes. |
-| UP-005 Automated finance and permission tests | Ready for implementation with UP-001 | Establish the emulator test harness and add permission and calculation regression coverage without touching production data. |
-| UP-006 Bounded and filtered Logs loading | Ready for implementation after query design validation | Separate Logs queries from shared calculation subscriptions, confirm required indexes, then add range filters and pagination. |
+| UP-001 Permission hardening | Implemented - pending deployment | Eight owner, manager, billing, disabled-user, and unauthenticated scenarios pass in the local Firestore emulator. |
+| UP-005 Automated finance and permission tests | Release 1 coverage implemented | Permission tests and existing cashout correction tests pass; broader finance calculation coverage continues with later releases. |
+| UP-006 Bounded and filtered Logs loading | Implemented - pending deployment | Shared IST range filtering, adaptive controls, incremental rendering, and bounded Settings Audit queries are complete. Shared finance subscriptions remain intact where required for calculations. |
 | UP-002 Audited finance record corrections | Planned after Release 1 | Finalize per-record correction invariants and build only after hardened permissions and tests are in place. |
 | UP-003 Operations Action Centre | Planned after Release 2 | Define missing and overdue rules using read-only derived data. |
 | UP-004 Export Centre | Planned after Release 2 | Finalize export columns and role visibility; exports remain client-side and read-only. |

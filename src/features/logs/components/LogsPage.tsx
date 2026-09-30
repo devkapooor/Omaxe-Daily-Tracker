@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
-import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, legacyCashHolderLabel, money, userNameById } from '@/app/uiHelpers'
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, legacyCashHolderLabel, money, shiftDate, userNameById } from '@/app/uiHelpers'
+import { db } from '@/shared/lib/firebase'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutLogTab } from '@/features/logs/components/DailyCashoutLogTab'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
@@ -35,8 +38,6 @@ type LogCardProps = {
 }
 
 type FilterBarProps = {
-  monthValue?: string
-  onMonthChange?: (value: string) => void
   searchValue?: string
   searchPlaceholder?: string
   onSearchChange?: (value: string) => void
@@ -53,33 +54,20 @@ function LogCard({ eyebrow, title, children }: LogCardProps) {
   )
 }
 
-function formatDisplayMonth(value: string) {
-  const [year, month] = value.split('-')
-  if (!year || !month) return value
-  return `${month}/${year}`
+function FilterBar({ searchValue, searchPlaceholder, onSearchChange }: FilterBarProps) {
+  if (!onSearchChange) return null
+  return (
+    <FieldLabel label="Search">
+      <Input value={searchValue} placeholder={searchPlaceholder} onChange={(event) => onSearchChange(event.target.value)} />
+    </FieldLabel>
+  )
 }
 
-function FilterBar({ monthValue, onMonthChange, searchValue, searchPlaceholder, onSearchChange }: FilterBarProps) {
-  if (!onMonthChange && !onSearchChange) return null
-  return (
-    <div className="grid gap-2 md:grid-cols-2">
-      {onMonthChange ? (
-        <FieldLabel label="Month">
-          <div className="space-y-1">
-            <Input type="month" value={monthValue} onChange={(event) => onMonthChange(event.target.value)} />
-            {monthValue ? <p className="text-[11px] font-semibold text-muted-foreground">Showing: {formatDisplayMonth(monthValue)}</p> : null}
-          </div>
-        </FieldLabel>
-      ) : (
-        <div />
-      )}
-      {onSearchChange ? (
-        <FieldLabel label="Search">
-          <Input value={searchValue} placeholder={searchPlaceholder} onChange={(event) => onSearchChange(event.target.value)} />
-        </FieldLabel>
-      ) : null}
-    </div>
-  )
+type LogRangePreset = '7' | '15' | '30' | '90' | 'custom'
+
+function LoadMoreButton({ shown, total, onClick }: { shown: number; total: number; onClick: () => void }) {
+  if (shown >= total) return null
+  return <Button type="button" variant="outline" className="w-full" onClick={onClick}>Load more ({total - shown} remaining)</Button>
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -92,6 +80,30 @@ function compareDateDesc(left: string, right: string) {
 
 function compareTimestampDesc(left?: string, right?: string) {
   return (right ?? '').localeCompare(left ?? '')
+}
+
+function isDateWithinRange(value: string, start: string, end: string) {
+  const date = value.slice(0, 10)
+  return date >= start && date <= end
+}
+
+function indiaDateKey(value = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  }).formatToParts(value)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function indiaBoundaryIso(date: string, boundary: 'start' | 'end') {
+  return new Date(`${date}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}+05:30`).toISOString()
+}
+
+function isTimestampWithinIndiaRange(value: string, start: string, end: string) {
+  return isDateWithinRange(indiaDateKey(new Date(value)), start, end)
 }
 
 function ChequeMeta({
@@ -140,18 +152,44 @@ export function LogsPage({
   onRejectCashoutCorrection,
   onEditDailyCashout,
 }: LogsPageProps) {
-  const [salesMonth, setSalesMonth] = useState('')
-  const [expenseMonth, setExpenseMonth] = useState('')
+  const [activeTab, setActiveTab] = useState('sales')
+  const [rangePreset, setRangePreset] = useState<LogRangePreset>('7')
+  const [customStart, setCustomStart] = useState(indiaDateKey())
+  const [customEnd, setCustomEnd] = useState(indiaDateKey())
+  const [visibleCount, setVisibleCount] = useState(50)
   const [expenseSearch, setExpenseSearch] = useState('')
-  const [purchaseMonth, setPurchaseMonth] = useState('')
   const [purchaseSearch, setPurchaseSearch] = useState('')
-  const [paymentMonth, setPaymentMonth] = useState('')
   const [paymentSearch, setPaymentSearch] = useState('')
   const [loanSearch, setLoanSearch] = useState('')
-  const [transferMonth, setTransferMonth] = useState('')
   const [transferSearch, setTransferSearch] = useState('')
   const [auditSearch, setAuditSearch] = useState('')
+  const [boundedAuditLog, setBoundedAuditLog] = useState(settingsAuditLog)
   const userNames = useMemo(() => userNameById(users), [users])
+  const rangeEnd = rangePreset === 'custom' ? customEnd : indiaDateKey()
+  const rangeStart = rangePreset === 'custom' ? customStart : shiftDate(rangeEnd, -(Number(rangePreset) - 1))
+  const validRangeStart = rangeStart <= rangeEnd ? rangeStart : rangeEnd
+  const validRangeEnd = rangeStart <= rangeEnd ? rangeEnd : rangeStart
+
+  function resetResults() {
+    setVisibleCount(50)
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'settingsAudit') return
+
+    const auditQuery = query(
+      collection(db, 'settingsAudit'),
+      where('createdAt', '>=', indiaBoundaryIso(validRangeStart, 'start')),
+      where('createdAt', '<=', indiaBoundaryIso(validRangeEnd, 'end')),
+      orderBy('createdAt', 'desc'),
+      limit(visibleCount),
+    )
+    return onSnapshot(
+      auditQuery,
+      (snapshot) => setBoundedAuditLog(snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<SettingsAuditEntry, 'id'>) }))),
+      () => setBoundedAuditLog(settingsAuditLog.filter((entry) => isTimestampWithinIndiaRange(entry.createdAt, validRangeStart, validRangeEnd)).slice(0, visibleCount)),
+    )
+  }, [activeTab, settingsAuditLog, validRangeEnd, validRangeStart, visibleCount])
 
   function transferPartyName(entry: CashTransfer, side: 'from' | 'to') {
     if (side === 'from') {
@@ -167,47 +205,44 @@ export function LogsPage({
   const filteredSales = useMemo(
     () =>
       sales
-        .filter((entry) => !salesMonth || entry.date.slice(0, 7) === salesMonth)
+        .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
         .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt)),
-    [sales, salesMonth],
+    [sales, validRangeEnd, validRangeStart],
   )
 
   const filteredExpenses = useMemo(() => {
     const query = expenseSearch.trim().toLowerCase()
     return expenses
       .filter((entry) => {
-        const monthMatch = !expenseMonth || entry.date.slice(0, 7) === expenseMonth
         const searchMatch =
           !query ||
           entry.paidTo.toLowerCase().includes(query) ||
           entry.category.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return monthMatch && searchMatch
+        return isDateWithinRange(entry.date, validRangeStart, validRangeEnd) && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [expenseMonth, expenseSearch, expenses])
+  }, [expenseSearch, expenses, validRangeEnd, validRangeStart])
 
   const filteredPurchases = useMemo(() => {
     const query = purchaseSearch.trim().toLowerCase()
     return purchases
       .filter((entry) => {
-        const monthMatch = !purchaseMonth || entry.date.slice(0, 7) === purchaseMonth
         const searchMatch =
           !query ||
           entry.supplierName.toLowerCase().includes(query) ||
           entry.billNumber.toLowerCase().includes(query) ||
           entry.category.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return monthMatch && searchMatch
+        return isDateWithinRange(entry.date, validRangeStart, validRangeEnd) && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [purchaseMonth, purchaseSearch, purchases])
+  }, [purchaseSearch, purchases, validRangeEnd, validRangeStart])
 
   const filteredPayments = useMemo(() => {
     const query = paymentSearch.trim().toLowerCase()
     return payments
       .filter((entry) => {
-        const monthMatch = !paymentMonth || entry.date.slice(0, 7) === paymentMonth
         const entryType = entry.entryType ?? 'general'
         const searchMatch =
           !query ||
@@ -215,24 +250,23 @@ export function LogsPage({
           entry.type.toLowerCase().includes(query) ||
           entryType.toLowerCase().includes(query) ||
           entry.notes.toLowerCase().includes(query)
-        return monthMatch && searchMatch
+        return isDateWithinRange(entry.date, validRangeStart, validRangeEnd) && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [paymentMonth, paymentSearch, payments])
+  }, [paymentSearch, payments, validRangeEnd, validRangeStart])
 
   const filteredLoans = useMemo(() => {
     const query = loanSearch.trim().toLowerCase()
     return loans
-      .filter((entry) => !query || entry.personName.toLowerCase().includes(query) || entry.status.toLowerCase().includes(query))
+      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd) && (!query || entry.personName.toLowerCase().includes(query) || entry.status.toLowerCase().includes(query)))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [loanSearch, loans])
+  }, [loanSearch, loans, validRangeEnd, validRangeStart])
 
 
   const filteredTransfers = useMemo(() => {
     const query = transferSearch.trim().toLowerCase()
     return cashTransfers
       .filter((entry) => {
-        const monthMatch = !transferMonth || entry.date.slice(0, 7) === transferMonth
         const source = entry.fromUserId && userNames.has(entry.fromUserId)
           ? userNames.get(entry.fromUserId) ?? 'Unknown User'
           : legacyCashHolderLabel(entry.from)
@@ -248,22 +282,67 @@ export function LogsPage({
           destination.toLowerCase().includes(query) ||
           entry.reason.toLowerCase().includes(query) ||
           entry.createdBy.toLowerCase().includes(query)
-        return monthMatch && searchMatch
+        return isDateWithinRange(entry.date, validRangeStart, validRangeEnd) && searchMatch
       })
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashTransfers, transferMonth, transferSearch, userNames])
+  }, [cashTransfers, transferSearch, userNames, validRangeEnd, validRangeStart])
+
+  const filteredDailyCashouts = useMemo(
+    () => dailyCashouts.filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd)),
+    [dailyCashouts, validRangeEnd, validRangeStart],
+  )
+
+  const rangedCorrectionRequests = useMemo(
+    () => cashoutCorrectionRequests.filter((entry) => entry.status === 'pending' || isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
+    [cashoutCorrectionRequests, validRangeEnd, validRangeStart],
+  )
 
   const filteredAudit = useMemo(() => {
     const query = auditSearch.trim().toLowerCase()
-    return settingsAuditLog
+    return boundedAuditLog
       .filter((entry) => !query || entry.actor.toLowerCase().includes(query) || entry.action.toLowerCase().includes(query))
       .sort((left, right) => compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [auditSearch, settingsAuditLog])
+  }, [auditSearch, boundedAuditLog])
+
+  const activeResultCount = {
+    sales: filteredSales.length,
+    expenses: filteredExpenses.length,
+    purchases: filteredPurchases.length,
+    payments: filteredPayments.length,
+    loans: filteredLoans.length,
+    dailyCashouts: filteredDailyCashouts.length,
+    cashTransfers: filteredTransfers.length,
+    settingsAudit: filteredAudit.length,
+  }[activeTab] ?? 0
 
   return (
     <section className="grid gap-2.5 xl:min-h-0 xl:overflow-hidden">
-      <Tabs defaultValue="sales" className="grid gap-2 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
-        <TabsList className="min-h-9 grid-cols-8">
+      <div className="grid gap-3 rounded-[18px] border border-border/70 bg-secondary/35 p-3 sm:grid-cols-[minmax(150px,220px)_1fr_auto] sm:items-end">
+        <FieldLabel label="Log range">
+          <NativeSelect value={rangePreset} onChange={(event) => {
+            setRangePreset(event.target.value as LogRangePreset)
+            resetResults()
+          }}>
+            <option value="7">Last 7 days</option>
+            <option value="15">Last 15 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="custom">Custom range</option>
+          </NativeSelect>
+        </FieldLabel>
+        {rangePreset === 'custom' ? (
+          <div className="grid gap-2 min-[460px]:grid-cols-2">
+            <FieldLabel label="From"><Input type="date" value={customStart} onChange={(event) => { setCustomStart(event.target.value); resetResults() }} /></FieldLabel>
+            <FieldLabel label="To"><Input type="date" value={customEnd} onChange={(event) => { setCustomEnd(event.target.value); resetResults() }} /></FieldLabel>
+          </div>
+        ) : <div className="hidden sm:block" />}
+        <div className="rounded-xl border border-border/60 bg-background/45 px-3 py-2 text-xs font-semibold text-muted-foreground sm:text-right">
+          <span className="block text-foreground">{activeResultCount} result{activeResultCount === 1 ? '' : 's'}</span>
+          {formatDisplayDate(validRangeStart)} to {formatDisplayDate(validRangeEnd)}
+        </div>
+      </div>
+      <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); resetResults() }} className="grid gap-2 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+        <TabsList className="min-h-9 grid-flow-row grid-cols-2 sm:grid-cols-4 xl:grid-flow-col xl:grid-cols-8">
           <TabsTrigger value="sales">Sales</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="purchases">Purchases</TabsTrigger>
@@ -276,10 +355,9 @@ export function LogsPage({
 
         <TabsContent value="sales" className="min-h-0">
           <LogCard eyebrow="Logs" title="Sales">
-            <FilterBar monthValue={salesMonth} onMonthChange={setSalesMonth} />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredSales.length === 0 ? <EmptyState message="No sales recorded yet." /> : null}
-              {filteredSales.map((entry) => (
+              {filteredSales.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">{formatDisplayDate(entry.date)} | {money(entry.totalSales)}</p>
                   <p className="text-muted-foreground">
@@ -289,16 +367,17 @@ export function LogsPage({
                   {entry.notes ? <p className="text-muted-foreground">{entry.notes}</p> : null}
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredSales.length)} total={filteredSales.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="expenses" className="min-h-0">
           <LogCard eyebrow="Logs" title="Expenses">
-            <FilterBar monthValue={expenseMonth} onMonthChange={setExpenseMonth} searchValue={expenseSearch} onSearchChange={setExpenseSearch} searchPlaceholder="Paid to, category, notes" />
+            <FilterBar searchValue={expenseSearch} onSearchChange={(value) => { setExpenseSearch(value); resetResults() }} searchPlaceholder="Paid to, category, notes" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredExpenses.length === 0 ? <EmptyState message="No expenses recorded yet." /> : null}
-              {filteredExpenses.map((entry) => (
+              {filteredExpenses.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">{entry.paidTo} | {money(entry.amount)}</p>
                   <p className="text-muted-foreground">{formatDisplayDate(entry.date)} | {entry.category} | {entry.paymentMode}</p>
@@ -306,16 +385,17 @@ export function LogsPage({
                   {entry.notes ? <p className="text-muted-foreground">{entry.notes}</p> : null}
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredExpenses.length)} total={filteredExpenses.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="purchases" className="min-h-0">
           <LogCard eyebrow="Logs" title="Purchases">
-            <FilterBar monthValue={purchaseMonth} onMonthChange={setPurchaseMonth} searchValue={purchaseSearch} onSearchChange={setPurchaseSearch} searchPlaceholder="Vendor, bill number, category" />
+            <FilterBar searchValue={purchaseSearch} onSearchChange={(value) => { setPurchaseSearch(value); resetResults() }} searchPlaceholder="Vendor, bill number, category" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPurchases.length === 0 ? <EmptyState message="No purchases recorded yet." /> : null}
-              {filteredPurchases.map((entry) => (
+              {filteredPurchases.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">{entry.supplierName} | Bill {entry.billNumber || '-'}</p>
                   <p className="text-muted-foreground">{formatDisplayDate(entry.date)} | {entry.category} | {entry.paymentMode}</p>
@@ -323,16 +403,17 @@ export function LogsPage({
                   {entry.notes ? <p className="text-muted-foreground">{entry.notes}</p> : null}
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredPurchases.length)} total={filteredPurchases.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="payments" className="min-h-0">
           <LogCard eyebrow="Logs" title="Payments">
-            <FilterBar monthValue={paymentMonth} onMonthChange={setPaymentMonth} searchValue={paymentSearch} onSearchChange={setPaymentSearch} searchPlaceholder="Party, type, notes" />
+            <FilterBar searchValue={paymentSearch} onSearchChange={(value) => { setPaymentSearch(value); resetResults() }} searchPlaceholder="Party, type, notes" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredPayments.length === 0 ? <EmptyState message="No payments recorded yet." /> : null}
-              {filteredPayments.map((entry) => (
+              {filteredPayments.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">{entry.partyName} | {money(entry.amount)}</p>
                   <p className="text-muted-foreground">
@@ -342,16 +423,17 @@ export function LogsPage({
                   {entry.notes ? <p className="text-muted-foreground">{entry.notes}</p> : null}
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredPayments.length)} total={filteredPayments.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="loans" className="min-h-0">
           <LogCard eyebrow="Logs" title="Loans">
-            <FilterBar searchValue={loanSearch} onSearchChange={setLoanSearch} searchPlaceholder="Person or status" />
+            <FilterBar searchValue={loanSearch} onSearchChange={(value) => { setLoanSearch(value); resetResults() }} searchPlaceholder="Person or status" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredLoans.length === 0 ? <EmptyState message="No loans recorded yet." /> : null}
-              {filteredLoans.map((entry) => (
+              {filteredLoans.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-2">
@@ -371,14 +453,17 @@ export function LogsPage({
                   </div>
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredLoans.length)} total={filteredLoans.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="dailyCashouts" className="min-h-0">
           <DailyCashoutLogTab
-            correctionRequests={cashoutCorrectionRequests}
-            entries={dailyCashouts}
+            correctionRequests={rangedCorrectionRequests}
+            entries={filteredDailyCashouts}
+            visibleCount={visibleCount}
+            onLoadMore={() => setVisibleCount((count) => count + 50)}
             onApproveCorrection={onApproveCashoutCorrection}
             onDelete={onDeleteDailyCashout}
             onEdit={onEditDailyCashout}
@@ -387,10 +472,10 @@ export function LogsPage({
         </TabsContent>
         <TabsContent value="cashTransfers" className="min-h-0">
           <LogCard eyebrow="Logs" title="Cash Transfers">
-            <FilterBar monthValue={transferMonth} onMonthChange={setTransferMonth} searchValue={transferSearch} onSearchChange={setTransferSearch} searchPlaceholder="From, destination, reason" />
+            <FilterBar searchValue={transferSearch} onSearchChange={(value) => { setTransferSearch(value); resetResults() }} searchPlaceholder="From, destination, reason" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredTransfers.length === 0 ? <EmptyState message="No cash transfers recorded yet." /> : null}
-              {filteredTransfers.map((entry) => (
+              {filteredTransfers.slice(0, visibleCount).map((entry) => (
                 <LogEntryCard key={entry.id}>
                   <p className="font-bold">
                     {formatDisplayDate(entry.date)} | {transferPartyName(entry, 'from')} to {transferPartyName(entry, 'to')}
@@ -401,13 +486,14 @@ export function LogsPage({
                   <p className="text-muted-foreground">By {entry.createdBy} at {formatDisplayTime(entry.createdAt)}</p>
                 </LogEntryCard>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, filteredTransfers.length)} total={filteredTransfers.length} onClick={() => setVisibleCount((count) => count + 50)} />
             </div>
           </LogCard>
         </TabsContent>
 
         <TabsContent value="settingsAudit" className="min-h-0">
           <LogCard eyebrow="Logs" title="Settings Audit">
-            <FilterBar searchValue={auditSearch} onSearchChange={setAuditSearch} searchPlaceholder="Actor or action" />
+            <FilterBar searchValue={auditSearch} onSearchChange={(value) => { setAuditSearch(value); resetResults() }} searchPlaceholder="Actor or action" />
             <div className="space-y-2 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {filteredAudit.length === 0 ? <EmptyState message="No settings activity recorded yet." /> : null}
               {filteredAudit.map((entry) => (
@@ -415,6 +501,7 @@ export function LogsPage({
                   {formatDisplayDateTime(entry.createdAt)} | {entry.actor} | {entry.action}
                 </LogEntryCard>
               ))}
+              {boundedAuditLog.length >= visibleCount ? <Button type="button" variant="outline" className="w-full" onClick={() => setVisibleCount((count) => count + 50)}>Load more</Button> : null}
             </div>
           </LogCard>
         </TabsContent>

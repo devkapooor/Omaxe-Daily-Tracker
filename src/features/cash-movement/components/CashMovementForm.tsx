@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { CashTransfer, DailyCashoutEntry, UserAccount } from '@/domain/appTypes'
+import type { UserRole } from '@/domain/financeTypes'
 import {
   activeWorkspaceUsers,
   formatDisplayDate,
@@ -21,6 +22,7 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 type CashMovementFormProps = {
   currentUserId: string
   currentUserName: string
+  currentUserRole: UserRole
   users: UserAccount[]
   userBalances: PendingCashUserBalance[]
   legacyBalances: LegacyCashBalance[]
@@ -33,6 +35,7 @@ type CashMovementFormProps = {
 export function CashMovementForm({
   currentUserId,
   currentUserName,
+  currentUserRole,
   users,
   userBalances,
   legacyBalances,
@@ -44,13 +47,14 @@ export function CashMovementForm({
   const userOptions = useMemo(
     () =>
       activeWorkspaceUsers(users)
+        .filter((user) => currentUserRole !== 'billing' || user.id === currentUserId)
         .map((user) => ({
           id: user.id,
           name: user.name,
           amount: userBalances.find((entry) => entry.userId === user.id)?.amount ?? 0,
         }))
         .sort((left, right) => left.name.localeCompare(right.name)),
-    [userBalances, users],
+    [currentUserId, currentUserRole, userBalances, users],
   )
 
   const [transferFromUserId, setTransferFromUserId] = useState(currentUserId)

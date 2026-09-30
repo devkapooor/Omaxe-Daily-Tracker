@@ -52,6 +52,7 @@ export function useAppStore() {
   const [workspaceMetrics, setWorkspaceMetrics] = useState(emptyWorkspaceMetrics)
   const [isBusy, setIsBusy] = useState(false)
   const [canStartSubscriptions, setCanStartSubscriptions] = useState(false)
+  const [verifiedRole, setVerifiedRole] = useState<AppUser['role'] | null>(null)
   const bootstrappedOwnerRef = useRef<string | null>(null)
   const localBypassAttemptedRef = useRef(false)
   const vendorFallbackLoadedRef = useRef(false)
@@ -89,6 +90,7 @@ export function useAppStore() {
       setMonthlyReports([])
       setSettingsAuditLog([])
       setWorkspaceMetrics(emptyWorkspaceMetrics)
+      setVerifiedRole(null)
       setCanStartSubscriptions(!nextUser)
     })
   }, [])
@@ -126,6 +128,7 @@ export function useAppStore() {
       try {
         const profileSnapshot = await getDoc(doc(db, 'users', currentAuthUser.uid))
         if (!profileSnapshot.exists()) {
+          if (!cancelled) setVerifiedRole('owner')
           if (!cancelled) setCanStartSubscriptions(true)
           return
         }
@@ -143,7 +146,16 @@ export function useAppStore() {
           return
         }
 
-        if (!cancelled) setCanStartSubscriptions(true)
+        if (profile.role !== 'owner' && profile.role !== 'manager' && profile.role !== 'billing') {
+          setAuthError('Your account has an invalid workspace role. Please contact the owner.')
+          await signOut(auth)
+          return
+        }
+
+        if (!cancelled) {
+          setVerifiedRole(profile.role)
+          setCanStartSubscriptions(true)
+        }
       } catch (error) {
         const code = error instanceof Error && 'code' in error ? String(error.code) : ''
         const isNetworkError =
@@ -169,7 +181,7 @@ export function useAppStore() {
   }, [authUser, networkTick])
 
   useEffect(() => {
-    if (!authUser || !canStartSubscriptions) return
+    if (!authUser || !canStartSubscriptions || !verifiedRole) return
 
     function handleSubscriptionError(error: unknown) {
       const code = error instanceof Error && 'code' in error ? String(error.code) : ''
@@ -202,9 +214,10 @@ export function useAppStore() {
       setUsers,
       setVendors,
       setWorkspaceMetrics,
+      currentUserRole: verifiedRole,
       vendorFallbackLoadedRef,
     })
-  }, [authUser, canStartSubscriptions])
+  }, [authUser, canStartSubscriptions, verifiedRole])
 
   const collectionsReady = useMemo(() => Object.values(loadedCollections).every(Boolean), [loadedCollections])
 
@@ -260,17 +273,17 @@ export function useAppStore() {
 
   useEffect(() => {
     async function seedDefaultStore() {
-      if (!authUser || !loadedCollections.stores) return
+      if (!authUser || verifiedRole !== 'owner' || !loadedCollections.stores) return
       if (financeData.stores.length > 0) return
       await setDoc(doc(db, 'stores', ensureSingleStore([])[0].id), seedData.stores[0])
     }
 
     void seedDefaultStore()
-  }, [authUser, financeData.stores.length, loadedCollections.stores])
+  }, [authUser, financeData.stores.length, loadedCollections.stores, verifiedRole])
 
   useEffect(() => {
     async function syncWorkspaceMetrics() {
-      if (!authUser || !canStartSubscriptions) return
+      if (!authUser || verifiedRole !== 'owner' || !canStartSubscriptions) return
       if (!Object.entries(loadedCollections).every(([key, value]) => key === 'workspaceMetrics' || value)) return
       if (metricsSyncInFlightRef.current) return
 
@@ -314,6 +327,7 @@ export function useAppStore() {
     plannedPayments,
     users,
     vendors,
+    verifiedRole,
     workspaceMetrics,
   ])
 
