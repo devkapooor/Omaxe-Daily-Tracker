@@ -46,7 +46,7 @@ Every phase uses the same sequence:
 
 - Owner approves all decisions in the Financial Decision Register.
 - Collection names, money units, event signs, source-of-truth boundaries, and cutover rules are unambiguous.
-- Any workbook data proposed for V2 is independently verified; unreliable legacy vendor balances are not migrated.
+- Any workbook data proposed for V2 is independently verified; unreliable legacy vendor balances are not migrated. The open-cheque control and blank leaf range have been verified read-only.
 - No application code or production data is changed in this phase.
 
 ## Phase 1 - Domain Foundation
@@ -167,7 +167,7 @@ Every phase uses the same sequence:
 ### Completion Gate
 
 - Every proposed V2 opening value has an owner-approved source; legacy balances are excluded.
-- Any approved cheque controls, available leaves, and starting statuses reconcile.
+- The approved open-cheque controls, available leaves, and starting statuses reconcile.
 - Re-running the clean-start preparation is idempotent.
 - Production initialization remains disabled.
 
@@ -215,11 +215,12 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
 | FD-007 | Vendor returns post as unallocated vendor-ledger credits and do not adjust individual invoices. Payments may be linked to a selected invoice for any amount up to its open value or entered as a custom unallocated vendor-account payment. | Approved 2026-10-01 | Phase 5 allocation rules |
 | FD-008 | Vendors do not repay returns in cash. Remove `Cash Refund` as a supported return outcome; returns never create cash-holder, Cash Movement, or bank-balance entries. | Approved 2026-10-01 | Phase 7 return effects |
-| FD-009 | Confirm whether cheque numbers 1120-1299 are a new available book and whether any imported open cheque uses a number in that range. | Pending verification | Phase 6 cheque book |
-| FD-010 | Confirm the 30 imported cheque statuses and totals after independent workbook reconciliation. | Pending verification | Phase 8 dry run |
+| FD-009 | Workbook verification found 180 unique blank leaves numbered 1120-1299, with no populated fields and no overlap with an open cheque. Confirm whether V2 should initialize this range as the active available cheque book. | Verified; owner decision pending | Phase 6 cheque book |
+| FD-010 | Include the 30 verified open cheques in V2 operational tracking. Workbook controls are 21 `Issued` totalling INR 182,192.30 and 9 `In Process` totalling INR 46,819; combined total INR 229,011.30, with no duplicate cheque numbers. | Approved 2026-10-01 | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
 | FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
+| FD-014 | Confirm how legacy `In Process` maps to the V2 lifecycle and whether imported open cheques are tracking-only or may affect clean V2 vendor outstanding when later debited. | Pending | Phase 6 legacy cheque behavior |
 
 ## Phase 0 Findings
 
@@ -232,6 +233,21 @@ No implementation phase may cross a decision marked `Pending`.
 - The proposed design remains Spark-compatible if it uses Firestore client transactions, rules, indexes, and emulator-tested owner tooling without Cloud Functions.
 - The owner has identified legacy vendor financial data as unreliable. It will remain preserved as read-only historical evidence but will not seed or influence V2 balances.
 - Existing loan balances and all loan records, calculations, and workflows are protected and must never be changed by this redesign.
+- The owner requires the verified open cheques from the workbook to remain visible in the new Cheque Register.
+
+## Verified Cheque Workbook Controls
+
+- Source file: `Daily-Liquidity-Payment-Planner.xlsx`
+- Read-only verification date: 2026-10-01
+- SHA-256: `10295B920CD635D634B977A705B84846B8608B91E10BAE225C72F134D0989F50`
+- `Issued`: 21 cheques totalling INR 182,192.30.
+- `In Process`: 9 cheques totalling INR 46,819.00.
+- Combined open control: 30 cheques totalling INR 229,011.30.
+- Open cheque numbers are unique and range from 1079 to 1119 with gaps.
+- Blank cheque leaves: 180 unique numbers covering every number from 1120 through 1299.
+- Blank leaves have no date, party, amount, or status populated.
+- No open cheque number overlaps the blank 1120-1299 range.
+- These controls verify workbook structure and totals only. They do not establish vendor opening balances or authorize an accounting effect in V2.
 
 ## Approved Financial Behavior
 
