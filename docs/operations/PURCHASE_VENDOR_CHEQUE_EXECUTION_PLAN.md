@@ -209,7 +209,7 @@ No implementation phase may cross a decision marked `Pending`.
 | --- | --- | --- | --- |
 | FD-001 | Vendor outstanding decreases only when the cheque becomes `Debited`. `Issued` and `Presented` cheques remain visible in the vendor ledger as pending cheque commitments without changing outstanding. | Approved 2026-10-01 | Phase 1 sign rules |
 | FD-002 | Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases its reserved invoice allocations in the same atomic transition. | Approved 2026-10-01 | Phase 1 transition rules |
-| FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. Exact activation date remains pending. | Partially approved 2026-10-01 | Phase 3 compatibility design |
+| FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. The owner selects the exact activation date during cutover approval. | Approved 2026-10-01; date deferred to cutover | Phase 3 compatibility design |
 | FD-004 | Every V2 vendor starts at zero outstanding. The owner alone may enter a separately verified opening balance; no legacy value is copied or calculated automatically. After recording, corrections use audited compensating adjustment entries and never overwrite the original opening entry. | Approved 2026-10-01 | Phase 4 ledger posting |
 | FD-005 | Staff submit purchase, settlement, return, and cheque correction requests through the Action Centre. The owner may apply direct audited corrections without submitting a separate approval request. | Approved 2026-10-01 | Phase 2 permissions |
 | FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
@@ -221,7 +221,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
 | FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
 | FD-014 | Imported legacy open cheques are tracking-only. Their status may be updated, but they never post to or reduce clean V2 vendor outstanding. Legacy `In Process` maps to V2 `Presented`. | Approved 2026-10-01 | Phase 6 legacy cheque behavior |
-| FD-015 | Confirm how existing open expense cheques enter the unified register and whether they remain tracking-only while their source Expense records stay unchanged. | Pending | Phase 6 expense cheque transition |
+| FD-015 | Bring currently open AlphaHub expense cheques into the unified register as tracking-only records, matched and deduplicated by normalized cheque number against workbook records. Preserve every source Expense record unchanged. | Approved 2026-10-01 | Phase 6 expense cheque transition |
 
 ## Phase 0 Findings
 
@@ -333,3 +333,7 @@ No implementation phase may cross a decision marked `Pending`.
 - Vendor-payment cheques follow the approved vendor-ledger rule and reduce vendor outstanding only when `Debited`.
 - The Payment Planner reads pending instruments from the unified register rather than presenting separate cheque registers.
 - Tests must prevent duplicate numbers across expense and vendor workflows and prove that an expense-cheque status change cannot create a vendor-ledger event.
+- Existing open AlphaHub expense cheques enter the unified register as tracking-only records; their source Expense documents remain unchanged.
+- Normalize cheque numbers before matching against workbook and AlphaHub sources. One physical cheque number may produce only one register record.
+- Any amount, date, party, purpose, or status conflict blocks that record from initialization and requires owner review.
+- Tests must cover exact duplicates, formatting-only number differences, conflicting source values, unmatched expense cheques, and idempotent retries without changing Expense records.
