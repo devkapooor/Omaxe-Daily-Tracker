@@ -215,7 +215,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
 | FD-007 | Vendor returns post as unallocated vendor-ledger credits and do not adjust individual invoices. Payments may be linked to a selected invoice for any amount up to its open value or entered as a custom unallocated vendor-account payment. | Approved 2026-10-01 | Phase 5 allocation rules |
 | FD-008 | Vendors do not repay returns in cash. Remove `Cash Refund` as a supported return outcome; returns never create cash-holder, Cash Movement, or bank-balance entries. | Approved 2026-10-01 | Phase 7 return effects |
-| FD-009 | Workbook verification found 180 unique blank leaves numbered 1120-1299, with no populated fields and no overlap with an open cheque. Confirm whether V2 should initialize this range as the active available cheque book. | Verified; owner decision pending | Phase 6 cheque book |
+| FD-009 | Initialize cheque numbers 1120-1199 as the active available cheque book. Keep verified blank numbers 1200-1299 inactive and unavailable until the owner explicitly activates a future book. | Approved 2026-10-01 | Phase 6 cheque book |
 | FD-010 | Include the 30 verified open cheques in V2 operational tracking. Workbook controls are 21 `Issued` totalling INR 182,192.30 and 9 `In Process` totalling INR 46,819; combined total INR 229,011.30, with no duplicate cheque numbers. | Approved 2026-10-01 | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
@@ -247,11 +247,14 @@ No implementation phase may cross a decision marked `Pending`.
 - Blank cheque leaves: 180 unique numbers covering every number from 1120 through 1299.
 - Blank leaves have no date, party, amount, or status populated.
 - No open cheque number overlaps the blank 1120-1299 range.
+- Active V2 cheque book: 80 available leaves numbered 1120-1199.
+- Verified numbers 1200-1299 remain inactive source evidence and cannot be reserved or issued unless the owner explicitly activates a future cheque book.
 - These controls verify workbook structure and totals only. They do not establish vendor opening balances or authorize an accounting effect in V2.
 - Imported legacy open cheques are tagged as legacy tracking records and are excluded from all V2 vendor-ledger posting equations.
 - Preserve each imported workbook status as source metadata; map `Issued` to V2 `Issued` and `In Process` to V2 `Presented`.
 - Changing a legacy cheque to `Debited`, `Cancelled`, or `Bounced` updates operational status and history only; it creates no vendor settlement or reversal event.
 - Tests must prove that all nine `In Process` records map to `Presented`, all 21 `Issued` records retain `Issued`, and every legacy status transition leaves V2 vendor outstanding and invoice balances unchanged.
+- Tests must accept and uniquely reserve numbers 1120-1199, reject 1200-1299 while inactive, reject numbers outside the active book, and prevent duplicate leaf reservation under concurrent submissions.
 
 ## Approved Financial Behavior
 
