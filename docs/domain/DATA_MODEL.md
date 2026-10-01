@@ -228,15 +228,16 @@ Used to back searchable selectors and keep naming consistent across forms.
 
 ## Dormant V2 Vendor Ledger Contracts
 
-`src/domain/vendorLedgerV2.ts` defines the isolated Phase 1 contracts and pure validation rules for the future vendor-ledger workflow. These types are not connected to Firestore, subscriptions, metrics, or UI write paths yet.
+`src/domain/vendorLedgerV2.ts` defines the isolated contracts and pure validation rules for the future vendor-ledger workflow. The V2 purchase repository and UI are dormant behind a disabled feature flag and are not connected to live subscriptions, metrics, navigation, or V1 write paths.
 
 - All V2 money fields use safe integer paise and carry an `amountPaise`, `invoiceTotalPaise`, `valuePaise`, or `signedAmountPaise` suffix.
 - `VendorV2` starts at zero outstanding. An owner-entered opening balance creates an immutable ledger event; later corrections use signed audited adjustment events.
-- `PurchaseV2` stores invoice facts only. `VendorSettlementV2` and `InvoiceAllocationV2` remain separate records.
+- `PurchaseV2` stores invoice facts only. Its normalized invoice number links one immutable `InvoiceReservationV2`, enforcing uniqueness per vendor. `VendorSettlementV2` and `InvoiceAllocationV2` remain separate records.
 - `VendorReturnV2` supports `pending`, `vendor-credit`, `replacement`, and `rejected`; cash refund is unsupported.
 - `ChequeV2` supports one register for `vendor-payment` and `expense` purposes and records whether an instrument is V2 or legacy tracking-only.
 - `VendorLedgerEntryV2` distinguishes financial postings from informational pending-cheque entries. Informational entries do not affect outstanding.
 - `InvoiceAllocationV2` supports reserved, posted, released, and reversed states without mutating purchase totals.
+- Open invoice value subtracts posted allocations only. Reserved allocations remain separately visible and reduce the amount available for another allocation without changing the posted balance.
 - V2 vendor outstanding is the sum of financial ledger entries. Pending cheques, legacy cheques, and expense cheques have no vendor-ledger effect.
 - The active cheque-book boundary is 1120-1199; this remains a domain rule until persistence is implemented.
 - V2 vendor identity uses the vendor document ID as its financial key. Canonical names and aliases are searchable labels only.
@@ -250,6 +251,7 @@ The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchange
 - `appMetadata/vendorLedgerV2Config.enabled` is the protected master feature flag and defaults effectively to false when absent.
 - Dormant collection names are centralized in `src/store/vendorLedgerV2Repository.ts`.
 - The guarded transaction helper reads the feature flag inside every future V2 transaction before running its operation.
+- Purchase creation atomically writes `purchasesV2`, `invoiceReservationsV2`, and one deterministic `vendorLedgerEntriesV2` event; incomplete or conflicting postings are rejected.
 - Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
 - `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
 - Existing users without `purchasingCapabilities` retain current access but receive no V2 purchasing authority.

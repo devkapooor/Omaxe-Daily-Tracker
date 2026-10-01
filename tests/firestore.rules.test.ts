@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertFails,
   assertSucceeds,
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { createPurchaseV2 } from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
 
@@ -267,6 +268,18 @@ describe('V2 vendor ledger capability enforcement', () => {
 
   it('keeps ledger history append-only and limits reading to the ledger capability', async () => {
     await enableV2()
+    const purchasingDb = userDb('purchasing-user')
+    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
+    const purchase = {
+      id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-1', normalizedInvoiceNumber: 'INV-1', invoiceDate: '2026-10-01',
+      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-1',
+      ledgerEntryId: 'purchase:purchase-v2-1:1:purchase', notes: '', revision: 1,
+      createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    }
+    const reservation = {
+      id: 'vendor-v2-1:INV-1', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-1',
+      purchaseId: 'purchase-v2-1', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    }
     const entry = {
       id: 'purchase:purchase-v2-1:1:purchase',
       vendorId: 'vendor-v2-1',
@@ -281,11 +294,81 @@ describe('V2 vendor ledger capability enforcement', () => {
       createdByUserId: 'purchasing-user',
     }
     const entryPath = 'vendorLedgerEntriesV2/purchase:purchase-v2-1:1:purchase'
-    await assertSucceeds(setDoc(doc(userDb('purchasing-user'), entryPath), entry))
+    const postingBatch = writeBatch(purchasingDb)
+    postingBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-v2-1'), purchase)
+    postingBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-1'), reservation)
+    postingBatch.set(doc(purchasingDb, entryPath), entry)
+    await assertSucceeds(postingBatch.commit())
     await assertSucceeds(getDoc(doc(userDb('purchasing-user'), entryPath)))
     await assertFails(getDoc(doc(userDb('manager-user'), entryPath)))
     await assertFails(updateDoc(doc(userDb('owner-user'), entryPath), { signedAmountPaise: 1 }))
     await assertFails(deleteDoc(doc(userDb('owner-user'), entryPath)))
+  })
+
+  it('requires atomic purchase posting and rejects duplicate vendor invoice numbers', async () => {
+    await enableV2()
+    const purchasingDb = userDb('purchasing-user')
+    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
+    await assertFails(setDoc(doc(purchasingDb, 'purchasesV2', 'incomplete-purchase'), {
+      id: 'incomplete-purchase', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
+      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-2',
+      ledgerEntryId: 'purchase:incomplete-purchase:1:purchase', notes: '', revision: 1,
+      createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    }))
+
+    const firstBatch = writeBatch(purchasingDb)
+    firstBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-first'), {
+      id: 'purchase-first', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
+      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-2', ledgerEntryId: 'purchase:purchase-first:1:purchase',
+      notes: '', revision: 1, createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    })
+    firstBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-2'), {
+      id: 'vendor-v2-1:INV-2', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-2',
+      purchaseId: 'purchase-first', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    })
+    firstBatch.set(doc(purchasingDb, 'vendorLedgerEntriesV2', 'purchase:purchase-first:1:purchase'), {
+      id: 'purchase:purchase-first:1:purchase', vendorId: 'vendor-v2-1', eventType: 'purchase', posting: 'financial',
+      signedAmountPaise: 100000, sourceType: 'purchase', sourceRecordId: 'purchase-first', sourceRevision: 1,
+      occurredOn: '2026-10-01', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    })
+    await assertSucceeds(firstBatch.commit())
+
+    const duplicateBatch = writeBatch(purchasingDb)
+    duplicateBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-duplicate'), {
+      id: 'purchase-duplicate', vendorId: 'vendor-v2-1', invoiceNumber: 'inv-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
+      invoiceTotalPaise: 200000, invoiceReservationId: 'vendor-v2-1:INV-2', ledgerEntryId: 'purchase:purchase-duplicate:1:purchase',
+      notes: '', revision: 1, createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    })
+    duplicateBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-2'), {
+      id: 'vendor-v2-1:INV-2', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-2',
+      purchaseId: 'purchase-duplicate', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    })
+    duplicateBatch.set(doc(purchasingDb, 'vendorLedgerEntriesV2', 'purchase:purchase-duplicate:1:purchase'), {
+      id: 'purchase:purchase-duplicate:1:purchase', vendorId: 'vendor-v2-1', eventType: 'purchase', posting: 'financial',
+      signedAmountPaise: 200000, sourceType: 'purchase', sourceRecordId: 'purchase-duplicate', sourceRevision: 1,
+      occurredOn: '2026-10-01', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    })
+    await assertFails(duplicateBatch.commit())
+  })
+
+  it('makes repository purchase retries idempotent and rejects a second purchase for the same invoice', async () => {
+    await enableV2()
+    const purchasingDb = userDb('purchasing-user')
+    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
+    const input = {
+      id: 'purchase-repository-1',
+      vendorId: 'vendor-v2-1',
+      invoiceNumber: ' inv 3 ',
+      invoiceDate: '2026-10-01',
+      invoiceTotalPaise: 125000,
+      actorUserId: 'purchasing-user',
+      timestamp,
+    }
+
+    await expect(createPurchaseV2(input, purchasingDb)).resolves.toMatchObject({ created: true })
+    await expect(createPurchaseV2(input, purchasingDb)).resolves.toMatchObject({ created: false })
+    await expect(createPurchaseV2({ ...input, id: 'purchase-repository-2' }, purchasingDb))
+      .rejects.toThrow(/already registered/)
   })
 
   it('enforces capability-specific cheque transitions and immutable identity', async () => {

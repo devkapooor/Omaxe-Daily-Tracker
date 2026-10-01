@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import type { ChequeV2, VendorLedgerEntryV2 } from './vendorLedgerV2'
+import type { ChequeV2, InvoiceAllocationV2, VendorLedgerEntryV2 } from './vendorLedgerV2'
 import {
   activeChequeLeaf,
   assertExpectedRevision,
   assertChequeTransition,
+  buildPurchasePostingV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
   financialLedgerAmountPaise,
   invoiceReservationId,
+  invoiceBalanceV2,
   isV2BusinessDate,
   mapLegacyChequeStatus,
   normalizeChequeNumber,
+  openInvoiceBalancesV2,
   paiseToRupees,
   releasesReservedAllocations,
   rupeesToPaise,
@@ -80,6 +83,25 @@ describe('V2 money and deterministic identifiers', () => {
 })
 
 describe('V2 ledger rules', () => {
+  it('builds one deterministic purchase, uniqueness reservation, and ledger event', () => {
+    const posting = buildPurchasePostingV2({
+      id: 'purchase-1',
+      vendorId: 'vendor-1',
+      invoiceNumber: ' inv 10 ',
+      invoiceDate: '2026-10-02',
+      invoiceTotalPaise: 125_050,
+      category: ' Grocery ',
+      actorUserId: 'user-1',
+      timestamp: '2026-10-02T00:00:00.000Z',
+    })
+    expect(posting.purchase.invoiceReservationId).toBe('vendor-1:INV%2010')
+    expect(posting.purchase.normalizedInvoiceNumber).toBe('INV 10')
+    expect(posting.purchase.ledgerEntryId).toBe('purchase:purchase-1:1:purchase')
+    expect(posting.reservation.normalizedInvoiceNumber).toBe('INV 10')
+    expect(posting.ledgerEntry.signedAmountPaise).toBe(125_050)
+    expect(posting.purchase).not.toHaveProperty('paidAmount')
+  })
+
   it('calculates outstanding from financial entries and excludes pending cheque information', () => {
     const entries = [
       ledgerEntry(),
@@ -87,6 +109,26 @@ describe('V2 ledger rules', () => {
       ledgerEntry({ id: 'pending', eventType: 'pending-cheque', posting: 'informational', signedAmountPaise: -50_000 }),
     ]
     expect(vendorOutstandingPaise(entries)).toBe(80_000)
+  })
+
+  it('derives open invoice value from posted allocations and keeps cheque reservations separate', () => {
+    const purchase = buildPurchasePostingV2({
+      id: 'purchase-1', vendorId: 'vendor-1', invoiceNumber: 'INV-1', invoiceDate: '2026-10-02',
+      invoiceTotalPaise: 100_000, actorUserId: 'owner-1', timestamp: '2026-10-02T00:00:00.000Z',
+    }).purchase
+    const allocation = (id: string, amountPaise: number, state: InvoiceAllocationV2['state']): InvoiceAllocationV2 => ({
+      id, vendorId: 'vendor-1', invoiceId: 'purchase-1', sourceType: 'settlement', sourceRecordId: `source-${id}`,
+      amountPaise, state, revision: 1, createdAt: '2026-10-02T00:00:00.000Z', createdByUserId: 'owner-1',
+    })
+    const allocations = [allocation('posted', 25_000, 'posted'), allocation('reserved', 20_000, 'reserved')]
+
+    expect(invoiceBalanceV2(purchase, allocations)).toMatchObject({
+      openAmountPaise: 75_000,
+      reservedAmountPaise: 20_000,
+      availableToAllocatePaise: 55_000,
+    })
+    expect(openInvoiceBalancesV2([purchase], allocations)).toHaveLength(1)
+    expect(() => invoiceBalanceV2(purchase, [allocation('excess', 100_001, 'posted')])).toThrow(/exceed/)
   })
 
   it('applies approved financial signs and rejects ambiguous event types', () => {

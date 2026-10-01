@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 3 complete; Phase 4 - purchase and ledger workflow is next
+- Current phase: Phase 4 complete; Phase 5 - settlements and allocations is next
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -134,6 +134,17 @@ Every phase uses the same sequence:
 
 - Emulator tests prove atomic posting, retries, duplicate protection, corrections, and balance equations.
 - V1 dashboard, planner, logs, and vendor totals remain unchanged while the feature flag is disabled.
+
+### Completion Evidence
+
+- Added dormant ID-based purchase capture containing invoice facts only, with no embedded payment fields and a separate `Record payment for this invoice` handoff.
+- Added normalized per-vendor invoice reservations and deterministic purchase ledger events in one guarded Firestore transaction.
+- Firestore rules require the purchase, reservation, and ledger event to be created atomically and keep all three records append-only.
+- Exact transaction retries return the original posting without duplicating ledger effects; a second purchase using the same normalized vendor invoice is rejected.
+- Added pure open-invoice balances that distinguish posted allocations from pending cheque reservations without mutating invoice totals.
+- Purchase updates remain denied; future corrections must use the audited compensating workflow rather than rewriting original financial evidence.
+- Full source suite passes with 39 tests; all 16 Firestore emulator scenarios, source ESLint, TypeScript, and production build pass.
+- V2 remains unmounted and disabled. No rules were deployed and no production record, V1 calculation, loan, expense, cashout, or cash movement was changed.
 
 ## Phase 5 - Settlements and Allocations
 

@@ -21,9 +21,12 @@ export type PurchaseV2 = {
   id: string
   vendorId: string
   invoiceNumber: string
+  normalizedInvoiceNumber: string
   invoiceDate: string
   receiptDate?: string
   invoiceTotalPaise: AmountPaise
+  invoiceReservationId: string
+  ledgerEntryId: string
   category?: string
   notes: string
   revision: number
@@ -31,6 +34,15 @@ export type PurchaseV2 = {
   createdByUserId: string
   updatedAt: string
   updatedByUserId: string
+}
+
+export type InvoiceReservationV2 = {
+  id: string
+  vendorId: string
+  normalizedInvoiceNumber: string
+  purchaseId: string
+  createdAt: string
+  createdByUserId: string
 }
 
 export type VendorSettlementMode = 'cash' | 'upi' | 'card' | 'bank-transfer'
@@ -148,6 +160,13 @@ export type InvoiceAllocationV2 = {
   createdByUserId: string
 }
 
+export type InvoiceBalanceV2 = {
+  purchase: PurchaseV2
+  openAmountPaise: AmountPaise
+  reservedAmountPaise: AmountPaise
+  availableToAllocatePaise: AmountPaise
+}
+
 const businessDatePattern = /^\d{4}-\d{2}-\d{2}$/
 
 function assertIntegerPaise(value: number, label: string) {
@@ -188,9 +207,82 @@ export function deterministicEventId(
 }
 
 export function invoiceReservationId(vendorId: string, invoiceNumber: string) {
-  const normalizedInvoice = invoiceNumber.trim().toLocaleUpperCase('en-IN')
+  const normalizedInvoice = normalizeInvoiceNumber(invoiceNumber)
   if (!vendorId.trim() || !normalizedInvoice) throw new Error('Vendor and invoice number are required.')
   return `${encodeURIComponent(vendorId.trim())}:${encodeURIComponent(normalizedInvoice)}`
+}
+
+export function normalizeInvoiceNumber(invoiceNumber: string) {
+  return invoiceNumber.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('en-IN')
+}
+
+export type CreatePurchaseV2Input = {
+  id: string
+  vendorId: string
+  invoiceNumber: string
+  invoiceDate: string
+  receiptDate?: string
+  invoiceTotalPaise: AmountPaise
+  category?: string
+  notes?: string
+  actorUserId: string
+  timestamp: string
+}
+
+export function buildPurchasePostingV2(input: CreatePurchaseV2Input) {
+  const id = input.id.trim()
+  const vendorId = input.vendorId.trim()
+  const invoiceNumber = input.invoiceNumber.trim()
+  const actorUserId = input.actorUserId.trim()
+  if (!id || !vendorId || !invoiceNumber || !actorUserId) throw new Error('Purchase ID, vendor, invoice number, and actor are required.')
+  assertIntegerPaise(input.invoiceTotalPaise, 'Invoice total')
+  if (input.invoiceTotalPaise <= 0) throw new Error('Invoice total must be greater than zero.')
+  if (!businessDatePattern.test(input.invoiceDate)) throw new Error('Invoice date must use YYYY-MM-DD.')
+  if (input.receiptDate && !businessDatePattern.test(input.receiptDate)) throw new Error('Receipt date must use YYYY-MM-DD.')
+
+  const reservationId = invoiceReservationId(vendorId, invoiceNumber)
+  const normalizedInvoiceNumber = normalizeInvoiceNumber(invoiceNumber)
+  const ledgerEntryId = deterministicEventId('purchase', id, 1, 'purchase')
+  const purchase: PurchaseV2 = {
+    id,
+    vendorId,
+    invoiceNumber,
+    normalizedInvoiceNumber,
+    invoiceDate: input.invoiceDate,
+    ...(input.receiptDate ? { receiptDate: input.receiptDate } : {}),
+    invoiceTotalPaise: input.invoiceTotalPaise,
+    invoiceReservationId: reservationId,
+    ledgerEntryId,
+    ...(input.category?.trim() ? { category: input.category.trim() } : {}),
+    notes: input.notes?.trim() ?? '',
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+  const reservation: InvoiceReservationV2 = {
+    id: reservationId,
+    vendorId,
+    normalizedInvoiceNumber,
+    purchaseId: id,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+  }
+  const ledgerEntry: VendorLedgerEntryV2 = {
+    id: ledgerEntryId,
+    vendorId,
+    eventType: 'purchase',
+    posting: 'financial',
+    signedAmountPaise: financialLedgerAmountPaise('purchase', input.invoiceTotalPaise),
+    sourceType: 'purchase',
+    sourceRecordId: id,
+    sourceRevision: 1,
+    occurredOn: input.invoiceDate,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+  }
+  return { ledgerEntry, purchase, reservation }
 }
 
 export function isV2BusinessDate(date: string, activationDate: string) {
@@ -205,6 +297,31 @@ export function vendorOutstandingPaise(entries: VendorLedgerEntryV2[]) {
     assertIntegerPaise(entry.signedAmountPaise, 'Ledger amount')
     return entry.posting === 'financial' ? total + entry.signedAmountPaise : total
   }, 0)
+}
+
+export function invoiceBalanceV2(purchase: PurchaseV2, allocations: InvoiceAllocationV2[]): InvoiceBalanceV2 {
+  const matchingAllocations = allocations.filter((allocation) => allocation.invoiceId === purchase.id)
+  const postedAmountPaise = matchingAllocations
+    .filter((allocation) => allocation.state === 'posted')
+    .reduce((total, allocation) => total + allocation.amountPaise, 0)
+  const reservedAmountPaise = matchingAllocations
+    .filter((allocation) => allocation.state === 'reserved')
+    .reduce((total, allocation) => total + allocation.amountPaise, 0)
+  assertIntegerPaise(postedAmountPaise, 'Posted invoice allocation')
+  assertIntegerPaise(reservedAmountPaise, 'Reserved invoice allocation')
+  const openAmountPaise = purchase.invoiceTotalPaise - postedAmountPaise
+  const availableToAllocatePaise = openAmountPaise - reservedAmountPaise
+  if (openAmountPaise < 0 || availableToAllocatePaise < 0) {
+    throw new Error('Invoice allocations exceed the immutable invoice total.')
+  }
+  return { purchase, openAmountPaise, reservedAmountPaise, availableToAllocatePaise }
+}
+
+export function openInvoiceBalancesV2(purchases: PurchaseV2[], allocations: InvoiceAllocationV2[]) {
+  return purchases
+    .map((purchase) => invoiceBalanceV2(purchase, allocations))
+    .filter((balance) => balance.openAmountPaise > 0)
+    .sort((left, right) => left.purchase.invoiceDate.localeCompare(right.purchase.invoiceDate))
 }
 
 export function financialLedgerAmountPaise(eventType: LedgerEventType, amountPaise: AmountPaise) {

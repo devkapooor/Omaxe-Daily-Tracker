@@ -71,8 +71,32 @@ service cloud.firestore {
       return validV2Identity(data, documentId) &&
         data.vendorId is string &&
         data.invoiceNumber is string &&
+        data.normalizedInvoiceNumber is string &&
+        data.normalizedInvoiceNumber.size() > 0 &&
         data.invoiceDate is string &&
-        isPositivePaise(data.invoiceTotalPaise);
+        isPositivePaise(data.invoiceTotalPaise) &&
+        data.invoiceReservationId is string &&
+        data.ledgerEntryId is string &&
+        get(/databases/$(database)/documents/vendorsV2/$(data.vendorId)).data.active == true &&
+        getAfter(/databases/$(database)/documents/invoiceReservationsV2/$(data.invoiceReservationId)).data.purchaseId == documentId &&
+        getAfter(/databases/$(database)/documents/invoiceReservationsV2/$(data.invoiceReservationId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/invoiceReservationsV2/$(data.invoiceReservationId)).data.normalizedInvoiceNumber == data.normalizedInvoiceNumber &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.sourceRecordId == documentId &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.signedAmountPaise == data.invoiceTotalPaise;
+    }
+
+    function validInvoiceReservationV2(data, documentId) {
+      return data.id == documentId &&
+        data.vendorId is string &&
+        data.normalizedInvoiceNumber is string &&
+        data.normalizedInvoiceNumber.size() > 0 &&
+        data.purchaseId is string &&
+        data.createdAt is string &&
+        data.createdByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.purchaseId)).data.invoiceReservationId == documentId &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.purchaseId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.purchaseId)).data.normalizedInvoiceNumber == data.normalizedInvoiceNumber;
     }
 
     function validSettlementV2(data, documentId) {
@@ -132,6 +156,18 @@ service cloud.firestore {
         (data.eventType == 'purchase' && hasPurchasingCapability('purchase.create')) ||
         (data.eventType == 'vendor-credit' && hasPurchasingCapability('return.resolve')) ||
         (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit'));
+    }
+
+    function validPurchaseLedgerEntry(data, documentId) {
+      return data.eventType != 'purchase' || (
+        data.posting == 'financial' &&
+        data.sourceType == 'purchase' &&
+        data.sourceRevision == 1 &&
+        data.signedAmountPaise > 0 &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.ledgerEntryId == documentId &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.invoiceTotalPaise == data.signedAmountPaise
+      );
     }
 
     function isNonNegativeNumber(value) {
@@ -227,7 +263,8 @@ service cloud.firestore {
     }
 
     match /appMetadata/vendorLedgerV2Config {
-      allow read, create, update: if isOwner();
+      allow read: if isStaff();
+      allow create, update: if isOwner();
       allow delete: if false;
     }
 
@@ -376,8 +413,16 @@ service cloud.firestore {
     match /purchasesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
       allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validPurchaseV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow update: if false;
       allow delete: if false;
+    }
+
+    match /invoiceReservationsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() &&
+        hasPurchasingCapability('purchase.create') &&
+        validInvoiceReservationV2(request.resource.data, documentId);
+      allow update, delete: if false;
     }
 
     match /vendorSettlementsV2/{documentId} {
@@ -419,7 +464,8 @@ service cloud.firestore {
         request.resource.data.sourceRevision >= 1 &&
         request.resource.data.createdAt is string &&
         request.resource.data.createdByUserId == request.auth.uid &&
-        canCreateLedgerEntry(request.resource.data);
+        canCreateLedgerEntry(request.resource.data) &&
+        validPurchaseLedgerEntry(request.resource.data, documentId);
       allow update, delete: if false;
     }
 
