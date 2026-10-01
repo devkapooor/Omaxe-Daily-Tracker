@@ -128,16 +128,16 @@ Every phase uses the same sequence:
 
 ### Scope
 
-- Add cheque-book leaf reservations and unique cheque-number enforcement.
+- Add one shared cheque-book reservation and Cheque Register for vendor-payment and expense cheques, with global cheque-number uniqueness.
 - Add Draft, Issued, Presented, Debited, Cancelled, and Bounced transitions.
 - Post the owner-approved financial effect at the owner-approved lifecycle transition only.
 - Add a responsive Cheque Register with searchable history and source links.
-- Update Payment Planner to merge legacy expense cheques and V2 vendor cheques without duplication.
+- Update Payment Planner to read active instruments from the unified Cheque Register without duplicating linked legacy sources.
 
 ### Completion Gate
 
 - Lifecycle, stale revision, cancellation, bounce, leaf state, duplicate number, and planner deduplication tests pass.
-- Existing expense cheques remain unchanged and visible.
+- Existing expense accounting remains unchanged; cheque instruments are tracked in the unified register and remain visible in the Payment Planner.
 
 ## Phase 7 - Vendor Returns
 
@@ -217,10 +217,11 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-008 | Vendors do not repay returns in cash. Remove `Cash Refund` as a supported return outcome; returns never create cash-holder, Cash Movement, or bank-balance entries. | Approved 2026-10-01 | Phase 7 return effects |
 | FD-009 | Initialize cheque numbers 1120-1199 as the active available cheque book. Keep verified blank numbers 1200-1299 inactive and unavailable until the owner explicitly activates a future book. | Approved 2026-10-01 | Phase 6 cheque book |
 | FD-010 | Include the 30 verified open cheques in V2 operational tracking. Workbook controls are 21 `Issued` totalling INR 182,192.30 and 9 `In Process` totalling INR 46,819; combined total INR 229,011.30, with no duplicate cheque numbers. | Approved 2026-10-01 | Phase 8 dry run |
-| FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
+| FD-011 | Maintain one unified Cheque Register for expense and vendor-payment cheques. Each cheque records its purpose and source link; cheque numbers are unique across both workflows. | Approved 2026-10-01 | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
 | FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
 | FD-014 | Imported legacy open cheques are tracking-only. Their status may be updated, but they never post to or reduce clean V2 vendor outstanding. Legacy `In Process` maps to V2 `Presented`. | Approved 2026-10-01 | Phase 6 legacy cheque behavior |
+| FD-015 | Confirm how existing open expense cheques enter the unified register and whether they remain tracking-only while their source Expense records stay unchanged. | Pending | Phase 6 expense cheque transition |
 
 ## Phase 0 Findings
 
@@ -323,3 +324,12 @@ No implementation phase may cross a decision marked `Pending`.
 - `Cash Refund` is not available because vendors do not repay returns in cash.
 - Return workflows cannot create or modify cash-holder balances, Cash Movement records, or bank balances.
 - Tests must reject unsupported outcomes and prove that every supported return outcome leaves operational cash records unchanged.
+
+### Unified Cheque Register
+
+- Maintain one Cheque Register for every physical cheque, regardless of whether its purpose is `vendor-payment` or `expense`.
+- Every cheque has one globally unique cheque number, one cheque-book leaf reservation, a purpose, and a source-record link.
+- Expense records remain the source of truth for expense recognition and are not recalculated or rewritten by cheque status changes.
+- Vendor-payment cheques follow the approved vendor-ledger rule and reduce vendor outstanding only when `Debited`.
+- The Payment Planner reads pending instruments from the unified register rather than presenting separate cheque registers.
+- Tests must prevent duplicate numbers across expense and vendor workflows and prove that an expense-cheque status change cannot create a vendor-ledger event.
