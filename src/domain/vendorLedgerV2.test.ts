@@ -71,9 +71,14 @@ describe('V2 money and deterministic identifiers', () => {
   it('builds new vendors at zero without copying a legacy balance', () => {
     const vendor = buildVendorV2({
       id: 'vendor-1', canonicalName: ' Acme Supply ', aliases: ['ACME', ' acme ', 'North Shop'],
-      suppliedBrands: ['Brand A', ' brand a ', 'Brand B'], actorUserId: 'owner-1', timestamp: '2026-10-01T00:00:00.000Z',
+      ownerName: ' Vendor Owner ', contact: ' 9999999999 ', address: ' Main Road ',
+      suppliedBrands: ['Brand A', ' brand a ', 'Brand B'], notes: ' Net 15 ',
+      actorUserId: 'owner-1', timestamp: '2026-10-01T00:00:00.000Z',
     })
-    expect(vendor).toMatchObject({ canonicalName: 'Acme Supply', aliases: ['ACME', 'North Shop'], openingBalancePaise: 0 })
+    expect(vendor).toMatchObject({
+      canonicalName: 'Acme Supply', ownerName: 'Vendor Owner', aliases: ['ACME', 'North Shop'],
+      contact: '9999999999', address: 'Main Road', notes: 'Net 15', openingBalancePaise: 0,
+    })
     expect(vendor.suppliedBrands).toEqual(['Brand A', 'Brand B'])
   })
 

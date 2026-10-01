@@ -3,10 +3,12 @@ export type AmountPaise = number
 export type VendorV2 = {
   id: string
   canonicalName: string
+  ownerName?: string
   aliases: string[]
   contact: string
   address: string
   suppliedBrands: string[]
+  notes?: string
   active: boolean
   openingBalancePaise: AmountPaise
   openingLedgerEntryId?: string
@@ -20,10 +22,12 @@ export type VendorV2 = {
 export type CreateVendorV2Input = {
   id: string
   canonicalName: string
+  ownerName?: string
   aliases?: string[]
   contact?: string
   address?: string
   suppliedBrands?: string[]
+  notes?: string
   actorUserId: string
   timestamp: string
 }
@@ -277,10 +281,12 @@ export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
   return {
     id,
     canonicalName,
+    ownerName: input.ownerName?.trim() ?? '',
     aliases,
     contact: input.contact?.trim() ?? '',
     address: input.address?.trim() ?? '',
     suppliedBrands: uniqueTrimmedValues(input.suppliedBrands ?? []),
+    notes: input.notes?.trim() ?? '',
     active: true,
     openingBalancePaise: 0,
     revision: 1,

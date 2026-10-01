@@ -23,8 +23,8 @@ function searchableNames(vendor: Pick<VendorV2, 'aliases' | 'canonicalName'>) {
     .filter(Boolean)
 }
 
-export function vendorIdentitySearchText(vendor: Pick<VendorV2, 'aliases' | 'canonicalName' | 'contact' | 'suppliedBrands'>) {
-  return [vendor.canonicalName, ...vendor.aliases, vendor.contact, ...vendor.suppliedBrands]
+export function vendorIdentitySearchText(vendor: Pick<VendorV2, 'aliases' | 'canonicalName' | 'contact' | 'suppliedBrands' | 'ownerName' | 'address' | 'notes'>) {
+  return [vendor.canonicalName, vendor.ownerName ?? '', ...vendor.aliases, vendor.contact, vendor.address, ...vendor.suppliedBrands, vendor.notes ?? '']
     .map(normalizeVendorIdentityName)
     .filter(Boolean)
     .join(' ')

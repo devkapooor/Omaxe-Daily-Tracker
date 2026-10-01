@@ -69,7 +69,17 @@ describe('V2 vendor identity', () => {
   })
 
   it('searches aliases and returns ID-valued options for active vendors only', () => {
-    expect(vendorIdentitySearchText(vendors[0])).toContain('bobmay hot')
+    const searchableVendor = {
+      ...vendors[0],
+      ownerName: 'Raj Malhotra',
+      address: 'Central Market',
+      notes: 'Delivers every Tuesday',
+    }
+    const searchText = vendorIdentitySearchText(searchableVendor)
+    expect(searchText).toContain('bobmay hot')
+    expect(searchText).toContain('raj malhotra')
+    expect(searchText).toContain('central market')
+    expect(searchText).toContain('delivers every tuesday')
     expect(vendorIdentityOptions(vendors)).toEqual([
       { value: 'vendor-1', label: 'Bombay Hot' },
       { value: 'vendor-2', label: 'Geeta Lakshmi Corporation' },

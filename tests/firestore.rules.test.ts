@@ -482,10 +482,16 @@ describe('V2 vendor ledger capability enforcement', () => {
   it('creates owner-managed V2 vendors at zero and keeps retries idempotent', async () => {
     await enableV2()
     const input = {
-      id: 'vendor-created-1', canonicalName: 'New Vendor', aliases: ['NV'], actorUserId: 'owner-user', timestamp,
+      id: 'vendor-created-1', canonicalName: 'New Vendor', ownerName: 'Vendor Owner', aliases: ['NV'],
+      contact: '9999999999', address: 'Main Road', suppliedBrands: ['Brand One'], notes: 'Net 15',
+      actorUserId: 'owner-user', timestamp,
     }
     await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({
-      created: true, vendor: { openingBalancePaise: 0 },
+      created: true,
+      vendor: {
+        ownerName: 'Vendor Owner', contact: '9999999999', address: 'Main Road',
+        suppliedBrands: ['Brand One'], notes: 'Net 15', openingBalancePaise: 0,
+      },
     })
     await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({ created: false })
     await expect(createVendorV2({ ...input, canonicalName: 'Different Vendor' }, userDb('owner-user')))
