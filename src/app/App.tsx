@@ -69,7 +69,6 @@ export default function App() {
     saveLoanEntry,
     saveOperationalSettings,
     savePayment,
-    savePurchase,
     saveVendor,
     deletePlannedPayment,
   } = useAppStore()
@@ -254,7 +253,6 @@ export default function App() {
         savePayment={savePayment}
         savePlannedPayment={savePlannedPayment}
         savePlannerBankBalance={savePlannerBankBalance}
-        savePurchase={savePurchase}
         saveVendor={saveVendor}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}

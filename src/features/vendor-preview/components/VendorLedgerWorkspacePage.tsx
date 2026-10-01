@@ -57,7 +57,10 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
   const vendorNameById = Object.fromEntries(ledger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
 
   if (ledger.loading && !ledger.config) return <p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p>
-  if (ledger.config?.enabled !== true) return <VendorLedgerPreActivationPage currentUser={currentUser} />
+  if (ledger.config?.enabled !== true) {
+    if (currentUser.role === 'owner') return <VendorLedgerPreActivationPage currentUser={currentUser} />
+    return <Card><CardContent className="py-5 text-sm text-muted-foreground">The owner must activate the V2 vendor ledger before staff can enter vendor records.</CardContent></Card>
+  }
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true)
@@ -103,13 +106,13 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
         {ledger.error || message ? <p className="rounded-xl border border-border bg-secondary/50 px-3 py-2 text-sm">{ledger.error ?? message}</p> : null}
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid-cols-7 overflow-x-auto">
+          <TabsList className={`${currentUser.role === 'owner' ? 'grid-cols-7' : 'grid-cols-5'} overflow-x-auto`}>
             <TabsTrigger value="directory">Vendors</TabsTrigger>
             <TabsTrigger value="purchases">Purchases</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
-            <TabsTrigger value="corrections">Corrections</TabsTrigger>
-            <TabsTrigger value="cheques">Cheques</TabsTrigger>
+            {currentUser.role === 'owner' ? <TabsTrigger value="corrections">Corrections</TabsTrigger> : null}
+            {currentUser.role === 'owner' ? <TabsTrigger value="cheques">Cheques</TabsTrigger> : null}
             <TabsTrigger value="balances">Balances</TabsTrigger>
           </TabsList>
           <TabsContent value="directory" className="grid gap-3 pt-2">
@@ -119,8 +122,8 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
           <TabsContent value="purchases" className="pt-2"><PurchaseFormV2 isBusy={busy} vendors={ledger.vendors} onSave={savePurchase} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>
           <TabsContent value="invoices" className="pt-2"><OpenInvoicesV2 balances={balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} /></TabsContent>
-          <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} states={ledger.settlementStates} vendors={vendorNameById} onRun={run} /></TabsContent>
-          <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} vendors={ledger.vendors} onRun={run} /></TabsContent>
+          {currentUser.role === 'owner' ? <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} states={ledger.settlementStates} vendors={vendorNameById} onRun={run} /></TabsContent> : null}
+          {currentUser.role === 'owner' ? <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} vendors={ledger.vendors} onRun={run} /></TabsContent> : null}
           <TabsContent value="balances" className="grid gap-2 pt-2">
             {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><strong>INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong></CardContent></Card>)}
           </TabsContent>

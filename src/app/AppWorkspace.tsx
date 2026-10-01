@@ -1,6 +1,6 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { AppUser, CashoutDraft, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
+import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
 import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import {
@@ -115,7 +115,6 @@ type AppWorkspaceProps = {
   savePayment: (draft: PaymentDraft) => Promise<void>
   savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   savePlannerBankBalance: (value: number, actor: string) => Promise<void>
-  savePurchase: (draft: PurchaseDraft) => Promise<void>
   saveVendor: (vendor: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
@@ -178,7 +177,6 @@ export function AppWorkspace({
   savePayment,
   savePlannedPayment,
   savePlannerBankBalance,
-  savePurchase,
   saveVendor,
   setDashboardMonthOffset,
   settingsAuditLog,
@@ -268,7 +266,7 @@ export function AppWorkspace({
           />
         ) : null}
 
-        {activePage === 'vendor-preview' && currentUser.role === 'owner' ? (
+        {activePage === 'vendor-preview' ? (
           <VendorLedgerWorkspacePage currentUser={currentUser} />
         ) : null}
 
@@ -305,11 +303,9 @@ export function AppWorkspace({
             saveExpense={saveCashout}
             saveLoan={saveLoanEntry}
             savePayment={savePayment}
-            savePurchase={savePurchase}
             showToast={showToast}
             todayExpense={todayCashout}
             todayPaymentNet={todayPaymentNet}
-            vendorOptions={directoryOptions.vendors}
           />
         ) : null}
         {activePage === 'cashout' ? (

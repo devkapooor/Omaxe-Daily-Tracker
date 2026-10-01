@@ -8,10 +8,11 @@ describe('owner-only route resolution', () => {
     expect(resolveActivePage('owner', 'vendor-preview')).toBe('vendor-preview')
   })
 
-  it('redirects manager and billing users away from the Action Centre', () => {
+  it('redirects non-owners away from owner pages while allowing the Vendor Workspace', () => {
     expect(resolveActivePage('manager', 'actions')).toBe('expense')
-    expect(resolveActivePage('manager', 'vendor-preview')).toBe('expense')
+    expect(resolveActivePage('manager', 'vendor-preview')).toBe('vendor-preview')
     expect(resolveActivePage('billing', 'actions')).toBe('expense')
+    expect(resolveActivePage('billing', 'vendor-preview')).toBe('vendor-preview')
   })
 
   it('adds the Action Centre navigation item only for the owner', () => {
@@ -19,5 +20,7 @@ describe('owner-only route resolution', () => {
     expect(pagesFor('owner')).toContain('actions')
     expect(pagesFor('manager')).not.toContain('actions')
     expect(pagesFor('billing')).not.toContain('actions')
+    expect(pagesFor('manager')).toContain('vendor-preview')
+    expect(pagesFor('billing')).toContain('vendor-preview')
   })
 })

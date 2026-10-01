@@ -32,7 +32,7 @@ export function pageTitle(page: Page) {
     case 'actions':
       return 'Action Centre'
     case 'vendor-preview':
-      return 'Vendor Ledger Preview'
+      return 'Vendor Workspace'
     case 'directory':
       return 'Directory'
     case 'expense':
@@ -74,16 +74,17 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       activeClass: 'bg-secondary text-foreground',
       action: 'page',
     })
-    items.push({
-      icon: <TestTube2 className="size-4 shrink-0" />,
-      label: 'Vendor Workspace',
-      page: 'vendor-preview',
-      gradient: '',
-      hoverClass: '',
-      activeClass: 'bg-secondary text-foreground',
-      action: 'page',
-    })
   }
+
+  items.push({
+    icon: <TestTube2 className="size-4 shrink-0" />,
+    label: 'Vendor Workspace',
+    page: 'vendor-preview',
+    gradient: '',
+    hoverClass: '',
+    activeClass: 'bg-secondary text-foreground',
+    action: 'page',
+  })
 
   items.push(
     {
