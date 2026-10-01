@@ -216,6 +216,8 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 ### Lean Release C - Controlled Clean Start
 
+**Implementation status (2026-10-01): Cutover planner, atomic emulator rehearsal, and read-only production preflight complete in source. Deployment pending owner confirmation; production remains uninitialized and disabled.**
+
 #### Scope
 
 - Produce one owner-reviewed cutover screen showing vendors, zero opening balances, optional owner-entered audited openings, and whole-system totals.
@@ -228,6 +230,22 @@ This three-release route supersedes the active execution of the former Phases 5-
 - Opening controls reconcile exactly and rollback is documented.
 - V1 evidence remains preserved and excluded from V2 calculations.
 - Production initialization, activation, and deployment remain separately auditable actions.
+
+#### Implementation Evidence
+
+- Added a local-only owner cutover planner for explicit vendor selection, zero-default openings, mandatory reasons for non-zero openings, one activation date, cheque leaves 1120-1199, and whole-system reconciliation totals.
+- Added an owner-only atomic initializer used only in the Firestore emulator rehearsal. It creates reviewed V2 vendors, audited opening ledger entries and account projections, the active cheque book, and the enabled configuration in one transaction.
+- Firestore emulator: 20 rules tests passed. The rehearsal proved owner-only access, exact opening reconciliation, automatic transaction rollback, single initialization, cheque-book setup, and preservation of seeded V1 vendor and loan records.
+- Read-only production preflight on 2026-10-01: `vendorLedgerV2Config` does not exist; checked V2 collections are empty; legacy `vendors` and `loans` remain present. No document was created, updated, or deleted.
+- Source validation: 45 tests passed; source ESLint, TypeScript, and production build passed with only the existing bundle-size warning.
+
+#### Rollback And Containment
+
+- Before activation, no rollback is required because the planner is local-only and writes nothing.
+- If the activation transaction fails, Firestore rolls back the full transaction; no partial vendor, opening, cheque-book, or configuration records remain.
+- After a successful activation, records are never deleted or overwritten. Emergency containment sets only `vendorLedgerV2Config.enabled` to `false`, preserving the activation date and all append-only evidence while blocking V2 reads and writes.
+- A disabled initialized ledger cannot be initialized again. Resuming after containment requires a separately reviewed resume operation; it must not recreate vendors or openings.
+- V1 financial records and all loan records remain outside both activation and rollback paths.
 
 ### Post-Launch Backlog
 

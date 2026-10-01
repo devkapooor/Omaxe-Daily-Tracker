@@ -246,7 +246,15 @@ describe('V2 vendor ledger capability enforcement', () => {
     expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', 'clean-vendor-zero'))).exists()).toBe(false)
     expect((await getDoc(doc(ownerDb, 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
     expect((await getDoc(doc(ownerDb, 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
-    await expect(activateVendorLedgerV2(input, ownerDb)).rejects.toThrow(/already active/)
+    await expect(activateVendorLedgerV2(input, ownerDb)).rejects.toThrow(/already initialized/)
+    await assertSucceeds(updateDoc(doc(ownerDb, 'appMetadata', 'vendorLedgerV2Config'), {
+      enabled: false, updatedAt: '2026-10-01T01:00:00.000Z', updatedByUserId: 'owner-user',
+    }))
+    await expect(activateVendorLedgerV2(input, ownerDb)).rejects.toThrow(/already initialized/)
+    await assertFails(getDoc(doc(ownerDb, 'vendorLedgerEntriesV2', 'vendor:clean-vendor-open:1:opening-balance')))
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      expect((await getDoc(doc(context.firestore(), 'vendorLedgerEntriesV2', 'vendor:clean-vendor-open:1:opening-balance'))).exists()).toBe(true)
+    })
   })
 
   it('denies non-owner activation and unaudited non-zero openings', async () => {

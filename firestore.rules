@@ -510,7 +510,14 @@ service cloud.firestore {
 
     match /appMetadata/vendorLedgerV2Config {
       allow read: if isStaff();
-      allow create, update: if isOwner();
+      allow create: if isOwner() &&
+        request.resource.data.enabled == true &&
+        request.resource.data.activationDate is string &&
+        request.resource.data.updatedByUserId == request.auth.uid;
+      allow update: if isOwner() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enabled', 'updatedAt', 'updatedByUserId']) &&
+        request.resource.data.activationDate == resource.data.activationDate &&
+        request.resource.data.updatedByUserId == request.auth.uid;
       allow delete: if false;
     }
 

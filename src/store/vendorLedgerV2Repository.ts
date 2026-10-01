@@ -105,7 +105,7 @@ export async function activateVendorLedgerV2(
   return runTransaction(database, async (transaction) => {
     const configSnapshot = await transaction.get(refs.config)
     const currentConfig = configSnapshot.data() as VendorLedgerV2Config | undefined
-    if (currentConfig?.enabled === true) throw new Error('The V2 vendor ledger is already active.')
+    if (configSnapshot.exists() || currentConfig) throw new Error('The V2 vendor ledger was already initialized and cannot be initialized again.')
 
     for (const candidate of review.vendors) {
       const baseVendor = buildVendorV2({
