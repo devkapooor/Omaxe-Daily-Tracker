@@ -206,7 +206,7 @@ No implementation phase may cross a decision marked `Pending`.
 | ID | Decision | Status | Required before |
 | --- | --- | --- | --- |
 | FD-001 | Vendor outstanding decreases only when the cheque becomes `Debited`. `Issued` and `Presented` cheques remain visible in the vendor ledger as pending cheque commitments without changing outstanding. | Approved 2026-10-01 | Phase 1 sign rules |
-| FD-002 | Confirm whether a cancelled/bounced cheque reopens its original invoice allocations automatically or requires owner review. | Pending | Phase 1 transition rules |
+| FD-002 | Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases its reserved invoice allocations in the same atomic transition. | Approved 2026-10-01 | Phase 1 transition rules |
 | FD-003 | Confirm the authoritative V1-to-V2 cutover boundary: a fixed business date or an owner-controlled per-vendor cutover. | Pending | Phase 3 compatibility design |
 | FD-004 | Confirm how current opening outstanding and open purchases should be represented in the V2 ledger without double counting. | Pending | Phase 4 ledger posting |
 | FD-005 | Confirm whether V2 purchase, settlement, return, and cheque corrections require Action Centre approval or can be performed directly by users with correction capabilities. | Pending | Phase 2 permissions |
@@ -238,3 +238,10 @@ No implementation phase may cross a decision marked `Pending`.
 - `Debited`: post the settlement ledger event and reduce vendor outstanding exactly once.
 - A pending cheque commitment is informational and must be excluded from the outstanding-balance equation.
 - Invoice allocations attached before debit are reservations only. Their final accounting effect occurs on debit.
+
+### Cancelled and Bounced Pending Cheques
+
+- Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases only that cheque's reserved invoice allocations.
+- Because vendor outstanding is unchanged before debit, releasing a pending reservation creates no settlement reversal and does not alter outstanding.
+- The status change and reservation release must be atomic and idempotent.
+- Tests must prove that the release occurs exactly once, retries do not duplicate effects, unrelated allocations remain unchanged, and vendor outstanding remains unchanged.
