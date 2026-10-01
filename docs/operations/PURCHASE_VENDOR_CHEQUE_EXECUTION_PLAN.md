@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Lean Release A release candidate ready; deployment approval pending
+- Current phase: Lean Release C deployed; production initialization awaits an owner-reviewed vendor schedule and activation date
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -182,7 +182,7 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 ### Lean Release B - Minimum Operational Vendor Ledger
 
-**Implementation status (2026-10-01): Complete in source and pushed; deployment pending owner confirmation. Production V2 remains disabled.**
+**Implementation status (2026-10-01): Complete, pushed, and deployed. Production V2 remains disabled.**
 
 #### Scope
 
@@ -207,7 +207,7 @@ This three-release route supersedes the active execution of the former Phases 5-
 - Firestore emulator: 18 tests passed, including purchase, settlement, linked owner correction, cheque uniqueness, lifecycle, stale revision, and debit posting.
 - Source validation: 43 tests passed; source ESLint, TypeScript, and production build passed. The existing bundle-size warning remains unchanged.
 - Commits: `c521b28`, `d8f9f78`, and `4b009f8`.
-- No Firebase deployment, production initialization, financial write, legacy-data write, or loan write was performed during implementation.
+- Firestore rules and Hosting were deployed before any V2 initialization. No production initialization, financial write, legacy-data write, or loan write was performed.
 
 #### Credit Boundary
 
@@ -216,7 +216,7 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 ### Lean Release C - Controlled Clean Start
 
-**Implementation status (2026-10-01): Cutover planner, atomic emulator rehearsal, and read-only production preflight complete in source. Deployment pending owner confirmation; production remains uninitialized and disabled.**
+**Implementation status (2026-10-01): Cutover planner, atomic emulator rehearsal, read-only production preflight, Firestore rules deployment, and Hosting deployment complete. Production remains uninitialized and disabled pending an owner-reviewed vendor schedule and activation date.**
 
 #### Scope
 
@@ -238,6 +238,9 @@ This three-release route supersedes the active execution of the former Phases 5-
 - Firestore emulator: 20 rules tests passed. The rehearsal proved owner-only access, exact opening reconciliation, automatic transaction rollback, single initialization, cheque-book setup, and preservation of seeded V1 vendor and loan records.
 - Read-only production preflight on 2026-10-01: `vendorLedgerV2Config` does not exist; checked V2 collections are empty; legacy `vendors` and `loans` remain present. No document was created, updated, or deleted.
 - Source validation: 45 tests passed; source ESLint, TypeScript, and production build passed with only the existing bundle-size warning.
+- Firestore ruleset `25536885-9170-4d44-ab34-c780baf6c04b` and Hosting version `cb56626dcf95668f` were deployed on 2026-10-01. The live endpoint returned HTTP 200.
+- Post-deployment read-only verification found all checked V2 collections empty and no V2 configuration document. All 20 loan documents predate the deployment baseline; none was updated during deployment.
+- Production initialization was not run because the repository contains no owner-reviewed vendor names, opening balances, or activation date. These financial inputs must not be inferred.
 
 #### Rollback And Containment
 
