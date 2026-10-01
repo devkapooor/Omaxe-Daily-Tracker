@@ -1,5 +1,20 @@
 # Version Log
 
+## Owner Action Centre - 2026-10-01
+
+- Commit: `a75125e`
+- Deployment: Firebase Hosting - `https://alphahub-f137b.web.app`
+- Firebase Hosting version: `703d8b0aa1f9d715`
+- Summary:
+  - Added an owner-only Action Centre with a live pending approval badge.
+  - Moved cashout correction approval actions out of Logs while preserving reviewed audit history.
+  - Added stale-request detection and a non-financial `Close as Outdated` path.
+  - Added a reusable source-adapter model for future approval workflows.
+- Verification:
+  - Thirteen source tests, source ESLint, TypeScript, and the production build passed.
+  - Firestore owner/manager/billing approval scenarios were added, but the emulator could not run because Java is not installed on this machine.
+  - Firestore rules were unchanged; Hosting-only deployment made no production financial-record changes.
+
 ## Dashboard Batch A - 2026-10-01
 
 - Commit: `42e19a9`
