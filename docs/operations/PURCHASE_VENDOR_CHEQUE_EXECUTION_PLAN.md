@@ -220,7 +220,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
 | FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
-| FD-014 | Confirm how legacy `In Process` maps to the V2 lifecycle and whether imported open cheques are tracking-only or may affect clean V2 vendor outstanding when later debited. | Pending | Phase 6 legacy cheque behavior |
+| FD-014 | Imported legacy open cheques are tracking-only. Their status may be updated, but they never post to or reduce clean V2 vendor outstanding. Mapping legacy `In Process` to a V2 status remains pending. | Partially approved 2026-10-01 | Phase 6 legacy cheque behavior |
 
 ## Phase 0 Findings
 
@@ -248,6 +248,9 @@ No implementation phase may cross a decision marked `Pending`.
 - Blank leaves have no date, party, amount, or status populated.
 - No open cheque number overlaps the blank 1120-1299 range.
 - These controls verify workbook structure and totals only. They do not establish vendor opening balances or authorize an accounting effect in V2.
+- Imported legacy open cheques are tagged as legacy tracking records and are excluded from all V2 vendor-ledger posting equations.
+- Changing a legacy cheque to `Debited`, `Cancelled`, or `Bounced` updates operational status and history only; it creates no vendor settlement or reversal event.
+- Tests must prove that every legacy status transition leaves V2 vendor outstanding and invoice balances unchanged.
 
 ## Approved Financial Behavior
 
