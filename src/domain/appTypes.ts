@@ -1,11 +1,35 @@
 import type { AppUser } from './financeTypes'
 
+export type PurchasingCapability =
+  | 'vendor.manage'
+  | 'purchase.create'
+  | 'purchase.correct'
+  | 'return.create'
+  | 'return.resolve'
+  | 'cheque.prepare'
+  | 'cheque.issue'
+  | 'cheque.present'
+  | 'cheque.debit'
+  | 'cheque.cancel'
+  | 'vendorLedger.view'
+  | 'migration.execute'
+
+export type PurchasingCapabilities = Partial<Record<PurchasingCapability, boolean>>
+
 export type UserAccount = AppUser & {
   email: string
   mobileNumber?: string
   approvalStatus?: 'pending' | 'approved' | 'rejected'
   createdAt: string
   disabled?: boolean
+  purchasingCapabilities?: PurchasingCapabilities
+}
+
+export type VendorLedgerV2Config = {
+  enabled: boolean
+  activationDate?: string
+  updatedAt?: string
+  updatedByUserId?: string
 }
 
 export type Page = 'dashboard' | 'actions' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'logs' | 'settings'

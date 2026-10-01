@@ -98,6 +98,7 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | approvalStatus | `pending \| approved \| rejected` | no | Current app generally writes approved for created users |
 | createdAt | string | yes | ISO timestamp |
 | disabled | boolean | no | Optional inactive marker |
+| purchasingCapabilities | map | no | Optional V2 purchasing grants; absent and false values grant nothing to non-owners, while owners retain full authority |
 
 ### VendorRecord
 
@@ -240,6 +241,16 @@ Used to back searchable selectors and keep naming consistent across forms.
 - The active cheque-book boundary is 1120-1199; this remains a domain rule until persistence is implemented.
 
 The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchanged and authoritative in the live application until the separately approved all-vendor activation date.
+
+### V2 Persistence Boundary
+
+- `appMetadata/vendorLedgerV2Config.enabled` is the protected master feature flag and defaults effectively to false when absent.
+- Dormant collection names are centralized in `src/store/vendorLedgerV2Repository.ts`.
+- The guarded transaction helper reads the feature flag inside every future V2 transaction before running its operation.
+- Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
+- `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
+- Existing users without `purchasingCapabilities` retain current access but receive no V2 purchasing authority.
+- Newly created staff accounts receive every purchasing capability explicitly set to false.
 
 ## Metadata Documents
 

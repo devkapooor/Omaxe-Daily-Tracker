@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 1 complete; Phase 2 - security and persistence foundation is next
+- Current phase: Phase 2 complete; Phase 3 - vendor identity foundation is next
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -87,6 +87,15 @@ Every phase uses the same sequence:
 - Firestore emulator tests prove all allowed and denied paths.
 - Feature flag remains disabled and no production V2 record exists.
 - Rules are ready for a later rules-first deployment, but are not deployed without confirmation.
+
+### Completion Evidence
+
+- Added optional per-user purchasing capabilities with owner override and all non-owner defaults off.
+- Added a protected V2 feature flag and dormant transaction guard; an absent or disabled flag blocks every V2 write.
+- Added rules for V2 source records, lifecycle permissions, correction requests, and append-only ledger history without changing current collection permissions.
+- Firestore emulator suite passes all 14 scenarios, including owner, explicit capability, missing capability, disabled user, unauthenticated user, self-escalation, immutable identity, and append-only history checks.
+- Used a temporary portable Java 21 runtime for emulator validation because Java is not installed on the system path; no runtime was added to the repository.
+- No rules were deployed, no V2 config was created in production, and no production record was read or written.
 
 ## Phase 3 - Vendor Identity Foundation
 

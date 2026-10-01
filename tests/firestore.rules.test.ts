@@ -17,7 +17,12 @@ function userDb(userId: string) {
   return testEnvironment.authenticatedContext(userId).firestore()
 }
 
-async function seedUser(id: string, role: 'owner' | 'manager' | 'billing', disabled = false) {
+async function seedUser(
+  id: string,
+  role: 'owner' | 'manager' | 'billing',
+  disabled = false,
+  purchasingCapabilities: Record<string, boolean> = {},
+) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'users', id), {
       name: id,
@@ -25,6 +30,7 @@ async function seedUser(id: string, role: 'owner' | 'manager' | 'billing', disab
       role,
       createdAt: timestamp,
       disabled,
+      purchasingCapabilities,
     })
   })
 }
@@ -43,6 +49,18 @@ beforeEach(async () => {
     seedUser('manager-user', 'manager'),
     seedUser('billing-user', 'billing'),
     seedUser('disabled-user', 'billing', true),
+    seedUser('purchasing-user', 'manager', false, {
+      'vendor.manage': true,
+      'purchase.create': true,
+      'vendorLedger.view': true,
+    }),
+    seedUser('cheque-user', 'manager', false, {
+      'cheque.prepare': true,
+      'cheque.issue': true,
+      'cheque.present': true,
+      'cheque.debit': true,
+      'cheque.cancel': true,
+    }),
   ])
 })
 
@@ -186,5 +204,120 @@ describe('Firestore role enforcement', () => {
     await assertFails(updateDoc(doc(userDb('manager-user'), requestPath), { status: 'approved' }))
     await assertFails(updateDoc(doc(userDb('billing-user'), requestPath), { status: 'approved' }))
     await assertFails(updateDoc(doc(userDb('disabled-user'), requestPath), { status: 'approved' }))
+  })
+})
+
+describe('V2 vendor ledger capability enforcement', () => {
+  const vendor = {
+    id: 'vendor-v2-1',
+    canonicalName: 'New Vendor',
+    aliases: [],
+    contact: '',
+    address: '',
+    suppliedBrands: [],
+    active: true,
+    openingBalancePaise: 0,
+    revision: 1,
+    createdAt: timestamp,
+    createdByUserId: 'purchasing-user',
+    updatedAt: timestamp,
+    updatedByUserId: 'purchasing-user',
+  }
+
+  async function enableV2() {
+    await setDoc(doc(userDb('owner-user'), 'appMetadata', 'vendorLedgerV2Config'), {
+      enabled: true,
+      activationDate: '2026-10-01',
+      updatedAt: timestamp,
+      updatedByUserId: 'owner-user',
+    })
+  }
+
+  it('denies every V2 write while the protected feature flag is disabled', async () => {
+    await assertFails(setDoc(doc(userDb('owner-user'), 'vendorsV2', 'vendor-v2-1'), {
+      ...vendor,
+      createdByUserId: 'owner-user',
+      updatedByUserId: 'owner-user',
+    }))
+  })
+
+  it('allows explicit capabilities and denies ungranted, disabled, and unauthenticated users', async () => {
+    await enableV2()
+    await assertSucceeds(setDoc(doc(userDb('purchasing-user'), 'vendorsV2', 'vendor-v2-1'), vendor))
+    await assertFails(setDoc(doc(userDb('manager-user'), 'vendorsV2', 'vendor-v2-2'), {
+      ...vendor,
+      id: 'vendor-v2-2',
+      createdByUserId: 'manager-user',
+      updatedByUserId: 'manager-user',
+    }))
+    await assertFails(setDoc(doc(userDb('disabled-user'), 'vendorsV2', 'vendor-v2-3'), {
+      ...vendor,
+      id: 'vendor-v2-3',
+      createdByUserId: 'disabled-user',
+      updatedByUserId: 'disabled-user',
+    }))
+    await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), 'vendorsV2', 'vendor-v2-1')))
+  })
+
+  it('prevents users from granting themselves purchasing capabilities', async () => {
+    await assertFails(updateDoc(doc(userDb('purchasing-user'), 'users', 'purchasing-user'), {
+      purchasingCapabilities: { 'migration.execute': true },
+    }))
+  })
+
+  it('keeps ledger history append-only and limits reading to the ledger capability', async () => {
+    await enableV2()
+    const entry = {
+      id: 'purchase:purchase-v2-1:1:purchase',
+      vendorId: 'vendor-v2-1',
+      eventType: 'purchase',
+      posting: 'financial',
+      signedAmountPaise: 100000,
+      sourceType: 'purchase',
+      sourceRecordId: 'purchase-v2-1',
+      sourceRevision: 1,
+      occurredOn: '2026-10-01',
+      createdAt: timestamp,
+      createdByUserId: 'purchasing-user',
+    }
+    const entryPath = 'vendorLedgerEntriesV2/purchase:purchase-v2-1:1:purchase'
+    await assertSucceeds(setDoc(doc(userDb('purchasing-user'), entryPath), entry))
+    await assertSucceeds(getDoc(doc(userDb('purchasing-user'), entryPath)))
+    await assertFails(getDoc(doc(userDb('manager-user'), entryPath)))
+    await assertFails(updateDoc(doc(userDb('owner-user'), entryPath), { signedAmountPaise: 1 }))
+    await assertFails(deleteDoc(doc(userDb('owner-user'), entryPath)))
+  })
+
+  it('enforces capability-specific cheque transitions and immutable identity', async () => {
+    await enableV2()
+    const chequeRef = doc(userDb('cheque-user'), 'chequesV2', 'cheque-v2-1')
+    await assertSucceeds(setDoc(chequeRef, {
+      id: 'cheque-v2-1',
+      chequeBookId: 'book-1',
+      chequeNumber: '1120',
+      purpose: 'vendor-payment',
+      sourceRecordId: 'settlement-v2-1',
+      vendorId: 'vendor-v2-1',
+      date: '2026-10-02',
+      amountPaise: 100000,
+      status: 'draft',
+      origin: 'v2',
+      trackingOnly: false,
+      revision: 1,
+      createdAt: timestamp,
+      createdByUserId: 'cheque-user',
+      updatedAt: timestamp,
+      updatedByUserId: 'cheque-user',
+    }))
+    await assertSucceeds(updateDoc(chequeRef, {
+      status: 'issued', revision: 2, updatedAt: '2026-10-01T01:00:00.000Z', updatedByUserId: 'cheque-user',
+    }))
+    await assertFails(updateDoc(doc(userDb('manager-user'), 'chequesV2', 'cheque-v2-1'), {
+      status: 'presented', revision: 3, updatedAt: '2026-10-01T02:00:00.000Z', updatedByUserId: 'manager-user',
+    }))
+    await assertFails(updateDoc(chequeRef, {
+      chequeNumber: '1121', status: 'presented', revision: 3,
+      updatedAt: '2026-10-01T02:00:00.000Z', updatedByUserId: 'cheque-user',
+    }))
   })
 })

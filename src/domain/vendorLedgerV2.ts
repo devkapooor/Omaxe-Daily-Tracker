@@ -29,6 +29,8 @@ export type PurchaseV2 = {
   revision: number
   createdAt: string
   createdByUserId: string
+  updatedAt: string
+  updatedByUserId: string
 }
 
 export type VendorSettlementMode = 'cash' | 'upi' | 'card' | 'bank-transfer'
@@ -44,6 +46,8 @@ export type VendorSettlementV2 = {
   revision: number
   createdAt: string
   createdByUserId: string
+  updatedAt: string
+  updatedByUserId: string
 }
 
 export type VendorReturnOutcome = 'pending' | 'vendor-credit' | 'replacement' | 'rejected'
@@ -64,6 +68,8 @@ export type VendorReturnV2 = {
   revision: number
   createdAt: string
   createdByUserId: string
+  updatedAt: string
+  updatedByUserId: string
 }
 
 export type ChequePurpose = 'vendor-payment' | 'expense'
@@ -76,8 +82,11 @@ export type ChequeBookV2 = {
   startNumber: number
   endNumber: number
   active: boolean
+  revision: number
   createdAt: string
   createdByUserId: string
+  updatedAt: string
+  updatedByUserId: string
 }
 
 export type ChequeV2 = {

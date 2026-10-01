@@ -28,6 +28,112 @@ service cloud.firestore {
       return isStaff() && userDoc().data.role == 'billing';
     }
 
+    function hasPurchasingCapability(capability) {
+      return isOwner() || (
+        isStaff() &&
+        userDoc().data.keys().hasAny(['purchasingCapabilities']) &&
+        userDoc().data.purchasingCapabilities.keys().hasAny([capability]) &&
+        userDoc().data.purchasingCapabilities[capability] == true
+      );
+    }
+
+    function isVendorLedgerV2Enabled() {
+      return get(/databases/$(database)/documents/appMetadata/vendorLedgerV2Config).data.enabled == true;
+    }
+
+    function isPositivePaise(value) {
+      return value is int && value > 0;
+    }
+
+    function validV2Identity(data, documentId) {
+      return hasDocumentId(data, documentId) &&
+        data.revision is int &&
+        data.revision >= 1 &&
+        data.createdAt is string &&
+        data.createdByUserId == request.auth.uid;
+    }
+
+    function immutableV2Identity() {
+      return request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdByUserId == resource.data.createdByUserId &&
+        request.resource.data.revision == resource.data.revision + 1;
+    }
+
+    function validVendorV2(data, documentId) {
+      return validV2Identity(data, documentId) &&
+        data.canonicalName is string &&
+        data.canonicalName.size() > 0 &&
+        data.openingBalancePaise is int &&
+        data.openingBalancePaise >= 0;
+    }
+
+    function validPurchaseV2(data, documentId) {
+      return validV2Identity(data, documentId) &&
+        data.vendorId is string &&
+        data.invoiceNumber is string &&
+        data.invoiceDate is string &&
+        isPositivePaise(data.invoiceTotalPaise);
+    }
+
+    function validSettlementV2(data, documentId) {
+      return validV2Identity(data, documentId) &&
+        data.vendorId is string &&
+        data.date is string &&
+        isPositivePaise(data.amountPaise) &&
+        data.mode in ['cash', 'upi', 'card', 'bank-transfer'];
+    }
+
+    function validReturnV2(data, documentId) {
+      return validV2Identity(data, documentId) &&
+        data.vendorId is string &&
+        data.date is string &&
+        isPositivePaise(data.valuePaise) &&
+        data.outcome in ['pending', 'vendor-credit', 'replacement', 'rejected'];
+    }
+
+    function validChequeV2(data, documentId) {
+      return validV2Identity(data, documentId) &&
+        data.chequeNumber is string &&
+        data.purpose in ['vendor-payment', 'expense'] &&
+        data.sourceRecordId is string &&
+        data.date is string &&
+        isPositivePaise(data.amountPaise) &&
+        data.status in ['draft', 'issued', 'presented', 'debited', 'cancelled', 'bounced'] &&
+        data.origin in ['v2', 'legacy-workbook', 'legacy-expense'] &&
+        data.trackingOnly is bool;
+    }
+
+    function canUpdateChequeStatus() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'revision', 'updatedAt', 'updatedByUserId'
+        ]) &&
+        immutableV2Identity() &&
+        request.resource.data.updatedByUserId == request.auth.uid &&
+        (
+          (resource.data.status == 'draft' && request.resource.data.status == 'issued' && hasPurchasingCapability('cheque.issue')) ||
+          (resource.data.status == 'issued' && request.resource.data.status == 'presented' && hasPurchasingCapability('cheque.present')) ||
+          (resource.data.status == 'presented' && request.resource.data.status == 'debited' && hasPurchasingCapability('cheque.debit')) ||
+          (resource.data.status in ['issued', 'presented'] && request.resource.data.status in ['cancelled', 'bounced'] && hasPurchasingCapability('cheque.cancel'))
+        );
+    }
+
+    function canResolveVendorReturn() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'outcome', 'outcomeReason', 'replacementReceivedAt', 'revision', 'updatedAt', 'updatedByUserId'
+        ]) &&
+        immutableV2Identity() &&
+        request.resource.data.updatedByUserId == request.auth.uid &&
+        request.resource.data.outcome in ['vendor-credit', 'replacement', 'rejected'] &&
+        hasPurchasingCapability('return.resolve');
+    }
+
+    function canCreateLedgerEntry(data) {
+      return isOwner() ||
+        (data.eventType == 'purchase' && hasPurchasingCapability('purchase.create')) ||
+        (data.eventType == 'vendor-credit' && hasPurchasingCapability('return.resolve')) ||
+        (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit'));
+    }
+
     function isNonNegativeNumber(value) {
       return value is number && value >= 0;
     }
@@ -118,6 +224,11 @@ service cloud.firestore {
     match /appMetadata/vendorCatalog {
       allow read: if isStaff();
       allow write: if isOwner();
+    }
+
+    match /appMetadata/vendorLedgerV2Config {
+      allow read, create, update: if isOwner();
+      allow delete: if false;
     }
 
     match /appMetadata/appSettings {
@@ -253,6 +364,91 @@ service cloud.firestore {
         request.resource.data.action is string &&
         request.resource.data.createdAt is string;
       allow update, delete: if false;
+    }
+
+    match /vendorsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('vendor.manage') && validVendorV2(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow delete: if false;
+    }
+
+    match /purchasesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validPurchaseV2(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow delete: if false;
+    }
+
+    match /vendorSettlementsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && isOwner() && validSettlementV2(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow delete: if false;
+    }
+
+    match /vendorReturnsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('return.create') && validReturnV2(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && ((isOwner() && immutableV2Identity()) || canResolveVendorReturn());
+      allow delete: if false;
+    }
+
+    match /chequeBooksV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create, update: if isVendorLedgerV2Enabled() && isOwner();
+      allow delete: if false;
+    }
+
+    match /chequesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('cheque.prepare') && validChequeV2(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && ((isOwner() && immutableV2Identity()) || canUpdateChequeStatus());
+      allow delete: if false;
+    }
+
+    match /vendorLedgerEntriesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && hasPurchasingCapability('vendorLedger.view');
+      allow create: if isVendorLedgerV2Enabled() &&
+        request.resource.data.id == documentId &&
+        request.resource.data.vendorId is string &&
+        request.resource.data.posting in ['financial', 'informational'] &&
+        request.resource.data.signedAmountPaise is int &&
+        request.resource.data.sourceRecordId is string &&
+        request.resource.data.sourceRevision is int &&
+        request.resource.data.sourceRevision >= 1 &&
+        request.resource.data.createdAt is string &&
+        request.resource.data.createdByUserId == request.auth.uid &&
+        canCreateLedgerEntry(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /invoiceAllocationsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && isOwner() &&
+        request.resource.data.id == documentId &&
+        isPositivePaise(request.resource.data.amountPaise);
+      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow delete: if false;
+    }
+
+    match /vendorLedgerCorrectionRequestsV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && (isOwner() || (
+        isStaff() && resource.data.requestedByUserId == request.auth.uid
+      ));
+      allow create: if isVendorLedgerV2Enabled() && isStaff() &&
+        request.resource.data.requestedByUserId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.reason is string &&
+        request.resource.data.reason.size() > 0;
+      allow update: if isVendorLedgerV2Enabled() && isOwner() &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['approved', 'rejected'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'reviewedAt', 'reviewedByUserId', 'reviewedBy', 'reviewReason'
+        ]) &&
+        request.resource.data.reviewedByUserId == request.auth.uid;
+      allow delete: if false;
     }
   }
 }

@@ -1,6 +1,7 @@
 import { deleteApp, initializeApp } from 'firebase/app'
 import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth'
 import { deleteDoc, doc, setDoc } from 'firebase/firestore'
+import { defaultPurchasingCapabilities } from '@/domain/purchasingCapabilities'
 import { auth, db, firebaseConfig } from '@/shared/lib/firebase'
 import type { CreateUserInput, StoreCollectionState } from '@/store/storeShared'
 import { normalizeName, nowIso } from '@/store/storeShared'
@@ -61,6 +62,7 @@ export function createAuthActions({
         approvalStatus: 'approved',
         createdAt: nowIso(),
         disabled: false,
+        purchasingCapabilities: defaultPurchasingCapabilities(),
       })
       await ensureNameInDirectory('people', name)
       await pushSettingsAudit(`User created: ${name} (${role})`, actor)
