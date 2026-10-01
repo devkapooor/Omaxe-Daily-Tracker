@@ -76,7 +76,7 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
     })
     items.push({
       icon: <TestTube2 className="size-4 shrink-0" />,
-      label: 'Vendor Preview',
+      label: 'Vendor Workspace',
       page: 'vendor-preview',
       gradient: '',
       hoverClass: '',
