@@ -7,8 +7,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
-import { createPurchaseV2 } from '../src/store/vendorLedgerV2Repository'
-import { createSettlementV2 } from '../src/store/vendorLedgerV2Repository'
+import { applySettlementCorrectionV2, createPurchaseV2, createSettlementV2 } from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
 
@@ -413,6 +412,21 @@ describe('V2 vendor ledger capability enforcement', () => {
       id: 'settlement-excess-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 1,
       mode: 'cash', actorUserId: 'purchasing-user', timestamp,
     }, purchasingDb)).rejects.toThrow(/positive outstanding/)
+
+    const correction = {
+      id: 'settlement-correction-1', kind: 'settlement-correction', sourceRecordId: 'settlement-custom-1',
+      vendorId: 'vendor-v2-1', sourceRevision: 1,
+      before: { date: '2026-10-01', amountPaise: 60000, mode: 'bank-transfer', notes: '' },
+      proposed: { date: '2026-10-01', amountPaise: 50000, mode: 'bank-transfer', notes: 'Corrected amount' },
+      reason: 'Amount entered incorrectly', requestedByUserId: 'purchasing-user', requestedBy: 'Purchasing User',
+      requestType: 'staff-request', status: 'pending', createdAt: timestamp,
+    }
+    await assertSucceeds(setDoc(doc(purchasingDb, 'vendorLedgerCorrectionRequestsV2', correction.id), correction))
+    await expect(applySettlementCorrectionV2(correction.id, { id: 'owner-user', name: 'Owner' }, '2026-10-01T01:00:00.000Z', userDb('owner-user')))
+      .resolves.toMatchObject({ adjustmentPaise: 10000 })
+    const accountAfterCorrection = await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))
+    expect(accountAfterCorrection.data()?.outstandingPaise).toBe(10000)
+    await assertFails(updateDoc(doc(userDb('owner-user'), 'vendorSettlementsV2', 'settlement-custom-1'), { amountPaise: 50000 }))
   })
 
   it('enforces capability-specific cheque transitions and immutable identity', async () => {

@@ -64,6 +64,42 @@ export type VendorSettlementV2 = {
   updatedByUserId: string
 }
 
+export type SettlementCorrectionValuesV2 = Pick<VendorSettlementV2, 'amountPaise' | 'date' | 'mode' | 'notes'> & {
+  invoiceId?: string
+}
+
+export type VendorSettlementStateV2 = SettlementCorrectionValuesV2 & {
+  id: string
+  vendorId: string
+  settlementId: string
+  revision: number
+  lastCorrectionId?: string
+  updatedAt: string
+  updatedByUserId: string
+}
+
+export type VendorLedgerCorrectionRequestV2 = {
+  id: string
+  kind: 'settlement-correction'
+  sourceRecordId: string
+  vendorId: string
+  sourceRevision: number
+  before: SettlementCorrectionValuesV2
+  proposed: SettlementCorrectionValuesV2
+  reason: string
+  requestedByUserId: string
+  requestedBy: string
+  requestType: 'staff-request' | 'owner-edit'
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
+  createdAt: string
+  reviewedAt?: string
+  reviewedByUserId?: string
+  reviewedBy?: string
+  reviewReason?: string
+  ledgerEntryId?: string
+  allocationAdjustmentId?: string
+}
+
 export type VendorAccountStateV2 = {
   id: string
   vendorId: string
@@ -175,7 +211,7 @@ export type InvoiceAllocationV2 = {
   id: string
   vendorId: string
   invoiceId: string
-  sourceType: 'settlement' | 'cheque'
+  sourceType: 'settlement' | 'settlement-correction' | 'cheque'
   sourceRecordId: string
   amountPaise: AmountPaise
   state: 'reserved' | 'posted' | 'released' | 'reversed'
@@ -368,6 +404,19 @@ export function buildSettlementPostingV2(
     updatedAt: input.timestamp,
     updatedByUserId: actorUserId,
   }
+  const settlementState: VendorSettlementStateV2 = {
+    id,
+    vendorId,
+    settlementId: id,
+    date: input.date,
+    amountPaise: input.amountPaise,
+    mode: input.mode,
+    ...(input.invoiceId ? { invoiceId: input.invoiceId } : {}),
+    notes: input.notes?.trim() ?? '',
+    revision: 1,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
   const ledgerEntry: VendorLedgerEntryV2 = {
     id: ledgerEntryId,
     vendorId,
@@ -409,12 +458,94 @@ export function buildSettlementPostingV2(
     updatedAt: input.timestamp,
     updatedByUserId: actorUserId,
   } : undefined
-  return { allocation, ledgerEntry, nextAccountState, nextInvoiceState, settlement }
+  return { allocation, ledgerEntry, nextAccountState, nextInvoiceState, settlement, settlementState }
 }
 
 export function deterministicAllocationId(sourceType: InvoiceAllocationV2['sourceType'], sourceRecordId: string, invoiceId: string) {
   if (!sourceRecordId.trim() || !invoiceId.trim()) throw new Error('Allocation source and invoice IDs are required.')
   return [sourceType, sourceRecordId.trim(), invoiceId.trim()].map((part) => encodeURIComponent(part)).join(':')
+}
+
+export function settlementCorrectionValuesV2(state: VendorSettlementStateV2): SettlementCorrectionValuesV2 {
+  return {
+    date: state.date,
+    amountPaise: state.amountPaise,
+    mode: state.mode,
+    ...(state.invoiceId ? { invoiceId: state.invoiceId } : {}),
+    notes: state.notes,
+  }
+}
+
+export function settlementCorrectionValuesEqualV2(left: SettlementCorrectionValuesV2, right: SettlementCorrectionValuesV2) {
+  return left.date === right.date && left.amountPaise === right.amountPaise && left.mode === right.mode &&
+    left.invoiceId === right.invoiceId && left.notes.trim() === right.notes.trim()
+}
+
+export function buildSettlementCorrectionV2(
+  request: VendorLedgerCorrectionRequestV2,
+  state: VendorSettlementStateV2,
+  accountState: VendorAccountStateV2,
+  invoiceState: InvoiceStateV2 | undefined,
+  actorUserId: string,
+  timestamp: string,
+) {
+  assertExpectedRevision(state.revision, request.sourceRevision)
+  if (!settlementCorrectionValuesEqualV2(settlementCorrectionValuesV2(state), request.before)) {
+    throw new Error('The settlement values changed after this correction was submitted.')
+  }
+  if (request.vendorId !== state.vendorId || request.sourceRecordId !== state.settlementId) {
+    throw new Error('Correction source does not match the settlement state.')
+  }
+  if (request.proposed.invoiceId !== state.invoiceId) throw new Error('A correction cannot change the invoice allocation link.')
+  if (!request.reason.trim()) throw new Error('Correction reason is required.')
+  assertIntegerPaise(request.proposed.amountPaise, 'Corrected payment')
+  if (request.proposed.amountPaise <= 0) throw new Error('Corrected payment must be greater than zero.')
+  if (!businessDatePattern.test(request.proposed.date)) throw new Error('Corrected settlement date must use YYYY-MM-DD.')
+  if (settlementCorrectionValuesEqualV2(request.before, request.proposed)) throw new Error('No settlement values were changed.')
+
+  const adjustmentPaise = state.amountPaise - request.proposed.amountPaise
+  if (accountState.outstandingPaise + adjustmentPaise < 0) throw new Error('Corrected payment cannot create a vendor credit balance.')
+  if (state.invoiceId && (!invoiceState || invoiceState.invoiceId !== state.invoiceId)) {
+    throw new Error('Invoice state is required for an invoice-linked correction.')
+  }
+  if (invoiceState && invoiceState.openAmountPaise + adjustmentPaise < 0) {
+    throw new Error('Corrected payment cannot exceed the invoice open amount.')
+  }
+  const nextState: VendorSettlementStateV2 = {
+    ...state,
+    ...request.proposed,
+    revision: state.revision + 1,
+    lastCorrectionId: request.id,
+    updatedAt: timestamp,
+    updatedByUserId: actorUserId,
+  }
+  if (adjustmentPaise === 0) return { adjustmentPaise, nextState }
+
+  const ledgerEntryId = deterministicEventId('ledger-entry', request.id, 1, 'reversal')
+  const ledgerEntry: VendorLedgerEntryV2 = {
+    id: ledgerEntryId, vendorId: state.vendorId, eventType: 'reversal', posting: 'financial',
+    signedAmountPaise: adjustmentPaise, sourceType: 'ledger-entry', sourceRecordId: request.id, sourceRevision: 1,
+    reversalOfEntryId: deterministicEventId('settlement', state.settlementId, 1, 'settlement'),
+    reason: request.reason.trim(), occurredOn: request.proposed.date, createdAt: timestamp, createdByUserId: actorUserId,
+  }
+  const nextAccountState: VendorAccountStateV2 = {
+    ...accountState, outstandingPaise: accountState.outstandingPaise + adjustmentPaise,
+    revision: accountState.revision + 1, lastLedgerEntryId: ledgerEntryId, updatedAt: timestamp, updatedByUserId: actorUserId,
+  }
+  const allocationAdjustmentId = state.invoiceId
+    ? deterministicAllocationId('settlement-correction', request.id, state.invoiceId)
+    : undefined
+  const allocationAdjustment: InvoiceAllocationV2 | undefined = state.invoiceId && allocationAdjustmentId ? {
+    id: allocationAdjustmentId, vendorId: state.vendorId, invoiceId: state.invoiceId,
+    sourceType: 'settlement-correction', sourceRecordId: request.id, amountPaise: Math.abs(adjustmentPaise),
+    state: adjustmentPaise > 0 ? 'reversed' : 'posted', revision: 1, createdAt: timestamp, createdByUserId: actorUserId,
+  } : undefined
+  const nextInvoiceState = invoiceState && allocationAdjustment ? {
+    ...invoiceState, openAmountPaise: invoiceState.openAmountPaise + adjustmentPaise,
+    revision: invoiceState.revision + 1, lastAllocationId: allocationAdjustment.id,
+    updatedAt: timestamp, updatedByUserId: actorUserId,
+  } : undefined
+  return { adjustmentPaise, allocationAdjustment, ledgerEntry, nextAccountState, nextInvoiceState, nextState }
 }
 
 export function isV2BusinessDate(date: string, activationDate: string) {
@@ -436,12 +567,15 @@ export function invoiceBalanceV2(purchase: PurchaseV2, allocations: InvoiceAlloc
   const postedAmountPaise = matchingAllocations
     .filter((allocation) => allocation.state === 'posted')
     .reduce((total, allocation) => total + allocation.amountPaise, 0)
+  const reversedAmountPaise = matchingAllocations
+    .filter((allocation) => allocation.state === 'reversed')
+    .reduce((total, allocation) => total + allocation.amountPaise, 0)
   const reservedAmountPaise = matchingAllocations
     .filter((allocation) => allocation.state === 'reserved')
     .reduce((total, allocation) => total + allocation.amountPaise, 0)
   assertIntegerPaise(postedAmountPaise, 'Posted invoice allocation')
   assertIntegerPaise(reservedAmountPaise, 'Reserved invoice allocation')
-  const openAmountPaise = purchase.invoiceTotalPaise - postedAmountPaise
+  const openAmountPaise = purchase.invoiceTotalPaise - postedAmountPaise + reversedAmountPaise
   const availableToAllocatePaise = openAmountPaise - reservedAmountPaise
   if (openAmountPaise < 0 || availableToAllocatePaise < 0) {
     throw new Error('Invoice allocations exceed the immutable invoice total.')

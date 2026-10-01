@@ -42,7 +42,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-007 Dashboard break-even progress | Deployed | Formula, zero-margin state, current-month requirement, and completed-month behavior are covered by tests. |
 | UP-008 Dashboard daily sales trend | Deployed | Responsive SVG trend aligns calendar days and preserves gaps where no sales record exists. |
 | UP-009 Dashboard recording health | Deployed | Neutral sales and cashout coverage is shown without treating closed days as missing. |
-| UP-010 Purchase, vendor, and cheque ledger redesign | Phase 5 in progress | Atomic separate settlements, optional invoice allocations, and concurrency-safe caps are complete. Audited compensating corrections remain before Phase 5 closes. |
+| UP-010 Purchase, vendor, and cheque ledger redesign | Phase 5 in progress | Atomic settlements, allocations, caps, and the emulator-proven custom-settlement correction foundation are complete. Invoice-linked corrections and Action Centre UI remain before Phase 5 closes. |
 
 ## Acceptance Criteria
 

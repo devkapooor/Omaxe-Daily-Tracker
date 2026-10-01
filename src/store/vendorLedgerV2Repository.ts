@@ -3,6 +3,7 @@ import type { VendorLedgerV2Config } from '@/domain/appTypes'
 import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
+  buildSettlementCorrectionV2,
   isV2BusinessDate,
   type CreatePurchaseV2Input,
   type CreateSettlementV2Input,
@@ -14,6 +15,8 @@ import {
   type InvoiceStateV2,
   type InvoiceAllocationV2,
   type VendorSettlementV2,
+  type VendorSettlementStateV2,
+  type VendorLedgerCorrectionRequestV2,
 } from '@/domain/vendorLedgerV2'
 import { db } from '@/shared/lib/firebase'
 
@@ -24,6 +27,7 @@ export const vendorLedgerV2Collections = {
   vendorAccountStates: 'vendorAccountStatesV2',
   invoiceStates: 'invoiceStatesV2',
   settlements: 'vendorSettlementsV2',
+  settlementStates: 'vendorSettlementStatesV2',
   returns: 'vendorReturnsV2',
   chequeBooks: 'chequeBooksV2',
   cheques: 'chequesV2',
@@ -41,6 +45,7 @@ export function vendorLedgerV2Refs(database: Firestore = db) {
     vendorAccountStates: collection(database, vendorLedgerV2Collections.vendorAccountStates),
     invoiceStates: collection(database, vendorLedgerV2Collections.invoiceStates),
     settlements: collection(database, vendorLedgerV2Collections.settlements),
+    settlementStates: collection(database, vendorLedgerV2Collections.settlementStates),
     returns: collection(database, vendorLedgerV2Collections.returns),
     chequeBooks: collection(database, vendorLedgerV2Collections.chequeBooks),
     cheques: collection(database, vendorLedgerV2Collections.cheques),
@@ -161,6 +166,7 @@ export async function createSettlementV2(input: CreateSettlementV2Input, databas
     const vendorRef = doc(refs.vendors, input.vendorId)
     const accountStateRef = doc(refs.vendorAccountStates, input.vendorId)
     const settlementRef = doc(refs.settlements, input.id)
+    const settlementStateRef = doc(refs.settlementStates, input.id)
     const ledgerEntryId = `settlement:${encodeURIComponent(input.id.trim())}:1:settlement`
     const ledgerEntryRef = doc(refs.ledgerEntries, ledgerEntryId)
     const invoiceStateRef = input.invoiceId ? doc(refs.invoiceStates, input.invoiceId) : null
@@ -173,19 +179,20 @@ export async function createSettlementV2(input: CreateSettlementV2Input, databas
       transaction.get(accountStateRef),
       transaction.get(settlementRef),
       transaction.get(ledgerEntryRef),
+      transaction.get(settlementStateRef),
       ...(invoiceStateRef ? [transaction.get(invoiceStateRef)] : []),
       ...(allocationRef ? [transaction.get(allocationRef)] : []),
     ])
-    const [vendorSnapshot, accountStateSnapshot, settlementSnapshot, ledgerEntrySnapshot] = reads
-    const invoiceStateSnapshot = input.invoiceId ? reads[4] : undefined
-    const allocationSnapshot = input.invoiceId ? reads[5] : undefined
+    const [vendorSnapshot, accountStateSnapshot, settlementSnapshot, ledgerEntrySnapshot, settlementStateSnapshot] = reads
+    const invoiceStateSnapshot = input.invoiceId ? reads[5] : undefined
+    const allocationSnapshot = input.invoiceId ? reads[6] : undefined
     const vendor = vendorSnapshot.data() as VendorV2 | undefined
     if (!vendorSnapshot.exists() || !vendor?.active) throw new Error('Choose an active V2 vendor.')
     if (!accountStateSnapshot.exists()) throw new Error('Vendor has no V2 outstanding balance.')
 
-    const existingSourceCount = [settlementSnapshot, ledgerEntrySnapshot, allocationSnapshot]
+    const existingSourceCount = [settlementSnapshot, ledgerEntrySnapshot, settlementStateSnapshot, allocationSnapshot]
       .filter((snapshot) => snapshot?.exists()).length
-    const expectedSourceCount = input.invoiceId ? 3 : 2
+    const expectedSourceCount = input.invoiceId ? 4 : 3
     if (existingSourceCount > 0) {
       const existingSettlement = settlementSnapshot.data() as VendorSettlementV2 | undefined
       const existingLedgerEntry = ledgerEntrySnapshot.data() as VendorLedgerEntryV2 | undefined
@@ -211,10 +218,63 @@ export async function createSettlementV2(input: CreateSettlementV2Input, databas
       invoiceStateSnapshot?.data() as InvoiceStateV2 | undefined,
     )
     transaction.set(settlementRef, posting.settlement)
+    transaction.set(settlementStateRef, posting.settlementState)
     transaction.set(ledgerEntryRef, posting.ledgerEntry)
     transaction.set(accountStateRef, posting.nextAccountState)
     if (allocationRef && posting.allocation) transaction.set(allocationRef, posting.allocation)
     if (invoiceStateRef && posting.nextInvoiceState) transaction.set(invoiceStateRef, posting.nextInvoiceState)
     return { created: true, ...posting }
+  }, database)
+}
+
+export async function applySettlementCorrectionV2(
+  requestId: string,
+  actor: { id: string; name: string },
+  timestamp: string,
+  database: Firestore = db,
+) {
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const requestRef = doc(refs.correctionRequests, requestId)
+    const requestSnapshot = await transaction.get(requestRef)
+    const request = requestSnapshot.data() as VendorLedgerCorrectionRequestV2 | undefined
+    if (!requestSnapshot.exists() || !request || request.kind !== 'settlement-correction' || request.status !== 'pending') {
+      throw new Error('This settlement correction request is no longer pending.')
+    }
+    const settlementStateRef = doc(refs.settlementStates, request.sourceRecordId)
+    const accountStateRef = doc(refs.vendorAccountStates, request.vendorId)
+    const invoiceStateRef = request.before.invoiceId ? doc(refs.invoiceStates, request.before.invoiceId) : null
+    const [stateSnapshot, accountSnapshot, invoiceSnapshot] = await Promise.all([
+      transaction.get(settlementStateRef),
+      transaction.get(accountStateRef),
+      ...(invoiceStateRef ? [transaction.get(invoiceStateRef)] : []),
+    ])
+    if (!stateSnapshot.exists() || !accountSnapshot.exists()) throw new Error('Settlement correction source state is missing.')
+    const correction = buildSettlementCorrectionV2(
+      request,
+      stateSnapshot.data() as VendorSettlementStateV2,
+      accountSnapshot.data() as VendorAccountStateV2,
+      invoiceSnapshot?.data() as InvoiceStateV2 | undefined,
+      actor.id,
+      timestamp,
+    )
+    const ledgerEntryRef = correction.ledgerEntry ? doc(refs.ledgerEntries, correction.ledgerEntry.id) : null
+    const allocationRef = correction.allocationAdjustment ? doc(refs.allocations, correction.allocationAdjustment.id) : null
+    if (ledgerEntryRef && (await transaction.get(ledgerEntryRef)).exists()) throw new Error('This correction was already posted.')
+    if (allocationRef && (await transaction.get(allocationRef)).exists()) throw new Error('This correction allocation was already posted.')
+
+    transaction.set(settlementStateRef, correction.nextState)
+    if (ledgerEntryRef && correction.ledgerEntry && correction.nextAccountState) {
+      transaction.set(ledgerEntryRef, correction.ledgerEntry)
+      transaction.set(accountStateRef, correction.nextAccountState)
+    }
+    if (allocationRef && correction.allocationAdjustment && invoiceStateRef && correction.nextInvoiceState) {
+      transaction.set(allocationRef, correction.allocationAdjustment)
+      transaction.set(invoiceStateRef, correction.nextInvoiceState)
+    }
+    transaction.update(requestRef, {
+      status: 'approved', reviewedAt: timestamp, reviewedByUserId: actor.id, reviewedBy: actor.name,
+      reviewReason: 'Approved by owner.',
+    })
+    return correction
   }, database)
 }

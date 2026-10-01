@@ -254,6 +254,7 @@ The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchange
 - Purchase creation atomically writes `purchasesV2`, `invoiceReservationsV2`, one deterministic `vendorLedgerEntriesV2` event, and the matching vendor-account and invoice-state projections; incomplete or conflicting postings are rejected.
 - `vendorAccountStatesV2` and `invoiceStatesV2` are guarded derived projections updated in the same transaction as their immutable ledger or allocation evidence. They prevent concurrent overpayment without changing V1 balances.
 - `vendorSettlementsV2` stores cash, UPI, card, and bank-transfer payments separately from purchases. Invoice allocation is optional; cheque payments remain outside this collection.
+- `vendorSettlementStatesV2` stores the effective revision without rewriting the immutable source settlement. Approved custom-payment amount corrections append a compensating ledger event; invoice-linked correction persistence remains disabled until its allocation-reversal rules are complete.
 - Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
 - `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
 - Existing users without `purchasingCapabilities` retain current access but receive no V2 purchasing authority.

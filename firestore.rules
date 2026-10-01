@@ -111,6 +111,7 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.sourceRecordId == documentId &&
         getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.signedAmountPaise == -data.amountPaise &&
         getAfter(/databases/$(database)/documents/vendorAccountStatesV2/$(data.vendorId)).data.lastLedgerEntryId == data.ledgerEntryId &&
+        getAfter(/databases/$(database)/documents/vendorSettlementStatesV2/$(documentId)).data.amountPaise == data.amountPaise &&
         (
           (!data.keys().hasAny(['invoiceId', 'allocationId'])) ||
           (
@@ -257,6 +258,22 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.allocationId == documentId &&
         getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.invoiceId == data.invoiceId &&
         getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.amountPaise == data.amountPaise;
+    }
+
+    function validSettlementStateCreate(data, documentId) {
+      return data.id == documentId && data.settlementId == documentId && data.revision == 1 &&
+        data.vendorId == getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(documentId)).data.vendorId &&
+        data.amountPaise == getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(documentId)).data.amountPaise &&
+        data.updatedByUserId == request.auth.uid;
+    }
+
+    function validSettlementStateCorrection(data, documentId) {
+      return isOwner() && data.id == documentId && data.settlementId == resource.data.settlementId &&
+        data.vendorId == resource.data.vendorId && data.revision == resource.data.revision + 1 &&
+        data.lastCorrectionId is string && data.updatedByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.lastCorrectionId)).data.status == 'approved' &&
+        getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.lastCorrectionId)).data.sourceRevision == resource.data.revision &&
+        getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.lastCorrectionId)).data.proposed.amountPaise == data.amountPaise;
     }
 
     function isNonNegativeNumber(value) {
@@ -521,6 +538,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /vendorSettlementStatesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') &&
+        validSettlementStateCreate(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && validSettlementStateCorrection(request.resource.data, documentId);
+      allow delete: if false;
+    }
+
     match /vendorAccountStatesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
       allow create: if isVendorLedgerV2Enabled() && validVendorAccountStateCreate(request.resource.data, documentId) &&
@@ -589,6 +614,7 @@ service cloud.firestore {
         isStaff() && resource.data.requestedByUserId == request.auth.uid
       ));
       allow create: if isVendorLedgerV2Enabled() && isStaff() &&
+        request.resource.data.kind == 'settlement-correction' &&
         request.resource.data.requestedByUserId == request.auth.uid &&
         request.resource.data.status == 'pending' &&
         request.resource.data.reason is string &&

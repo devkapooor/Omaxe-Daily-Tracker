@@ -6,6 +6,7 @@ import {
   assertChequeTransition,
   buildPurchasePostingV2,
   buildSettlementPostingV2,
+  buildSettlementCorrectionV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
   financialLedgerAmountPaise,
@@ -154,6 +155,38 @@ describe('V2 ledger rules', () => {
       id: 'settlement-2', vendorId: 'vendor-1', date: '2026-10-02', amountPaise: 100_001,
       mode: 'cash', actorUserId: 'owner-1', timestamp: '2026-10-02T01:00:00.000Z',
     }, accountState)).toThrow(/exceed/)
+  })
+
+  it('corrects settlements with compensating evidence and blocks stale requests', () => {
+    const state = {
+      id: 'settlement-1', vendorId: 'vendor-1', settlementId: 'settlement-1', date: '2026-10-02',
+      amountPaise: 40_000, mode: 'upi' as const, invoiceId: 'purchase-1', notes: '', revision: 1,
+      updatedAt: '2026-10-02T00:00:00.000Z', updatedByUserId: 'staff-1',
+    }
+    const request = {
+      id: 'correction-1', kind: 'settlement-correction' as const, sourceRecordId: 'settlement-1', vendorId: 'vendor-1',
+      sourceRevision: 1, before: { date: state.date, amountPaise: 40_000, mode: state.mode, invoiceId: 'purchase-1', notes: '' },
+      proposed: { date: state.date, amountPaise: 30_000, mode: state.mode, invoiceId: 'purchase-1', notes: 'Corrected' },
+      reason: 'Amount entered incorrectly', requestedByUserId: 'staff-1', requestedBy: 'Staff',
+      requestType: 'staff-request' as const, status: 'pending' as const, createdAt: state.updatedAt,
+    }
+    const accountState = {
+      id: 'vendor-1', vendorId: 'vendor-1', outstandingPaise: 60_000, revision: 2,
+      lastLedgerEntryId: 'settlement:settlement-1:1:settlement', updatedAt: state.updatedAt, updatedByUserId: 'staff-1',
+    }
+    const invoiceState = {
+      id: 'purchase-1', vendorId: 'vendor-1', invoiceId: 'purchase-1', openAmountPaise: 60_000,
+      reservedAmountPaise: 0, revision: 2, lastAllocationId: 'settlement:settlement-1:purchase-1',
+      updatedAt: state.updatedAt, updatedByUserId: 'staff-1',
+    }
+    const correction = buildSettlementCorrectionV2(request, state, accountState, invoiceState, 'owner-1', '2026-10-03T00:00:00.000Z')
+
+    expect(correction.adjustmentPaise).toBe(10_000)
+    expect(correction.ledgerEntry?.signedAmountPaise).toBe(10_000)
+    expect(correction.allocationAdjustment?.state).toBe('reversed')
+    expect(correction.nextAccountState?.outstandingPaise).toBe(70_000)
+    expect(correction.nextInvoiceState?.openAmountPaise).toBe(70_000)
+    expect(() => buildSettlementCorrectionV2({ ...request, sourceRevision: 2 }, state, accountState, invoiceState, 'owner-1', '2026-10-03T00:00:00.000Z')).toThrow(/stale/)
   })
 
   it('applies approved financial signs and rejects ambiguous event types', () => {
