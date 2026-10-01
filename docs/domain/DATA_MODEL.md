@@ -257,7 +257,7 @@ The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchange
 - `vendorSettlementStatesV2` stores the effective revision without rewriting the immutable source settlement. Approved custom-payment amount corrections append a compensating ledger event; invoice-linked correction persistence remains disabled until its allocation-reversal rules are complete.
 - Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
 - `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
-- Existing users without `purchasingCapabilities` retain current access but receive no V2 purchasing authority.
+- Active manager and billing users receive baseline V2 authority to manage vendors, create purchases and settlements, and view the vendor ledger. Sensitive actions such as corrections, returns, cheques, migration, and activation remain owner-only or require an explicit capability.
 - Newly created staff accounts receive every purchasing capability explicitly set to false.
 
 ## Metadata Documents

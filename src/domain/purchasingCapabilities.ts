@@ -17,6 +17,13 @@ export const purchasingCapabilities = [
   'migration.execute',
 ] as const satisfies readonly PurchasingCapability[]
 
+export const staffVendorEntryCapabilities = new Set<PurchasingCapability>([
+  'vendor.manage',
+  'purchase.create',
+  'settlement.create',
+  'vendorLedger.view',
+])
+
 export function defaultPurchasingCapabilities(): PurchasingCapabilities {
   return Object.fromEntries(purchasingCapabilities.map((capability) => [capability, false])) as PurchasingCapabilities
 }
@@ -26,5 +33,7 @@ export function hasPurchasingCapability(
   capability: PurchasingCapability,
 ) {
   if (!user || user.disabled) return false
-  return user.role === 'owner' || user.purchasingCapabilities?.[capability] === true
+  return user.role === 'owner' ||
+    staffVendorEntryCapabilities.has(capability) ||
+    user.purchasingCapabilities?.[capability] === true
 }

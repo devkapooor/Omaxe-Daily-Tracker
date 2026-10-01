@@ -12,9 +12,11 @@ describe('purchasing capabilities', () => {
     expect(hasPurchasingCapability({ role: 'owner' }, 'migration.execute')).toBe(true)
   })
 
-  it('requires an explicit grant for active non-owners and denies disabled users', () => {
-    expect(hasPurchasingCapability({ role: 'manager' }, 'purchase.create')).toBe(false)
-    expect(hasPurchasingCapability({ role: 'manager', purchasingCapabilities: { 'purchase.create': true } }, 'purchase.create')).toBe(true)
+  it('grants staff vendor entry while keeping sensitive capabilities explicit', () => {
+    expect(hasPurchasingCapability({ role: 'manager' }, 'purchase.create')).toBe(true)
+    expect(hasPurchasingCapability({ role: 'billing' }, 'settlement.create')).toBe(true)
+    expect(hasPurchasingCapability({ role: 'billing' }, 'cheque.prepare')).toBe(false)
+    expect(hasPurchasingCapability({ role: 'manager', purchasingCapabilities: { 'cheque.prepare': true } }, 'cheque.prepare')).toBe(true)
     expect(hasPurchasingCapability({ role: 'manager', disabled: true, purchasingCapabilities: { 'purchase.create': true } }, 'purchase.create')).toBe(false)
   })
 })

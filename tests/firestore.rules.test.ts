@@ -328,14 +328,20 @@ describe('V2 vendor ledger capability enforcement', () => {
     }))
   })
 
-  it('allows explicit capabilities and denies ungranted, disabled, and unauthenticated users', async () => {
+  it('allows staff vendor entry capabilities and denies disabled and unauthenticated users', async () => {
     await enableV2()
     await assertSucceeds(setDoc(doc(userDb('purchasing-user'), 'vendorsV2', 'vendor-v2-1'), vendor))
-    await assertFails(setDoc(doc(userDb('manager-user'), 'vendorsV2', 'vendor-v2-2'), {
+    await assertSucceeds(setDoc(doc(userDb('manager-user'), 'vendorsV2', 'vendor-v2-2'), {
       ...vendor,
       id: 'vendor-v2-2',
       createdByUserId: 'manager-user',
       updatedByUserId: 'manager-user',
+    }))
+    await assertSucceeds(setDoc(doc(userDb('billing-user'), 'vendorsV2', 'vendor-v2-4'), {
+      ...vendor,
+      id: 'vendor-v2-4',
+      createdByUserId: 'billing-user',
+      updatedByUserId: 'billing-user',
     }))
     await assertFails(setDoc(doc(userDb('disabled-user'), 'vendorsV2', 'vendor-v2-3'), {
       ...vendor,
@@ -394,7 +400,7 @@ describe('V2 vendor ledger capability enforcement', () => {
     })
     await assertSucceeds(postingBatch.commit())
     await assertSucceeds(getDoc(doc(userDb('purchasing-user'), entryPath)))
-    await assertFails(getDoc(doc(userDb('manager-user'), entryPath)))
+    await assertSucceeds(getDoc(doc(userDb('manager-user'), entryPath)))
     await assertFails(updateDoc(doc(userDb('owner-user'), entryPath), { signedAmountPaise: 1 }))
     await assertFails(deleteDoc(doc(userDb('owner-user'), entryPath)))
   })
@@ -484,6 +490,24 @@ describe('V2 vendor ledger capability enforcement', () => {
     await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({ created: false })
     await expect(createVendorV2({ ...input, canonicalName: 'Different Vendor' }, userDb('owner-user')))
       .rejects.toThrow(/already uses this ID/)
+  })
+
+  it('blocks legacy vendor posting after V2 activation while preserving owner loan payments', async () => {
+    const legacyPurchase = {
+      id: 'legacy-before-cutover', storeId: 'single-store', date: '2026-09-30', supplierName: 'Legacy Vendor',
+      purchaseAmount: 1000, paidAmount: 0, unpaidAmount: 1000, createdAt: timestamp, updatedAt: timestamp,
+    }
+    await assertSucceeds(setDoc(doc(userDb('manager-user'), 'purchases', legacyPurchase.id), legacyPurchase))
+    await enableV2()
+    await assertFails(setDoc(doc(userDb('manager-user'), 'purchases', 'legacy-after-cutover'), {
+      ...legacyPurchase, id: 'legacy-after-cutover', date: '2026-10-01',
+    }))
+    await assertFails(setDoc(doc(userDb('billing-user'), 'payments', 'legacy-vendor-payment'), {
+      entryType: 'vendor-payment', amount: 500,
+    }))
+    await assertSucceeds(setDoc(doc(userDb('owner-user'), 'payments', 'protected-loan-payment'), {
+      entryType: 'loan-payment', amount: 500,
+    }))
   })
 
   it('posts invoice-linked and custom settlements atomically without exceeding balances', async () => {

@@ -31,10 +31,20 @@ service cloud.firestore {
     function hasPurchasingCapability(capability) {
       return isOwner() || (
         isStaff() &&
-        userDoc().data.keys().hasAny(['purchasingCapabilities']) &&
-        userDoc().data.purchasingCapabilities.keys().hasAny([capability]) &&
-        userDoc().data.purchasingCapabilities[capability] == true
+        (
+          capability in ['vendor.manage', 'purchase.create', 'settlement.create', 'vendorLedger.view'] ||
+          (
+            userDoc().data.keys().hasAny(['purchasingCapabilities']) &&
+            userDoc().data.purchasingCapabilities.keys().hasAny([capability]) &&
+            userDoc().data.purchasingCapabilities[capability] == true
+          )
+        )
       );
+    }
+
+    function isVendorLedgerV2Inactive() {
+      return !exists(/databases/$(database)/documents/appMetadata/vendorLedgerV2Config) ||
+        get(/databases/$(database)/documents/appMetadata/vendorLedgerV2Config).data.enabled != true;
     }
 
     function isVendorLedgerV2Enabled() {
@@ -559,8 +569,8 @@ service cloud.firestore {
 
     match /purchases/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff() && validPurchaseCreate(request.resource.data, documentId);
-      allow update: if isOwner() || (isStaff() && isVendorPaymentAllocation());
+      allow create: if isStaff() && isVendorLedgerV2Inactive() && validPurchaseCreate(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Inactive() && (isOwner() || (isStaff() && isVendorPaymentAllocation()));
       allow delete: if isOwner();
     }
 
@@ -580,9 +590,18 @@ service cloud.firestore {
     match /payments/{documentId} {
       allow read: if isStaff();
       allow create: if isStaff() && (
-        !request.resource.data.keys().hasAny(['entryType']) ||
-        request.resource.data.entryType != 'loan-payment' ||
-        isOwner()
+        (
+          request.resource.data.keys().hasAny(['entryType']) &&
+          request.resource.data.entryType == 'loan-payment' &&
+          isOwner()
+        ) ||
+        (
+          isVendorLedgerV2Inactive() &&
+          (
+            !request.resource.data.keys().hasAny(['entryType']) ||
+            request.resource.data.entryType == 'vendor-payment'
+          )
+        )
       );
       allow update, delete: if isOwner();
     }

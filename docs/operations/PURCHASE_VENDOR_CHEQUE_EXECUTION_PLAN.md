@@ -377,6 +377,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-014 | Imported legacy open cheques are tracking-only. Their status may be updated, but they never post to or reduce clean V2 vendor outstanding. Legacy `In Process` maps to V2 `Presented`. | Approved 2026-10-01 | Phase 6 legacy cheque behavior |
 | FD-015 | Bring currently open AlphaHub expense cheques into the unified register as tracking-only records, matched and deduplicated by normalized cheque number against workbook records. Preserve every source Expense record unchanged. | Approved 2026-10-01 | Phase 6 expense cheque transition |
 | FD-016 | Permit V2 activation with zero vendors. The owner will add vendors individually after activation; each new vendor starts at zero and legacy vendor data is never copied automatically. | Approved 2026-10-01 | Lean Release C activation |
+| FD-017 | After V2 activation, Register contains only Expenses and owner Loan operations. Manager and billing staff may manage V2 vendors and enter purchases and payments in Vendor Workspace; activation, corrections, and cheque controls remain owner-only. Legacy vendor posting is blocked while its history stays unchanged. | Approved 2026-10-01 | Post-activation consolidation |
 
 ## Phase 0 Findings
 
