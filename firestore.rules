@@ -41,6 +41,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/appMetadata/vendorLedgerV2Config).data.enabled == true;
     }
 
+    function isVendorLedgerV2EnabledAfter() {
+      return getAfter(/databases/$(database)/documents/appMetadata/vendorLedgerV2Config).data.enabled == true;
+    }
+
     function isPositivePaise(value) {
       return value is int && value > 0;
     }
@@ -64,7 +68,18 @@ service cloud.firestore {
         data.canonicalName is string &&
         data.canonicalName.size() > 0 &&
         data.openingBalancePaise is int &&
-        data.openingBalancePaise >= 0;
+        data.openingBalancePaise >= 0 &&
+        (
+          (data.openingBalancePaise == 0 && !data.keys().hasAny(['openingLedgerEntryId'])) ||
+          (
+            data.openingBalancePaise > 0 &&
+            data.openingLedgerEntryId is string &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.openingLedgerEntryId)).data.eventType == 'opening-balance' &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.openingLedgerEntryId)).data.vendorId == documentId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.openingLedgerEntryId)).data.signedAmountPaise == data.openingBalancePaise &&
+            getAfter(/databases/$(database)/documents/vendorAccountStatesV2/$(documentId)).data.outstandingPaise == data.openingBalancePaise
+          )
+        );
     }
 
     function validPurchaseV2(data, documentId) {
@@ -215,6 +230,19 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.ledgerEntryId == documentId &&
         getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
         getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.invoiceTotalPaise == data.signedAmountPaise
+      );
+    }
+
+    function validOpeningLedgerEntry(data, documentId) {
+      return data.eventType != 'opening-balance' || (
+        isOwner() &&
+        data.posting == 'financial' &&
+        data.sourceType == 'vendor' &&
+        data.sourceRevision == 1 &&
+        data.signedAmountPaise > 0 &&
+        data.reason is string && data.reason.size() > 0 &&
+        getAfter(/databases/$(database)/documents/vendorsV2/$(data.sourceRecordId)).data.openingLedgerEntryId == documentId &&
+        getAfter(/databases/$(database)/documents/vendorsV2/$(data.sourceRecordId)).data.openingBalancePaise == data.signedAmountPaise
       );
     }
 
@@ -623,7 +651,8 @@ service cloud.firestore {
 
     match /vendorsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('vendor.manage') && validVendorV2(request.resource.data, documentId);
+      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
+        hasPurchasingCapability('vendor.manage') && validVendorV2(request.resource.data, documentId);
       allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
       allow delete: if false;
     }
@@ -660,7 +689,8 @@ service cloud.firestore {
 
     match /vendorAccountStatesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && validVendorAccountStateCreate(request.resource.data, documentId) &&
+      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
+        validVendorAccountStateCreate(request.resource.data, documentId) &&
         canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
       allow update: if isVendorLedgerV2Enabled() && validVendorAccountStateUpdate(request.resource.data, documentId) &&
         canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
@@ -683,7 +713,8 @@ service cloud.firestore {
 
     match /chequeBooksV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create, update: if isVendorLedgerV2Enabled() && isOwner();
+      allow create: if (isVendorLedgerV2Enabled() || isVendorLedgerV2EnabledAfter()) && isOwner();
+      allow update: if isVendorLedgerV2Enabled() && isOwner();
       allow delete: if false;
     }
 
@@ -696,7 +727,7 @@ service cloud.firestore {
 
     match /vendorLedgerEntriesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && hasPurchasingCapability('vendorLedger.view');
-      allow create: if isVendorLedgerV2Enabled() &&
+      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
         request.resource.data.id == documentId &&
         request.resource.data.vendorId is string &&
         request.resource.data.posting in ['financial', 'informational'] &&
@@ -707,6 +738,7 @@ service cloud.firestore {
         request.resource.data.createdAt is string &&
         request.resource.data.createdByUserId == request.auth.uid &&
         canCreateLedgerEntry(request.resource.data) &&
+        validOpeningLedgerEntry(request.resource.data, documentId) &&
         validPurchaseLedgerEntry(request.resource.data, documentId) &&
         validSettlementLedgerEntry(request.resource.data, documentId) &&
         validCorrectionLedgerEntry(request.resource.data, documentId) &&

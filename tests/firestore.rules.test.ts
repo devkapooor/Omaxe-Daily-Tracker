@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import {
+  activateVendorLedgerV2,
   applyOwnerSettlementCorrectionV2,
   applySettlementCorrectionV2,
   createPurchaseV2,
@@ -218,6 +219,51 @@ describe('Firestore role enforcement', () => {
 })
 
 describe('V2 vendor ledger capability enforcement', () => {
+  it('activates the reviewed clean start atomically for the owner only', async () => {
+    const ownerDb = userDb('owner-user')
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'loans', 'protected-loan'), { remainingAmount: 98765 })
+      await setDoc(doc(context.firestore(), 'vendors', 'legacy-vendor'), { name: 'Legacy Evidence', openingOutstandingRemaining: 12345 })
+    })
+    const input = {
+      activationDate: '2026-10-05',
+      vendors: [
+        { id: 'clean-vendor-zero', canonicalName: 'Clean Zero Vendor', openingBalancePaise: 0, openingReason: '' },
+        { id: 'clean-vendor-open', canonicalName: 'Verified Opening Vendor', openingBalancePaise: 125050, openingReason: 'Verified owner statement' },
+      ],
+      actor: { id: 'owner-user', name: 'Owner' },
+      timestamp,
+    }
+
+    await expect(activateVendorLedgerV2(input, ownerDb)).resolves.toMatchObject({
+      review: { ready: true, vendorCount: 2, totalOpeningPaise: 125050 },
+      chequeBook: { startNumber: 1120, endNumber: 1199, active: true },
+    })
+    expect((await getDoc(doc(ownerDb, 'appMetadata', 'vendorLedgerV2Config'))).data()).toMatchObject({
+      enabled: true, activationDate: '2026-10-05',
+    })
+    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', 'clean-vendor-open'))).data()?.outstandingPaise).toBe(125050)
+    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', 'clean-vendor-zero'))).exists()).toBe(false)
+    expect((await getDoc(doc(ownerDb, 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
+    expect((await getDoc(doc(ownerDb, 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+    await expect(activateVendorLedgerV2(input, ownerDb)).rejects.toThrow(/already active/)
+  })
+
+  it('denies non-owner activation and unaudited non-zero openings', async () => {
+    const input = {
+      activationDate: '2026-10-05',
+      vendors: [{ id: 'manager-vendor', canonicalName: 'Manager Vendor', openingBalancePaise: 0, openingReason: '' }],
+      actor: { id: 'manager-user', name: 'Manager' },
+      timestamp,
+    }
+    await expect(activateVendorLedgerV2(input, userDb('manager-user'))).rejects.toThrow()
+    await expect(activateVendorLedgerV2({
+      ...input,
+      actor: { id: 'owner-user', name: 'Owner' },
+      vendors: [{ ...input.vendors[0], openingBalancePaise: 10000 }],
+    }, userDb('owner-user'))).rejects.toThrow(/audit reason/)
+  })
+
   const vendor = {
     id: 'vendor-v2-1',
     canonicalName: 'New Vendor',

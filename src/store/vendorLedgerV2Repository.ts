@@ -1,5 +1,6 @@
 import { collection, doc, runTransaction, type Firestore, type Transaction } from 'firebase/firestore'
 import type { VendorLedgerV2Config } from '@/domain/appTypes'
+import { reviewVendorLedgerCutover, type CutoverVendorDraft } from '@/domain/vendorLedgerCutover'
 import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
@@ -80,6 +81,98 @@ export async function runVendorLedgerV2Transaction<T>(
     const config = configSnapshot.data() as VendorLedgerV2Config | undefined
     if (config?.enabled !== true) throw new Error('The V2 vendor ledger is not enabled.')
     return operation(transaction, refs, config)
+  })
+}
+
+export type ActivateVendorLedgerV2Input = {
+  activationDate: string
+  vendors: CutoverVendorDraft[]
+  actor: { id: string; name: string }
+  timestamp: string
+}
+
+export async function activateVendorLedgerV2(
+  input: ActivateVendorLedgerV2Input,
+  database: Firestore = db,
+) {
+  const review = reviewVendorLedgerCutover(input.activationDate, input.vendors)
+  if (!review.ready) throw new Error(review.errors.join(' '))
+  if (review.vendorCount > 100) throw new Error('A single controlled cutover supports at most 100 reviewed vendors.')
+  const actorUserId = input.actor.id.trim()
+  if (!actorUserId || !input.actor.name.trim()) throw new Error('Owner identity is required for activation.')
+
+  const refs = vendorLedgerV2Refs(database)
+  return runTransaction(database, async (transaction) => {
+    const configSnapshot = await transaction.get(refs.config)
+    const currentConfig = configSnapshot.data() as VendorLedgerV2Config | undefined
+    if (currentConfig?.enabled === true) throw new Error('The V2 vendor ledger is already active.')
+
+    for (const candidate of review.vendors) {
+      const baseVendor = buildVendorV2({
+        id: candidate.id,
+        canonicalName: candidate.canonicalName,
+        actorUserId,
+        timestamp: input.timestamp,
+      })
+      const openingLedgerEntryId = candidate.openingBalancePaise > 0
+        ? deterministicEventId('vendor', candidate.id, 1, 'opening-balance')
+        : undefined
+      const vendor: VendorV2 = {
+        ...baseVendor,
+        openingBalancePaise: candidate.openingBalancePaise,
+        ...(openingLedgerEntryId ? { openingLedgerEntryId } : {}),
+      }
+      transaction.set(doc(refs.vendors, vendor.id), vendor)
+
+      if (openingLedgerEntryId) {
+        const ledgerEntry: VendorLedgerEntryV2 = {
+          id: openingLedgerEntryId,
+          vendorId: vendor.id,
+          eventType: 'opening-balance',
+          posting: 'financial',
+          signedAmountPaise: candidate.openingBalancePaise,
+          sourceType: 'vendor',
+          sourceRecordId: vendor.id,
+          sourceRevision: 1,
+          reason: candidate.openingReason,
+          occurredOn: review.activationDate,
+          createdAt: input.timestamp,
+          createdByUserId: actorUserId,
+        }
+        const accountState: VendorAccountStateV2 = {
+          id: vendor.id,
+          vendorId: vendor.id,
+          outstandingPaise: candidate.openingBalancePaise,
+          revision: 1,
+          lastLedgerEntryId: ledgerEntry.id,
+          updatedAt: input.timestamp,
+          updatedByUserId: actorUserId,
+        }
+        transaction.set(doc(refs.ledgerEntries, ledgerEntry.id), ledgerEntry)
+        transaction.set(doc(refs.vendorAccountStates, accountState.id), accountState)
+      }
+    }
+
+    const chequeBook: ChequeBookV2 = {
+      id: review.chequeBook.id,
+      bankAccountLabel: 'Primary Bank',
+      startNumber: review.chequeBook.startNumber,
+      endNumber: review.chequeBook.endNumber,
+      active: true,
+      revision: 1,
+      createdAt: input.timestamp,
+      createdByUserId: actorUserId,
+      updatedAt: input.timestamp,
+      updatedByUserId: actorUserId,
+    }
+    transaction.set(doc(refs.chequeBooks, chequeBook.id), chequeBook)
+    transaction.set(refs.config, {
+      enabled: true,
+      activationDate: review.activationDate,
+      updatedAt: input.timestamp,
+      updatedByUserId: actorUserId,
+    } satisfies VendorLedgerV2Config)
+    return { review, chequeBook }
   })
 }
 
