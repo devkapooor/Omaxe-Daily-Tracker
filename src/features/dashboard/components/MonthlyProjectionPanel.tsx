@@ -1,5 +1,8 @@
-import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { money } from '@/app/uiHelpers'
+import { BreakEvenProgressCard } from '@/features/dashboard/components/BreakEvenProgressCard'
+import { DailySalesTrendCard } from '@/features/dashboard/components/DailySalesTrendCard'
+import { RecordingHealthCard } from '@/features/dashboard/components/RecordingHealthCard'
+import type { MonthlyPerformanceMetrics } from '@/features/dashboard/domain/deriveMonthlyPerformance'
 import { GlowCard } from '@/shared/ui/spotlight-card'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
 
@@ -44,7 +47,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
         <SummaryCard label="Cash Collected" value={money(performance.cashCollected)} comparison={comparison(performance.cashCollected, performance.previous.cashCollected)} />
       </div>
 
-      <section className="grid gap-1.5 lg:grid-cols-2">
+      <section className="grid gap-1.5 lg:grid-cols-2 xl:grid-cols-3">
         <GlowCard glowColor="blue" className="p-3">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">
             {performance.isCurrentMonth ? 'Month-End Outlook' : 'Completed Month Result'}
@@ -72,6 +75,8 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
           <p className="mt-2 text-[9px] font-semibold text-muted-foreground">Estimated using {marginPercentage}% margin and configured monthly operating expenses.</p>
         </GlowCard>
 
+        <BreakEvenProgressCard performance={performance} marginPercentage={marginPercentage} />
+
         <GlowCard glowColor="blue" className="p-3">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">Sales Mix</span>
           <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" aria-label={`Sales mix for ${performance.monthLabel}`}>
@@ -95,6 +100,11 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
             ))}
           </div>
         </GlowCard>
+      </section>
+
+      <section className="grid gap-1.5 lg:grid-cols-3">
+        <DailySalesTrendCard performance={performance} />
+        <RecordingHealthCard performance={performance} />
       </section>
     </div>
   )
