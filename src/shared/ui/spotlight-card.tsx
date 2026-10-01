@@ -9,7 +9,7 @@ const glowColorMap: Record<GlowColor, { base: number; spread: number }> = {
   green: { base: 132, spread: 22 },
   red: { base: 8, spread: 18 },
   orange: { base: 32, spread: 18 },
-  neutral: { base: 34, spread: 10 },
+  neutral: { base: 210, spread: 16 },
 }
 
 const GLOW_STYLE_ID = 'alphahub-glow-card-styles'
@@ -43,7 +43,7 @@ function ensureGlowStyles() {
     }
 
     [data-glow-card="true"]::before {
-      border: 1px solid hsl(var(--glow-hue) 24% 42% / 0.78);
+      border: 1px solid hsl(var(--glow-hue) 48% 50% / 0.58);
       box-shadow:
         inset 0 1px 0 hsl(0 0% 100% / 0.04),
         0 9px 20px hsl(0 0% 0% / 0.2);
@@ -157,7 +157,7 @@ function GlowCard({
       ref={cardRef}
       data-glow-card={canInteract ? 'true' : 'false'}
       className={cn(
-        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(30,31,35,0.96),rgba(22,23,26,0.94))] text-card-foreground backdrop-blur-xl',
+        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(17,43,65,0.96),rgba(10,31,49,0.94))] text-card-foreground backdrop-blur-xl',
         className,
       )}
       style={mergedStyle}

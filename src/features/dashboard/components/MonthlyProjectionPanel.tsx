@@ -30,7 +30,7 @@ function comparison(current: number, previous: number, positiveIsGood = true) {
 const mixMeta = [
   { key: 'cash', label: 'Cash', color: 'bg-cyan-400' },
   { key: 'upi', label: 'UPI', color: 'bg-blue-500' },
-  { key: 'credit', label: 'Credit', color: 'bg-amber-400' },
+  { key: 'credit', label: 'Credit', color: 'bg-indigo-400' },
   { key: 'returns', label: 'Returns', color: 'bg-rose-500' },
 ] as const
 

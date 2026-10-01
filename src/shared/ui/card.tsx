@@ -11,7 +11,7 @@ function Card({ className, variant = 'workspace', ...props }: CardProps) {
     return (
       <div
         className={cn(
-          'rounded-[16px] border border-border/80 bg-[linear-gradient(180deg,rgba(29,30,34,0.96),rgba(22,23,27,0.92))] text-card-foreground shadow-[0_10px_22px_rgba(0,0,0,0.2)] backdrop-blur-xl',
+          'rounded-[16px] border border-border/80 bg-[linear-gradient(180deg,rgba(17,42,63,0.96),rgba(10,30,48,0.94))] text-card-foreground shadow-[0_12px_28px_rgba(1,10,20,0.3)] backdrop-blur-xl',
           className,
         )}
         {...props}

@@ -143,7 +143,7 @@ export function CashMovementForm({
         </div>
 
         {hasLegacyWarnings ? (
-          <div className="rounded-[18px] border border-amber-200 bg-amber-50/90 p-4 text-amber-900">
+          <div className="rounded-[18px] border border-amber-400/30 bg-amber-500/10 p-4 text-amber-100">
             <p className="text-sm font-bold">Legacy cash records need review</p>
             <p className="mt-1 text-sm">
               Only records with exact user evidence are counted in live balances. Unmatched legacy slot records stay isolated until you review them.
@@ -152,17 +152,17 @@ export function CashMovementForm({
               {legacyBalances
                 .filter((entry) => entry.amount !== 0 || entry.cashoutCount > 0 || entry.transferInCount > 0 || entry.transferOutCount > 0)
                 .map((entry) => (
-                  <div key={entry.holder} className="rounded-[16px] border border-amber-200 bg-white/80 p-3">
-                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-amber-700">{entry.label}</p>
+                  <div key={entry.holder} className="rounded-[16px] border border-amber-400/25 bg-amber-950/20 p-3">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-amber-300">{entry.label}</p>
                     <p className="mt-1 text-sm font-bold">{money(entry.amount)}</p>
-                    <p className="mt-1 text-xs text-amber-800">
+                    <p className="mt-1 text-xs text-amber-200/80">
                       Cashouts {entry.cashoutCount} | In {entry.transferInCount} | Out {entry.transferOutCount}
                     </p>
                   </div>
                 ))}
             </div>
             {migratedCashoutEntries.length > 0 ? (
-              <div className="mt-3 space-y-1 text-xs text-amber-900">
+              <div className="mt-3 space-y-1 text-xs text-amber-100">
                 <p className="font-bold">Auto-matched legacy cashouts now counted under users</p>
                 {migratedCashoutEntries.slice(-5).reverse().map((entry) => (
                   <p key={entry.id}>
@@ -172,7 +172,7 @@ export function CashMovementForm({
               </div>
             ) : null}
             {legacyCashoutEntries.length > 0 ? (
-              <div className="mt-3 space-y-1 text-xs text-amber-900">
+              <div className="mt-3 space-y-1 text-xs text-amber-100">
                 <p className="font-bold">Recent unmatched legacy cashouts</p>
                 {legacyCashoutEntries.slice(0, 5).map((entry) => (
                   <p key={entry.id}>
@@ -182,7 +182,7 @@ export function CashMovementForm({
               </div>
             ) : null}
             {legacyTransferEntries.length > 0 ? (
-              <div className="mt-3 space-y-1 text-xs text-amber-900">
+              <div className="mt-3 space-y-1 text-xs text-amber-100">
                 <p className="font-bold">Recent unmatched legacy transfers</p>
                 {legacyTransferEntries.slice(-5).reverse().map((entry) => (
                   <p key={entry.id}>

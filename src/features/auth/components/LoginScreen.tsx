@@ -1,8 +1,6 @@
-import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
-import { ArrowRight, Building2, ShieldCheck } from 'lucide-react'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent } from '@/shared/ui/card'
+import { useState } from 'react'
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion'
+import { ArrowRight, Building2, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react'
 import { Input } from '@/shared/ui/input'
 
 type LoginScreenProps = {
@@ -11,13 +9,19 @@ type LoginScreenProps = {
   onLogin: (email: string, password: string) => Promise<void>
 }
 
+type FocusedField = 'email' | 'password' | null
+
 export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-
-  const trustNotes = useMemo(() => ['Owner-approved access', 'Live shared workspace', 'Firebase-backed records'], [])
+  const [focusedField, setFocusedField] = useState<FocusedField>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const prefersReducedMotion = useReducedMotion()
+  const pointerX = useMotionValue(0)
+  const pointerY = useMotionValue(0)
+  const rotateX = useTransform(pointerY, [-260, 260], [4, -4])
+  const rotateY = useTransform(pointerX, [-260, 260], [-4, 4])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,114 +32,168 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
 
     try {
       setError('')
-      setSuccessMessage('')
       await onLogin(email.trim(), password)
     } catch {
       setPassword('')
     }
   }
 
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (prefersReducedMotion || event.pointerType !== 'mouse') return
+    const rect = event.currentTarget.getBoundingClientRect()
+    pointerX.set(event.clientX - rect.left - rect.width / 2)
+    pointerY.set(event.clientY - rect.top - rect.height / 2)
+  }
+
+  function resetTilt() {
+    pointerX.set(0)
+    pointerY.set(0)
+  }
+
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-6">
+    <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden px-4 py-8 text-foreground">
+      <div className="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 text-cyan-100/80">
+        <Building2 className="h-4 w-4 text-cyan-300" />
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.26em]">AlphaHub</span>
+      </div>
+
       <motion.div
-        initial={{ opacity: 0, y: 28 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: 'easeOut' }}
-        className="w-full max-w-5xl"
+        transition={{ duration: prefersReducedMotion ? 0 : 0.65, ease: 'easeOut' }}
+        className="relative z-10 w-full max-w-[390px]"
+        style={{ perspective: 1400 }}
       >
-        <Card variant="quiet" className="w-full overflow-hidden border-white/80 bg-white/72 text-slate-950 shadow-[0_30px_100px_rgba(30,64,175,0.18)] backdrop-blur-2xl">
-          <CardContent className="grid p-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,396px)]">
-          <section className="grid content-center gap-5 border-b border-blue-100/80 bg-[radial-gradient(circle_at_16%_18%,rgba(34,211,238,0.18),transparent_28%),radial-gradient(circle_at_88%_10%,rgba(99,102,241,0.14),transparent_34%),linear-gradient(145deg,rgba(239,249,255,0.94),rgba(238,242,255,0.76))] px-5 py-8 sm:px-7 lg:border-b-0 lg:border-r lg:px-8 lg:py-10">
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-200 bg-white/80 text-cyan-700 shadow-[0_12px_30px_rgba(8,145,178,0.16)]">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div className="space-y-2.5">
-              <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-cyan-700">AlphaHub</p>
-              <h1 className="max-w-xl text-[clamp(2rem,3.8vw,3.5rem)] font-black tracking-[-0.04em] text-slate-950">
-                Finance operations, compact and connected.
-              </h1>
-              <p className="max-w-xl text-[14px] leading-7 text-slate-600">
-                Shared expense, purchase, vendor, loan, cash movement, and cheque planning records for the full workspace.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {trustNotes.map((note, index) => (
-                <div
-                  key={note}
-                  className="rounded-[16px] border border-white/90 bg-white/62 px-3 py-2.5 text-[12px] font-semibold text-slate-700 shadow-sm backdrop-blur"
-                >
-                  <div className="mb-1 flex items-center gap-2 text-indigo-600">
-                    {index === 0 ? <ShieldCheck className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
-                    <span className="text-[10px] uppercase tracking-[0.18em]">Access</span>
-                  </div>
-                  {note}
-                </div>
-              ))}
-            </div>
-          </section>
+        <motion.div
+          className="group relative"
+          style={prefersReducedMotion ? undefined : { rotateX, rotateY }}
+          onPointerLeave={resetTilt}
+          onPointerMove={handlePointerMove}
+        >
+          <div className="absolute -inset-5 rounded-[36px] bg-blue-500/12 opacity-70 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+          <div className="absolute -inset-px overflow-hidden rounded-[25px]">
+            <motion.span
+              aria-hidden="true"
+              className="absolute left-0 top-0 h-px w-1/2 bg-linear-to-r from-transparent via-cyan-200 to-transparent shadow-[0_0_14px_rgba(34,211,238,0.8)]"
+              animate={prefersReducedMotion ? undefined : { x: ['-100%', '300%'] }}
+              transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 0.8, ease: 'easeInOut' }}
+            />
+            <motion.span
+              aria-hidden="true"
+              className="absolute bottom-0 right-0 h-px w-1/2 bg-linear-to-r from-transparent via-blue-300 to-transparent shadow-[0_0_14px_rgba(59,130,246,0.8)]"
+              animate={prefersReducedMotion ? undefined : { x: ['100%', '-300%'] }}
+              transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 0.8, delay: 1.9, ease: 'easeInOut' }}
+            />
+          </div>
 
-          <section className="grid content-center bg-white/74 px-5 py-8 sm:px-7 lg:px-8 lg:py-10">
-            <div className="space-y-2">
-              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-indigo-600">Access</p>
-              <h2 className="text-[1.8rem] font-black tracking-tight text-slate-950">Open the workspace</h2>
-              <p className="text-[13px] leading-6 text-slate-600">Sign in with the account details created for you by the owner.</p>
+          <section className="relative overflow-hidden rounded-[24px] border border-cyan-200/12 bg-[linear-gradient(145deg,rgba(16,40,61,0.92),rgba(5,20,36,0.9))] p-5 shadow-[0_32px_90px_rgba(1,10,20,0.58)] backdrop-blur-2xl sm:p-6">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 opacity-[0.035]"
+              style={{
+                backgroundImage: 'linear-gradient(135deg,white 0.5px,transparent 0.5px),linear-gradient(45deg,white 0.5px,transparent 0.5px)',
+                backgroundSize: '28px 28px',
+              }}
+            />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-10 top-0 h-24 bg-cyan-300/8 blur-3xl" />
+
+            <div className="relative text-center">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.5, delay: 0.1 }}
+                className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-200 shadow-[0_12px_34px_rgba(8,145,178,0.18)]"
+              >
+                <ShieldCheck className="h-5 w-5" />
+              </motion.div>
+              <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-300">Secure Workspace</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-white">Welcome back</h1>
+              <p className="mt-1.5 text-xs leading-5 text-slate-300">Sign in with the account created for you by the owner.</p>
             </div>
 
-            <div className="mt-6">
-              <form className="grid gap-4" onSubmit={handleLogin}>
-                <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                  <span>Email</span>
+            <form className="relative mt-6 grid gap-3.5" onSubmit={handleLogin}>
+              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">
+                Email
+                <div className="relative">
+                  <Mail className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'email' ? 'text-cyan-300' : 'text-slate-500'}`} />
                   <Input
                     aria-label="Email"
                     autoComplete="email"
                     placeholder="name@company.com"
                     type="email"
-                    className="border-blue-200 text-slate-950 placeholder:text-slate-400 focus-visible:ring-blue-500"
-                    style={{ background: 'rgba(255, 255, 255, 0.88)' }}
+                    className="h-10 border-blue-300/15 bg-blue-950/30 pl-10 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/60 focus-visible:ring-cyan-400/12"
                     value={email}
+                    onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
                       setEmail(event.target.value)
                       setError('')
-                      setSuccessMessage('')
                     }}
+                    onFocus={() => setFocusedField('email')}
                   />
-                </label>
+                </div>
+              </label>
 
-                <label className="grid gap-2 text-sm font-semibold text-slate-800">
-                  <span>Password</span>
+              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">
+                Password
+                <div className="relative">
+                  <Lock className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'password' ? 'text-cyan-300' : 'text-slate-500'}`} />
                   <Input
                     aria-label="Password"
                     autoComplete="current-password"
                     placeholder="Enter password"
-                    type="password"
-                    className="border-blue-200 text-slate-950 placeholder:text-slate-400 focus-visible:ring-blue-500"
-                    style={{ background: 'rgba(255, 255, 255, 0.88)' }}
+                    type={showPassword ? 'text' : 'password'}
+                    className="h-10 border-blue-300/15 bg-blue-950/30 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/60 focus-visible:ring-cyan-400/12"
                     value={password}
+                    onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
                       setPassword(event.target.value)
                       setError('')
-                      setSuccessMessage('')
                     }}
+                    onFocus={() => setFocusedField('password')}
                   />
-                </label>
+                  <button
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-1.5 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-cyan-400/10 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </label>
 
-                {(error || authError) && <p className="text-sm font-semibold text-destructive">{error || authError}</p>}
-                {successMessage && <p className="text-sm font-semibold text-emerald-700">{successMessage}</p>}
+              {(error || authError) ? (
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">
+                  {error || authError}
+                </motion.p>
+              ) : null}
 
-                <Button
-                  className="mt-1 h-10 rounded-xl border-0 text-[13px] font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.24)] hover:brightness-110"
-                  disabled={isBusy}
-                  style={{ background: 'linear-gradient(90deg, #0891b2, #4f46e5)' }}
-                >
-                  {isBusy ? 'Signing In...' : 'Open Workspace'}
-                </Button>
-              </form>
-            </div>
+              <motion.button
+                whileHover={prefersReducedMotion ? undefined : { scale: 1.015 }}
+                whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
+                className="group/button relative mt-1 flex h-10 items-center justify-center overflow-hidden rounded-xl border border-cyan-200/20 bg-[linear-gradient(90deg,#0891b2,#2563eb)] px-4 text-sm font-bold text-white shadow-[0_14px_34px_rgba(37,99,235,0.3)] transition-[filter,box-shadow] hover:brightness-110 hover:shadow-[0_16px_40px_rgba(37,99,235,0.4)] disabled:cursor-not-allowed disabled:opacity-65"
+                disabled={isBusy}
+                type="submit"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {isBusy ? (
+                    <motion.span key="busy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-4 w-4 rounded-full border-2 border-white/35 border-t-white motion-safe:animate-spin" />
+                  ) : (
+                    <motion.span key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                      Open Workspace
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover/button:translate-x-0.5" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            </form>
+
+            <p className="relative mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Owner-approved access only
+            </p>
           </section>
-          </CardContent>
-        </Card>
+        </motion.div>
       </motion.div>
     </main>
   )
 }
-

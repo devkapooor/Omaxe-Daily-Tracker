@@ -100,7 +100,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
       >
         <div className="border-b border-border/70 px-3 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl bg-linear-to-b from-[#f0b44d] to-[#b97a1f] font-black text-[12px] text-[#22170b] shadow-lg shadow-amber-900/30">
+            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-cyan-300/25 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-950/40">
               {initials}
             </span>
             <div className="min-w-0">
@@ -191,7 +191,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
         {!isDesktopCollapsed ? (
           <div className="border-t border-border/70 px-2 py-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl bg-linear-to-b from-[#f0b44d] to-[#b97a1f] font-black text-[12px] text-[#22170b] shadow-lg shadow-amber-900/30">
+              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-cyan-300/25 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-950/40">
                 {initials}
               </span>
               {logoutItem ? (

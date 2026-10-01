@@ -202,7 +202,7 @@ export function SelectField({
   const panel = isOpen
     ? createPortal(
         <div
-          className="fixed z-[90] rounded-[22px] border border-border/80 bg-[linear-gradient(180deg,rgba(28,29,33,0.99),rgba(20,21,25,0.98))] p-2 shadow-[0_28px_60px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+          className="fixed z-[90] rounded-[22px] border border-border/80 bg-[linear-gradient(180deg,rgba(16,40,61,0.99),rgba(8,27,44,0.98))] p-2 shadow-[0_28px_60px_rgba(1,10,20,0.48)] backdrop-blur-xl"
           ref={panelRef}
           style={{
             left: panelStyle.left,
@@ -232,7 +232,7 @@ export function SelectField({
                       option.disabled && 'cursor-not-allowed opacity-45',
                       !option.disabled && !isHighlighted && 'hover:bg-secondary/70',
                       isHighlighted && 'bg-secondary/80',
-                      isSelected && 'border border-amber-300/25 bg-amber-500/15 text-amber-50',
+                      isSelected && 'border border-cyan-300/25 bg-cyan-500/15 text-cyan-50',
                     )}
                     disabled={option.disabled}
                     id={`${generatedId}-option-${index}`}
@@ -246,7 +246,7 @@ export function SelectField({
                     onMouseEnter={() => setHighlightedIndex(index)}
                   >
                     <span>{option.label}</span>
-                    {isSelected ? <Check className="h-4 w-4 text-[#d6b06c]" /> : null}
+                    {isSelected ? <Check className="h-4 w-4 text-cyan-300" /> : null}
                   </button>
                 )
               })
@@ -266,8 +266,8 @@ export function SelectField({
             aria-expanded={isOpen}
             aria-haspopup="listbox"
             className={cn(
-              'flex h-8 w-full rounded-xl border border-input bg-[linear-gradient(180deg,rgba(31,32,36,0.98),rgba(24,25,29,0.96))] px-2.5 py-1.25 pr-9 text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow,background] outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:opacity-60',
-              isOpen && 'border-[#c59d55] ring-4 ring-[#c59d55]/18',
+              'flex h-8 w-full rounded-xl border border-input bg-[linear-gradient(180deg,rgba(14,38,58,0.98),rgba(9,29,47,0.97))] px-2.5 py-1.25 pr-9 text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] transition-[border-color,box-shadow,background] outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:opacity-60',
+              isOpen && 'border-ring ring-4 ring-ring/12',
               className,
             )}
             disabled={disabled}
@@ -299,7 +299,7 @@ export function SelectField({
           />
           <button
             aria-label={isOpen ? 'Close options' : 'Open options'}
-            className="absolute right-1.25 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-[#d6b06c]"
+            className="absolute right-1.25 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-cyan-300"
             disabled={disabled}
             type="button"
             onClick={() => {
@@ -313,7 +313,7 @@ export function SelectField({
               triggerRef.current?.focus()
             }}
           >
-            <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180 text-[#d6b06c]')} />
+            <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180 text-cyan-300')} />
           </button>
         </div>
       ) : (
@@ -321,8 +321,8 @@ export function SelectField({
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           className={cn(
-            'flex h-8 w-full items-center justify-between rounded-xl border border-input bg-[linear-gradient(180deg,rgba(31,32,36,0.98),rgba(24,25,29,0.96))] px-2.5 py-1.25 text-left text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] outline-none transition-[border-color,box-shadow,background] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:opacity-60',
-            isOpen && 'border-[#c59d55] ring-4 ring-[#c59d55]/18',
+            'flex h-8 w-full items-center justify-between rounded-xl border border-input bg-[linear-gradient(180deg,rgba(14,38,58,0.98),rgba(9,29,47,0.97))] px-2.5 py-1.25 text-left text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] outline-none transition-[border-color,box-shadow,background] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:opacity-60',
+            isOpen && 'border-ring ring-4 ring-ring/12',
             className,
           )}
           disabled={disabled}
@@ -339,7 +339,7 @@ export function SelectField({
           onKeyDown={handleTriggerKeyDown}
         >
           <span className={cn('truncate', !selectedOption && 'text-muted-foreground/85')}>{selectedOption?.label ?? placeholder}</span>
-          <ChevronDown className={cn('ml-3 h-4 w-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180 text-[#d6b06c]')} />
+          <ChevronDown className={cn('ml-3 h-4 w-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180 text-cyan-300')} />
         </button>
       )}
       {required && name ? <input aria-hidden="true" className="sr-only" required tabIndex={-1} value={selectedValue} onChange={() => undefined} /> : null}

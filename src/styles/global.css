@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -14,25 +14,26 @@
 
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --color-background: #101113;
-  --color-foreground: #f4efe6;
-  --color-card: #17181b;
-  --color-card-foreground: #f5f2eb;
-  --color-popover: #1b1c20;
-  --color-popover-foreground: #f5f2eb;
-  --color-primary: #d8a048;
-  --color-primary-foreground: #18120a;
-  --color-secondary: #202126;
-  --color-secondary-foreground: #ebe6db;
-  --color-muted: #1a1b1f;
-  --color-muted-foreground: #a9a191;
-  --color-accent: #2d2519;
-  --color-accent-foreground: #f6e7ca;
-  --color-destructive: #c94b45;
-  --color-destructive-foreground: #fff8f6;
-  --color-border: #2f3137;
-  --color-input: #2f3137;
-  --color-ring: #f1b556;
+  --font-heading: "Space Grotesk", "Manrope", "Segoe UI", sans-serif;
+  --color-background: #061525;
+  --color-foreground: #e5f0fc;
+  --color-card: #0d2134;
+  --color-card-foreground: #eaf4ff;
+  --color-popover: #10283d;
+  --color-popover-foreground: #eaf4ff;
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #f8fbff;
+  --color-secondary: #142d43;
+  --color-secondary-foreground: #dcecff;
+  --color-muted: #0b1d30;
+  --color-muted-foreground: #9fb3c8;
+  --color-accent: #0c3547;
+  --color-accent-foreground: #b8f3ff;
+  --color-destructive: #e05264;
+  --color-destructive-foreground: #fff7f8;
+  --color-border: #29465f;
+  --color-input: #31516c;
+  --color-ring: #22d3ee;
   --radius-sm: 0.5rem;
   --radius-md: 0.875rem;
   --radius-lg: 1.5rem;
@@ -67,9 +68,18 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(circle at 14% 10%, rgba(240, 181, 86, 0.1), transparent 18%),
-      radial-gradient(circle at top right, rgba(152, 111, 40, 0.12), transparent 24%),
-      linear-gradient(180deg, #17181a 0%, #101113 100%);
+      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.1), transparent 22%),
+      radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 28%),
+      linear-gradient(180deg, #0a1d30 0%, #061525 100%);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
   }
 
   button {
@@ -88,5 +98,16 @@
 
   #root {
     @apply h-[100dvh] min-h-screen overflow-hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

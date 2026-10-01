@@ -122,7 +122,7 @@ function ChequeMeta({
 }
 
 function LogEntryCard({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(31,32,36,0.96),rgba(24,25,29,0.92))] p-2.5 text-[12px] text-foreground shadow-[0_10px_20px_rgba(0,0,0,0.14)]">{children}</div>
+  return <div className="rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(16,40,61,0.96),rgba(9,29,47,0.94))] p-2.5 text-[12px] text-foreground shadow-[0_10px_22px_rgba(1,10,20,0.24)]">{children}</div>
 }
 
 function DeleteButton({ onClick }: { onClick: () => void }) {

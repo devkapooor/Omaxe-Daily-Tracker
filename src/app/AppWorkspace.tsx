@@ -206,7 +206,7 @@ export function AppWorkspace({
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
-          <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] border border-[#5f4823] bg-[linear-gradient(180deg,rgba(62,45,20,0.92),rgba(42,31,14,0.9))] p-2.5 text-amber-100 shadow-[0_10px_22px_rgba(0,0,0,0.2)] md:flex-row md:items-center md:justify-between">
+          <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] border border-amber-400/30 bg-amber-500/10 p-2.5 text-amber-100 shadow-[0_10px_22px_rgba(1,10,20,0.24)] md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <DatabaseZap className="mt-0.5 h-4 w-4 flex-none" />
               <span className="text-xs font-semibold sm:text-sm">
@@ -216,7 +216,7 @@ export function AppWorkspace({
             <Button
               type="button"
               variant="outline"
-              className="border-[#6e572e] bg-background/70 text-amber-100 hover:bg-accent hover:text-accent-foreground"
+              className="border-amber-400/30 bg-background/70 text-amber-100 hover:border-amber-300/50 hover:bg-amber-500/15 hover:text-amber-50"
               onClick={() => {
                 void importLegacyData().then((imported) => {
                   if (imported) showToast('Legacy browser data imported into Firebase.')
