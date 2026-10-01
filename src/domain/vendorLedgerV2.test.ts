@@ -7,6 +7,7 @@ import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildVendorChequeV2,
   buildVendorV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
@@ -31,6 +32,7 @@ function cheque(overrides: Partial<ChequeV2> = {}): ChequeV2 {
     id: 'cheque-1',
     chequeBookId: 'book-1',
     chequeNumber: '1120',
+    chequeNumberValue: 1120,
     purpose: 'vendor-payment',
     sourceRecordId: 'settlement-1',
     vendorId: 'vendor-1',
@@ -230,6 +232,18 @@ describe('V2 ledger rules', () => {
 })
 
 describe('V2 cheque rules', () => {
+  it('builds a unique draft cheque only from the active book', () => {
+    const draft = buildVendorChequeV2({
+      chequeBookId: 'book-1120-1199', chequeNumber: '00 11-20', vendorId: 'vendor-1',
+      date: '2026-10-02', amountPaise: 50_000, actorUserId: 'owner-1', timestamp: '2026-10-01T00:00:00.000Z',
+    })
+    expect(draft).toMatchObject({ id: '1120', chequeNumber: '1120', chequeNumberValue: 1120, status: 'draft' })
+    expect(() => buildVendorChequeV2({
+      chequeBookId: 'book-1120-1199', chequeNumber: '1200', vendorId: 'vendor-1',
+      date: '2026-10-02', amountPaise: 50_000, actorUserId: 'owner-1', timestamp: '2026-10-01T00:00:00.000Z',
+    })).toThrow(/active leaf/)
+  })
+
   it('enforces the approved lifecycle and allocation release rules', () => {
     expect(() => assertChequeTransition('draft', 'issued')).not.toThrow()
     expect(() => assertChequeTransition('issued', 'presented')).not.toThrow()

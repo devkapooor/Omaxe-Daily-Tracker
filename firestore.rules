@@ -134,27 +134,56 @@ service cloud.firestore {
 
     function validChequeV2(data, documentId) {
       return validV2Identity(data, documentId) &&
-        data.chequeNumber is string &&
-        data.purpose in ['vendor-payment', 'expense'] &&
-        data.sourceRecordId is string &&
+        data.chequeNumber == documentId &&
+        data.chequeNumberValue is int &&
+        data.chequeNumberValue >= 1120 && data.chequeNumberValue <= 1199 &&
+        data.purpose == 'vendor-payment' &&
+        data.sourceRecordId == documentId &&
+        data.vendorId is string &&
+        get(/databases/$(database)/documents/vendorsV2/$(data.vendorId)).data.active == true &&
+        get(/databases/$(database)/documents/vendorAccountStatesV2/$(data.vendorId)).data.outstandingPaise >= data.amountPaise &&
+        data.chequeBookId is string &&
+        get(/databases/$(database)/documents/chequeBooksV2/$(data.chequeBookId)).data.active == true &&
+        data.chequeNumberValue >= get(/databases/$(database)/documents/chequeBooksV2/$(data.chequeBookId)).data.startNumber &&
+        data.chequeNumberValue <= get(/databases/$(database)/documents/chequeBooksV2/$(data.chequeBookId)).data.endNumber &&
         data.date is string &&
         isPositivePaise(data.amountPaise) &&
-        data.status in ['draft', 'issued', 'presented', 'debited', 'cancelled', 'bounced'] &&
-        data.origin in ['v2', 'legacy-workbook', 'legacy-expense'] &&
-        data.trackingOnly is bool;
+        data.status == 'draft' &&
+        data.origin == 'v2' &&
+        data.trackingOnly == false;
     }
 
     function canUpdateChequeStatus() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'revision', 'updatedAt', 'updatedByUserId'
-        ]) &&
-        immutableV2Identity() &&
+      return immutableV2Identity() &&
         request.resource.data.updatedByUserId == request.auth.uid &&
         (
-          (resource.data.status == 'draft' && request.resource.data.status == 'issued' && hasPurchasingCapability('cheque.issue')) ||
-          (resource.data.status == 'issued' && request.resource.data.status == 'presented' && hasPurchasingCapability('cheque.present')) ||
-          (resource.data.status == 'presented' && request.resource.data.status == 'debited' && hasPurchasingCapability('cheque.debit')) ||
-          (resource.data.status in ['issued', 'presented'] && request.resource.data.status in ['cancelled', 'bounced'] && hasPurchasingCapability('cheque.cancel'))
+          (
+            resource.data.status == 'draft' && request.resource.data.status == 'issued' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'revision', 'pendingLedgerEntryId', 'updatedAt', 'updatedByUserId'
+            ]) &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.pendingLedgerEntryId)).data.eventType == 'pending-cheque' &&
+            hasPurchasingCapability('cheque.issue')
+          ) ||
+          (
+            resource.data.status == 'issued' && request.resource.data.status == 'presented' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'revision', 'updatedAt', 'updatedByUserId']) &&
+            hasPurchasingCapability('cheque.present')
+          ) ||
+          (
+            resource.data.status == 'presented' && request.resource.data.status == 'debited' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'revision', 'debitLedgerEntryId', 'updatedAt', 'updatedByUserId'
+            ]) &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.debitLedgerEntryId)).data.eventType == 'cheque-debit' &&
+            getAfter(/databases/$(database)/documents/vendorAccountStatesV2/$(resource.data.vendorId)).data.lastLedgerEntryId == request.resource.data.debitLedgerEntryId &&
+            hasPurchasingCapability('cheque.debit')
+          ) ||
+          (
+            resource.data.status in ['issued', 'presented'] && request.resource.data.status in ['cancelled', 'bounced'] &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'revision', 'updatedAt', 'updatedByUserId']) &&
+            hasPurchasingCapability('cheque.cancel')
+          )
         );
     }
 
@@ -173,6 +202,7 @@ service cloud.firestore {
         (data.eventType == 'purchase' && hasPurchasingCapability('purchase.create')) ||
         (data.eventType == 'settlement' && hasPurchasingCapability('settlement.create')) ||
         (data.eventType == 'vendor-credit' && hasPurchasingCapability('return.resolve')) ||
+        (data.eventType == 'pending-cheque' && hasPurchasingCapability('cheque.issue')) ||
         (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit'));
     }
 
@@ -211,6 +241,28 @@ service cloud.firestore {
         data.signedAmountPaise ==
           getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.before.amountPaise -
           getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.proposed.amountPaise
+      );
+    }
+
+    function validChequeLedgerEntry(data, documentId) {
+      return !(data.eventType in ['pending-cheque', 'cheque-debit']) || (
+        data.sourceType == 'cheque' &&
+        data.signedAmountPaise < 0 &&
+        getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.amountPaise == -data.signedAmountPaise &&
+        getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.revision == data.sourceRevision &&
+        (
+          (
+            data.eventType == 'pending-cheque' && data.posting == 'informational' &&
+            getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.status == 'issued' &&
+            getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.pendingLedgerEntryId == documentId
+          ) ||
+          (
+            data.eventType == 'cheque-debit' && data.posting == 'financial' &&
+            getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.status == 'debited' &&
+            getAfter(/databases/$(database)/documents/chequesV2/$(data.sourceRecordId)).data.debitLedgerEntryId == documentId
+          )
+        )
       );
     }
 
@@ -638,7 +690,7 @@ service cloud.firestore {
     match /chequesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
       allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('cheque.prepare') && validChequeV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && ((isOwner() && immutableV2Identity()) || canUpdateChequeStatus());
+      allow update: if isVendorLedgerV2Enabled() && canUpdateChequeStatus();
       allow delete: if false;
     }
 
@@ -657,7 +709,8 @@ service cloud.firestore {
         canCreateLedgerEntry(request.resource.data) &&
         validPurchaseLedgerEntry(request.resource.data, documentId) &&
         validSettlementLedgerEntry(request.resource.data, documentId) &&
-        validCorrectionLedgerEntry(request.resource.data, documentId);
+        validCorrectionLedgerEntry(request.resource.data, documentId) &&
+        validChequeLedgerEntry(request.resource.data, documentId);
       allow update, delete: if false;
     }
 

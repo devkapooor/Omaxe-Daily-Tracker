@@ -176,6 +176,7 @@ export type ChequeV2 = {
   id: string
   chequeBookId?: string
   chequeNumber: string
+  chequeNumberValue: number
   purpose: ChequePurpose
   sourceRecordId: string
   vendorId?: string
@@ -185,11 +186,23 @@ export type ChequeV2 = {
   origin: ChequeOrigin
   sourceStatus?: string
   trackingOnly: boolean
+  pendingLedgerEntryId?: string
+  debitLedgerEntryId?: string
   revision: number
   createdAt: string
   createdByUserId: string
   updatedAt: string
   updatedByUserId: string
+}
+
+export type CreateVendorChequeV2Input = {
+  chequeBookId: string
+  chequeNumber: string | number
+  vendorId: string
+  date: string
+  amountPaise: AmountPaise
+  actorUserId: string
+  timestamp: string
 }
 
 export type LedgerEventType =
@@ -300,6 +313,39 @@ export function normalizeChequeNumber(value: string | number) {
   const normalized = raw.replace(/^0+(?=\d)/, '')
   if (normalized === '0') throw new Error('Cheque number must be greater than zero.')
   return normalized
+}
+
+export function buildVendorChequeV2(input: CreateVendorChequeV2Input): ChequeV2 {
+  const chequeNumber = normalizeChequeNumber(input.chequeNumber)
+  const chequeNumberValue = Number(chequeNumber)
+  const chequeBookId = input.chequeBookId.trim()
+  const vendorId = input.vendorId.trim()
+  const actorUserId = input.actorUserId.trim()
+  if (!chequeBookId || !vendorId || !actorUserId) throw new Error('Cheque book, vendor, and actor are required.')
+  if (!activeChequeLeaf(chequeNumber)) throw new Error('Cheque number must be an active leaf from 1120 to 1199.')
+  if (!businessDatePattern.test(input.date)) throw new Error('Cheque date must use YYYY-MM-DD.')
+  assertIntegerPaise(input.amountPaise, 'Cheque amount')
+  if (input.amountPaise <= 0) throw new Error('Cheque amount must be greater than zero.')
+
+  return {
+    id: chequeNumber,
+    chequeBookId,
+    chequeNumber,
+    chequeNumberValue,
+    purpose: 'vendor-payment',
+    sourceRecordId: chequeNumber,
+    vendorId,
+    date: input.date,
+    amountPaise: input.amountPaise,
+    status: 'draft',
+    origin: 'v2',
+    trackingOnly: false,
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
 }
 
 export function deterministicEventId(

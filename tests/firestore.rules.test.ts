@@ -12,7 +12,9 @@ import {
   applySettlementCorrectionV2,
   createPurchaseV2,
   createSettlementV2,
+  createVendorChequeV2,
   createVendorV2,
+  transitionVendorChequeV2,
 } from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
@@ -459,36 +461,48 @@ describe('V2 vendor ledger capability enforcement', () => {
     expect(linkedInvoice.data()?.openAmountPaise).toBe(70000)
   })
 
-  it('enforces capability-specific cheque transitions and immutable identity', async () => {
+  it('keeps V2 vendor cheques unique and reduces outstanding only on debit', async () => {
     await enableV2()
-    const chequeRef = doc(userDb('cheque-user'), 'chequesV2', 'cheque-v2-1')
-    await assertSucceeds(setDoc(chequeRef, {
-      id: 'cheque-v2-1',
-      chequeBookId: 'book-1',
-      chequeNumber: '1120',
-      purpose: 'vendor-payment',
-      sourceRecordId: 'settlement-v2-1',
-      vendorId: 'vendor-v2-1',
-      date: '2026-10-02',
-      amountPaise: 100000,
-      status: 'draft',
-      origin: 'v2',
-      trackingOnly: false,
-      revision: 1,
-      createdAt: timestamp,
-      createdByUserId: 'cheque-user',
-      updatedAt: timestamp,
-      updatedByUserId: 'cheque-user',
+    const purchasingDb = userDb('purchasing-user')
+    const chequeDb = userDb('cheque-user')
+    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
+    await createPurchaseV2({
+      id: 'purchase-cheque-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-CHEQUE',
+      invoiceDate: '2026-10-01', invoiceTotalPaise: 100000, actorUserId: 'purchasing-user', timestamp,
+    }, purchasingDb)
+    await assertSucceeds(setDoc(doc(userDb('owner-user'), 'chequeBooksV2', 'book-1120-1199'), {
+      id: 'book-1120-1199', bankAccountLabel: 'Primary Bank', startNumber: 1120, endNumber: 1199,
+      active: true, revision: 1, createdAt: timestamp, createdByUserId: 'owner-user',
+      updatedAt: timestamp, updatedByUserId: 'owner-user',
     }))
-    await assertSucceeds(updateDoc(chequeRef, {
-      status: 'issued', revision: 2, updatedAt: '2026-10-01T01:00:00.000Z', updatedByUserId: 'cheque-user',
-    }))
-    await assertFails(updateDoc(doc(userDb('manager-user'), 'chequesV2', 'cheque-v2-1'), {
-      status: 'presented', revision: 3, updatedAt: '2026-10-01T02:00:00.000Z', updatedByUserId: 'manager-user',
-    }))
-    await assertFails(updateDoc(chequeRef, {
-      chequeNumber: '1121', status: 'presented', revision: 3,
-      updatedAt: '2026-10-01T02:00:00.000Z', updatedByUserId: 'cheque-user',
-    }))
+    const input = {
+      chequeBookId: 'book-1120-1199', chequeNumber: '00 11-20', vendorId: 'vendor-v2-1',
+      date: '2026-10-02', amountPaise: 40000, actorUserId: 'cheque-user', timestamp,
+    }
+    await expect(createVendorChequeV2(input, chequeDb)).resolves.toMatchObject({ created: true })
+    await expect(createVendorChequeV2(input, chequeDb)).resolves.toMatchObject({ created: false })
+    await expect(createVendorChequeV2({ ...input, amountPaise: 41000 }, chequeDb)).rejects.toThrow(/already registered/)
+    await expect(createVendorChequeV2({ ...input, chequeNumber: '1200' }, chequeDb)).rejects.toThrow(/active leaf/)
+
+    await expect(transitionVendorChequeV2({
+      chequeNumber: '1120', expectedRevision: 1, toStatus: 'issued', actorUserId: 'cheque-user',
+      timestamp: '2026-10-01T01:00:00.000Z',
+    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'issued', revision: 2 } })
+    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
+    await expect(transitionVendorChequeV2({
+      chequeNumber: '1120', expectedRevision: 2, toStatus: 'presented', actorUserId: 'cheque-user',
+      timestamp: '2026-10-01T02:00:00.000Z',
+    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'presented', revision: 3 } })
+    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
+    await expect(transitionVendorChequeV2({
+      chequeNumber: '1120', expectedRevision: 3, toStatus: 'debited', actorUserId: 'cheque-user',
+      timestamp: '2026-10-01T03:00:00.000Z',
+    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'debited', revision: 4 } })
+    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(60000)
+    await expect(transitionVendorChequeV2({
+      chequeNumber: '1120', expectedRevision: 3, toStatus: 'debited', actorUserId: 'cheque-user',
+      timestamp: '2026-10-01T03:00:00.000Z',
+    }, chequeDb)).rejects.toThrow(/stale/)
+    await assertFails(updateDoc(doc(userDb('owner-user'), 'chequesV2', '1120'), { chequeNumber: '1121' }))
   })
 })

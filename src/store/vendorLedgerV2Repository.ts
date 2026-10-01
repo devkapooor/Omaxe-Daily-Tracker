@@ -4,10 +4,18 @@ import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildVendorChequeV2,
   buildVendorV2,
+  assertChequeTransition,
+  assertExpectedRevision,
+  deterministicEventId,
   isV2BusinessDate,
   settlementCorrectionValuesV2,
   type CreateVendorV2Input,
+  type CreateVendorChequeV2Input,
+  type ChequeBookV2,
+  type ChequeStatus,
+  type ChequeV2,
   type CreatePurchaseV2Input,
   type CreateSettlementV2Input,
   type InvoiceReservationV2,
@@ -175,6 +183,116 @@ export async function createVendorV2(input: CreateVendorV2Input, database: Fires
     }
     transaction.set(vendorRef, vendor)
     return { created: true, vendor }
+  }, database)
+}
+
+export async function createVendorChequeV2(input: CreateVendorChequeV2Input, database: Firestore = db) {
+  const cheque = buildVendorChequeV2(input)
+  return runVendorLedgerV2Transaction(async (transaction, refs, config) => {
+    if (!config.activationDate || !isV2BusinessDate(cheque.date, config.activationDate)) {
+      throw new Error('Cheque date is before the approved V2 activation date.')
+    }
+    const chequeRef = doc(refs.cheques, cheque.id)
+    const bookRef = doc(refs.chequeBooks, cheque.chequeBookId!)
+    const vendorRef = doc(refs.vendors, cheque.vendorId!)
+    const accountRef = doc(refs.vendorAccountStates, cheque.vendorId!)
+    const [chequeSnapshot, bookSnapshot, vendorSnapshot, accountSnapshot] = await Promise.all([
+      transaction.get(chequeRef), transaction.get(bookRef), transaction.get(vendorRef), transaction.get(accountRef),
+    ])
+    if (chequeSnapshot.exists()) {
+      const existing = chequeSnapshot.data() as ChequeV2
+      const exactRetry = existing.vendorId === cheque.vendorId && existing.date === cheque.date &&
+        existing.amountPaise === cheque.amountPaise && existing.chequeBookId === cheque.chequeBookId
+      if (exactRetry) return { created: false, cheque: existing }
+      throw new Error('This cheque number is already registered.')
+    }
+    const book = bookSnapshot.data() as ChequeBookV2 | undefined
+    if (!bookSnapshot.exists() || !book?.active || cheque.chequeNumberValue < book.startNumber || cheque.chequeNumberValue > book.endNumber) {
+      throw new Error('Choose an active cheque book containing this leaf.')
+    }
+    const vendor = vendorSnapshot.data() as VendorV2 | undefined
+    if (!vendorSnapshot.exists() || !vendor?.active) throw new Error('Choose an active V2 vendor.')
+    const account = accountSnapshot.data() as VendorAccountStateV2 | undefined
+    if (!accountSnapshot.exists() || !account || cheque.amountPaise > account.outstandingPaise) {
+      throw new Error('Cheque amount cannot exceed vendor outstanding.')
+    }
+    transaction.set(chequeRef, cheque)
+    return { created: true, cheque }
+  }, database)
+}
+
+export type TransitionVendorChequeV2Input = {
+  chequeNumber: string | number
+  expectedRevision: number
+  toStatus: Exclude<ChequeStatus, 'draft'>
+  actorUserId: string
+  timestamp: string
+}
+
+export async function transitionVendorChequeV2(input: TransitionVendorChequeV2Input, database: Firestore = db) {
+  const chequeId = String(input.chequeNumber).trim().replace(/[\s-]/g, '').replace(/^0+(?=\d)/, '')
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const chequeRef = doc(refs.cheques, chequeId)
+    const chequeSnapshot = await transaction.get(chequeRef)
+    const cheque = chequeSnapshot.data() as ChequeV2 | undefined
+    if (!chequeSnapshot.exists() || !cheque) throw new Error('Cheque was not found.')
+    if (cheque.trackingOnly || cheque.origin !== 'v2' || cheque.purpose !== 'vendor-payment' || !cheque.vendorId) {
+      throw new Error('Only new V2 vendor cheques use this lifecycle.')
+    }
+    assertExpectedRevision(cheque.revision, input.expectedRevision)
+    assertChequeTransition(cheque.status, input.toStatus)
+
+    const nextRevision = cheque.revision + 1
+    const isIssue = input.toStatus === 'issued'
+    const isDebit = input.toStatus === 'debited'
+    const ledgerEntryId = isIssue
+      ? deterministicEventId('cheque', cheque.id, nextRevision, 'pending-cheque')
+      : isDebit ? deterministicEventId('cheque', cheque.id, nextRevision, 'cheque-debit') : undefined
+    const ledgerEntryRef = ledgerEntryId ? doc(refs.ledgerEntries, ledgerEntryId) : null
+    const accountRef = isDebit ? doc(refs.vendorAccountStates, cheque.vendorId) : null
+    const accountSnapshot = accountRef ? await transaction.get(accountRef) : null
+
+    const nextCheque: ChequeV2 = {
+      ...cheque,
+      status: input.toStatus,
+      revision: nextRevision,
+      ...(isIssue && ledgerEntryId ? { pendingLedgerEntryId: ledgerEntryId } : {}),
+      ...(isDebit && ledgerEntryId ? { debitLedgerEntryId: ledgerEntryId } : {}),
+      updatedAt: input.timestamp,
+      updatedByUserId: input.actorUserId,
+    }
+    transaction.set(chequeRef, nextCheque)
+    if (ledgerEntryRef && ledgerEntryId) {
+      const ledgerEntry: VendorLedgerEntryV2 = {
+        id: ledgerEntryId,
+        vendorId: cheque.vendorId,
+        eventType: isDebit ? 'cheque-debit' : 'pending-cheque',
+        posting: isDebit ? 'financial' : 'informational',
+        signedAmountPaise: -cheque.amountPaise,
+        sourceType: 'cheque',
+        sourceRecordId: cheque.id,
+        sourceRevision: nextRevision,
+        occurredOn: cheque.date,
+        createdAt: input.timestamp,
+        createdByUserId: input.actorUserId,
+      }
+      transaction.set(ledgerEntryRef, ledgerEntry)
+      if (isDebit && accountRef) {
+        const account = accountSnapshot?.data() as VendorAccountStateV2 | undefined
+        if (!accountSnapshot?.exists() || !account || cheque.amountPaise > account.outstandingPaise) {
+          throw new Error('Cheque amount cannot exceed current vendor outstanding.')
+        }
+        transaction.set(accountRef, {
+          ...account,
+          outstandingPaise: account.outstandingPaise - cheque.amountPaise,
+          revision: account.revision + 1,
+          lastLedgerEntryId: ledgerEntryId,
+          updatedAt: input.timestamp,
+          updatedByUserId: input.actorUserId,
+        })
+      }
+    }
+    return { cheque: nextCheque }
   }, database)
 }
 
