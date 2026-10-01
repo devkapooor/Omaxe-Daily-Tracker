@@ -211,7 +211,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-002 | Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases its reserved invoice allocations in the same atomic transition. | Approved 2026-10-01 | Phase 1 transition rules |
 | FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. Exact activation date remains pending. | Partially approved 2026-10-01 | Phase 3 compatibility design |
 | FD-004 | Every V2 vendor starts at zero outstanding. The owner alone may enter a separately verified opening balance; no legacy value is copied or calculated automatically. After recording, corrections use audited compensating adjustment entries and never overwrite the original opening entry. | Approved 2026-10-01 | Phase 4 ledger posting |
-| FD-005 | Confirm whether V2 purchase, settlement, return, and cheque corrections require Action Centre approval or can be performed directly by users with correction capabilities. | Pending | Phase 2 permissions |
+| FD-005 | Staff submit purchase, settlement, return, and cheque correction requests through the Action Centre. The owner may apply direct audited corrections without submitting a separate approval request. | Approved 2026-10-01 | Phase 2 permissions |
 | FD-006 | Confirm whether an immediate payment entered with a purchase should support all payment modes or only create a linked non-cheque settlement. | Pending | Phase 4 purchase UI |
 | FD-007 | Confirm whether vendor credit must allocate to the source invoice first and then FIFO, and who may override that order. | Pending | Phase 5 allocation rules |
 | FD-008 | Confirm how a cash refund is received: cash drawer, bank receipt, or a selectable destination, and which workflow records that receipt. | Pending | Phase 7 return effects |
@@ -259,3 +259,11 @@ No implementation phase may cross a decision marked `Pending`.
 - A recorded opening balance is immutable.
 - A later correction creates a compensating opening-adjustment ledger entry with actor, timestamp, mandatory reason, signed amount, and reference to the original opening entry.
 - Tests must cover positive and negative adjustments, repeated submissions, authorization, and preservation of the original entry.
+
+### Correction Authority
+
+- Staff cannot directly alter posted V2 financial records.
+- Staff correction requests are reviewed individually through the owner-only Action Centre.
+- The owner may apply a direct correction without creating a separate pending approval request.
+- Every approved request and direct owner correction records before and proposed snapshots, actor, reason, timestamp, source revision, resulting revision, and compensating ledger references where applicable.
+- Tests must deny unauthorized direct writes, reject stale revisions and duplicate effects, and prove that owner corrections remain fully auditable.
