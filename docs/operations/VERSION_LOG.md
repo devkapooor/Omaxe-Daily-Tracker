@@ -1,5 +1,19 @@
 # Version Log
 
+## Dashboard Batch A - 2026-10-01
+
+- Commit: `42e19a9`
+- Deployment: Firebase Hosting - `https://alphahub-f137b.web.app`
+- Firebase Hosting version: `293f4664f732d2be`
+- Summary:
+  - Added break-even progress from the configured margin and monthly operating expense.
+  - Added a responsive daily sales trend against the preceding month.
+  - Added neutral sales and cashout recording coverage without false missing-day warnings.
+- Verification:
+  - Seven unit tests, source ESLint, TypeScript, and the production build passed.
+  - The live HTML returned HTTP 200 and referenced the expected production asset.
+  - Hosting-only deployment made no Firestore rule or production financial-record changes.
+
 ## Live Update - 2026-10-01
 
 - Commit: `ed1b933`
