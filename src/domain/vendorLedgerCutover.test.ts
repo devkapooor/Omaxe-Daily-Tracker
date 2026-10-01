@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { reviewVendorLedgerCutover } from './vendorLedgerCutover'
+import {
+  confirmsVendorLedgerActivation,
+  reviewVendorLedgerCutover,
+  VENDOR_LEDGER_ACTIVATION_PHRASE,
+} from './vendorLedgerCutover'
 
 describe('V2 vendor ledger cutover review', () => {
   it('reconciles explicit zero and audited opening balances', () => {
@@ -22,5 +26,11 @@ describe('V2 vendor ledger cutover review', () => {
     expect(review.errors.join(' ')).toMatch(/audit reason/)
     expect(review.errors.join(' ')).toMatch(/invalid opening/)
   })
-})
 
+  it('requires the exact production activation phrase', () => {
+    expect(confirmsVendorLedgerActivation(VENDOR_LEDGER_ACTIVATION_PHRASE)).toBe(true)
+    expect(confirmsVendorLedgerActivation(` ${VENDOR_LEDGER_ACTIVATION_PHRASE} `)).toBe(true)
+    expect(confirmsVendorLedgerActivation('activate v2')).toBe(false)
+    expect(confirmsVendorLedgerActivation('ACTIVATE')).toBe(false)
+  })
+})

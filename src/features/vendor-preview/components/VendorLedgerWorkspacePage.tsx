@@ -57,7 +57,7 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
   const vendorNameById = Object.fromEntries(ledger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
 
   if (ledger.loading && !ledger.config) return <p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p>
-  if (ledger.config?.enabled !== true) return <VendorLedgerPreActivationPage />
+  if (ledger.config?.enabled !== true) return <VendorLedgerPreActivationPage currentUser={currentUser} />
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true)

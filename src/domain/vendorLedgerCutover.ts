@@ -18,6 +18,12 @@ export type VendorLedgerCutoverReview = {
 
 const businessDatePattern = /^\d{4}-\d{2}-\d{2}$/
 
+export const VENDOR_LEDGER_ACTIVATION_PHRASE = 'ACTIVATE V2'
+
+export function confirmsVendorLedgerActivation(value: string) {
+  return value.trim() === VENDOR_LEDGER_ACTIVATION_PHRASE
+}
+
 export function reviewVendorLedgerCutover(
   activationDate: string,
   drafts: CutoverVendorDraft[],
@@ -59,4 +65,3 @@ export function reviewVendorLedgerCutover(
     ready: errors.length === 0,
   }
 }
-
