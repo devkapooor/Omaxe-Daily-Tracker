@@ -182,6 +182,8 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 ### Lean Release B - Minimum Operational Vendor Ledger
 
+**Implementation status (2026-10-01): Complete in source and pushed; deployment pending owner confirmation. Production V2 remains disabled.**
+
 #### Scope
 
 - Replace preview fixtures with the already-built guarded V2 repositories.
@@ -195,6 +197,17 @@ This three-release route supersedes the active execution of the former Phases 5-
 - Emulator tests cover purchase, settlement, owner correction, cheque uniqueness, lifecycle, and debit posting.
 - V2 remains disabled in production after rules and Hosting deployment.
 - No legacy financial records or loan records are modified.
+
+#### Implementation Evidence
+
+- Added guarded repositories for zero-opening vendor creation, purchases, non-cheque settlements, invoice allocation, and owner direct audited settlement corrections.
+- Added the minimum new-V2 vendor cheque lifecycle for active leaves 1120-1199 with normalized cheque-number uniqueness.
+- `Issued` and `Presented` cheques create no financial balance movement; the `Presented` to `Debited` transaction appends the cheque-debit ledger entry and reduces vendor outstanding atomically.
+- Added a guarded owner Vendor Workspace. It reads only the V2 configuration while disabled and keeps showing the local preview; V2 collection subscriptions and write forms mount only after activation.
+- Firestore emulator: 18 tests passed, including purchase, settlement, linked owner correction, cheque uniqueness, lifecycle, stale revision, and debit posting.
+- Source validation: 43 tests passed; source ESLint, TypeScript, and production build passed. The existing bundle-size warning remains unchanged.
+- Commits: `c521b28`, `d8f9f78`, and `4b009f8`.
+- No Firebase deployment, production initialization, financial write, legacy-data write, or loan write was performed during implementation.
 
 #### Credit Boundary
 
