@@ -205,7 +205,7 @@ No implementation phase may cross a decision marked `Pending`.
 
 | ID | Decision | Status | Required before |
 | --- | --- | --- | --- |
-| FD-001 | Confirm whether vendor outstanding decreases at cheque `Issued` or only at cheque `Debited`. | Pending | Phase 1 sign rules |
+| FD-001 | Vendor outstanding decreases only when the cheque becomes `Debited`. `Issued` and `Presented` cheques remain visible in the vendor ledger as pending cheque commitments without changing outstanding. | Approved 2026-10-01 | Phase 1 sign rules |
 | FD-002 | Confirm whether a cancelled/bounced cheque reopens its original invoice allocations automatically or requires owner review. | Pending | Phase 1 transition rules |
 | FD-003 | Confirm the authoritative V1-to-V2 cutover boundary: a fixed business date or an owner-controlled per-vendor cutover. | Pending | Phase 3 compatibility design |
 | FD-004 | Confirm how current opening outstanding and open purchases should be represented in the V2 ledger without double counting. | Pending | Phase 4 ledger posting |
@@ -228,3 +228,13 @@ No implementation phase may cross a decision marked `Pending`.
 - Adding V2 records without an explicit compatibility and cutover boundary would double count vendor balances and cheque commitments.
 - The proposed design remains Spark-compatible if it uses Firestore client transactions, rules, indexes, and emulator-tested owner tooling without Cloud Functions.
 
+## Approved Financial Behavior
+
+### Cheque Effect on Vendor Outstanding
+
+- `Draft`: no vendor-ledger visibility and no financial effect.
+- `Issued`: show the cheque amount in the vendor ledger as a pending cheque commitment; do not reduce vendor outstanding.
+- `Presented`: retain the pending cheque commitment in the vendor ledger; do not reduce vendor outstanding.
+- `Debited`: post the settlement ledger event and reduce vendor outstanding exactly once.
+- A pending cheque commitment is informational and must be excluded from the outstanding-balance equation.
+- Invoice allocations attached before debit are reservations only. Their final accounting effect occurs on debit.
