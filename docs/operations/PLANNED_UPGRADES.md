@@ -26,6 +26,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-007 | Dashboard break-even progress | High | Dashboard batch A | Use the configured margin and monthly operating expense to show break-even sales, progress, amount remaining, and required daily sales for the selected month. | Deployed 2026-10-01 | No |
 | UP-008 | Dashboard daily sales trend | High | Dashboard batch A | Add a compact daily sales trend for the selected month with a preceding-month overlay, controlled by the existing T, T-1, and T-2 selector. | Deployed 2026-10-01 | No |
 | UP-009 | Dashboard recording health | High | Dashboard batch A | Show recorded-day coverage and latest sales and cashout dates without adding detailed records or Cash Movement calculations to the dashboard. | Deployed 2026-10-01 | No |
+| UP-010 | Purchase, vendor, and cheque ledger redesign | Critical | Phased V2 finance release | Replace name-keyed mutable vendor balances with stable vendor IDs, append-only ledger events, invoice allocations, and an auditable cheque register using the gated execution plan. | Phase 0 - financial decisions pending | No |
 
 ## Implementation Readiness
 
@@ -40,6 +41,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-007 Dashboard break-even progress | Deployed | Formula, zero-margin state, current-month requirement, and completed-month behavior are covered by tests. |
 | UP-008 Dashboard daily sales trend | Deployed | Responsive SVG trend aligns calendar days and preserves gaps where no sales record exists. |
 | UP-009 Dashboard recording health | Deployed | Neutral sales and cashout coverage is shown without treating closed days as missing. |
+| UP-010 Purchase, vendor, and cheque ledger redesign | Phase 0 | Resolve the Financial Decision Register in `PURCHASE_VENDOR_CHEQUE_EXECUTION_PLAN.md` before application implementation begins. |
 
 ## Acceptance Criteria
 
@@ -106,6 +108,16 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 - The first release uses neutral coverage wording and does not assume that every calendar day is a working day.
 - Missing-day warnings remain disabled until store closure and holiday rules are explicitly approved.
 - The status contains no holder balances, bank transfers, detailed logs, or Cash Movement calculations.
+
+### UP-010 Purchase, Vendor, and Cheque Ledger Redesign
+
+- Each phase follows start, check, resolve, validate, commit, and push before the next phase begins.
+- Existing production financial records remain unchanged throughout development and migration rehearsals.
+- New financial behavior is implemented only after its corresponding owner decision is recorded.
+- V2 money is stored as integer paise while V1 rupee-number fields remain unchanged behind explicit compatibility boundaries.
+- Migration is blocked unless vendor-level and whole-system dry-run controls reconcile exactly.
+- Deployment, production migration, and feature activation are separate owner approvals.
+- The detailed sequence and financial decision register are maintained in `PURCHASE_VENDOR_CHEQUE_EXECUTION_PLAN.md`.
 
 ## Release Order
 
