@@ -60,6 +60,7 @@ export function setupCashoutCorrectionSubscription(
   currentUser: AppUser,
   setRequests: AppStoreSetters['setCashoutCorrectionRequests'],
   onSubscriptionError: (error: unknown) => void,
+  onLoaded: () => void,
 ) {
   const requestsRef = collection(db, 'cashoutCorrectionRequests')
   const requestsQuery = currentUser.role === 'owner'
@@ -72,6 +73,7 @@ export function setupCashoutCorrectionSubscription(
         .map((item) => mapDoc(item.id, item.data() as Omit<CashoutCorrectionRequest, 'id'>))
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     )
+    onLoaded()
   }, onSubscriptionError)
 }
 

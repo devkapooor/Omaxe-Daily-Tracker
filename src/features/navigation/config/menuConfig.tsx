@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   ArrowRightLeft,
   CalendarClock,
+  ClipboardCheck,
   LayoutDashboard,
   LogOut,
   Logs,
@@ -27,6 +28,8 @@ export function pageTitle(page: Page) {
   switch (page) {
     case 'dashboard':
       return 'Dashboard'
+    case 'actions':
+      return 'Action Centre'
     case 'directory':
       return 'Directory'
     case 'expense':
@@ -54,6 +57,15 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       icon: <LayoutDashboard className="size-4 shrink-0" />,
       label: 'Dashboard',
       page: 'dashboard',
+      gradient: '',
+      hoverClass: '',
+      activeClass: 'bg-secondary text-foreground',
+      action: 'page',
+    })
+    items.push({
+      icon: <ClipboardCheck className="size-4 shrink-0" />,
+      label: 'Action Centre',
+      page: 'actions',
       gradient: '',
       hoverClass: '',
       activeClass: 'bg-secondary text-foreground',

@@ -9,6 +9,7 @@ import { cn } from '@/shared/lib/utils'
 type AppTopBarProps = {
   currentUser: AppUser
   activePage: Page
+  pendingApprovalCount: number
   onPageChange: (page: Page) => void
   onLogout: () => void
 }
@@ -31,7 +32,21 @@ const roleLabel: Record<AppUser['role'], string> = {
   billing: 'Billing',
 }
 
-export function AppTopBar({ currentUser, activePage, onPageChange, onLogout }: AppTopBarProps) {
+function PendingBadge({ count, compact = false }: { count: number; compact?: boolean }) {
+  if (count <= 0) return null
+  return (
+    <span
+      className={compact
+        ? 'absolute -right-1.5 -top-1.5 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white'
+        : 'ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1.5 text-[9px] font-black text-white'}
+      aria-label={`${count} pending approval${count === 1 ? '' : 's'}`}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPageChange, onLogout }: AppTopBarProps) {
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const menuItems = useMemo(() => buildMenu(currentUser), [currentUser])
@@ -109,10 +124,11 @@ export function AppTopBar({ currentUser, activePage, onPageChange, onLogout }: A
                     )}
                     onClick={() => handleSelect(item)}
                   >
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background/70">
+                    <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background/70">
                       {item.icon}
                     </span>
                     <span className="truncate">{item.label}</span>
+                    {item.page === 'actions' ? <PendingBadge count={pendingApprovalCount} /> : null}
                   </button>
                 </li>
               )
@@ -159,10 +175,12 @@ export function AppTopBar({ currentUser, activePage, onPageChange, onLogout }: A
                     title={isDesktopCollapsed ? item.label : undefined}
                     onClick={() => handleSelect(item)}
                   >
-                    <span className="inline-flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-border/70 bg-background/70">
+                    <span className="relative inline-flex h-6.5 w-6.5 flex-none items-center justify-center rounded-lg border border-border/70 bg-background/70">
                       {item.icon}
+                      {item.page === 'actions' && isDesktopCollapsed ? <PendingBadge count={pendingApprovalCount} compact /> : null}
                     </span>
                     {!isDesktopCollapsed ? <span className="truncate">{item.label}</span> : null}
+                    {!isDesktopCollapsed && item.page === 'actions' ? <PendingBadge count={pendingApprovalCount} /> : null}
                   </button>
                 </li>
               )

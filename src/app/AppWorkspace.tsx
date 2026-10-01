@@ -24,12 +24,13 @@ import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlanner
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
+import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
+import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
-import { drawerTotalFromDenominations } from '@/domain/cashoutCorrections'
 import { ToastHost } from '@/shared/ui/toast-host'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
@@ -44,6 +45,8 @@ type AppWorkspaceProps = {
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
   cashoutCorrectionRequests: CashoutCorrectionRequest[]
+  cashoutCorrectionsError: string | null
+  cashoutCorrectionsReady: boolean
   changeOwnPassword: (password: string) => Promise<void>
   createUserAccount: (draft: {
     name: string
@@ -132,6 +135,8 @@ export function AppWorkspace({
   canImportLegacyData,
   cashTransfers,
   cashoutCorrectionRequests,
+  cashoutCorrectionsError,
+  cashoutCorrectionsReady,
   changeOwnPassword,
   createUserAccount,
   currentUser,
@@ -187,11 +192,13 @@ export function AppWorkspace({
   vendorOutstandingByName,
 }: AppWorkspaceProps) {
   const confirmation = useConfirmationDialog()
+  const approvalQueue = deriveApprovalQueue(cashoutCorrectionRequests, dailyCashouts)
   return (
     <main className="mx-auto flex h-[100dvh] w-full max-w-[1320px] overflow-hidden">
       <AppTopBar
         currentUser={currentUser}
         activePage={activePage}
+        pendingApprovalCount={approvalQueue.pendingCount}
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
@@ -231,6 +238,32 @@ export function AppWorkspace({
             setMonthOffset={setDashboardMonthOffset}
             totalLoans={totalLoans}
             totalVendorOutstanding={totalVendorOutstanding}
+          />
+        ) : null}
+
+        {activePage === 'actions' && currentUser.role === 'owner' ? (
+          <ActionCenterPage
+            error={cashoutCorrectionsError}
+            isLoading={!cashoutCorrectionsReady}
+            queue={approvalQueue}
+            onApprove={async (item) => {
+              try {
+                await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
+                showToast(`Cashout correction approved: ${item.recordedBy}`)
+              } catch (error) {
+                showToast(error instanceof Error ? error.message : 'Unable to approve this correction.')
+              }
+            }}
+            onReject={async (item, reason) => {
+              try {
+                await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
+                showToast(reason === OUTDATED_CORRECTION_REASON
+                  ? `Outdated request closed: ${item.recordedBy}`
+                  : `Cashout correction rejected: ${item.recordedBy}`)
+              } catch (error) {
+                showToast(error instanceof Error ? error.message : 'Unable to close this correction request.')
+              }
+            }}
           />
         ) : null}
 
@@ -388,31 +421,6 @@ export function AppWorkspace({
                   showToast(`Daily cashout deleted: ${entry.recordedBy} - ${formatDisplayDate(entry.date)}`)
                 } catch (error) {
                   showToast(error instanceof Error ? error.message : 'Unable to delete this daily cashout entry.')
-                }
-              }}
-              onApproveCashoutCorrection={async (request) => {
-                const currentEntry = dailyCashouts.find((entry) => entry.id === request.cashoutId)
-                const currentDrawer = currentEntry?.drawerTotal ?? currentEntry?.remainingBalance ?? 0
-                const proposedDrawer = drawerTotalFromDenominations(request.proposed.drawerDenominations)
-                if (!await confirmation.confirm({
-                  title: 'Approve this correction?',
-                  details: [`Cash Movement balance impact: ${money(proposedDrawer - currentDrawer)}`],
-                  warning: 'The linked sales totals will be recalculated.',
-                  confirmLabel: 'Approve Correction',
-                })) return
-                try {
-                  await approveCashoutCorrectionRequest(request.id, currentUser)
-                  showToast(`Cashout correction approved: ${request.recordedBy}`)
-                } catch (error) {
-                  showToast(error instanceof Error ? error.message : 'Unable to approve this correction.')
-                }
-              }}
-              onRejectCashoutCorrection={async (request, reason) => {
-                try {
-                  await rejectCashoutCorrectionRequest(request.id, reason, currentUser)
-                  showToast(`Cashout correction rejected: ${request.recordedBy}`)
-                } catch (error) {
-                  showToast(error instanceof Error ? error.message : 'Unable to reject this correction.')
                 }
               }}
               onEditDailyCashout={async (entry, values, reason) => {

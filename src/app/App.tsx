@@ -17,7 +17,7 @@ import { AuroraBackground } from '@/shared/ui/aurora-background'
 import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
 
 function isPage(value: string | null): value is Page {
-  return value === 'dashboard' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'logs' || value === 'settings'
+  return value === 'dashboard' || value === 'actions' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'logs' || value === 'settings'
 }
 
 export default function App() {
@@ -29,6 +29,8 @@ export default function App() {
     canImportLegacyData,
     cashTransfers,
     cashoutCorrectionRequests,
+    cashoutCorrectionsError,
+    cashoutCorrectionsReady,
     changeOwnPassword,
     collectionsReady,
     createUserAccount,
@@ -211,6 +213,8 @@ export default function App() {
         canImportLegacyData={canImportLegacyData}
         cashTransfers={cashTransfers}
         cashoutCorrectionRequests={cashoutCorrectionRequests}
+        cashoutCorrectionsError={cashoutCorrectionsError}
+        cashoutCorrectionsReady={cashoutCorrectionsReady}
         changeOwnPassword={changeOwnPassword}
         createUserAccount={createUserAccount}
         currentUser={currentUser}

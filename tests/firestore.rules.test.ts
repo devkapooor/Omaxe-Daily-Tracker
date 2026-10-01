@@ -153,4 +153,38 @@ describe('Firestore role enforcement', () => {
     await assertSucceeds(setDoc(doc(userDb('manager-user'), 'plannedPayments', 'planned-1'), plannedPayment))
     await assertFails(setDoc(doc(userDb('billing-user'), 'plannedPayments', 'planned-2'), plannedPayment))
   })
+
+  it('keeps cashout correction review owner-only while staff can read only their own request', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore()
+      await setDoc(doc(database, 'dailyCashouts', 'cashout-approval-1'), {
+        date: '2026-10-01', recordedBy: 'billing-user', recordedByUserId: 'billing-user',
+        cashSales: 500, upiSales: 300, creditSales: 100, returns: 0, cashAudit: 500,
+        actualCashParticulars: '500 x 1 = 500', pendingCashParticulars: '', remainingBalance: 500,
+        createdAt: timestamp, revision: 1,
+      })
+      await setDoc(doc(database, 'cashoutCorrectionRequests', 'correction-approval-1'), {
+        cashoutId: 'cashout-approval-1', cashoutDate: '2026-10-01', recordedBy: 'billing-user',
+        recordedByUserId: 'billing-user', sourceRevision: 1, requestedByUserId: 'billing-user',
+        requestedBy: 'billing-user', reason: 'Correct drawer count', requestType: 'staff-request',
+        status: 'pending', createdAt: timestamp,
+      })
+    })
+
+    const requestPath = 'cashoutCorrectionRequests/correction-approval-1'
+    await assertSucceeds(getDoc(doc(userDb('owner-user'), requestPath)))
+    await assertSucceeds(getDoc(doc(userDb('billing-user'), requestPath)))
+    await assertFails(getDoc(doc(userDb('manager-user'), requestPath)))
+    await assertFails(getDoc(doc(userDb('disabled-user'), requestPath)))
+    await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), requestPath)))
+
+    await assertSucceeds(updateDoc(doc(userDb('owner-user'), requestPath), { status: 'approved' }))
+
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), requestPath), { status: 'pending' })
+    })
+    await assertFails(updateDoc(doc(userDb('manager-user'), requestPath), { status: 'approved' }))
+    await assertFails(updateDoc(doc(userDb('billing-user'), requestPath), { status: 'approved' }))
+    await assertFails(updateDoc(doc(userDb('disabled-user'), requestPath), { status: 'approved' }))
+  })
 })

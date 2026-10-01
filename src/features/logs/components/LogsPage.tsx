@@ -26,8 +26,6 @@ type LogsPageProps = {
   users: UserAccount[]
   onDeleteLoan: (loan: LoanEntry) => Promise<void> | void
   onDeleteDailyCashout: (entry: DailyCashoutEntry) => Promise<void> | void
-  onApproveCashoutCorrection: (request: CashoutCorrectionRequest) => Promise<void> | void
-  onRejectCashoutCorrection: (request: CashoutCorrectionRequest, reason: string) => Promise<void> | void
   onEditDailyCashout: (entry: DailyCashoutEntry, values: CashoutCorrectionValues, reason: string) => Promise<void> | void
 }
 
@@ -148,8 +146,6 @@ export function LogsPage({
   users,
   onDeleteLoan,
   onDeleteDailyCashout,
-  onApproveCashoutCorrection,
-  onRejectCashoutCorrection,
   onEditDailyCashout,
 }: LogsPageProps) {
   const [activeTab, setActiveTab] = useState('sales')
@@ -293,7 +289,7 @@ export function LogsPage({
   )
 
   const rangedCorrectionRequests = useMemo(
-    () => cashoutCorrectionRequests.filter((entry) => entry.status === 'pending' || isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
+    () => cashoutCorrectionRequests.filter((entry) => entry.status !== 'pending' && isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
     [cashoutCorrectionRequests, validRangeEnd, validRangeStart],
   )
 
@@ -464,10 +460,8 @@ export function LogsPage({
             entries={filteredDailyCashouts}
             visibleCount={visibleCount}
             onLoadMore={() => setVisibleCount((count) => count + 50)}
-            onApproveCorrection={onApproveCashoutCorrection}
             onDelete={onDeleteDailyCashout}
             onEdit={onEditDailyCashout}
-            onRejectCorrection={onRejectCashoutCorrection}
           />
         </TabsContent>
         <TabsContent value="cashTransfers" className="min-h-0">

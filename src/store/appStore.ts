@@ -46,6 +46,8 @@ export function useAppStore() {
   const [dailyCashouts, setDailyCashouts] = useState<DailyCashoutEntry[]>([])
   const [cashTransfers, setCashTransfers] = useState<CashTransfer[]>([])
   const [cashoutCorrectionRequests, setCashoutCorrectionRequests] = useState<CashoutCorrectionRequest[]>([])
+  const [cashoutCorrectionsReady, setCashoutCorrectionsReady] = useState(false)
+  const [cashoutCorrectionsError, setCashoutCorrectionsError] = useState<string | null>(null)
   const [plannedPayments, setPlannedPayments] = useState<PlannedPayment[]>([])
   const [monthlyReports, setMonthlyReports] = useState<MonthlyReportMeta[]>([])
   const [settingsAuditLog, setSettingsAuditLog] = useState<SettingsAuditEntry[]>([])
@@ -86,6 +88,8 @@ export function useAppStore() {
       setDailyCashouts([])
       setCashTransfers([])
       setCashoutCorrectionRequests([])
+      setCashoutCorrectionsReady(false)
+      setCashoutCorrectionsError(null)
       setPlannedPayments([])
       setMonthlyReports([])
       setSettingsAuditLog([])
@@ -234,7 +238,16 @@ export function useAppStore() {
     return setupCashoutCorrectionSubscription(
       currentUser,
       setCashoutCorrectionRequests,
-      (error) => setAuthError(error instanceof Error ? error.message : 'Unable to load cashout correction requests.'),
+      (error) => {
+        const message = error instanceof Error ? error.message : 'Unable to load cashout correction requests.'
+        setCashoutCorrectionsError(message)
+        setCashoutCorrectionsReady(true)
+        setAuthError(message)
+      },
+      () => {
+        setCashoutCorrectionsError(null)
+        setCashoutCorrectionsReady(true)
+      },
     )
   }, [currentUser])
 
@@ -395,6 +408,8 @@ export function useAppStore() {
     canImportLegacyData,
     cashTransfers,
     cashoutCorrectionRequests,
+    cashoutCorrectionsError,
+    cashoutCorrectionsReady,
     changeOwnPassword: actions.changeOwnPassword,
     collectionsReady,
     createUserAccount: actions.createUserAccount,

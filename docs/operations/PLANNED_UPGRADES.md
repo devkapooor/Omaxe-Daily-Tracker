@@ -19,7 +19,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | --- | --- | --- | --- | --- | --- | --- |
 | UP-001 | Permission hardening | Critical | Release 1 | Enforce owner, manager, and billing capabilities in Firestore rules; protect immutable identity and audit fields; add rules tests. | Deployed 2026-10-01 | No |
 | UP-002 | Audited finance record corrections | Critical | Release 2 | Add owner-controlled correction or deletion flows for expenses, purchases, vendor payments, loans, and cash transfers, with before/after snapshots and reasons. | Planned | No |
-| UP-003 | Operations Action Centre | High | Release 3 | Add a separate workspace for missing cashouts, pending correction requests, upcoming cheques, and overdue planned payments without adding dashboard clutter. | Planned | No |
+| UP-003 | Operations Action Centre | High | Release 3 | Build an owner-only approval hub first, then add missing cashouts, upcoming cheques, and overdue planned payments without adding dashboard clutter. | Approval phase implemented locally; release pending | No |
 | UP-004 | Export Centre | High | Release 3 | Allow owner-filtered CSV downloads for sales, expenses, purchases, payments, cashouts, and cash movements, including the applied date range. | Planned | No |
 | UP-005 | Automated finance and permission tests | Critical | Releases 1-3 | Cover dashboard totals, cash balances, payment allocation, correction workflows, date boundaries, and Firestore role enforcement. | Release 1 coverage deployed | No |
 | UP-006 | Bounded and filtered Logs loading | High | Release 1 | Default Logs to the latest 7 days; provide 15, 30, and 90 day presets plus a custom date range; query only the active tab and paginate older records instead of downloading all history. | Deployed 2026-10-01 | No |
@@ -35,7 +35,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-005 Automated finance and permission tests | Release 1 coverage deployed | Permission tests and existing cashout correction tests pass; broader finance calculation coverage continues with later releases. |
 | UP-006 Bounded and filtered Logs loading | Deployed | Shared IST range filtering, adaptive controls, incremental rendering, and bounded Settings Audit queries are live. Shared finance subscriptions remain intact where required for calculations. |
 | UP-002 Audited finance record corrections | Planned after Release 1 | Finalize per-record correction invariants and build only after hardened permissions and tests are in place. |
-| UP-003 Operations Action Centre | Planned after Release 2 | Define missing and overdue rules using read-only derived data. |
+| UP-003 Operations Action Centre | Approval phase implemented locally | Release the cashout-correction approval hub; define missing and overdue rules separately before adding operational signals. |
 | UP-004 Export Centre | Planned after Release 2 | Finalize export columns and role visibility; exports remain client-side and read-only. |
 | UP-007 Dashboard break-even progress | Deployed | Formula, zero-margin state, current-month requirement, and completed-month behavior are covered by tests. |
 | UP-008 Dashboard daily sales trend | Deployed | Responsive SVG trend aligns calendar days and preserves gaps where no sales record exists. |
@@ -59,8 +59,10 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 
 ### UP-003 Operations Action Centre
 
-- The page highlights missing recent cashouts, pending correction requests, upcoming cheques, and overdue planned payments.
-- Each item links to the existing workflow where it can be resolved.
+- Phase A provides an owner-only approval queue for cashout correction requests with a live navigation badge.
+- Pending approvals are processed individually, stale requests can be closed as outdated, and the latest 20 decisions remain visible.
+- Source workflows retain their own collections and atomic approval actions through a reusable approval-item adapter.
+- A later phase may add missing recent cashouts, upcoming cheques, and overdue planned payments after those rules are separately approved.
 - The dashboard remains focused on monthly performance and current financial position.
 
 ### UP-004 Export Centre
