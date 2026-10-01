@@ -216,3 +216,4 @@ App opened without internet
 - Stable releases are now tracked with Git tags and operational docs under `docs/operations/`.
 - `src/domain/vendorLedgerV2.ts` is a dormant, pure TypeScript domain foundation for UP-010. It has no runtime imports, Firestore repositories, subscriptions, UI activation, or effect on current financial calculations.
 - `src/store/vendorLedgerV2Repository.ts` exposes dormant V2 collection references only through a transaction guard that requires `appMetadata/vendorLedgerV2Config.enabled == true`; no live feature imports it yet.
+- `src/features/directory/components/VendorDirectoryV2.tsx` is the dormant responsive V2 identity and owner-review surface. It remains unmounted while V2 is disabled, so the live name-keyed V1 Directory and Register behavior is unchanged.

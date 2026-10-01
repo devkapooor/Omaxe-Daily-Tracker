@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 2 complete; Phase 3 - vendor identity foundation is next
+- Current phase: Phase 3 complete; Phase 4 - purchase and ledger workflow is next
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -111,6 +111,14 @@ Every phase uses the same sequence:
 - Existing Directory and Register selectors continue to work.
 - Vendor identity tests cover aliases, inactive vendors, duplicate names, and legacy fallback.
 - No outstanding balance or legacy vendor record is recalculated.
+
+### Completion Evidence
+
+- Added pure stable-ID, alias normalization, search, inactive-vendor, duplicate-conflict, and legacy-fallback rules.
+- Added a dormant responsive V2 Vendor Directory with ID-based selection, aliases, active status, owner-only legacy-name review, and prepared Overview, Ledger, Purchases, Returns, and Cheques tabs.
+- Legacy name review is read-only and never copies balances or automatically assigns unmatched names.
+- The V2 component remains unmounted while the protected feature flag is disabled; current Directory, Register selectors, vendor balances, and loans remain unchanged.
+- Full source suite passes with 37 tests; source ESLint and production build pass with only the existing bundle-size warning.
 
 ## Phase 4 - Purchase and Ledger Workflow
 

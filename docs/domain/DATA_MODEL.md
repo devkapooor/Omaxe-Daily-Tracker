@@ -239,6 +239,9 @@ Used to back searchable selectors and keep naming consistent across forms.
 - `InvoiceAllocationV2` supports reserved, posted, released, and reversed states without mutating purchase totals.
 - V2 vendor outstanding is the sum of financial ledger entries. Pending cheques, legacy cheques, and expense cheques have no vendor-ledger effect.
 - The active cheque-book boundary is 1120-1199; this remains a domain rule until persistence is implemented.
+- V2 vendor identity uses the vendor document ID as its financial key. Canonical names and aliases are searchable labels only.
+- Active canonical names and aliases must be unique across V2 vendors. Ambiguous names resolve to no vendor and require owner review.
+- Unmatched historical names remain explicit legacy references and never acquire a V2 vendor ID automatically.
 
 The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchanged and authoritative in the live application until the separately approved all-vendor activation date.
 

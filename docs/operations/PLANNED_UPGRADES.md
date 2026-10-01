@@ -27,7 +27,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-007 | Dashboard break-even progress | High | Dashboard batch A | Use the configured margin and monthly operating expense to show break-even sales, progress, amount remaining, and required daily sales for the selected month. | Deployed 2026-10-01 | No |
 | UP-008 | Dashboard daily sales trend | High | Dashboard batch A | Add a compact daily sales trend for the selected month with a preceding-month overlay, controlled by the existing T, T-1, and T-2 selector. | Deployed 2026-10-01 | No |
 | UP-009 | Dashboard recording health | High | Dashboard batch A | Show recorded-day coverage and latest sales and cashout dates without adding detailed records or Cash Movement calculations to the dashboard. | Deployed 2026-10-01 | No |
-| UP-010 | Purchase, vendor, and cheque ledger redesign | Critical | Phased V2 finance release | Replace name-keyed mutable vendor balances with stable vendor IDs, append-only ledger events, invoice allocations, and an auditable cheque register using the gated execution plan. | Phase 2 complete; Phase 3 next | No |
+| UP-010 | Purchase, vendor, and cheque ledger redesign | Critical | Phased V2 finance release | Replace name-keyed mutable vendor balances with stable vendor IDs, append-only ledger events, invoice allocations, and an auditable cheque register using the gated execution plan. | Phase 3 complete; Phase 4 next | No |
 
 ## Implementation Readiness
 
@@ -42,7 +42,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | UP-007 Dashboard break-even progress | Deployed | Formula, zero-margin state, current-month requirement, and completed-month behavior are covered by tests. |
 | UP-008 Dashboard daily sales trend | Deployed | Responsive SVG trend aligns calendar days and preserves gaps where no sales record exists. |
 | UP-009 Dashboard recording health | Deployed | Neutral sales and cashout coverage is shown without treating closed days as missing. |
-| UP-010 Purchase, vendor, and cheque ledger redesign | Phase 2 complete | Implement the Phase 3 stable vendor identity and alias foundation while keeping V2 disabled and legacy balances read-only. |
+| UP-010 Purchase, vendor, and cheque ledger redesign | Phase 3 complete | Implement Phase 4 purchase posting, invoice uniqueness, and append-only ledger transactions behind the disabled V2 flag. |
 
 ## Acceptance Criteria
 
