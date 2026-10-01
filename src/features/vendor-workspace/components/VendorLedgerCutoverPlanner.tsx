@@ -9,7 +9,7 @@ import {
   type CutoverVendorDraft,
 } from '@/domain/vendorLedgerCutover'
 import { rupeesToPaise } from '@/domain/vendorLedgerV2'
-import { VendorLedgerPreviewPage } from '@/features/vendor-preview/components/VendorLedgerPreviewPage'
+import { VendorLedgerPreviewPage } from '@/features/vendor-workspace/components/VendorLedgerPreviewPage'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'

@@ -1,6 +1,8 @@
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
 
 node_modules/
 dist/
@@ -23,7 +25,11 @@ vite-recheck.err.log
 drill artifacts/
 drill screenshots/
 test-results/
-functions/
+coverage/
+.cache/
+.vite/
+functions/node_modules/
+functions/lib/
 
 .DS_Store
 Thumbs.db

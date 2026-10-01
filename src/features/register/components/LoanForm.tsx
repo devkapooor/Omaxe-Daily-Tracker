@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { LoanEntry } from '@/domain/appTypes'
 import { normalizeName, numberValue, today } from '@/app/uiHelpers'
-import { SearchableSelect } from '@/shared/ui/SearchableSelect'
+import { SearchableSelect } from '@/shared/ui/searchable-select'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
