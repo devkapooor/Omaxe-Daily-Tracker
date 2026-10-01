@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 0 - architecture and financial decision gates
+- Current phase: Phase 0 complete; Phase 1 - domain foundation is next
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -218,7 +218,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-009 | Initialize cheque numbers 1120-1199 as the active available cheque book. Keep verified blank numbers 1200-1299 inactive and unavailable until the owner explicitly activates a future book. | Approved 2026-10-01 | Phase 6 cheque book |
 | FD-010 | Include the 30 verified open cheques in V2 operational tracking. Workbook controls are 21 `Issued` totalling INR 182,192.30 and 9 `In Process` totalling INR 46,819; combined total INR 229,011.30, with no duplicate cheque numbers. | Approved 2026-10-01 | Phase 8 dry run |
 | FD-011 | Maintain one unified Cheque Register for expense and vendor-payment cheques. Each cheque records its purpose and source link; cheque numbers are unique across both workflows. | Approved 2026-10-01 | Phase 6 planner integration |
-| FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
+| FD-012 | Activate the clean V2 workflow for all vendors together on one owner-approved business date. Per-vendor activation is not supported. | Approved 2026-10-01 | Phase 8 activation design |
 | FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
 | FD-014 | Imported legacy open cheques are tracking-only. Their status may be updated, but they never post to or reduce clean V2 vendor outstanding. Legacy `In Process` maps to V2 `Presented`. | Approved 2026-10-01 | Phase 6 legacy cheque behavior |
 | FD-015 | Bring currently open AlphaHub expense cheques into the unified register as tracking-only records, matched and deduplicated by normalized cheque number against workbook records. Preserve every source Expense record unchanged. | Approved 2026-10-01 | Phase 6 expense cheque transition |
@@ -337,3 +337,11 @@ No implementation phase may cross a decision marked `Pending`.
 - Normalize cheque numbers before matching against workbook and AlphaHub sources. One physical cheque number may produce only one register record.
 - Any amount, date, party, purpose, or status conflict blocks that record from initialization and requires owner review.
 - Tests must cover exact duplicates, formatting-only number differences, conflicting source values, unmatched expense cheques, and idempotent retries without changing Expense records.
+
+### Single-Date Activation
+
+- The owner selects one business date during cutover approval.
+- The clean V2 workflow activates for every vendor together on that date.
+- Per-vendor activation and simultaneous V1/V2 posting are not supported.
+- The activation date does not migrate, recalculate, or modify legacy vendor records.
+- Tests must prove records before the activation boundary remain legacy-only and new posting uses V2 consistently on and after the approved date.
