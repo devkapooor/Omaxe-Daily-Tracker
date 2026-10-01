@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 0 complete; Phase 1 - domain foundation is next
+- Current phase: Phase 1 complete; Phase 2 - security and persistence foundation is next
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -57,12 +57,20 @@ Every phase uses the same sequence:
 - Use integer `amountPaise` fields for new V2 financial records while preserving legacy rupee-number fields unchanged.
 - Add pure converters at the V1/V2 display and compatibility boundary.
 - Add deterministic identifiers, revision contracts, transition validators, balance equations, and allocation validators.
-- Add unit tests for signs, rounding, transitions, stale revisions, idempotency, FIFO proposals, and over-allocation rejection.
+- Add unit tests for signs, rounding, transitions, stale revisions, idempotency, optional invoice allocations, custom-payment caps, and over-allocation rejection.
 
 ### Completion Gate
 
 - Pure domain tests, source ESLint, TypeScript, and production build pass.
 - No Firestore writes, subscriptions, UI activation, or legacy calculations change.
+
+### Completion Evidence
+
+- Added isolated V2 contracts and pure validators in `src/domain/vendorLedgerV2.ts`.
+- Added money, sign, activation, revision, allocation, payment-cap, cheque-lifecycle, active-leaf, and legacy-isolation coverage.
+- Full source suite passes with 28 tests across six files.
+- Source ESLint and production build pass; the existing bundle-size warning remains unchanged.
+- The module has no runtime imports and makes no Firestore or production-data changes.
 
 ## Phase 2 - Security and Persistence Foundation
 

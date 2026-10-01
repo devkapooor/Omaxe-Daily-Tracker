@@ -225,6 +225,22 @@ vendors: string[]
 
 Used to back searchable selectors and keep naming consistent across forms.
 
+## Dormant V2 Vendor Ledger Contracts
+
+`src/domain/vendorLedgerV2.ts` defines the isolated Phase 1 contracts and pure validation rules for the future vendor-ledger workflow. These types are not connected to Firestore, subscriptions, metrics, or UI write paths yet.
+
+- All V2 money fields use safe integer paise and carry an `amountPaise`, `invoiceTotalPaise`, `valuePaise`, or `signedAmountPaise` suffix.
+- `VendorV2` starts at zero outstanding. An owner-entered opening balance creates an immutable ledger event; later corrections use signed audited adjustment events.
+- `PurchaseV2` stores invoice facts only. `VendorSettlementV2` and `InvoiceAllocationV2` remain separate records.
+- `VendorReturnV2` supports `pending`, `vendor-credit`, `replacement`, and `rejected`; cash refund is unsupported.
+- `ChequeV2` supports one register for `vendor-payment` and `expense` purposes and records whether an instrument is V2 or legacy tracking-only.
+- `VendorLedgerEntryV2` distinguishes financial postings from informational pending-cheque entries. Informational entries do not affect outstanding.
+- `InvoiceAllocationV2` supports reserved, posted, released, and reversed states without mutating purchase totals.
+- V2 vendor outstanding is the sum of financial ledger entries. Pending cheques, legacy cheques, and expense cheques have no vendor-ledger effect.
+- The active cheque-book boundary is 1120-1199; this remains a domain rule until persistence is implemented.
+
+The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchanged and authoritative in the live application until the separately approved all-vendor activation date.
+
 ## Metadata Documents
 
 ### appMetadata/appSettings
