@@ -1,3 +1,11 @@
+# Purchase, Vendor, and Cheque Ledger Implementation Archive - 2026-10-01
+
+## Archive notice
+
+The original execution plan is preserved below, including historical status claims and file paths. Its phase snapshots are not current operating instructions. See [Roadmap](../operations/ROADMAP.md) for remaining work and [Vendor Ledger](../domain/VENDOR_LEDGER.md) for current behavior and approved financial decisions. Production activation and outstanding balances are determined by Firestore, not this archived report.
+
+## Original execution plan
+
 # Purchase, Vendor, and Cheque Ledger Execution Plan
 
 ## Status

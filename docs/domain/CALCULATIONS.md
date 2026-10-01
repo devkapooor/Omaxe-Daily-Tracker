@@ -6,26 +6,30 @@ If any displayed summary, projection, or allocation rule changes, update this fi
 
 ## Current Runtime Sources
 
-Most current derived summary logic lives in:
+Current shared derivation lives in:
 
 - `src/store/deriveWorkspaceMetrics.ts`
 - `appMetadata/workspaceMetrics`
+- `src/features/dashboard/domain/deriveMonthlyPerformance.ts`
+- `src/domain/unifiedPaymentPlanner.ts`
+- V2 domain/repository contracts described in [Vendor Ledger](./VENDOR_LEDGER.md)
 
-Page components now consume the shared Firestore snapshot instead of recomputing the primary finance summaries in-page.
+The Dashboard month helper reads subscribed source sales, expenses and daily cashouts; shared settings/liabilities/cash snapshots remain Firestore-derived. Vendor Workspace consumes V2 account states. These sources are documented as implemented; cleanup does not change their calculations.
 
 ## Date Model
 
 - visible app dates are formatted as `DD/MM/YYYY`
 - visible date-time uses `Asia/Kolkata`
-- dashboard range options are currently:
-  - `yesterday`
-  - `mtd`
+- the Dashboard selector uses T (current calendar month), T-1 and T-2
+- retained workspaceMetrics.dashboardRanges.yesterday/mtd fields are legacy read-model fields, not the visible month selector
 
 ## Dashboard Range Logic
 
 ```text
-yesterday -> from = yesterday, to = yesterday
-mtd       -> from = first day of current month, to = today
+T   -> current IST calendar month
+T-1 -> preceding calendar month
+T-2 -> two calendar months earlier
+comparison -> month immediately before the selected month
 ```
 
 ## Dashboard Totals
@@ -33,16 +37,18 @@ mtd       -> from = first day of current month, to = today
 ### Dashboard Sales
 
 ```text
-workspaceMetrics.dashboardRanges[range].sales =
-sum(sale.totalSales where sale.date is within selected range)
+monthly sales = sum(sale.totalSales where sale.date belongs to selected month)
 ```
 
 ### Dashboard Expense Total
 
 ```text
-workspaceMetrics.dashboardRanges[range].expenses =
-sum(cashout.amount where cashout.date is within selected range)
+monthly recorded expenses = sum(cashout.amount where cashout.date belongs to selected month)
+net after recorded expenses = monthly sales - monthly recorded expenses
+cash collected = sum(entry.drawerTotal ?? entry.remainingBalance for selected-month daily cashouts)
 ```
+
+Sales mix sums cash, UPI, credit and returns from selected-month daily cashouts. The preceding month supplies comparison totals. Trend aligns calendar days and preserves missing-record gaps; recording health counts distinct recorded dates without assuming working days.
 
 ### Open Loan Balance
 
@@ -52,6 +58,8 @@ sum(normalizedLoan.remainingAmount for all loans)
 ```
 
 ### Vendor Outstanding
+
+This is the retained legacy metric currently passed to the Dashboard. V2 Vendor Workspace balances are separate account-state projections; switching the Dashboard source is outside cleanup.
 
 ```text
 vendorOutstandingByName =
@@ -66,6 +74,8 @@ sum(all vendorOutstandingByName values)
 
 ### Monthly Sales Projection
 
+For T, the monthly helper uses the latest recorded sales day as the elapsed-day denominator. T-1/T-2 use actual selected-month sales instead of extrapolation. The margin result is an estimate from configured margin and operational expense, distinct from net after recorded expenses.
+
 ```text
 monthStart = first day of current month
 latestRecordedSalesDate = latest sale date in current month
@@ -77,6 +87,8 @@ projectedMarginValue = projectedMonthlySales * (marginPercentage / 100)
 projectedProfit = max(projectedMarginValue - monthlyOperationalExpense, 0)
 projectedLoss = max(monthlyOperationalExpense - projectedMarginValue, 0)
 ```
+
+For completed months, estimated margin result = actual sales * marginPercentage / 100 - monthlyOperationalExpense. Break-even sales = max(monthlyOperationalExpense, 0) / (marginPercentage / 100); nonpositive or unavailable margin gives an unavailable state. Current-month daily requirement divides remaining break-even sales by the calendar days left, including today.
 
 ### Projection Settings
 
@@ -103,7 +115,7 @@ monthlyOperationalExpense =
 
 ## Latest Closed-Day Summary
 
-The owner dashboard uses the latest saved `DailyCashoutEntry.date` as the closed day reference.
+The retained shared summary uses the latest saved DailyCashoutEntry.date. Cashout still uses that reference; the old Dashboard final-summary panel has been removed.
 
 ```text
 cashSales   = sum(entries.cashSales for latestClosedDay)
@@ -232,6 +244,8 @@ if a loan record is deleted:
 
 ### Vendor Payment
 
+The following is the legacy V1 allocation behavior, retained for historical compatibility. Active V2 entries follow [Vendor Ledger](./VENDOR_LEDGER.md); do not apply this legacy algorithm to V2 balances.
+
 ```text
 apply against vendor openingOutstandingRemaining first when present
 then apply against open purchases oldest first
@@ -268,10 +282,11 @@ for each planner item:
 
 Planner notes:
 
+- AppWorkspace passes this legacy/manual schedule through mergeV2ChequesIntoPlanner. It adds issued/presented V2 cheques, excludes legacy rows sharing their normalized cheque numbers, and rebuilds running balances from the configured bank balance.
 - counter cash is shown for reference only
 - planner records do not alter pending cash balances
 - planner does not currently ingest loan-repayment cheques
-- the grouped schedule and running balances are persisted into `workspaceMetrics.planner`
+- the legacy/manual schedule is persisted into workspaceMetrics.planner; the unified display is composed by the shared V2 planner helper
 
 ## Daily Cashout Delete Resync
 
@@ -282,12 +297,12 @@ if a daily cashout entry is deleted:
   if no daily cashouts remain for the date, delete the sales row
 ```
 
-## Dashboard Tables
+## Retained Dashboard Table Fields
 
-Current tables include monthly grouped views such as:
+The read model retains monthly grouped fields such as:
 
 - expense by category
 - purchase total vs vendor payment total
 - payment mode breakdown for paid payments
 
-These are persisted into `workspaceMetrics.dashboardTables` so the dashboard reads one shared summarized snapshot across clients.
+These remain in workspaceMetrics.dashboardTables for compatibility. The current Dashboard does not render the removed detailed tables; this cleanup removes only their unreachable UI files.

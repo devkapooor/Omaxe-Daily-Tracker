@@ -1,5 +1,16 @@
 # Version Log
 
+## Project Cleanup Candidate - 2026-10-01
+
+- Status: verified local candidate; not deployed. Deployment requires separate confirmation.
+- Evidence commit: e48efb2; source/dependency cleanup: aa51b67.
+- Removed five unreachable UI files, renamed the vendor source feature and shared selector, and removed unused dependency declarations without upgrading retained versions.
+- Consolidated roadmap and QA documents, archived the complete vendor execution history, and documented current vendor rules separately from remaining requirements.
+- Verification: 51 tests, source/test ESLint, TypeScript/build, import and Markdown-link checks, protected-file hashes, and local index/seven-asset HTTP checks passed.
+- Rules tests: blocked by missing Java on PATH; rules and tests themselves are unchanged.
+- Existing bundle-size warning, dependency advisories, and report-only public backup exposure remain. Production financial records, loans, secrets and Firebase configuration were unchanged.
+- Details and final structure: [Cleanup Audit](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md).
+
 ## Owner Action Centre - 2026-10-01
 
 - Commit: `a75125e`

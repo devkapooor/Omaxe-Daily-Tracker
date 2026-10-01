@@ -13,7 +13,7 @@ AlphaHub is a Firebase-first, single-store operations app with:
 - live Firestore subscriptions
 - role-based page access
 - compact desktop sidebar plus mobile drawer navigation
-- directory, register, cashout, cash movement, planner, logs, and settings workflows
+- Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Payment Planner, Logs and Settings
 - installable PWA packaging for Chrome/mobile standalone launch
 - online-only offline handling for cached or installed opens
 
@@ -39,6 +39,7 @@ src/
     workspaceMetrics.ts
 
   features/
+    action-center/
     auth/
     cash-movement/
     cashout/
@@ -49,6 +50,7 @@ src/
     planner/
     register/
     settings/
+    vendor-workspace/
 
   shared/
     lib/
@@ -69,6 +71,7 @@ src/
     storeActions.ts
     storeShared.ts
     storeSubscriptions.ts
+    vendorLedgerV2Repository.ts
 
   styles/
     global.css
@@ -102,9 +105,11 @@ src/
 ### Feature Ownership
 
 - `features/navigation`: desktop sidebar, mobile drawer, menu config, page titles
-- `features/dashboard`: owner dashboard summaries, projections, latest closed-day view, tables
-- `features/directory`: vendor and party management
-- `features/register`: expenses, vendor payments, purchases, loans, cheque helpers
+- `features/dashboard`: month-scoped performance, sales mix, projections, trend, recording coverage and current financial-position cards
+- `features/action-center`: owner review adapters for cashout corrections, settlement corrections and vendor returns
+- `features/directory`: Party Directory and the reusable V2 vendor list/details modal
+- `features/register`: expense/owner-loan workspace plus reusable V2 purchase/payment forms and cheque helpers
+- `features/vendor-workspace`: production vendor workspace, guarded subscription, activation planner and local preview
 - `features/cashout`: daily cashout workflow and drawer audit
 - `features/cash-movement`: user-to-user and user-to-bank movement logging
 - `features/planner`: cheque-based and manual payment planning against bank balance
@@ -136,11 +141,15 @@ src/
 - hydrates Firestore collections and metadata into local state
 - keeps users, settings, finance records, planner entries, logs, and `workspaceMetrics` live
 
+`src/store/vendorLedgerV2Repository.ts` owns guarded V2 transactions. The workspace-level `useVendorLedgerV2` subscription is shared with Action Centre and Payment Planner rather than adding one listener per page.
+
 ## Current Navigation Model
 
 Owner sees:
 
 - `Dashboard`
+- `Action Centre`
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -151,6 +160,7 @@ Owner sees:
 
 Manager sees:
 
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -160,6 +170,7 @@ Manager sees:
 
 Billing sees:
 
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -169,6 +180,8 @@ Billing sees:
 Internal page ids still use:
 
 - `dashboard`
+- `actions` for Action Centre
+- `vendor-preview` for Vendor Workspace (retained for persisted navigation compatibility)
 - `directory`
 - `expense` for the `Register` workspace
 - `cashout`
@@ -178,6 +191,8 @@ Internal page ids still use:
 - `settings`
 
 Restricted page access resolves back to `expense`.
+
+The Directory label is Party Directory. Register mounts expenses and owner-only Loan Taken/Loan Repayment. The source-folder rename does not change page IDs, roles or stored navigation.
 
 ## Data Flow
 
@@ -206,17 +221,15 @@ App opened without internet
 ## Current Design Notes
 
 - The app is intentionally single-store and does not implement multi-store routing.
-- Dashboard, planner, pending-cash, and monthly-report summary cards now read from Firestore-backed `appMetadata/workspaceMetrics` instead of recomputing primary finance summaries inside page components.
-- `Payment Planner` uses live expense/payment cheque data plus manual planned payments, but it does not change cashout or cash-movement balances.
+- Monthly Dashboard performance uses the shared pure deriveMonthlyPerformance helper over subscribed source records; settings, liabilities and cash summaries still use workspaceMetrics. Retained monthly-report/table fields are compatibility data, not active dashboard panels.
+- Payment Planner merges legacy expense/payment schedules and manual plans with issued/presented V2 cheques using the shared mergeV2ChequesIntoPlanner helper. It does not change cashout or cash-movement balances.
 - `Cash Movement` remains separate from `Cashout` and separate from the removed shift-handover experiment.
 - Active cash ownership now uses Firebase user IDs end to end for cashouts, transfers, balance cards, and transfer logs.
 - Legacy slot fields such as `recordedByHolder`, `from`, and `toPerson` are compatibility-only fields for older documents and are not written by new runtime flows.
 - The live workspace migration on `2026-06-05` mapped all resolvable legacy cashouts and cash transfers onto user IDs, so unresolved legacy cash should no longer appear in normal operations.
 - The shared metrics snapshot is still generated by the app client because there is no Cloud Functions layer in this repo. Firestore is the shared read source for those summaries across devices.
 - Stable releases are now tracked with Git tags and operational docs under `docs/operations/`.
-- `src/domain/vendorLedgerV2.ts` is a dormant, pure TypeScript domain foundation for UP-010. It has no runtime imports, Firestore repositories, subscriptions, UI activation, or effect on current financial calculations.
-- `src/store/vendorLedgerV2Repository.ts` exposes dormant V2 collection references only through a transaction guard that requires `appMetadata/vendorLedgerV2Config.enabled == true`; no live feature imports it yet.
-- `src/features/directory/components/VendorDirectoryV2.tsx` is the dormant responsive V2 identity and owner-review surface. It remains unmounted while V2 is disabled, so the live name-keyed V1 Directory and Register behavior is unchanged.
-- `src/features/register/components/PurchaseFormV2.tsx` and `OpenInvoicesV2.tsx` are dormant V2 purchase surfaces. The guarded repository creates the source purchase, normalized invoice reservation, and append-only ledger event atomically; no current route imports these components.
-- `VendorSettlementFormV2.tsx` is the dormant non-cheque payment surface. Its repository transaction posts the settlement, negative ledger event, optional invoice allocation, and concurrency-safe account projections together.
-- `features/vendor-preview` mounts the dormant V2 directory and register components for owners using local session-only fixtures. It has no Firebase/repository imports and provides no production V2 write path.
+- V2 domain helpers and guarded repository transactions are connected to Vendor Workspace. Configuration is read from Firestore; this documentation makes no claim about a current production flag value.
+- The disabled owner view still needs the cutover planner and local fixture preview. These are reachable components, not obsolete code.
+- VendorDirectoryV2, PurchaseFormV2, OpenInvoicesV2 and VendorSettlementFormV2 are reused by production and preview workflows.
+- V2 source records, append-only audit events and transaction-updated projections are distinct from preserved V1 history. See [Vendor Ledger](../domain/VENDOR_LEDGER.md) for current contracts and deferred requirements.

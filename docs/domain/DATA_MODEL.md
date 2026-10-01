@@ -226,9 +226,9 @@ vendors: string[]
 
 Used to back searchable selectors and keep naming consistent across forms.
 
-## Dormant V2 Vendor Ledger Contracts
+## V2 Vendor Ledger Contracts
 
-`src/domain/vendorLedgerV2.ts` defines the isolated contracts and pure validation rules for the future vendor-ledger workflow. The V2 purchase repository and UI are dormant behind a disabled feature flag and are not connected to live subscriptions, metrics, navigation, or V1 write paths.
+`src/domain/vendorLedgerV2.ts` defines the contracts and pure validation rules used by Vendor Workspace. The repository and subscription are connected to the app and guarded by Firestore configuration. See [Vendor Ledger](./VENDOR_LEDGER.md) for current behavior, original approvals and remaining implementation boundaries.
 
 - All V2 money fields use safe integer paise and carry an `amountPaise`, `invoiceTotalPaise`, `valuePaise`, or `signedAmountPaise` suffix.
 - `VendorV2` starts at zero outstanding. An owner-entered opening balance creates an immutable ledger event; later corrections use signed audited adjustment events.
@@ -239,26 +239,26 @@ Used to back searchable selectors and keep naming consistent across forms.
 - `InvoiceAllocationV2` supports reserved, posted, released, and reversed states without mutating purchase totals.
 - Open invoice value subtracts posted allocations only. Reserved allocations remain separately visible and reduce the amount available for another allocation without changing the posted balance.
 - V2 vendor outstanding is the sum of financial ledger entries. Pending cheques, legacy cheques, and expense cheques have no vendor-ledger effect.
-- The active cheque-book boundary is 1120-1199; this remains a domain rule until persistence is implemented.
+- The active cheque-book boundary is 1120-1199 and is enforced in the current new-cheque persistence workflow.
 - V2 vendor identity uses the vendor document ID as its financial key. Canonical names and aliases are searchable labels only.
 - Active canonical names and aliases must be unique across V2 vendors. Ambiguous names resolve to no vendor and require owner review.
 - Unmatched historical names remain explicit legacy references and never acquire a V2 vendor ID automatically.
 
-The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchanged and authoritative in the live application until the separately approved all-vendor activation date.
+V1 Purchase, Payment and VendorRecord documents remain preserved historical records. The all-vendor activation boundary selects the new entry workflow; legacy data is not copied into V2 balances.
 
 ### V2 Persistence Boundary
 
 - `appMetadata/vendorLedgerV2Config.enabled` is the protected master feature flag and defaults effectively to false when absent.
-- Dormant collection names are centralized in `src/store/vendorLedgerV2Repository.ts`.
-- The guarded transaction helper reads the feature flag inside every future V2 transaction before running its operation.
+- Collection names are centralized in `src/store/vendorLedgerV2Repository.ts`.
+- The guarded transaction helper reads the feature flag inside V2 transactions before running their operations. Activation has its own owner-only atomic initializer.
 - Purchase creation atomically writes `purchasesV2`, `invoiceReservationsV2`, one deterministic `vendorLedgerEntriesV2` event, and the matching vendor-account and invoice-state projections; incomplete or conflicting postings are rejected.
 - `vendorAccountStatesV2` and `invoiceStatesV2` are guarded derived projections updated in the same transaction as their immutable ledger or allocation evidence. They prevent concurrent overpayment without changing V1 balances.
 - `vendorSettlementsV2` stores cash, UPI, card, and bank-transfer payments separately from purchases. Invoice allocation is optional; cheque payments remain outside this collection.
-- `vendorSettlementStatesV2` stores the effective revision without rewriting the immutable source settlement. Approved custom-payment amount corrections append a compensating ledger event; invoice-linked correction persistence remains disabled until its allocation-reversal rules are complete.
-- Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
+- `vendorSettlementStatesV2` stores effective revisions without rewriting source settlements. Approved corrections append compensating ledger events and adjust invoice state/allocation evidence when the source is invoice-linked.
+- Firestore rules independently enforce the enabled flag, baseline staff entry capabilities and explicit grants for additional restricted operations.
 - `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
-- Active manager and billing users receive baseline V2 authority to manage vendors, create purchases and settlements, and view the vendor ledger. Sensitive actions such as corrections, returns, cheques, migration, and activation remain owner-only or require an explicit capability.
-- Newly created staff accounts receive every purchasing capability explicitly set to false.
+- Active manager and billing users receive baseline V2 vendor/purchase/settlement entry, settlement-correction request, return submission and ledger-view authority. Approval, return resolution, cheques and activation remain restricted.
+- Newly created staff profiles contain false explicit grants; baseline capabilities still apply. A false optional grant does not revoke a baseline capability.
 
 ## Metadata Documents
 
@@ -308,7 +308,7 @@ Current shared derived snapshot includes:
 - `planner`
 - `monthlyReports`
 
-This document is the shared read model for dashboard, planner, pending-cash, and monthly-report displays. It is derived from the primary finance collections and app metadata, then written back to Firestore so all clients read the same summarized values.
+This document is a shared read model derived from source finance records and metadata. Monthly Dashboard performance additionally uses the shared monthly domain helper; V2 account state and unified planner composition remain separate. Retained monthlyReports and dashboardTables fields do not imply those removed screens/panels are active.
 
 ## Storage Notes
 
@@ -316,7 +316,7 @@ This document is the shared read model for dashboard, planner, pending-cash, and
 - Firestore stores app records and app metadata.
 - `appMetadata/workspaceMetrics` stores the shared derived read model used by the main finance dashboards and planner views.
 - Legacy browser-only data can still be imported once.
-- `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` together drive vendor outstanding.
+- `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` drive the retained legacy vendor metric, including the current dashboard liability binding. V2 workspace balances use V2 account states; cleanup does not switch financial sources.
 - Planner availability uses `currentBankBalance`, not counter cash.
 - `Cash Movement` records affect pending cash and bank totals; planner records do not.
 - Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.

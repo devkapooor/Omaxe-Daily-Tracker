@@ -10,16 +10,18 @@ Only a deliberate action by an authorized user through an approved live financia
 
 ## Current Baseline
 
-- Stable release tag: `v1.0.0`
+- First stable release tag: `v1.0.0` (historical baseline, not the latest feature snapshot)
 - Live Hosting URL: `https://alphahub-f137b.web.app`
+- Repository: https://github.com/devkapooor/Omaxe-Daily-Tracker (primary branch: `main`)
 
 ## Current Scope
 
 - Owner, manager, and billing login with Firebase Authentication
 - Shared Firestore-backed live data across devices
-- Owner dashboard with projections, balances, and summaries
-- Directory management for vendors and parties
-- Register workflows for expenses, vendor payments, purchases, and owner-only loan entries
+- Owner dashboard with T/T-1/T-2 performance, comparisons, trend, coverage and projections
+- Owner Action Centre for cashout corrections, vendor payment corrections and return decisions
+- Vendor Workspace for vendor profiles, purchases, separate payments, invoices, returns, corrections, cheques and balances
+- Party Directory for people; Register for expenses and owner loan entry/repayment
 - Cash movement tracking between real staff user accounts and bank
 - Daily cashout flow with drawer audit details
 - Payment planner with cheque-based deduction schedule and manual planned payouts
@@ -44,6 +46,8 @@ Only a deliberate action by an authorized user through an approved live financia
 Owner sees:
 
 - `Dashboard`
+- `Action Centre`
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -54,6 +58,7 @@ Owner sees:
 
 Manager sees:
 
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -63,6 +68,7 @@ Manager sees:
 
 Billing sees:
 
+- `Vendor Workspace`
 - `Directory`
 - `Register`
 - `Cashout`
@@ -72,9 +78,9 @@ Billing sees:
 `Register` currently contains:
 
 - `Expenses`
-- `Vendor Payments`
-- `Purchases`
-- `Loans` for owner only
+- `Loans` (Loan Taken and Loan Repayment) for owner only
+
+The Directory navigation label is `Party Directory`. Vendor creation is available only from the Vendor Workspace modal.
 
 ## Mobile Install
 
@@ -94,12 +100,18 @@ Billing sees:
 
 ## Local Scripts
 
+Use Node.js with npm and the locked dependency versions. Configure a local `.env` from `.env.example` with the intended Firebase web-project settings before starting the app. A local URL can still point at production; financial mutation tests must use an isolated project or the emulator.
+
 ```powershell
-npm install
+npm ci
 npm run dev
+npm test
+npx eslint src tests
 npm run build
-npm run preview
+npm run preview -- --host 127.0.0.1
 ```
+
+`npm run test:rules` uses the `demo-alphahub` Firestore emulator and requires Java and Firebase CLI. See [Firebase setup](docs/setup/FIREBASE_SETUP.md) and the [QA checklist](docs/operations/QA_CHECKLIST.md). No Cloud Function or Blaze service is needed.
 
 ## Root Files
 
@@ -109,29 +121,32 @@ These files stay at the repo root because the toolchain expects them there:
 - `vite.config.ts`: Vite bundler config
 - `tsconfig*.json`: TypeScript compiler config
 - `eslint.config.js`: linting rules
-- `firebase.json`, `.firebaserc`, `firestore.rules`: Firebase Hosting and Firestore config
+- `firebase.json`, `.firebaserc`, `firestore.rules`, `firestore.indexes.json`: Firebase Hosting and Firestore config
 - `components.json`: shadcn component alias config
 - `index.html`: Vite app entry HTML
 
-Everything else should generally live under `src/`, `public/`, or `docs/`.
+Source, PWA assets, documentation and rules tests live under `src/`, `public/`, `docs/` and `tests/`. Protected historical records in `docs/backups/` and `server/omaxe.db` are retained; they are not cleanup targets or the active application database.
 
 ## Local Auth Bypass
 
-For local owner-only testing, the app can run with:
+Optional automatic sign-in is controlled by:
 
 ```text
-VITE_LOCAL_AUTH_BYPASS=true
+VITE_LOCAL_AUTH_BYPASS=false
+VITE_LOCAL_AUTH_EMAIL=
+VITE_LOCAL_AUTH_PASSWORD=
 ```
 
-That bypass is for local development only and does not replace Firebase auth in the live app.
+When explicitly enabled on localhost/127.0.0.1, this still authenticates against the configured Firebase project. Leave it disabled for ordinary use. Every `VITE_*` value is client-visible; never include real passwords in build inputs or release artifacts. Do not commit local environment files. Cleanup does not change existing `.env` values.
 
 ## Source Layout
 
 ```text
 src/
   app/                 app shell and top-level workspace composition
+  config/              application constants
   domain/              stable domain and finance types
-  features/            feature modules grouped by workflow
+  features/            workflows, including vendor-workspace
   shared/
     lib/               shared infrastructure and utilities
     ui/                reusable UI primitives
@@ -141,22 +156,19 @@ src/
 
 ## Key Docs
 
-- `docs/architecture/ARCHITECTURE.md`
-- `docs/domain/DATA_MODEL.md`
-- `docs/domain/CALCULATIONS.md`
-- `docs/operations/CURRENT_DRILL_PLAN.md`
-- `docs/archive/DRILL.md`
-- `docs/archive/Drill Report.md`
-- `docs/operations/TASK_QUEUE.md`
-- `docs/operations/PLAN.md`
-- `docs/operations/VERSION_LOG.md`
-- `docs/operations/RELEASE_PROCESS.md`
-- `docs/operations/ROLLBACK.md`
-- `docs/setup/FIREBASE_SETUP.md`
+- [Architecture](docs/architecture/ARCHITECTURE.md)
+- [Data model](docs/domain/DATA_MODEL.md), [calculations](docs/domain/CALCULATIONS.md), and [vendor ledger](docs/domain/VENDOR_LEDGER.md)
+- [Roadmap and task queue](docs/operations/ROADMAP.md)
+- [QA checklist](docs/operations/QA_CHECKLIST.md)
+- [Version log](docs/operations/VERSION_LOG.md), [release process](docs/operations/RELEASE_PROCESS.md), and [rollback](docs/operations/ROLLBACK.md)
+- [Firebase setup](docs/setup/FIREBASE_SETUP.md)
+- [Historical drill report](<docs/archive/Drill Report.md>) and [vendor implementation archive](docs/archive/PURCHASE_VENDOR_CHEQUE_IMPLEMENTATION_2026-10-01.md)
+- [Cleanup audit and retained-file risks](docs/archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md)
 
 ## Release Management
 
 - Stable versions are tagged in Git using semantic version tags such as `v1.0.0`.
 - Every stable release gets an entry in `docs/operations/VERSION_LOG.md`.
 - Rollbacks should redeploy a tagged stable version instead of rewriting `main`.
+- Commit small verified changes; ask for deployment confirmation separately. Never deploy rules or mutate financial data merely to clean up the repository.
 
