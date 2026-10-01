@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, ShieldCheck, X } from 'lucide-react'
+import { ShieldCheck, X } from 'lucide-react'
 import { normalizeName, today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import {
@@ -117,18 +117,7 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
             <TabsTrigger value="balances">Balances</TabsTrigger>
           </TabsList>
           <TabsContent value="directory" className="grid gap-3 pt-2">
-            <Card>
-              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <SectionHeading eyebrow="Vendor directory" title="V2 Vendors" />
-                  <p className="mt-1 text-sm text-muted-foreground">Manage vendor profiles used by purchases, payments, balances, and cheques.</p>
-                </div>
-                <Button type="button" onClick={() => setVendorFormOpen(true)}>
-                  <Plus className="size-4" /> Add Vendor
-                </Button>
-              </CardContent>
-            </Card>
-            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} vendors={ledger.vendors} />
+            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} />
           </TabsContent>
           <TabsContent value="purchases" className="pt-2"><PurchaseFormV2 isBusy={busy} vendors={ledger.vendors} onSave={savePurchase} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>

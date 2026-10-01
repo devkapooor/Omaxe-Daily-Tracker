@@ -1,105 +1,124 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import type { UserRole } from '@/domain/financeTypes'
 import type { VendorV2 } from '@/domain/vendorLedgerV2'
 import { buildVendorAliasReview, vendorIdentitySearchText } from '@/domain/vendorIdentityV2'
 import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 type VendorDirectoryV2Props = {
   currentUserRole: UserRole
   legacyVendorNames: string[]
+  onAddVendor?: () => void
   vendors: VendorV2[]
 }
 
-const emptyTabCopy = {
-  ledger: 'Ledger activity will appear after the V2 purchase and settlement phases are activated.',
-  purchases: 'V2 purchase invoices will appear here after the purchase workflow is activated.',
-  returns: 'Vendor returns will appear here after the returns workflow is activated.',
-  cheques: 'Vendor cheques will appear here through the unified Cheque Register.',
-} as const
-
-export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors }: VendorDirectoryV2Props) {
+export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVendor, vendors }: VendorDirectoryV2Props) {
   const [search, setSearch] = useState('')
-  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(vendors[0]?.id ?? null)
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const vendorTriggerRef = useRef<HTMLButtonElement | null>(null)
   const query = search.trim().toLocaleLowerCase('en-IN')
   const filteredVendors = useMemo(
     () => vendors.filter((vendor) => !query || vendorIdentitySearchText(vendor).includes(query)),
     [query, vendors],
   )
-  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? vendors[0] ?? null
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null
   const aliasReview = useMemo(
     () => currentUserRole === 'owner' ? buildVendorAliasReview(legacyVendorNames, vendors) : [],
     [currentUserRole, legacyVendorNames, vendors],
   )
 
+  useEffect(() => {
+    if (!selectedVendorId) return
+    closeButtonRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedVendorId(null)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape)
+      vendorTriggerRef.current?.focus()
+    }
+  }, [selectedVendorId])
+
   return (
     <section className="grid gap-3">
       <Card>
-        <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <SectionHeading eyebrow="V2 vendor identity" title="Stable Vendor Directory" />
-          <FieldLabel className="w-full sm:max-w-sm" label="Search vendor details">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search V2 vendors" />
-          </FieldLabel>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-[minmax(15rem,0.75fr)_minmax(0,1.25fr)]">
-          <div className="grid content-start gap-2">
-            {filteredVendors.length === 0 ? (
-              <p className="rounded-2xl border border-border/70 bg-secondary/45 p-4 text-sm text-muted-foreground">No V2 vendors found.</p>
-            ) : null}
-            {filteredVendors.map((vendor) => (
-              <button
-                key={vendor.id}
-                type="button"
-                className="rounded-2xl border border-border/70 bg-secondary/50 p-3 text-left transition-colors hover:bg-secondary/75"
-                onClick={() => setSelectedVendorId(vendor.id)}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <strong className="text-sm text-foreground">{vendor.canonicalName}</strong>
-                  <Badge variant={vendor.active ? 'success' : 'secondary'}>{vendor.active ? 'Active' : 'Inactive'}</Badge>
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">ID: {vendor.id}</span>
-                {vendor.aliases.length > 0 ? <span className="mt-1 block text-xs text-muted-foreground">Aliases: {vendor.aliases.join(', ')}</span> : null}
-              </button>
-            ))}
+        <CardHeader className="gap-3 border-b border-border/60 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <SectionHeading eyebrow={`${vendors.length} ${vendors.length === 1 ? 'vendor' : 'vendors'}`} title="Vendors" />
+            <p className="mt-1 text-sm text-muted-foreground">Profiles used across purchases, payments, balances, and cheques.</p>
           </div>
-
-          {selectedVendor ? (
-            <Card className="border-cyan-400/15 bg-secondary/30">
-              <CardHeader>
-                <SectionHeading eyebrow={`Vendor ID ${selectedVendor.id}`} title={selectedVendor.canonicalName} />
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="overview">
-                  <TabsList className="grid-cols-5 overflow-x-auto">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="ledger">Ledger</TabsTrigger>
-                    <TabsTrigger value="purchases">Purchases</TabsTrigger>
-                    <TabsTrigger value="returns">Returns</TabsTrigger>
-                    <TabsTrigger value="cheques">Cheques</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="overview" className="grid gap-2 pt-3 text-sm">
-                    <p><span className="text-muted-foreground">Owner:</span> {selectedVendor.ownerName || 'Not provided'}</p>
-                    <p><span className="text-muted-foreground">Contact:</span> {selectedVendor.contact || 'Not provided'}</p>
-                    <p><span className="text-muted-foreground">Address:</span> {selectedVendor.address || 'Not provided'}</p>
-                    <p><span className="text-muted-foreground">Brands:</span> {selectedVendor.suppliedBrands.join(', ') || 'Not provided'}</p>
-                    <p><span className="text-muted-foreground">Notes:</span> {selectedVendor.notes || 'Not provided'}</p>
-                    <p><span className="text-muted-foreground">Opening:</span> New V2 vendors default to zero; legacy balances are excluded.</p>
-                  </TabsContent>
-                  {Object.entries(emptyTabCopy).map(([tab, copy]) => (
-                    <TabsContent key={tab} value={tab} className="pt-3">
-                      <p className="rounded-2xl border border-border/70 bg-background/25 p-4 text-sm text-muted-foreground">{copy}</p>
-                    </TabsContent>
-                  ))}
-                </Tabs>
-              </CardContent>
-            </Card>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+            <FieldLabel className="w-full sm:w-72" label="Search">
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, contact, company..." />
+            </FieldLabel>
+            {onAddVendor ? <Button type="button" onClick={onAddVendor}><Plus className="size-4" /> Add Vendor</Button> : null}
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredVendors.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/25 p-6 text-center sm:col-span-2 xl:col-span-3">
+              <p className="font-semibold text-foreground">{vendors.length === 0 ? 'No vendors added yet' : 'No vendors match this search'}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{vendors.length === 0 ? 'Use Add Vendor to create the first profile.' : 'Try a different name, contact, company, or note.'}</p>
+            </div>
           ) : null}
+          {filteredVendors.map((vendor) => (
+            <button
+              key={vendor.id}
+              type="button"
+              className="group rounded-2xl border border-border/70 bg-secondary/45 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={(event) => {
+                vendorTriggerRef.current = event.currentTarget
+                setSelectedVendorId(vendor.id)
+              }}
+            >
+              <span className="flex items-start justify-between gap-3">
+                <strong className="text-sm font-bold text-foreground group-hover:text-cyan-100">{vendor.canonicalName}</strong>
+                <Badge variant={vendor.active ? 'success' : 'secondary'}>{vendor.active ? 'Active' : 'Inactive'}</Badge>
+              </span>
+              <span className="mt-2 block text-xs text-muted-foreground">{vendor.contact || 'No contact provided'}</span>
+              <span className="mt-1 block truncate text-xs text-muted-foreground">{vendor.suppliedBrands.join(', ') || 'No companies provided'}</span>
+            </button>
+          ))}
         </CardContent>
       </Card>
+
+      {selectedVendor ? (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/65 px-3 py-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="vendor-details-title">
+          <Card className="max-h-[92dvh] w-full max-w-[42rem] overflow-y-auto border-cyan-400/25 shadow-[0_24px_80px_rgba(1,10,20,0.65)]">
+            <CardHeader className="gap-3 border-b border-border/70">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="mb-2"><Badge variant={selectedVendor.active ? 'success' : 'secondary'}>{selectedVendor.active ? 'Active vendor' : 'Inactive vendor'}</Badge></div>
+                  <h2 id="vendor-details-title" className="text-xl font-black text-foreground">{selectedVendor.canonicalName}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Vendor profile details</p>
+                </div>
+                <Button ref={closeButtonRef} type="button" size="icon" variant="ghost" aria-label="Close vendor details" onClick={() => setSelectedVendorId(null)}>
+                  <X className="size-5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4 pt-4 sm:grid-cols-2">
+              <VendorDetail label="Owner" value={selectedVendor.ownerName || 'Not provided'} />
+              <VendorDetail label="Contact" value={selectedVendor.contact || 'Not provided'} />
+              <VendorDetail className="sm:col-span-2" label="Address" value={selectedVendor.address || 'Not provided'} />
+              <VendorDetail className="sm:col-span-2" label="Companies Provided" value={selectedVendor.suppliedBrands.join(', ') || 'Not provided'} />
+              {selectedVendor.aliases.length > 0 ? <VendorDetail className="sm:col-span-2" label="Known As" value={selectedVendor.aliases.join(', ')} /> : null}
+              <VendorDetail className="sm:col-span-2" label="Notes / Comments" value={selectedVendor.notes || 'Not provided'} />
+              <div className="sm:col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3.5 py-3">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200">Opening Balance</span>
+                <strong className="mt-1 block text-base text-foreground">INR {(selectedVendor.openingBalancePaise / 100).toLocaleString('en-IN')}</strong>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {currentUserRole === 'owner' && legacyVendorNames.length > 0 ? (
         <Card>
@@ -125,5 +144,14 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors 
         </Card>
       ) : null}
     </section>
+  )
+}
+
+function VendorDetail({ className, label, value }: { className?: string; label: string; value: string }) {
+  return (
+    <div className={className ? `space-y-1 ${className}` : 'space-y-1'}>
+      <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
+      <p className="whitespace-pre-wrap text-sm font-medium text-foreground">{value}</p>
+    </div>
   )
 }
