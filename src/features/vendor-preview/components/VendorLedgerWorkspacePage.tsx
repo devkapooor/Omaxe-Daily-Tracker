@@ -12,7 +12,7 @@ import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
 import { PurchaseFormV2, type PurchaseV2Draft } from '@/features/register/components/PurchaseFormV2'
 import { VendorSettlementFormV2, type VendorSettlementV2Draft } from '@/features/register/components/VendorSettlementFormV2'
 import { useVendorLedgerV2 } from '@/features/vendor-preview/hooks/useVendorLedgerV2'
-import { VendorLedgerPreviewPage } from '@/features/vendor-preview/components/VendorLedgerPreviewPage'
+import { VendorLedgerPreActivationPage } from '@/features/vendor-preview/components/VendorLedgerCutoverPlanner'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -57,7 +57,7 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
   const vendorNameById = Object.fromEntries(ledger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
 
   if (ledger.loading && !ledger.config) return <p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p>
-  if (ledger.config?.enabled !== true) return <VendorLedgerPreviewPage />
+  if (ledger.config?.enabled !== true) return <VendorLedgerPreActivationPage />
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true)
