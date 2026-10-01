@@ -99,7 +99,7 @@ Every phase uses the same sequence:
 
 ### Scope
 
-- Add V2 invoice capture using vendor IDs and invoice facts only.
+- Add V2 invoice capture using vendor IDs and invoice facts only; purchase creation never embeds or mutates a payment.
 - Enforce invoice-number uniqueness per vendor using deterministic reservation records.
 - Post purchase ledger effects atomically with source records and idempotency keys.
 - Add open-invoice views and derived balances without mutating invoice totals.
@@ -212,7 +212,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. Exact activation date remains pending. | Partially approved 2026-10-01 | Phase 3 compatibility design |
 | FD-004 | Every V2 vendor starts at zero outstanding. The owner alone may enter a separately verified opening balance; no legacy value is copied or calculated automatically. After recording, corrections use audited compensating adjustment entries and never overwrite the original opening entry. | Approved 2026-10-01 | Phase 4 ledger posting |
 | FD-005 | Staff submit purchase, settlement, return, and cheque correction requests through the Action Centre. The owner may apply direct audited corrections without submitting a separate approval request. | Approved 2026-10-01 | Phase 2 permissions |
-| FD-006 | Confirm whether an immediate payment entered with a purchase should support all payment modes or only create a linked non-cheque settlement. | Pending | Phase 4 purchase UI |
+| FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
 | FD-007 | Confirm whether vendor credit must allocate to the source invoice first and then FIFO, and who may override that order. | Pending | Phase 5 allocation rules |
 | FD-008 | Confirm how a cash refund is received: cash drawer, bank receipt, or a selectable destination, and which workflow records that receipt. | Pending | Phase 7 return effects |
 | FD-009 | Confirm whether cheque numbers 1120-1299 are a new available book and whether any imported open cheque uses a number in that range. | Pending verification | Phase 6 cheque book |
@@ -267,3 +267,13 @@ No implementation phase may cross a decision marked `Pending`.
 - The owner may apply a direct correction without creating a separate pending approval request.
 - Every approved request and direct owner correction records before and proposed snapshots, actor, reason, timestamp, source revision, resulting revision, and compensating ledger references where applicable.
 - Tests must deny unauthorized direct writes, reject stale revisions and duplicate effects, and prove that owner corrections remain fully auditable.
+
+### Separate Purchase and Payment Records
+
+- A purchase records invoice facts and increases vendor outstanding; it never contains an embedded payment mutation.
+- Cash, UPI, Card, and Bank Transfer payments are created as separate Vendor Settlement records.
+- Cheque payments are created and managed through the Cheque Register and affect outstanding only when `Debited`.
+- Purchases, settlements, and cheque events appear together chronologically in the vendor ledger.
+- After saving a purchase, `Record payment for this invoice` opens Vendor Settlements with the vendor and invoice preselected; the user must still review and submit the payment separately.
+- Allocations connect settlements to invoices and derive the remaining invoice balance without rewriting the purchase total.
+- Tests must prove that retries and repeated shortcut use cannot duplicate a settlement or mutate the source purchase.
