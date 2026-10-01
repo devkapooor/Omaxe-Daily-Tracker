@@ -5,6 +5,7 @@ import {
   assertExpectedRevision,
   assertChequeTransition,
   buildPurchasePostingV2,
+  buildSettlementPostingV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
   financialLedgerAmountPaise,
@@ -129,6 +130,30 @@ describe('V2 ledger rules', () => {
     })
     expect(openInvoiceBalancesV2([purchase], allocations)).toHaveLength(1)
     expect(() => invoiceBalanceV2(purchase, [allocation('excess', 100_001, 'posted')])).toThrow(/exceed/)
+  })
+
+  it('builds separate invoice-linked settlements and caps them at current balances', () => {
+    const purchase = buildPurchasePostingV2({
+      id: 'purchase-1', vendorId: 'vendor-1', invoiceNumber: 'INV-1', invoiceDate: '2026-10-02',
+      invoiceTotalPaise: 100_000, actorUserId: 'owner-1', timestamp: '2026-10-02T00:00:00.000Z',
+    })
+    const accountState = {
+      id: 'vendor-1', vendorId: 'vendor-1', outstandingPaise: 100_000, revision: 1,
+      lastLedgerEntryId: purchase.ledgerEntry.id, updatedAt: purchase.purchase.createdAt, updatedByUserId: 'owner-1',
+    }
+    const posting = buildSettlementPostingV2({
+      id: 'settlement-1', vendorId: 'vendor-1', date: '2026-10-02', amountPaise: 40_000,
+      mode: 'upi', invoiceId: 'purchase-1', actorUserId: 'owner-1', timestamp: '2026-10-02T01:00:00.000Z',
+    }, accountState, purchase.invoiceState)
+
+    expect(posting.ledgerEntry.signedAmountPaise).toBe(-40_000)
+    expect(posting.nextAccountState.outstandingPaise).toBe(60_000)
+    expect(posting.nextInvoiceState?.openAmountPaise).toBe(60_000)
+    expect(posting.allocation?.state).toBe('posted')
+    expect(() => buildSettlementPostingV2({
+      id: 'settlement-2', vendorId: 'vendor-1', date: '2026-10-02', amountPaise: 100_001,
+      mode: 'cash', actorUserId: 'owner-1', timestamp: '2026-10-02T01:00:00.000Z',
+    }, accountState)).toThrow(/exceed/)
   })
 
   it('applies approved financial signs and rejects ambiguous event types', () => {

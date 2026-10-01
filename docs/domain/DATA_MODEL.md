@@ -251,7 +251,9 @@ The current V1 `Purchase`, `Payment`, and `VendorRecord` records remain unchange
 - `appMetadata/vendorLedgerV2Config.enabled` is the protected master feature flag and defaults effectively to false when absent.
 - Dormant collection names are centralized in `src/store/vendorLedgerV2Repository.ts`.
 - The guarded transaction helper reads the feature flag inside every future V2 transaction before running its operation.
-- Purchase creation atomically writes `purchasesV2`, `invoiceReservationsV2`, and one deterministic `vendorLedgerEntriesV2` event; incomplete or conflicting postings are rejected.
+- Purchase creation atomically writes `purchasesV2`, `invoiceReservationsV2`, one deterministic `vendorLedgerEntriesV2` event, and the matching vendor-account and invoice-state projections; incomplete or conflicting postings are rejected.
+- `vendorAccountStatesV2` and `invoiceStatesV2` are guarded derived projections updated in the same transaction as their immutable ledger or allocation evidence. They prevent concurrent overpayment without changing V1 balances.
+- `vendorSettlementsV2` stores cash, UPI, card, and bank-transfer payments separately from purchases. Invoice allocation is optional; cheque payments remain outside this collection.
 - Firestore rules independently require the enabled flag and explicit capabilities for non-owner writes.
 - `vendorLedgerEntriesV2` is append-only; correction history cannot overwrite or delete ledger entries.
 - Existing users without `purchasingCapabilities` retain current access but receive no V2 purchasing authority.

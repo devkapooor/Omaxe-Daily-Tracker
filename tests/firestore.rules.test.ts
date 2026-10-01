@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { createPurchaseV2 } from '../src/store/vendorLedgerV2Repository'
+import { createSettlementV2 } from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
 
@@ -53,6 +54,7 @@ beforeEach(async () => {
     seedUser('purchasing-user', 'manager', false, {
       'vendor.manage': true,
       'purchase.create': true,
+      'settlement.create': true,
       'vendorLedger.view': true,
     }),
     seedUser('cheque-user', 'manager', false, {
@@ -298,6 +300,14 @@ describe('V2 vendor ledger capability enforcement', () => {
     postingBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-v2-1'), purchase)
     postingBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-1'), reservation)
     postingBatch.set(doc(purchasingDb, entryPath), entry)
+    postingBatch.set(doc(purchasingDb, 'vendorAccountStatesV2', 'vendor-v2-1'), {
+      id: 'vendor-v2-1', vendorId: 'vendor-v2-1', outstandingPaise: 100000, revision: 1,
+      lastLedgerEntryId: entry.id, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    })
+    postingBatch.set(doc(purchasingDb, 'invoiceStatesV2', 'purchase-v2-1'), {
+      id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceId: 'purchase-v2-1', openAmountPaise: 100000,
+      reservedAmountPaise: 0, revision: 1, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    })
     await assertSucceeds(postingBatch.commit())
     await assertSucceeds(getDoc(doc(userDb('purchasing-user'), entryPath)))
     await assertFails(getDoc(doc(userDb('manager-user'), entryPath)))
@@ -330,6 +340,14 @@ describe('V2 vendor ledger capability enforcement', () => {
       id: 'purchase:purchase-first:1:purchase', vendorId: 'vendor-v2-1', eventType: 'purchase', posting: 'financial',
       signedAmountPaise: 100000, sourceType: 'purchase', sourceRecordId: 'purchase-first', sourceRevision: 1,
       occurredOn: '2026-10-01', createdAt: timestamp, createdByUserId: 'purchasing-user',
+    })
+    firstBatch.set(doc(purchasingDb, 'vendorAccountStatesV2', 'vendor-v2-1'), {
+      id: 'vendor-v2-1', vendorId: 'vendor-v2-1', outstandingPaise: 100000, revision: 1,
+      lastLedgerEntryId: 'purchase:purchase-first:1:purchase', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
+    })
+    firstBatch.set(doc(purchasingDb, 'invoiceStatesV2', 'purchase-first'), {
+      id: 'purchase-first', vendorId: 'vendor-v2-1', invoiceId: 'purchase-first', openAmountPaise: 100000,
+      reservedAmountPaise: 0, revision: 1, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
     })
     await assertSucceeds(firstBatch.commit())
 
@@ -369,6 +387,32 @@ describe('V2 vendor ledger capability enforcement', () => {
     await expect(createPurchaseV2(input, purchasingDb)).resolves.toMatchObject({ created: false })
     await expect(createPurchaseV2({ ...input, id: 'purchase-repository-2' }, purchasingDb))
       .rejects.toThrow(/already registered/)
+  })
+
+  it('posts invoice-linked and custom settlements atomically without exceeding balances', async () => {
+    await enableV2()
+    const purchasingDb = userDb('purchasing-user')
+    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
+    await createPurchaseV2({
+      id: 'purchase-settlement-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-SETTLE',
+      invoiceDate: '2026-10-01', invoiceTotalPaise: 100000, actorUserId: 'purchasing-user', timestamp,
+    }, purchasingDb)
+
+    const linked = {
+      id: 'settlement-linked-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 40000,
+      mode: 'upi' as const, invoiceId: 'purchase-settlement-1', actorUserId: 'purchasing-user', timestamp,
+    }
+    await expect(createSettlementV2(linked, purchasingDb)).resolves.toMatchObject({ created: true })
+    await expect(createSettlementV2(linked, purchasingDb)).resolves.toMatchObject({ created: false })
+    await expect(createSettlementV2({ ...linked, amountPaise: 41000 }, purchasingDb)).rejects.toThrow(/conflicts/)
+    await expect(createSettlementV2({
+      id: 'settlement-custom-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 60000,
+      mode: 'bank-transfer', actorUserId: 'purchasing-user', timestamp,
+    }, purchasingDb)).resolves.toMatchObject({ created: true })
+    await expect(createSettlementV2({
+      id: 'settlement-excess-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 1,
+      mode: 'cash', actorUserId: 'purchasing-user', timestamp,
+    }, purchasingDb)).rejects.toThrow(/positive outstanding/)
   })
 
   it('enforces capability-specific cheque transitions and immutable identity', async () => {

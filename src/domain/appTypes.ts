@@ -4,6 +4,8 @@ export type PurchasingCapability =
   | 'vendor.manage'
   | 'purchase.create'
   | 'purchase.correct'
+  | 'settlement.create'
+  | 'settlement.correct'
   | 'return.create'
   | 'return.resolve'
   | 'cheque.prepare'

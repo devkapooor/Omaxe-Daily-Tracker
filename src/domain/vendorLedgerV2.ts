@@ -54,10 +54,34 @@ export type VendorSettlementV2 = {
   amountPaise: AmountPaise
   mode: VendorSettlementMode
   invoiceId?: string
+  ledgerEntryId: string
+  allocationId?: string
   notes: string
   revision: number
   createdAt: string
   createdByUserId: string
+  updatedAt: string
+  updatedByUserId: string
+}
+
+export type VendorAccountStateV2 = {
+  id: string
+  vendorId: string
+  outstandingPaise: AmountPaise
+  revision: number
+  lastLedgerEntryId: string
+  updatedAt: string
+  updatedByUserId: string
+}
+
+export type InvoiceStateV2 = {
+  id: string
+  vendorId: string
+  invoiceId: string
+  openAmountPaise: AmountPaise
+  reservedAmountPaise: AmountPaise
+  revision: number
+  lastAllocationId?: string
   updatedAt: string
   updatedByUserId: string
 }
@@ -282,7 +306,115 @@ export function buildPurchasePostingV2(input: CreatePurchaseV2Input) {
     createdAt: input.timestamp,
     createdByUserId: actorUserId,
   }
-  return { ledgerEntry, purchase, reservation }
+  const invoiceState: InvoiceStateV2 = {
+    id,
+    vendorId,
+    invoiceId: id,
+    openAmountPaise: input.invoiceTotalPaise,
+    reservedAmountPaise: 0,
+    revision: 1,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+  return { invoiceState, ledgerEntry, purchase, reservation }
+}
+
+export type CreateSettlementV2Input = {
+  id: string
+  vendorId: string
+  date: string
+  amountPaise: AmountPaise
+  mode: VendorSettlementMode
+  invoiceId?: string
+  notes?: string
+  actorUserId: string
+  timestamp: string
+}
+
+export function buildSettlementPostingV2(
+  input: CreateSettlementV2Input,
+  accountState: VendorAccountStateV2,
+  invoiceState?: InvoiceStateV2,
+) {
+  const id = input.id.trim()
+  const vendorId = input.vendorId.trim()
+  const actorUserId = input.actorUserId.trim()
+  if (!id || !vendorId || !actorUserId) throw new Error('Settlement ID, vendor, and actor are required.')
+  if (!businessDatePattern.test(input.date)) throw new Error('Settlement date must use YYYY-MM-DD.')
+  if (accountState.vendorId !== vendorId) throw new Error('Vendor account state does not match the settlement vendor.')
+  validateCustomPayment(input.amountPaise, accountState.outstandingPaise)
+  if (input.invoiceId) {
+    if (!invoiceState || invoiceState.invoiceId !== input.invoiceId || invoiceState.vendorId !== vendorId) {
+      throw new Error('Invoice state does not match the selected vendor invoice.')
+    }
+    validateInvoiceAllocation(input.amountPaise, invoiceState.openAmountPaise - invoiceState.reservedAmountPaise)
+  }
+
+  const ledgerEntryId = deterministicEventId('settlement', id, 1, 'settlement')
+  const allocationId = input.invoiceId ? deterministicAllocationId('settlement', id, input.invoiceId) : undefined
+  const settlement: VendorSettlementV2 = {
+    id,
+    vendorId,
+    date: input.date,
+    amountPaise: input.amountPaise,
+    mode: input.mode,
+    ...(input.invoiceId ? { invoiceId: input.invoiceId } : {}),
+    ledgerEntryId,
+    ...(allocationId ? { allocationId } : {}),
+    notes: input.notes?.trim() ?? '',
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+  const ledgerEntry: VendorLedgerEntryV2 = {
+    id: ledgerEntryId,
+    vendorId,
+    eventType: 'settlement',
+    posting: 'financial',
+    signedAmountPaise: financialLedgerAmountPaise('settlement', input.amountPaise),
+    sourceType: 'settlement',
+    sourceRecordId: id,
+    sourceRevision: 1,
+    occurredOn: input.date,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+  }
+  const nextAccountState: VendorAccountStateV2 = {
+    ...accountState,
+    outstandingPaise: accountState.outstandingPaise - input.amountPaise,
+    revision: accountState.revision + 1,
+    lastLedgerEntryId: ledgerEntryId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+  const allocation: InvoiceAllocationV2 | undefined = input.invoiceId && allocationId ? {
+    id: allocationId,
+    vendorId,
+    invoiceId: input.invoiceId,
+    sourceType: 'settlement',
+    sourceRecordId: id,
+    amountPaise: input.amountPaise,
+    state: 'posted',
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+  } : undefined
+  const nextInvoiceState = allocation && invoiceState ? {
+    ...invoiceState,
+    openAmountPaise: invoiceState.openAmountPaise - input.amountPaise,
+    revision: invoiceState.revision + 1,
+    lastAllocationId: allocation.id,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  } : undefined
+  return { allocation, ledgerEntry, nextAccountState, nextInvoiceState, settlement }
+}
+
+export function deterministicAllocationId(sourceType: InvoiceAllocationV2['sourceType'], sourceRecordId: string, invoiceId: string) {
+  if (!sourceRecordId.trim() || !invoiceId.trim()) throw new Error('Allocation source and invoice IDs are required.')
+  return [sourceType, sourceRecordId.trim(), invoiceId.trim()].map((part) => encodeURIComponent(part)).join(':')
 }
 
 export function isV2BusinessDate(date: string, activationDate: string) {

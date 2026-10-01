@@ -83,7 +83,9 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/invoiceReservationsV2/$(data.invoiceReservationId)).data.normalizedInvoiceNumber == data.normalizedInvoiceNumber &&
         getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.sourceRecordId == documentId &&
         getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.vendorId == data.vendorId &&
-        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.signedAmountPaise == data.invoiceTotalPaise;
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.signedAmountPaise == data.invoiceTotalPaise &&
+        getAfter(/databases/$(database)/documents/vendorAccountStatesV2/$(data.vendorId)).data.lastLedgerEntryId == data.ledgerEntryId &&
+        getAfter(/databases/$(database)/documents/invoiceStatesV2/$(documentId)).data.openAmountPaise == data.invoiceTotalPaise;
     }
 
     function validInvoiceReservationV2(data, documentId) {
@@ -104,7 +106,21 @@ service cloud.firestore {
         data.vendorId is string &&
         data.date is string &&
         isPositivePaise(data.amountPaise) &&
-        data.mode in ['cash', 'upi', 'card', 'bank-transfer'];
+        data.mode in ['cash', 'upi', 'card', 'bank-transfer'] &&
+        data.ledgerEntryId is string &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.sourceRecordId == documentId &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.ledgerEntryId)).data.signedAmountPaise == -data.amountPaise &&
+        getAfter(/databases/$(database)/documents/vendorAccountStatesV2/$(data.vendorId)).data.lastLedgerEntryId == data.ledgerEntryId &&
+        (
+          (!data.keys().hasAny(['invoiceId', 'allocationId'])) ||
+          (
+            data.invoiceId is string &&
+            data.allocationId is string &&
+            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.allocationId)).data.invoiceId == data.invoiceId &&
+            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.allocationId)).data.sourceRecordId == documentId &&
+            getAfter(/databases/$(database)/documents/invoiceStatesV2/$(data.invoiceId)).data.lastAllocationId == data.allocationId
+          )
+        );
     }
 
     function validReturnV2(data, documentId) {
@@ -154,6 +170,7 @@ service cloud.firestore {
     function canCreateLedgerEntry(data) {
       return isOwner() ||
         (data.eventType == 'purchase' && hasPurchasingCapability('purchase.create')) ||
+        (data.eventType == 'settlement' && hasPurchasingCapability('settlement.create')) ||
         (data.eventType == 'vendor-credit' && hasPurchasingCapability('return.resolve')) ||
         (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit'));
     }
@@ -168,6 +185,78 @@ service cloud.firestore {
         getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
         getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.invoiceTotalPaise == data.signedAmountPaise
       );
+    }
+
+    function validSettlementLedgerEntry(data, documentId) {
+      return data.eventType != 'settlement' || (
+        data.posting == 'financial' &&
+        data.sourceType == 'settlement' &&
+        data.sourceRevision == 1 &&
+        data.signedAmountPaise < 0 &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.ledgerEntryId == documentId &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.amountPaise == -data.signedAmountPaise
+      );
+    }
+
+    function validVendorAccountStateCreate(data, documentId) {
+      return data.id == documentId &&
+        data.vendorId == documentId &&
+        data.outstandingPaise is int &&
+        data.outstandingPaise >= 0 &&
+        data.revision == 1 &&
+        data.lastLedgerEntryId is string &&
+        data.updatedByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.vendorId == documentId &&
+        data.outstandingPaise == getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.signedAmountPaise;
+    }
+
+    function validVendorAccountStateUpdate(data, documentId) {
+      return data.id == documentId &&
+        data.vendorId == resource.data.vendorId &&
+        data.revision == resource.data.revision + 1 &&
+        data.lastLedgerEntryId is string &&
+        data.updatedByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.vendorId == documentId &&
+        data.outstandingPaise == resource.data.outstandingPaise +
+          getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.signedAmountPaise &&
+        data.outstandingPaise >= 0;
+    }
+
+    function validInvoiceStateCreate(data, documentId) {
+      return data.id == documentId &&
+        data.invoiceId == documentId &&
+        data.revision == 1 &&
+        data.openAmountPaise == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.invoiceTotalPaise &&
+        data.reservedAmountPaise == 0 &&
+        data.vendorId == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.vendorId &&
+        data.updatedByUserId == request.auth.uid;
+    }
+
+    function validInvoiceStateUpdate(data, documentId) {
+      return data.id == documentId &&
+        data.invoiceId == resource.data.invoiceId &&
+        data.vendorId == resource.data.vendorId &&
+        data.revision == resource.data.revision + 1 &&
+        data.lastAllocationId is string &&
+        data.updatedByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.invoiceId == documentId &&
+        getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.state == 'posted' &&
+        data.openAmountPaise == resource.data.openAmountPaise -
+          getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.amountPaise &&
+        data.openAmountPaise >= 0 &&
+        data.reservedAmountPaise == resource.data.reservedAmountPaise;
+    }
+
+    function validSettlementAllocation(data, documentId) {
+      return data.id == documentId &&
+        data.sourceType == 'settlement' &&
+        data.state == 'posted' &&
+        data.revision == 1 &&
+        data.createdByUserId == request.auth.uid &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.allocationId == documentId &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.invoiceId == data.invoiceId &&
+        getAfter(/databases/$(database)/documents/vendorSettlementsV2/$(data.sourceRecordId)).data.amountPaise == data.amountPaise;
     }
 
     function isNonNegativeNumber(value) {
@@ -427,8 +516,24 @@ service cloud.firestore {
 
     match /vendorSettlementsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && isOwner() && validSettlementV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') && validSettlementV2(request.resource.data, documentId);
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /vendorAccountStatesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && validVendorAccountStateCreate(request.resource.data, documentId) &&
+        canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
+      allow update: if isVendorLedgerV2Enabled() && validVendorAccountStateUpdate(request.resource.data, documentId) &&
+        canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
+      allow delete: if false;
+    }
+
+    match /invoiceStatesV2/{documentId} {
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validInvoiceStateCreate(request.resource.data, documentId);
+      allow update: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') && validInvoiceStateUpdate(request.resource.data, documentId);
       allow delete: if false;
     }
 
@@ -465,16 +570,17 @@ service cloud.firestore {
         request.resource.data.createdAt is string &&
         request.resource.data.createdByUserId == request.auth.uid &&
         canCreateLedgerEntry(request.resource.data) &&
-        validPurchaseLedgerEntry(request.resource.data, documentId);
+        validPurchaseLedgerEntry(request.resource.data, documentId) &&
+        validSettlementLedgerEntry(request.resource.data, documentId);
       allow update, delete: if false;
     }
 
     match /invoiceAllocationsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && isOwner() &&
-        request.resource.data.id == documentId &&
-        isPositivePaise(request.resource.data.amountPaise);
-      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
+      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') &&
+        isPositivePaise(request.resource.data.amountPaise) &&
+        validSettlementAllocation(request.resource.data, documentId);
+      allow update: if false;
       allow delete: if false;
     }
 

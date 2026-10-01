@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 4 complete; Phase 5 - settlements and allocations is next
+- Current phase: Phase 5 in progress - atomic settlement posting complete; audited corrections remain
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
