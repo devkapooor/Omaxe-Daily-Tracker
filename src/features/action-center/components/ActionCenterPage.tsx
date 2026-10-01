@@ -9,6 +9,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { StatusPanel } from '@/shared/ui/status-panel'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { SelectField } from '@/shared/ui/select-field'
@@ -227,12 +228,10 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
         ) : null}
 
         {error ? (
-          <Card>
-            <CardContent className="flex items-start gap-3 py-5 text-sm text-rose-700">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-rose-600" />
-              <div><strong className="block">Approval requests could not be loaded</strong><span className="text-xs text-muted-foreground">{error}</span></div>
-            </CardContent>
-          </Card>
+          <StatusPanel variant="destructive" className="flex items-start gap-3 py-5">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none" />
+            <div><strong className="block">Approval requests could not be loaded</strong><span className="text-xs text-muted-foreground">{error}</span></div>
+          </StatusPanel>
         ) : null}
 
         {!isLoading && !error ? <Card>

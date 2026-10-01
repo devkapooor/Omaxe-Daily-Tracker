@@ -31,6 +31,9 @@
   --color-accent-foreground: #0f5f78;
   --color-destructive: #dc3f55;
   --color-destructive-foreground: #ffffff;
+  --color-success: #15803d;
+  --color-warning: #a16207;
+  --color-info: #0369a1;
   --color-border: #dbe7f2;
   --color-input: #cbdbea;
   --color-ring: #0ea5e9;

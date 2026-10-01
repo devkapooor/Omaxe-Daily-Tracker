@@ -31,6 +31,7 @@ import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLe
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
+import { StatusPanel } from '@/shared/ui/status-panel'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
@@ -219,7 +220,7 @@ export function AppWorkspace({
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
-          <div className="mb-2.5 flex flex-col gap-2 rounded-[16px] border border-amber-200 bg-amber-50 p-2.5 text-amber-800 shadow-[0_10px_22px_rgba(38,78,118,0.08)] md:flex-row md:items-center md:justify-between">
+          <StatusPanel variant="warning" className="mb-2.5 flex flex-col gap-2 p-2.5 shadow-[0_10px_22px_rgba(38,78,118,0.08)] md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <DatabaseZap className="mt-0.5 h-4 w-4 flex-none" />
               <span className="text-xs font-semibold sm:text-sm">
@@ -229,7 +230,7 @@ export function AppWorkspace({
             <Button
               type="button"
               variant="outline"
-              className="border-amber-300 bg-white/80 text-amber-800 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900"
+              className="border-warning/30 bg-white/80 text-warning hover:border-warning/45 hover:bg-warning/10 hover:text-warning"
               onClick={() => {
                 void importLegacyData().then((imported) => {
                   if (imported) showToast('Legacy browser data imported into Firebase.')
@@ -238,7 +239,7 @@ export function AppWorkspace({
             >
               Import Legacy Data
             </Button>
-          </div>
+          </StatusPanel>
         ) : null}
 
         <ToastHost toast={toast} />

@@ -9,6 +9,7 @@ import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 type SettingsPageProps = {
@@ -173,7 +174,7 @@ export function SettingsPage({
   return (
     <section className="grid min-h-0 gap-4 overflow-hidden">
       {error ? (
-        <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>
+        <StatusPanel variant="destructive" className="rounded-[18px] px-4 py-3">{error}</StatusPanel>
       ) : null}
       <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 gap-4 overflow-hidden">
         <TabsList className={canManageUsers ? 'grid-cols-4' : 'grid-cols-2'}>
