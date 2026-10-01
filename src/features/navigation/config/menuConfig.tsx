@@ -8,6 +8,7 @@ import {
   Logs,
   ReceiptText,
   Settings,
+  TestTube2,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -30,6 +31,8 @@ export function pageTitle(page: Page) {
       return 'Dashboard'
     case 'actions':
       return 'Action Centre'
+    case 'vendor-preview':
+      return 'Vendor Ledger Preview'
     case 'directory':
       return 'Directory'
     case 'expense':
@@ -66,6 +69,15 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       icon: <ClipboardCheck className="size-4 shrink-0" />,
       label: 'Action Centre',
       page: 'actions',
+      gradient: '',
+      hoverClass: '',
+      activeClass: 'bg-secondary text-foreground',
+      action: 'page',
+    })
+    items.push({
+      icon: <TestTube2 className="size-4 shrink-0" />,
+      label: 'Vendor Preview',
+      page: 'vendor-preview',
       gradient: '',
       hoverClass: '',
       activeClass: 'bg-secondary text-foreground',

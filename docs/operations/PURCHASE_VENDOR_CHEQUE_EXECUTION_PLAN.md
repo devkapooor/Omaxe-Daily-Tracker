@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Lean Release A - visible owner preview
+- Current phase: Lean Release A release candidate ready; deployment approval pending
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -170,6 +170,15 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 - One UI integration pass, one validation pass, one commit/push, and one optional Hosting deployment.
 - No browser automation, migration tooling, Action Centre integration, or financial mutation testing.
+
+#### Completion Evidence
+
+- Added an owner-only `Vendor Ledger Preview` navigation page using the existing cobalt workspace design.
+- Mounted the V2 directory, purchase, settlement, and open-invoice components with session-only demo fixtures.
+- Preview invoice and payment submissions update only React state and reset on refresh; the page imports no Firebase repository or write action.
+- Added explicit no-save and production-data protection notices plus a demo reset control.
+- Owner routing is preserved and manager/billing access resolves to the existing Register page.
+- Source tests, ESLint, TypeScript, and production build pass; deployment remains a separate approval.
 
 ### Lean Release B - Minimum Operational Vendor Ledger
 

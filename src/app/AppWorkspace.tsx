@@ -25,6 +25,7 @@ import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
+import { VendorLedgerPreviewPage } from '@/features/vendor-preview/components/VendorLedgerPreviewPage'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
@@ -265,6 +266,10 @@ export function AppWorkspace({
               }
             }}
           />
+        ) : null}
+
+        {activePage === 'vendor-preview' && currentUser.role === 'owner' ? (
+          <VendorLedgerPreviewPage />
         ) : null}
 
         {activePage === 'directory' ? (

@@ -5,10 +5,12 @@ import { buildMenu } from '@/features/navigation/config/menuConfig'
 describe('owner-only route resolution', () => {
   it('allows the owner to open the Action Centre', () => {
     expect(resolveActivePage('owner', 'actions')).toBe('actions')
+    expect(resolveActivePage('owner', 'vendor-preview')).toBe('vendor-preview')
   })
 
   it('redirects manager and billing users away from the Action Centre', () => {
     expect(resolveActivePage('manager', 'actions')).toBe('expense')
+    expect(resolveActivePage('manager', 'vendor-preview')).toBe('expense')
     expect(resolveActivePage('billing', 'actions')).toBe('expense')
   })
 
