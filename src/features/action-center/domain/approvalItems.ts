@@ -4,6 +4,13 @@ import {
   correctionValuesFromEntry,
   drawerTotalFromDenominations,
 } from '@/domain/cashoutCorrections'
+import {
+  settlementCorrectionValuesEqualV2,
+  settlementCorrectionValuesV2,
+  type VendorLedgerCorrectionRequestV2,
+  type VendorReturnV2,
+  type VendorSettlementStateV2,
+} from '@/domain/vendorLedgerV2'
 
 export const OUTDATED_CORRECTION_REASON = 'Closed as outdated because the source cashout changed after submission.'
 export const RECENT_APPROVAL_LIMIT = 20
@@ -31,11 +38,54 @@ export type CashoutCorrectionApprovalItem = {
   sourceCashout?: DailyCashoutEntry
 }
 
-export type ApprovalActionItem = CashoutCorrectionApprovalItem
+export type VendorSettlementCorrectionApprovalItem = {
+  kind: 'vendor-settlement-correction'
+  id: string
+  status: VendorLedgerCorrectionRequestV2['status']
+  submittedAt: string
+  requester: string
+  reason: string
+  vendorId: string
+  vendorName: string
+  before: VendorLedgerCorrectionRequestV2['before']
+  proposed: VendorLedgerCorrectionRequestV2['proposed']
+  outstandingImpactPaise: number
+  isStale: boolean
+  staleReason?: string
+  reviewedAt?: string
+  reviewedBy?: string
+  reviewReason?: string
+  sourceRequest: VendorLedgerCorrectionRequestV2
+}
+
+export type VendorReturnApprovalItem = {
+  kind: 'vendor-return'
+  id: string
+  status: VendorReturnV2['outcome']
+  submittedAt: string
+  requester: string
+  reason: string
+  vendorId: string
+  vendorName: string
+  sourceReturn: VendorReturnV2
+  isStale: boolean
+  staleReason?: string
+  reviewedAt?: string
+  reviewedBy?: string
+  reviewReason?: string
+}
+
+export type ApprovalActionItem = CashoutCorrectionApprovalItem | VendorSettlementCorrectionApprovalItem | VendorReturnApprovalItem
 
 export type ApprovalQueue = {
   pending: ApprovalActionItem[]
   recent: ApprovalActionItem[]
+  pendingCount: number
+}
+
+export type CashoutApprovalQueue = {
+  pending: CashoutCorrectionApprovalItem[]
+  recent: CashoutCorrectionApprovalItem[]
   pendingCount: number
 }
 
@@ -85,9 +135,75 @@ function toCashoutCorrectionItem(
 export function deriveApprovalQueue(
   requests: CashoutCorrectionRequest[],
   dailyCashouts: DailyCashoutEntry[],
-): ApprovalQueue {
+): CashoutApprovalQueue
+export function deriveApprovalQueue(
+  requests: CashoutCorrectionRequest[],
+  dailyCashouts: DailyCashoutEntry[],
+  vendor: {
+    correctionRequests: VendorLedgerCorrectionRequestV2[]
+    returns: VendorReturnV2[]
+    settlementStates: VendorSettlementStateV2[]
+    vendorNames: Record<string, string>
+  },
+): ApprovalQueue
+export function deriveApprovalQueue(
+  requests: CashoutCorrectionRequest[],
+  dailyCashouts: DailyCashoutEntry[],
+  vendor?: {
+    correctionRequests: VendorLedgerCorrectionRequestV2[]
+    returns: VendorReturnV2[]
+    settlementStates: VendorSettlementStateV2[]
+    vendorNames: Record<string, string>
+  },
+): ApprovalQueue | CashoutApprovalQueue {
   const cashoutsById = new Map(dailyCashouts.map((entry) => [entry.id, entry]))
-  const items = requests.map((request) => toCashoutCorrectionItem(request, cashoutsById))
+  const cashoutItems = requests.map((request) => toCashoutCorrectionItem(request, cashoutsById))
+  const stateById = new Map((vendor?.settlementStates ?? []).map((state) => [state.id, state]))
+  const correctionItems: VendorSettlementCorrectionApprovalItem[] = (vendor?.correctionRequests ?? []).map((request) => {
+    const state = stateById.get(request.sourceRecordId)
+    const staleReason = !state
+      ? 'The source vendor payment no longer exists.'
+      : state.revision !== request.sourceRevision
+        ? 'The vendor payment revision changed after this request was submitted.'
+        : !settlementCorrectionValuesEqualV2(settlementCorrectionValuesV2(state), request.before)
+          ? 'The saved vendor payment values changed after this request was submitted.'
+          : undefined
+    return {
+      kind: 'vendor-settlement-correction',
+      id: request.id,
+      status: request.status,
+      submittedAt: request.createdAt,
+      requester: request.requestedBy,
+      reason: request.reason,
+      vendorId: request.vendorId,
+      vendorName: vendor?.vendorNames[request.vendorId] ?? request.vendorId,
+      before: request.before,
+      proposed: request.proposed,
+      outstandingImpactPaise: request.before.amountPaise - request.proposed.amountPaise,
+      isStale: request.status === 'pending' && Boolean(staleReason),
+      ...(staleReason ? { staleReason } : {}),
+      ...(request.reviewedAt ? { reviewedAt: request.reviewedAt } : {}),
+      ...(request.reviewedBy ? { reviewedBy: request.reviewedBy } : {}),
+      ...(request.reviewReason ? { reviewReason: request.reviewReason } : {}),
+      sourceRequest: request,
+    }
+  })
+  const returnItems: VendorReturnApprovalItem[] = (vendor?.returns ?? []).map((vendorReturn) => ({
+    kind: 'vendor-return',
+    id: vendorReturn.id,
+    status: vendorReturn.outcome,
+    submittedAt: vendorReturn.createdAt,
+    requester: vendorReturn.createdByUserId,
+    reason: vendorReturn.reason,
+    vendorId: vendorReturn.vendorId,
+    vendorName: vendor?.vendorNames[vendorReturn.vendorId] ?? vendorReturn.vendorId,
+    sourceReturn: vendorReturn,
+    isStale: false,
+    ...(vendorReturn.reviewedAt ? { reviewedAt: vendorReturn.reviewedAt } : {}),
+    ...(vendorReturn.reviewedBy ? { reviewedBy: vendorReturn.reviewedBy } : {}),
+    ...(vendorReturn.outcomeReason ? { reviewReason: vendorReturn.outcomeReason } : {}),
+  }))
+  const items: ApprovalActionItem[] = [...cashoutItems, ...correctionItems, ...returnItems]
   const pending = items
     .filter((item) => item.status === 'pending')
     .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))

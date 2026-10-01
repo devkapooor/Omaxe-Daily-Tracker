@@ -44,7 +44,7 @@ export type PlannerScheduleItemSnapshot = {
   amount: number
   date: string
   note: string
-  source: 'expense-cheque' | 'vendor-cheque' | 'manual-plan'
+  source: 'expense-cheque' | 'vendor-cheque' | 'vendor-cheque-v2' | 'manual-plan'
   title: string
   chequeNumber?: string
   runningBalanceAfter: number

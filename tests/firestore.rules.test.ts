@@ -11,11 +11,15 @@ import {
   activateVendorLedgerV2,
   applyOwnerSettlementCorrectionV2,
   applySettlementCorrectionV2,
+  createSettlementCorrectionRequestV2,
   createPurchaseV2,
   createSettlementV2,
   createVendorChequeV2,
   createVendorV2,
+  createVendorReturnV2,
+  resolveVendorReturnV2,
   transitionVendorChequeV2,
+  withdrawSettlementCorrectionRequestV2,
 } from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
@@ -611,5 +615,24 @@ describe('V2 vendor ledger capability enforcement', () => {
       timestamp: '2026-10-01T03:00:00.000Z',
     }, chequeDb)).rejects.toThrow(/stale/)
     await assertFails(updateDoc(doc(userDb('owner-user'), 'chequesV2', '1120'), { chequeNumber: '1121' }))
+  })
+
+  it('enforces correction ownership and owner-only return decisions without touching loans', async () => {
+    await enableV2()
+    const managerDb = userDb('manager-user')
+    await createVendorV2({ id: 'workflow-vendor', canonicalName: 'Workflow Vendor', actorUserId: 'manager-user', timestamp }, managerDb)
+    await createPurchaseV2({ id: 'workflow-purchase', vendorId: 'workflow-vendor', invoiceNumber: 'WF-1', invoiceDate: '2026-10-01', invoiceTotalPaise: 100000, actorUserId: 'manager-user', timestamp }, managerDb)
+    await createSettlementV2({ id: 'workflow-payment', vendorId: 'workflow-vendor', date: '2026-10-01', amountPaise: 20000, mode: 'upi', actorUserId: 'manager-user', timestamp }, managerDb)
+    await testEnvironment.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), 'loans', 'protected-loan'), { remainingAmount: 98765 }))
+
+    const correctionInput = { id: 'workflow-correction', sourceRecordId: 'workflow-payment', proposed: { date: '2026-10-01', amountPaise: 15000, mode: 'upi' as const, notes: 'Corrected' }, reason: 'Wrong amount', actor: { id: 'manager-user', name: 'Manager' }, timestamp }
+    await expect(createSettlementCorrectionRequestV2(correctionInput, managerDb)).resolves.toMatchObject({ status: 'pending' })
+    await expect(createSettlementCorrectionRequestV2({ ...correctionInput, id: 'other-correction', actor: { id: 'billing-user', name: 'Billing' } }, userDb('billing-user'))).rejects.toThrow()
+    await expect(withdrawSettlementCorrectionRequestV2(correctionInput.id, correctionInput.actor, '2026-10-01T01:00:00.000Z', managerDb)).resolves.toMatchObject({ status: 'withdrawn' })
+
+    await expect(createVendorReturnV2({ id: 'workflow-return', vendorId: 'workflow-vendor', sourcePurchaseId: 'workflow-purchase', date: '2026-10-01', description: 'Damaged goods', quantity: 1, unit: 'carton', valuePaise: 10000, reason: 'Damaged', actorUserId: 'billing-user', timestamp }, userDb('billing-user'))).resolves.toMatchObject({ outcome: 'pending' })
+    await expect(resolveVendorReturnV2('workflow-return', { outcome: 'vendor-credit', creditedValuePaise: 10000, outcomeReason: 'Credit note verified', actor: { id: 'billing-user', name: 'Billing' }, timestamp: '2026-10-01T02:00:00.000Z' }, userDb('billing-user'))).rejects.toThrow()
+    await expect(resolveVendorReturnV2('workflow-return', { outcome: 'vendor-credit', creditedValuePaise: 10000, outcomeReason: 'Credit note verified', actor: { id: 'owner-user', name: 'Owner' }, timestamp: '2026-10-01T02:00:00.000Z' }, userDb('owner-user'))).resolves.toMatchObject({ nextAccountState: { outstandingPaise: 70000 } })
+    expect((await getDoc(doc(userDb('owner-user'), 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
   })
 })

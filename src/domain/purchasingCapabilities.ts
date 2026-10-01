@@ -21,6 +21,8 @@ export const staffVendorEntryCapabilities = new Set<PurchasingCapability>([
   'vendor.manage',
   'purchase.create',
   'settlement.create',
+  'settlement.correct',
+  'return.create',
   'vendorLedger.view',
 ])
 

@@ -209,7 +209,7 @@ export function PaymentPlannerPage({
                           <p className="text-muted-foreground">
                             {item.source === 'expense-cheque'
                               ? 'Expense Cheque'
-                              : item.source === 'vendor-cheque'
+                              : item.source === 'vendor-cheque' || item.source === 'vendor-cheque-v2'
                                 ? 'Vendor Payment Cheque'
                                 : 'Manual Planned Payment'}
                             {item.chequeNumber ? ` | Cheque ${item.chequeNumber}` : ''}

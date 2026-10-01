@@ -2,16 +2,18 @@ import { useMemo, useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { normalizeName, today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
+import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
   openInvoiceBalancesV2,
   rupeesToPaise,
   type ChequeStatus,
+  type VendorSettlementMode,
 } from '@/domain/vendorLedgerV2'
 import { VendorDirectoryV2 } from '@/features/directory/components/VendorDirectoryV2'
 import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
 import { PurchaseFormV2, type PurchaseV2Draft } from '@/features/register/components/PurchaseFormV2'
 import { VendorSettlementFormV2, type VendorSettlementV2Draft } from '@/features/register/components/VendorSettlementFormV2'
-import { useVendorLedgerV2 } from '@/features/vendor-preview/hooks/useVendorLedgerV2'
+import type { VendorLedgerV2Data } from '@/features/vendor-preview/hooks/useVendorLedgerV2'
 import { VendorLedgerPreActivationPage } from '@/features/vendor-preview/components/VendorLedgerCutoverPlanner'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -24,14 +26,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { Textarea } from '@/shared/ui/textarea'
 import {
   applyOwnerSettlementCorrectionV2,
+  createSettlementCorrectionRequestV2,
   createPurchaseV2,
   createSettlementV2,
   createVendorChequeV2,
+  createVendorReturnV2,
   createVendorV2,
   transitionVendorChequeV2,
+  withdrawSettlementCorrectionRequestV2,
 } from '@/store/vendorLedgerV2Repository'
 
-type Props = { currentUser: AppUser }
+type Props = { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[] }
 
 const chequeActions: Record<ChequeStatus, { label: string; status: Exclude<ChequeStatus, 'draft'> }[]> = {
   draft: [{ label: 'Issue', status: 'issued' }],
@@ -44,8 +49,7 @@ const chequeActions: Record<ChequeStatus, { label: string; status: Exclude<Chequ
   debited: [], cancelled: [], bounced: [],
 }
 
-export function VendorLedgerWorkspacePage({ currentUser }: Props) {
-  const ledger = useVendorLedgerV2()
+export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeItems }: Props) {
   const [tab, setTab] = useState('directory')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -107,12 +111,13 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
         {ledger.error || message ? <p className="rounded-xl border border-border bg-secondary/50 px-3 py-2 text-sm">{ledger.error ?? message}</p> : null}
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className={`${currentUser.role === 'owner' ? 'grid-cols-7' : 'grid-cols-5'} overflow-x-auto`}>
+          <TabsList className={`${currentUser.role === 'owner' ? 'grid-cols-8' : 'grid-cols-7'} overflow-x-auto`}>
             <TabsTrigger value="directory">Vendors</TabsTrigger>
             <TabsTrigger value="purchases">Purchases</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
-            {currentUser.role === 'owner' ? <TabsTrigger value="corrections">Corrections</TabsTrigger> : null}
+            <TabsTrigger value="returns">Returns</TabsTrigger>
+            <TabsTrigger value="corrections">Corrections</TabsTrigger>
             {currentUser.role === 'owner' ? <TabsTrigger value="cheques">Cheques</TabsTrigger> : null}
             <TabsTrigger value="balances">Balances</TabsTrigger>
           </TabsList>
@@ -122,8 +127,9 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
           <TabsContent value="purchases" className="pt-2"><PurchaseFormV2 isBusy={busy} vendors={ledger.vendors} onSave={savePurchase} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>
           <TabsContent value="invoices" className="pt-2"><OpenInvoicesV2 balances={balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} /></TabsContent>
-          {currentUser.role === 'owner' ? <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} states={ledger.settlementStates} vendors={vendorNameById} onRun={run} /></TabsContent> : null}
-          {currentUser.role === 'owner' ? <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} vendors={ledger.vendors} onRun={run} /></TabsContent> : null}
+          <TabsContent value="returns" className="pt-2"><ReturnsPanel busy={busy} currentUser={currentUser} ledger={ledger} onRun={run} /></TabsContent>
+          <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} ledger={ledger} vendors={vendorNameById} onRun={run} /></TabsContent>
+          {currentUser.role === 'owner' ? <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} legacyChequeItems={legacyChequeItems} vendors={ledger.vendors} onRun={run} /></TabsContent> : null}
           <TabsContent value="balances" className="grid gap-2 pt-2">
             {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><strong>INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong></CardContent></Card>)}
           </TabsContent>
@@ -147,7 +153,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
   currentUser: AppUser
   onClose: () => void
   onRun: (action: () => Promise<unknown>, success: string) => Promise<void>
-  vendors: ReturnType<typeof useVendorLedgerV2>['vendors']
+  vendors: VendorLedgerV2Data['vendors']
 }) {
   const [name, setName] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -237,20 +243,49 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
   )
 }
 
-function CorrectionForm({ busy, currentUser, onRun, states, vendors }: { busy: boolean; currentUser: AppUser; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; states: ReturnType<typeof useVendorLedgerV2>['settlementStates']; vendors: Record<string, string> }) {
-  const [selectedId, setSelectedId] = useState('')
-  const selected = states.find((state) => state.id === selectedId)
-  const [amount, setAmount] = useState('')
+function ReturnsPanel({ busy, currentUser, ledger, onRun }: {
+  busy: boolean
+  currentUser: AppUser
+  ledger: VendorLedgerV2Data
+  onRun: (action: () => Promise<unknown>, success: string) => Promise<void>
+}) {
+  const [vendorId, setVendorId] = useState('')
+  const [sourcePurchaseId, setSourcePurchaseId] = useState('')
+  const [date, setDate] = useState(today())
+  const [description, setDescription] = useState('')
+  const [quantity, setQuantity] = useState('1')
+  const [unit, setUnit] = useState('pieces')
+  const [value, setValue] = useState('')
   const [reason, setReason] = useState('')
-  const options = states.map((state) => ({ label: `${vendors[state.vendorId] ?? state.vendorId} | INR ${(state.amountPaise / 100).toLocaleString('en-IN')} | ${state.date}`, value: state.id }))
-  return <Card><CardHeader><SectionHeading eyebrow="Owner audit" title="Correct Vendor Payment" /><p className="text-sm text-muted-foreground">The original payment remains unchanged; a compensating audit entry records the correction.</p></CardHeader><CardContent><form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!selected) return; void onRun(() => applyOwnerSettlementCorrectionV2({ id: crypto.randomUUID(), sourceRecordId: selected.id, proposed: { date: selected.date, amountPaise: rupeesToPaise(Number(amount)), mode: selected.mode, notes: selected.notes }, reason, actor: { id: currentUser.id, name: currentUser.name }, timestamp: new Date().toISOString() }), 'Audited payment correction applied.').then(() => { setAmount(''); setReason('') }).catch(() => undefined) }}><FieldLabel label="Saved Payment"><SelectField searchable options={options} value={selectedId} onValueChange={(value) => { setSelectedId(value); const state = states.find((item) => item.id === value); setAmount(state ? String(state.amountPaise / 100) : '') }} /></FieldLabel><FieldLabel label="Correct Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><FieldLabel className="md:col-span-2" label="Mandatory Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></FieldLabel><Button className="md:col-span-2" disabled={busy || !selected}>Apply Audited Correction</Button></form></CardContent></Card>
+  const vendorOptions = ledger.vendors.filter((vendor) => vendor.active).map((vendor) => ({ label: vendor.canonicalName, value: vendor.id }))
+  const purchaseOptions = [{ label: 'No invoice link', value: '' }, ...ledger.purchases.filter((purchase) => purchase.vendorId === vendorId).map((purchase) => ({ label: `${purchase.invoiceNumber} | INR ${(purchase.invoiceTotalPaise / 100).toLocaleString('en-IN')}`, value: purchase.id }))]
+  return <div className="grid gap-3"><Card><CardHeader><SectionHeading eyebrow="Vendor stock return" title="Record Return Request" description="Returns do not change balances until the owner records vendor credit. Replacements have no financial effect." /></CardHeader><CardContent><form className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void onRun(() => createVendorReturnV2({ id: crypto.randomUUID(), vendorId, ...(sourcePurchaseId ? { sourcePurchaseId } : {}), date, description, quantity: Number(quantity), unit, valuePaise: rupeesToPaise(Number(value)), reason, actorUserId: currentUser.id, timestamp: new Date().toISOString() }), 'Vendor return sent to the Action Centre.').then(() => { setDescription(''); setValue(''); setReason('') }).catch(() => undefined) }}><FieldLabel label="Vendor"><SelectField searchable options={vendorOptions} value={vendorId} onValueChange={(next) => { setVendorId(next); setSourcePurchaseId('') }} /></FieldLabel><FieldLabel label="Related Invoice (Optional)"><SelectField searchable options={purchaseOptions} value={sourcePurchaseId} onValueChange={setSourcePurchaseId} /></FieldLabel><FieldLabel label="Return Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Item Description"><Input value={description} onChange={(event) => setDescription(event.target.value)} required /></FieldLabel><FieldLabel label="Quantity"><Input type="number" min="0.01" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></FieldLabel><FieldLabel label="Unit"><Input value={unit} onChange={(event) => setUnit(event.target.value)} required /></FieldLabel><FieldLabel label="Return Value"><Input type="number" min="0.01" step="0.01" value={value} onChange={(event) => setValue(event.target.value)} required /></FieldLabel><FieldLabel className="md:col-span-2" label="Mandatory Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></FieldLabel><Button className="lg:col-span-3" disabled={busy || !vendorId}>Submit Return</Button></form></CardContent></Card><Card><CardHeader><SectionHeading eyebrow="Return history" title="Recorded Returns" /></CardHeader><CardContent className="grid gap-2">{ledger.returns.length === 0 ? <p className="text-sm text-muted-foreground">No vendor returns recorded.</p> : [...ledger.returns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"><div><strong>{ledger.vendors.find((vendor) => vendor.id === item.vendorId)?.canonicalName ?? item.vendorId}</strong><p className="text-muted-foreground">{item.description} | {item.quantity} {item.unit} | INR {(item.valuePaise / 100).toLocaleString('en-IN')}</p></div><Badge variant={item.outcome === 'vendor-credit' ? 'success' : item.outcome === 'rejected' ? 'destructive' : item.outcome === 'pending' ? 'warning' : 'secondary'}>{item.outcome}</Badge></div>)}</CardContent></Card></div>
 }
 
-function ChequeRegister({ busy, cheques, currentUser, onRun, vendors }: { busy: boolean; cheques: ReturnType<typeof useVendorLedgerV2>['cheques']; currentUser: AppUser; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; vendors: ReturnType<typeof useVendorLedgerV2>['vendors'] }) {
+function CorrectionForm({ busy, currentUser, ledger, onRun, vendors }: { busy: boolean; currentUser: AppUser; ledger: VendorLedgerV2Data; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; vendors: Record<string, string> }) {
+  const [selectedId, setSelectedId] = useState('')
+  const states = currentUser.role === 'owner'
+    ? ledger.settlementStates
+    : ledger.settlementStates.filter((state) => ledger.settlements.find((item) => item.id === state.id)?.createdByUserId === currentUser.id)
+  const selected = states.find((state) => state.id === selectedId)
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState('')
+  const [mode, setMode] = useState<VendorSettlementMode>('bank-transfer')
+  const [notes, setNotes] = useState('')
+  const [reason, setReason] = useState('')
+  const options = states.map((state) => ({ label: `${vendors[state.vendorId] ?? state.vendorId} | INR ${(state.amountPaise / 100).toLocaleString('en-IN')} | ${state.date}`, value: state.id }))
+  const selectState = (value: string) => { const state = states.find((item) => item.id === value); setSelectedId(value); setAmount(state ? String(state.amountPaise / 100) : ''); setDate(state?.date ?? ''); setMode(state?.mode ?? 'bank-transfer'); setNotes(state?.notes ?? '') }
+  const pending = ledger.correctionRequests.filter((request) => request.status === 'pending')
+  return <div className="grid gap-3"><Card><CardHeader><SectionHeading eyebrow={currentUser.role === 'owner' ? 'Owner audit' : 'Approval workflow'} title={currentUser.role === 'owner' ? 'Correct Vendor Payment' : 'Request Payment Correction'} /><p className="text-sm text-muted-foreground">The original payment remains unchanged. {currentUser.role === 'owner' ? 'A compensating audit entry is posted immediately.' : 'The owner must approve your request before any balance changes.'}</p></CardHeader><CardContent><form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!selected) return; const action = currentUser.role === 'owner' ? applyOwnerSettlementCorrectionV2({ id: crypto.randomUUID(), sourceRecordId: selected.id, proposed: { date, amountPaise: rupeesToPaise(Number(amount)), mode, notes }, reason, actor: { id: currentUser.id, name: currentUser.name }, timestamp: new Date().toISOString() }) : createSettlementCorrectionRequestV2({ id: crypto.randomUUID(), sourceRecordId: selected.id, proposed: { date, amountPaise: rupeesToPaise(Number(amount)), mode, notes }, reason, actor: { id: currentUser.id, name: currentUser.name }, timestamp: new Date().toISOString() }); void onRun(() => action, currentUser.role === 'owner' ? 'Audited payment correction applied.' : 'Correction request sent to the Action Centre.').then(() => { setSelectedId(''); setAmount(''); setReason('') }).catch(() => undefined) }}><FieldLabel label="Saved Payment"><SelectField searchable options={options} value={selectedId} onValueChange={selectState} /></FieldLabel><FieldLabel label="Correct Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><FieldLabel label="Correct Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Correct Mode"><SelectField options={[{ label: 'Cash', value: 'cash' }, { label: 'UPI', value: 'upi' }, { label: 'Card', value: 'card' }, { label: 'Bank Transfer', value: 'bank-transfer' }]} value={mode} onValueChange={(value) => setMode(value as VendorSettlementMode)} /></FieldLabel><FieldLabel className="md:col-span-2" label="Correct Notes"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></FieldLabel><FieldLabel className="md:col-span-2" label="Mandatory Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></FieldLabel><Button className="md:col-span-2" disabled={busy || !selected || pending.some((request) => request.sourceRecordId === selected.id)}>{currentUser.role === 'owner' ? 'Apply Audited Correction' : 'Send Correction Request'}</Button></form></CardContent></Card>{ledger.correctionRequests.length ? <Card><CardHeader><SectionHeading eyebrow="Audit trail" title="Correction Requests" /></CardHeader><CardContent className="grid gap-2">{[...ledger.correctionRequests].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"><div><strong>{vendors[request.vendorId] ?? request.vendorId}</strong><p className="text-muted-foreground">INR {(request.before.amountPaise / 100).toLocaleString('en-IN')} to INR {(request.proposed.amountPaise / 100).toLocaleString('en-IN')} | {request.reason}</p></div><div className="flex items-center gap-2"><Badge variant={request.status === 'approved' ? 'success' : request.status === 'rejected' ? 'destructive' : request.status === 'pending' ? 'warning' : 'secondary'}>{request.status}</Badge>{request.status === 'pending' && request.requestedByUserId === currentUser.id && currentUser.role !== 'owner' ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void onRun(() => withdrawSettlementCorrectionRequestV2(request.id, { id: currentUser.id, name: currentUser.name }, new Date().toISOString()), 'Correction request withdrawn.').catch(() => undefined)}>Withdraw</Button> : null}</div></div>)}</CardContent></Card> : null}</div>
+}
+
+function ChequeRegister({ busy, cheques, currentUser, legacyChequeItems, onRun, vendors }: { busy: boolean; cheques: VendorLedgerV2Data['cheques']; currentUser: AppUser; legacyChequeItems: PlannerScheduleItemSnapshot[]; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; vendors: VendorLedgerV2Data['vendors'] }) {
   const [vendorId, setVendorId] = useState('')
   const [number, setNumber] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(today())
   const vendorOptions = vendors.filter((vendor) => vendor.active).map((vendor) => ({ label: vendor.canonicalName, value: vendor.id }))
-  return <div className="grid gap-3"><Card><CardHeader><SectionHeading eyebrow="Leaves 1120-1199" title="Register Vendor Cheque" /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => { event.preventDefault(); void onRun(() => createVendorChequeV2({ chequeBookId: 'book-1120-1199', chequeNumber: number, vendorId, date, amountPaise: rupeesToPaise(Number(amount)), actorUserId: currentUser.id, timestamp: new Date().toISOString() }), `Cheque ${number} registered.`).then(() => { setNumber(''); setAmount('') }).catch(() => undefined) }}><FieldLabel label="Vendor"><SelectField searchable options={vendorOptions} value={vendorId} onValueChange={setVendorId} /></FieldLabel><FieldLabel label="Cheque Number"><Input value={number} onChange={(event) => setNumber(event.target.value)} required /></FieldLabel><FieldLabel label="Cheque Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><Button className="self-end" disabled={busy}>Register</Button></form></CardContent></Card>{[...cheques].sort((a, b) => a.chequeNumberValue - b.chequeNumberValue).map((cheque) => <Card key={cheque.id}><CardContent className="grid gap-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"><div><strong>Cheque {cheque.chequeNumber}</strong><p className="text-sm text-muted-foreground">{vendors.find((vendor) => vendor.id === cheque.vendorId)?.canonicalName ?? cheque.vendorId} | INR {(cheque.amountPaise / 100).toLocaleString('en-IN')} | {cheque.date}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant={cheque.status === 'debited' ? 'success' : cheque.status === 'bounced' || cheque.status === 'cancelled' ? 'destructive' : 'warning'}>{cheque.status}</Badge>{chequeActions[cheque.status].map((action) => <Button key={action.status} size="sm" variant={action.status === 'debited' ? 'default' : 'outline'} disabled={busy} onClick={() => void onRun(() => transitionVendorChequeV2({ chequeNumber: cheque.chequeNumber, expectedRevision: cheque.revision, toStatus: action.status, actorUserId: currentUser.id, timestamp: new Date().toISOString() }), `Cheque ${cheque.chequeNumber} marked ${action.status}.`).catch(() => undefined)}>{action.label}</Button>)}</div></CardContent></Card>)}</div>
+  const v2Numbers = new Set(cheques.map((cheque) => cheque.chequeNumber.replace(/^0+/, '')))
+  const readOnlyLegacy = legacyChequeItems.filter((item) => item.chequeNumber && !v2Numbers.has(item.chequeNumber.replace(/^0+/, '')))
+  return <div className="grid gap-3"><Card><CardHeader><SectionHeading eyebrow="Leaves 1120-1199" title="Unified Cheque Register" description="V2 cheques are managed here. Existing scheduled legacy cheques remain visible and read-only." /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => { event.preventDefault(); void onRun(() => createVendorChequeV2({ chequeBookId: 'book-1120-1199', chequeNumber: number, vendorId, date, amountPaise: rupeesToPaise(Number(amount)), actorUserId: currentUser.id, timestamp: new Date().toISOString() }), `Cheque ${number} registered.`).then(() => { setNumber(''); setAmount('') }).catch(() => undefined) }}><FieldLabel label="Vendor"><SelectField searchable options={vendorOptions} value={vendorId} onValueChange={setVendorId} /></FieldLabel><FieldLabel label="Cheque Number"><Input value={number} onChange={(event) => setNumber(event.target.value)} required /></FieldLabel><FieldLabel label="Cheque Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><Button className="self-end" disabled={busy}>Register</Button></form></CardContent></Card>{[...cheques].sort((a, b) => a.chequeNumberValue - b.chequeNumberValue).map((cheque) => <Card key={cheque.id}><CardContent className="grid gap-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"><div><strong>Cheque {cheque.chequeNumber}</strong><p className="text-sm text-muted-foreground">{vendors.find((vendor) => vendor.id === cheque.vendorId)?.canonicalName ?? cheque.vendorId} | INR {(cheque.amountPaise / 100).toLocaleString('en-IN')} | {cheque.date}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant={cheque.status === 'debited' ? 'success' : cheque.status === 'bounced' || cheque.status === 'cancelled' ? 'destructive' : 'warning'}>{cheque.status}</Badge>{chequeActions[cheque.status].map((action) => <Button key={action.status} size="sm" variant={action.status === 'debited' ? 'default' : 'outline'} disabled={busy} onClick={() => void onRun(() => transitionVendorChequeV2({ chequeNumber: cheque.chequeNumber, expectedRevision: cheque.revision, toStatus: action.status, actorUserId: currentUser.id, timestamp: new Date().toISOString() }), `Cheque ${cheque.chequeNumber} marked ${action.status}.`).catch(() => undefined)}>{action.label}</Button>)}</div></CardContent></Card>)}{readOnlyLegacy.map((item) => <Card key={`legacy-${item.id}`}><CardContent className="flex flex-wrap items-center justify-between gap-2 py-3"><div><strong>Cheque {item.chequeNumber}</strong><p className="text-sm text-muted-foreground">{item.title} | INR {item.amount.toLocaleString('en-IN')} | {item.date}</p></div><Badge variant="secondary">Legacy read-only</Badge></CardContent></Card>)}</div>
 }

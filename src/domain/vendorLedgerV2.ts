@@ -151,12 +151,40 @@ export type VendorReturnV2 = {
   reason: string
   outcome: VendorReturnOutcome
   outcomeReason?: string
+  creditedValuePaise?: AmountPaise
+  ledgerEntryId?: string
   replacementReceivedAt?: string
+  reviewedAt?: string
+  reviewedByUserId?: string
+  reviewedBy?: string
   revision: number
   createdAt: string
   createdByUserId: string
   updatedAt: string
   updatedByUserId: string
+}
+
+export type CreateVendorReturnV2Input = {
+  id: string
+  vendorId: string
+  sourcePurchaseId?: string
+  date: string
+  description: string
+  quantity: number
+  unit: string
+  valuePaise: AmountPaise
+  reason: string
+  actorUserId: string
+  timestamp: string
+}
+
+export type ResolveVendorReturnV2Input = {
+  outcome: Exclude<VendorReturnOutcome, 'pending'>
+  creditedValuePaise?: AmountPaise
+  outcomeReason: string
+  replacementReceivedAt?: string
+  actor: { id: string; name: string }
+  timestamp: string
 }
 
 export type ChequePurpose = 'vendor-payment' | 'expense'
@@ -582,6 +610,48 @@ export function settlementCorrectionValuesEqualV2(left: SettlementCorrectionValu
     left.invoiceId === right.invoiceId && left.notes.trim() === right.notes.trim()
 }
 
+export function buildSettlementCorrectionRequestV2(input: {
+  id: string
+  settlement: VendorSettlementV2
+  state: VendorSettlementStateV2
+  proposed: Omit<SettlementCorrectionValuesV2, 'invoiceId'>
+  reason: string
+  actor: { id: string; name: string }
+  timestamp: string
+  requestType?: VendorLedgerCorrectionRequestV2['requestType']
+}): VendorLedgerCorrectionRequestV2 {
+  const id = input.id.trim()
+  const actorUserId = input.actor.id.trim()
+  const requestedBy = input.actor.name.trim()
+  const reason = input.reason.trim()
+  if (!id || !actorUserId || !requestedBy || !reason) throw new Error('Correction ID, requester, and reason are required.')
+  if (input.settlement.id !== input.state.settlementId || input.settlement.vendorId !== input.state.vendorId) {
+    throw new Error('Settlement correction source records do not match.')
+  }
+  const requestType = input.requestType ?? 'staff-request'
+  if (requestType === 'staff-request' && input.settlement.createdByUserId !== actorUserId) {
+    throw new Error('Staff can request corrections only for their own vendor payments.')
+  }
+  const before = settlementCorrectionValuesV2(input.state)
+  const proposed = { ...input.proposed, ...(input.state.invoiceId ? { invoiceId: input.state.invoiceId } : {}) }
+  if (settlementCorrectionValuesEqualV2(before, proposed)) throw new Error('Change at least one payment value before requesting a correction.')
+  return {
+    id,
+    kind: 'settlement-correction',
+    sourceRecordId: input.state.settlementId,
+    vendorId: input.state.vendorId,
+    sourceRevision: input.state.revision,
+    before,
+    proposed,
+    reason,
+    requestedByUserId: actorUserId,
+    requestedBy,
+    requestType,
+    status: 'pending',
+    createdAt: input.timestamp,
+  }
+}
+
 export function buildSettlementCorrectionV2(
   request: VendorLedgerCorrectionRequestV2,
   state: VendorSettlementStateV2,
@@ -647,6 +717,107 @@ export function buildSettlementCorrectionV2(
     updatedAt: timestamp, updatedByUserId: actorUserId,
   } : undefined
   return { adjustmentPaise, allocationAdjustment, ledgerEntry, nextAccountState, nextInvoiceState, nextState }
+}
+
+export function buildVendorReturnV2(input: CreateVendorReturnV2Input): VendorReturnV2 {
+  const id = input.id.trim()
+  const vendorId = input.vendorId.trim()
+  const actorUserId = input.actorUserId.trim()
+  const description = input.description.trim()
+  const unit = input.unit.trim()
+  const reason = input.reason.trim()
+  if (!id || !vendorId || !actorUserId || !description || !unit || !reason) {
+    throw new Error('Vendor, return details, value, reason, and requester are required.')
+  }
+  if (!businessDatePattern.test(input.date)) throw new Error('Return date must use YYYY-MM-DD.')
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) throw new Error('Return quantity must be greater than zero.')
+  assertIntegerPaise(input.valuePaise, 'Return value')
+  if (input.valuePaise <= 0) throw new Error('Return value must be greater than zero.')
+  return {
+    id,
+    vendorId,
+    ...(input.sourcePurchaseId?.trim() ? { sourcePurchaseId: input.sourcePurchaseId.trim() } : {}),
+    date: input.date,
+    description,
+    quantity: input.quantity,
+    unit,
+    valuePaise: input.valuePaise,
+    reason,
+    outcome: 'pending',
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+}
+
+export function buildVendorReturnResolutionV2(
+  source: VendorReturnV2,
+  accountState: VendorAccountStateV2,
+  input: ResolveVendorReturnV2Input,
+) {
+  if (source.outcome !== 'pending') throw new Error('This vendor return is no longer pending.')
+  if (!input.actor.id.trim() || !input.actor.name.trim() || !input.outcomeReason.trim()) {
+    throw new Error('Owner identity and decision reason are required.')
+  }
+  if (accountState.vendorId !== source.vendorId) throw new Error('Vendor account state does not match the return.')
+
+  const baseUpdate = {
+    outcome: input.outcome,
+    outcomeReason: input.outcomeReason.trim(),
+    reviewedAt: input.timestamp,
+    reviewedByUserId: input.actor.id.trim(),
+    reviewedBy: input.actor.name.trim(),
+    revision: source.revision + 1,
+    updatedAt: input.timestamp,
+    updatedByUserId: input.actor.id.trim(),
+  } as const
+
+  if (input.outcome === 'replacement') {
+    if (!input.replacementReceivedAt || !businessDatePattern.test(input.replacementReceivedAt)) {
+      throw new Error('Replacement received date is required.')
+    }
+    return { nextReturn: { ...source, ...baseUpdate, replacementReceivedAt: input.replacementReceivedAt } }
+  }
+  if (input.outcome === 'rejected') return { nextReturn: { ...source, ...baseUpdate } }
+
+  const creditedValuePaise = input.creditedValuePaise ?? source.valuePaise
+  assertIntegerPaise(creditedValuePaise, 'Vendor credit')
+  if (creditedValuePaise <= 0 || creditedValuePaise > source.valuePaise) {
+    throw new Error('Vendor credit must be greater than zero and cannot exceed the return value.')
+  }
+  if (creditedValuePaise > accountState.outstandingPaise) {
+    throw new Error('Vendor credit cannot exceed the current vendor outstanding.')
+  }
+  const ledgerEntryId = deterministicEventId('return', source.id, source.revision + 1, 'vendor-credit')
+  const ledgerEntry: VendorLedgerEntryV2 = {
+    id: ledgerEntryId,
+    vendorId: source.vendorId,
+    eventType: 'vendor-credit',
+    posting: 'financial',
+    signedAmountPaise: financialLedgerAmountPaise('vendor-credit', creditedValuePaise),
+    sourceType: 'return',
+    sourceRecordId: source.id,
+    sourceRevision: source.revision + 1,
+    reason: input.outcomeReason.trim(),
+    occurredOn: source.date,
+    createdAt: input.timestamp,
+    createdByUserId: input.actor.id.trim(),
+  }
+  const nextAccountState: VendorAccountStateV2 = {
+    ...accountState,
+    outstandingPaise: accountState.outstandingPaise - creditedValuePaise,
+    revision: accountState.revision + 1,
+    lastLedgerEntryId: ledgerEntryId,
+    updatedAt: input.timestamp,
+    updatedByUserId: input.actor.id.trim(),
+  }
+  return {
+    ledgerEntry,
+    nextAccountState,
+    nextReturn: { ...source, ...baseUpdate, creditedValuePaise, ledgerEntryId },
+  }
 }
 
 export function isV2BusinessDate(date: string, activationDate: string) {

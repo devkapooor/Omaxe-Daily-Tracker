@@ -1,10 +1,13 @@
-import { collection, doc, runTransaction, type Firestore, type Transaction } from 'firebase/firestore'
+import { collection, doc, getDocs, query, runTransaction, where, type Firestore, type Transaction } from 'firebase/firestore'
 import type { VendorLedgerV2Config } from '@/domain/appTypes'
 import { reviewVendorLedgerCutover, type CutoverVendorDraft } from '@/domain/vendorLedgerCutover'
 import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildSettlementCorrectionRequestV2,
+  buildVendorReturnResolutionV2,
+  buildVendorReturnV2,
   buildVendorChequeV2,
   buildVendorV2,
   assertChequeTransition,
@@ -29,6 +32,9 @@ import {
   type VendorSettlementV2,
   type VendorSettlementStateV2,
   type VendorLedgerCorrectionRequestV2,
+  type CreateVendorReturnV2Input,
+  type ResolveVendorReturnV2Input,
+  type VendorReturnV2,
 } from '@/domain/vendorLedgerV2'
 import { db } from '@/shared/lib/firebase'
 
@@ -564,4 +570,141 @@ export async function applyOwnerSettlementCorrectionV2(
 
   if (request.status === 'approved') return { alreadyApplied: true }
   return applySettlementCorrectionV2(request.id, input.actor, input.timestamp, database)
+}
+
+export type CreateSettlementCorrectionRequestV2Input = {
+  id: string
+  sourceRecordId: string
+  proposed: Omit<VendorLedgerCorrectionRequestV2['proposed'], 'invoiceId'>
+  reason: string
+  actor: { id: string; name: string }
+  timestamp: string
+}
+
+export async function createSettlementCorrectionRequestV2(
+  input: CreateSettlementCorrectionRequestV2Input,
+  database: Firestore = db,
+) {
+  const pending = await getDocs(query(
+    vendorLedgerV2Refs(database).correctionRequests,
+    where('sourceRecordId', '==', input.sourceRecordId.trim()),
+    where('status', '==', 'pending'),
+    where('requestedByUserId', '==', input.actor.id.trim()),
+  ))
+  if (!pending.empty) throw new Error('This payment already has a pending correction request.')
+
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const requestRef = doc(refs.correctionRequests, input.id.trim())
+    const settlementRef = doc(refs.settlements, input.sourceRecordId.trim())
+    const stateRef = doc(refs.settlementStates, input.sourceRecordId.trim())
+    const [settlementSnapshot, stateSnapshot] = await Promise.all([
+      transaction.get(settlementRef),
+      transaction.get(stateRef),
+    ])
+    if (!settlementSnapshot.exists() || !stateSnapshot.exists()) throw new Error('Vendor payment source records are missing.')
+    const request = buildSettlementCorrectionRequestV2({
+      ...input,
+      settlement: settlementSnapshot.data() as VendorSettlementV2,
+      state: stateSnapshot.data() as VendorSettlementStateV2,
+    })
+    transaction.set(requestRef, request)
+    return request
+  }, database)
+}
+
+async function closeSettlementCorrectionRequestV2(
+  requestId: string,
+  status: 'rejected' | 'withdrawn',
+  reason: string,
+  actor: { id: string; name: string },
+  timestamp: string,
+  database: Firestore,
+) {
+  if (!reason.trim()) throw new Error('A decision reason is required.')
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const requestRef = doc(refs.correctionRequests, requestId.trim())
+    const snapshot = await transaction.get(requestRef)
+    const request = snapshot.data() as VendorLedgerCorrectionRequestV2 | undefined
+    if (!snapshot.exists() || !request || request.status !== 'pending') throw new Error('This correction request is no longer pending.')
+    if (status === 'withdrawn' && request.requestedByUserId !== actor.id) throw new Error('Only the requester can withdraw this correction.')
+    transaction.update(requestRef, {
+      status,
+      reviewedAt: timestamp,
+      reviewedByUserId: actor.id,
+      reviewedBy: actor.name,
+      reviewReason: reason.trim(),
+    })
+    return { ...request, status }
+  }, database)
+}
+
+export function rejectSettlementCorrectionRequestV2(
+  requestId: string,
+  reason: string,
+  actor: { id: string; name: string },
+  timestamp: string,
+  database: Firestore = db,
+) {
+  return closeSettlementCorrectionRequestV2(requestId, 'rejected', reason, actor, timestamp, database)
+}
+
+export function withdrawSettlementCorrectionRequestV2(
+  requestId: string,
+  actor: { id: string; name: string },
+  timestamp: string,
+  database: Firestore = db,
+) {
+  return closeSettlementCorrectionRequestV2(requestId, 'withdrawn', 'Withdrawn by requester.', actor, timestamp, database)
+}
+
+export async function createVendorReturnV2(input: CreateVendorReturnV2Input, database: Firestore = db) {
+  return runVendorLedgerV2Transaction(async (transaction, refs, config) => {
+    const vendorReturn = buildVendorReturnV2(input)
+    if (!config.activationDate || !isV2BusinessDate(vendorReturn.date, config.activationDate)) throw new Error('Return date cannot be before V2 activation.')
+    const returnRef = doc(refs.returns, vendorReturn.id)
+    const vendorRef = doc(refs.vendors, vendorReturn.vendorId)
+    const purchaseRef = vendorReturn.sourcePurchaseId ? doc(refs.purchases, vendorReturn.sourcePurchaseId) : null
+    const [returnSnapshot, vendorSnapshot, purchaseSnapshot] = await Promise.all([
+      transaction.get(returnRef),
+      transaction.get(vendorRef),
+      ...(purchaseRef ? [transaction.get(purchaseRef)] : []),
+    ])
+    if (returnSnapshot.exists()) throw new Error('A return already uses this ID.')
+    const vendor = vendorSnapshot.data() as VendorV2 | undefined
+    if (!vendorSnapshot.exists() || !vendor?.active) throw new Error('Select an active V2 vendor.')
+    if (purchaseRef) {
+      const purchase = purchaseSnapshot?.data() as PurchaseV2 | undefined
+      if (!purchaseSnapshot?.exists() || purchase?.vendorId !== vendorReturn.vendorId) {
+        throw new Error('The selected purchase does not belong to this vendor.')
+      }
+    }
+    transaction.set(returnRef, vendorReturn)
+    return vendorReturn
+  }, database)
+}
+
+export async function resolveVendorReturnV2(
+  returnId: string,
+  input: ResolveVendorReturnV2Input,
+  database: Firestore = db,
+) {
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const returnRef = doc(refs.returns, returnId.trim())
+    const returnSnapshot = await transaction.get(returnRef)
+    const vendorReturn = returnSnapshot.data() as VendorReturnV2 | undefined
+    if (!returnSnapshot.exists() || !vendorReturn) throw new Error('Vendor return was not found.')
+    const accountRef = doc(refs.vendorAccountStates, vendorReturn.vendorId)
+    const accountSnapshot = await transaction.get(accountRef)
+    const accountState = accountSnapshot.data() as VendorAccountStateV2 | undefined
+    if (!accountSnapshot.exists() || !accountState) throw new Error('Vendor account state is missing.')
+    const resolution = buildVendorReturnResolutionV2(vendorReturn, accountState, input)
+    if (resolution.ledgerEntry && resolution.nextAccountState) {
+      const ledgerRef = doc(refs.ledgerEntries, resolution.ledgerEntry.id)
+      if ((await transaction.get(ledgerRef)).exists()) throw new Error('This return credit was already posted.')
+      transaction.set(ledgerRef, resolution.ledgerEntry)
+      transaction.set(accountRef, resolution.nextAccountState)
+    }
+    transaction.set(returnRef, resolution.nextReturn)
+    return resolution
+  }, database)
 }

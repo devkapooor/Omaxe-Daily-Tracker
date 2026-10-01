@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
 import type { Page, PlannedPayment, UserAccount } from '@/domain/appTypes'
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
+import { mergeV2ChequesIntoPlanner } from '@/domain/unifiedPaymentPlanner'
 import {
   type AppToast,
   type DashboardMonthOffset,
@@ -26,6 +27,7 @@ import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-preview/components/VendorLedgerWorkspacePage'
+import { useVendorLedgerV2 } from '@/features/vendor-preview/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
@@ -34,6 +36,11 @@ import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { ToastHost } from '@/shared/ui/toast-host'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
+import {
+  applySettlementCorrectionV2,
+  rejectSettlementCorrectionRequestV2,
+  resolveVendorReturnV2,
+} from '@/store/vendorLedgerV2Repository'
 
 type AppWorkspaceProps = {
   activePage: Page
@@ -185,7 +192,20 @@ export function AppWorkspace({
   users,
 }: AppWorkspaceProps) {
   const confirmation = useConfirmationDialog()
-  const approvalQueue = deriveApprovalQueue(cashoutCorrectionRequests, dailyCashouts)
+  const vendorLedger = useVendorLedgerV2(currentUser)
+  const vendorNames = Object.fromEntries(vendorLedger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
+  const approvalQueue = deriveApprovalQueue(cashoutCorrectionRequests, dailyCashouts, {
+    correctionRequests: vendorLedger.correctionRequests,
+    returns: vendorLedger.returns,
+    settlementStates: vendorLedger.settlementStates,
+    vendorNames,
+  })
+  const unifiedPlannerSchedule = mergeV2ChequesIntoPlanner(
+    appSettings.currentBankBalance,
+    plannerMetrics.groupedSchedule,
+    vendorLedger.cheques,
+    vendorLedger.vendors,
+  )
   return (
     <main className="mx-auto flex h-[100dvh] w-full max-w-[1320px] overflow-hidden">
       <AppTopBar
@@ -241,27 +261,51 @@ export function AppWorkspace({
             queue={approvalQueue}
             onApprove={async (item) => {
               try {
-                await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
-                showToast(`Cashout correction approved: ${item.recordedBy}`)
+                if (item.kind === 'cashout-correction') {
+                  await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
+                  showToast(`Cashout correction approved: ${item.recordedBy}`)
+                } else if (item.kind === 'vendor-settlement-correction') {
+                  await applySettlementCorrectionV2(item.sourceRequest.id, { id: currentUser.id, name: currentUser.name }, new Date().toISOString())
+                  showToast(`Vendor payment correction approved: ${item.vendorName}`)
+                }
               } catch (error) {
                 showToast(error instanceof Error ? error.message : 'Unable to approve this correction.')
               }
             }}
             onReject={async (item, reason) => {
               try {
-                await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
-                showToast(reason === OUTDATED_CORRECTION_REASON
-                  ? `Outdated request closed: ${item.recordedBy}`
-                  : `Cashout correction rejected: ${item.recordedBy}`)
+                if (item.kind === 'cashout-correction') {
+                  await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
+                  showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated request closed: ${item.recordedBy}` : `Cashout correction rejected: ${item.recordedBy}`)
+                } else if (item.kind === 'vendor-settlement-correction') {
+                  await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, new Date().toISOString())
+                  showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
+                }
               } catch (error) {
                 showToast(error instanceof Error ? error.message : 'Unable to close this correction request.')
+              }
+            }}
+            onResolveReturn={async (item, decision) => {
+              try {
+                await resolveVendorReturnV2(item.sourceReturn.id, {
+                  ...decision,
+                  actor: { id: currentUser.id, name: currentUser.name },
+                  timestamp: new Date().toISOString(),
+                })
+                showToast(`Vendor return marked ${decision.outcome}: ${item.vendorName}`)
+              } catch (error) {
+                showToast(error instanceof Error ? error.message : 'Unable to resolve this vendor return.')
               }
             }}
           />
         ) : null}
 
         {activePage === 'vendor-preview' ? (
-          <VendorLedgerWorkspacePage currentUser={currentUser} />
+          <VendorLedgerWorkspacePage
+            currentUser={currentUser}
+            ledger={vendorLedger}
+            legacyChequeItems={plannerMetrics.groupedSchedule.flatMap((group) => group.items).filter((item) => item.source !== 'manual-plan')}
+          />
         ) : null}
 
         {activePage === 'directory' ? (
@@ -341,7 +385,7 @@ export function AppWorkspace({
             <PaymentPlannerPage
               currentBankBalance={appSettings.currentBankBalance}
               currentUserName={currentUser.name}
-              groupedSchedule={plannerMetrics.groupedSchedule}
+              groupedSchedule={unifiedPlannerSchedule}
               plannedPayments={plannedPayments}
               totalCounterCash={plannerMetrics.totalCounterCash}
               onSaveBankBalance={async (value) => {

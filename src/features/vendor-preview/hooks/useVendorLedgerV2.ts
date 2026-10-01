@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react'
-import { collection, doc, onSnapshot, type Unsubscribe } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore'
 import type { VendorLedgerV2Config } from '@/domain/appTypes'
+import type { AppUser } from '@/domain/financeTypes'
 import type {
   ChequeV2,
   InvoiceAllocationV2,
   PurchaseV2,
   VendorAccountStateV2,
+  VendorLedgerCorrectionRequestV2,
+  VendorReturnV2,
+  VendorSettlementV2,
   VendorSettlementStateV2,
   VendorV2,
 } from '@/domain/vendorLedgerV2'
 import { db } from '@/shared/lib/firebase'
 import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
 
-type VendorLedgerV2Data = {
+export type VendorLedgerV2Data = {
   config: VendorLedgerV2Config | null
   vendors: VendorV2[]
   purchases: PurchaseV2[]
+  settlements: VendorSettlementV2[]
   allocations: InvoiceAllocationV2[]
   settlementStates: VendorSettlementStateV2[]
+  correctionRequests: VendorLedgerCorrectionRequestV2[]
+  returns: VendorReturnV2[]
   accountStates: VendorAccountStateV2[]
   cheques: ChequeV2[]
   loading: boolean
@@ -25,10 +32,10 @@ type VendorLedgerV2Data = {
 }
 
 const emptyData: Omit<VendorLedgerV2Data, 'config' | 'loading' | 'error'> = {
-  vendors: [], purchases: [], allocations: [], settlementStates: [], accountStates: [], cheques: [],
+  vendors: [], purchases: [], settlements: [], allocations: [], settlementStates: [], correctionRequests: [], returns: [], accountStates: [], cheques: [],
 }
 
-export function useVendorLedgerV2(): VendorLedgerV2Data {
+export function useVendorLedgerV2(currentUser: AppUser): VendorLedgerV2Data {
   const [state, setState] = useState<VendorLedgerV2Data>({ config: null, ...emptyData, loading: true, error: null })
 
   useEffect(() => {
@@ -57,17 +64,32 @@ export function useVendorLedgerV2(): VendorLedgerV2Data {
       }
       subscribe<VendorV2>('vendors', 'vendors')
       subscribe<PurchaseV2>('purchases', 'purchases')
+      subscribe<VendorSettlementV2>('settlements', 'settlements')
       subscribe<InvoiceAllocationV2>('allocations', 'allocations')
       subscribe<VendorSettlementStateV2>('settlementStates', 'settlementStates')
+      subscribe<VendorReturnV2>('returns', 'returns')
       subscribe<VendorAccountStateV2>('vendorAccountStates', 'accountStates')
       subscribe<ChequeV2>('cheques', 'cheques')
+      const correctionSource = currentUser.role === 'owner'
+        ? collection(db, vendorLedgerV2Collections.correctionRequests)
+        : query(
+            collection(db, vendorLedgerV2Collections.correctionRequests),
+            where('requestedByUserId', '==', currentUser.id),
+          )
+      dataUnsubscribers.push(onSnapshot(correctionSource, (result) => {
+        setState((current) => ({
+          ...current,
+          correctionRequests: result.docs.map((entry) => entry.data() as VendorLedgerCorrectionRequestV2),
+          loading: false,
+        }))
+      }, fail))
     }, fail)
 
     return () => {
       configUnsubscribe()
       dataUnsubscribers.forEach((unsubscribe) => unsubscribe())
     }
-  }, [])
+  }, [currentUser.id, currentUser.role])
 
   return state
 }

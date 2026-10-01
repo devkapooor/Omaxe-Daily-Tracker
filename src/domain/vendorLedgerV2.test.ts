@@ -7,6 +7,9 @@ import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildSettlementCorrectionRequestV2,
+  buildVendorReturnResolutionV2,
+  buildVendorReturnV2,
   buildVendorChequeV2,
   buildVendorV2,
   chequeVendorLedgerEffectPaise,
@@ -102,6 +105,32 @@ describe('V2 money and deterministic identifiers', () => {
 })
 
 describe('V2 ledger rules', () => {
+  it('limits staff corrections to their own settlements', () => {
+    const state = {
+      id: 'settlement-1', vendorId: 'vendor-1', settlementId: 'settlement-1', date: '2026-10-01', amountPaise: 50000,
+      mode: 'upi' as const, notes: '', revision: 1, updatedAt: '2026-10-01T00:00:00.000Z', updatedByUserId: 'staff-1',
+    }
+    const settlement = { ...state, ledgerEntryId: 'entry-1', createdAt: state.updatedAt, createdByUserId: 'staff-1' }
+    const proposed = { date: state.date, amountPaise: 45000, mode: state.mode, notes: 'Corrected' }
+    expect(buildSettlementCorrectionRequestV2({ id: 'request-1', settlement, state, proposed, reason: 'Entry error', actor: { id: 'staff-1', name: 'Staff' }, timestamp: state.updatedAt }).sourceRevision).toBe(1)
+    expect(() => buildSettlementCorrectionRequestV2({ id: 'request-2', settlement, state, proposed, reason: 'Entry error', actor: { id: 'staff-2', name: 'Other' }, timestamp: state.updatedAt })).toThrow(/own vendor payments/)
+  })
+
+  it('posts capped vendor return credits and keeps replacement returns non-financial', () => {
+    const vendorReturn = buildVendorReturnV2({
+      id: 'return-1', vendorId: 'vendor-1', date: '2026-10-01', description: 'Damaged cartons', quantity: 2,
+      unit: 'cartons', valuePaise: 30000, reason: 'Damaged stock', actorUserId: 'staff-1', timestamp: '2026-10-01T00:00:00.000Z',
+    })
+    const account = { id: 'vendor-1', vendorId: 'vendor-1', outstandingPaise: 50000, revision: 1, lastLedgerEntryId: 'entry-1', updatedAt: vendorReturn.createdAt, updatedByUserId: 'staff-1' }
+    const credited = buildVendorReturnResolutionV2(vendorReturn, account, { outcome: 'vendor-credit', creditedValuePaise: 20000, outcomeReason: 'Credit note confirmed', actor: { id: 'owner-1', name: 'Owner' }, timestamp: '2026-10-02T00:00:00.000Z' })
+    expect(credited.ledgerEntry?.signedAmountPaise).toBe(-20000)
+    expect(credited.nextAccountState?.outstandingPaise).toBe(30000)
+    expect(credited.nextReturn.creditedValuePaise).toBe(20000)
+    const replacement = buildVendorReturnResolutionV2(vendorReturn, account, { outcome: 'replacement', outcomeReason: 'Replacement received', replacementReceivedAt: '2026-10-02', actor: { id: 'owner-1', name: 'Owner' }, timestamp: '2026-10-02T00:00:00.000Z' })
+    expect(replacement).not.toHaveProperty('ledgerEntry')
+    expect(() => buildVendorReturnResolutionV2(vendorReturn, { ...account, outstandingPaise: 10000 }, { outcome: 'vendor-credit', creditedValuePaise: 20000, outcomeReason: 'Too high', actor: { id: 'owner-1', name: 'Owner' }, timestamp: '2026-10-02T00:00:00.000Z' })).toThrow(/outstanding/)
+  })
+
   it('builds one deterministic purchase, uniqueness reservation, and ledger event', () => {
     const posting = buildPurchasePostingV2({
       id: 'purchase-1',
