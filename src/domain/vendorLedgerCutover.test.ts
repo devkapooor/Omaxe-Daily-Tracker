@@ -6,6 +6,12 @@ import {
 } from './vendorLedgerCutover'
 
 describe('V2 vendor ledger cutover review', () => {
+  it('allows an empty clean start so vendors can be added individually after activation', () => {
+    const review = reviewVendorLedgerCutover('2026-10-01', [])
+
+    expect(review).toMatchObject({ ready: true, vendorCount: 0, adjustedOpeningCount: 0, totalOpeningPaise: 0 })
+  })
+
   it('reconciles explicit zero and audited opening balances', () => {
     const review = reviewVendorLedgerCutover('2026-10-05', [
       { id: 'vendor-1', canonicalName: 'Vendor One', openingBalancePaise: 0, openingReason: '' },

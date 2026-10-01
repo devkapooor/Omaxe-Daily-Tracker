@@ -30,7 +30,6 @@ export function reviewVendorLedgerCutover(
 ): VendorLedgerCutoverReview {
   const errors: string[] = []
   if (!businessDatePattern.test(activationDate)) errors.push('Choose one activation date for all vendors.')
-  if (drafts.length === 0) errors.push('Add at least one verified vendor.')
 
   const names = new Set<string>()
   let totalOpeningPaise = 0

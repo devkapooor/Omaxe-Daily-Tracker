@@ -219,6 +219,29 @@ describe('Firestore role enforcement', () => {
 })
 
 describe('V2 vendor ledger capability enforcement', () => {
+  it('activates an empty clean start without changing protected legacy records', async () => {
+    const ownerDb = userDb('owner-user')
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'loans', 'protected-loan'), { remainingAmount: 98765 })
+      await setDoc(doc(context.firestore(), 'vendors', 'legacy-vendor'), { name: 'Legacy Evidence', openingOutstandingRemaining: 12345 })
+    })
+
+    await expect(activateVendorLedgerV2({
+      activationDate: '2026-10-01',
+      vendors: [],
+      actor: { id: 'owner-user', name: 'Owner' },
+      timestamp,
+    }, ownerDb)).resolves.toMatchObject({
+      review: { ready: true, vendorCount: 0, totalOpeningPaise: 0 },
+      chequeBook: { startNumber: 1120, endNumber: 1199, active: true },
+    })
+    expect((await getDoc(doc(ownerDb, 'appMetadata', 'vendorLedgerV2Config'))).data()).toMatchObject({
+      enabled: true, activationDate: '2026-10-01',
+    })
+    expect((await getDoc(doc(ownerDb, 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
+    expect((await getDoc(doc(ownerDb, 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+  })
+
   it('activates the reviewed clean start atomically for the owner only', async () => {
     const ownerDb = userDb('owner-user')
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
