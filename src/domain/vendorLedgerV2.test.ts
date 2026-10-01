@@ -7,6 +7,7 @@ import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildVendorV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
   financialLedgerAmountPaise,
@@ -65,6 +66,15 @@ function ledgerEntry(overrides: Partial<VendorLedgerEntryV2> = {}): VendorLedger
 }
 
 describe('V2 money and deterministic identifiers', () => {
+  it('builds new vendors at zero without copying a legacy balance', () => {
+    const vendor = buildVendorV2({
+      id: 'vendor-1', canonicalName: ' Acme Supply ', aliases: ['ACME', ' acme ', 'North Shop'],
+      suppliedBrands: ['Brand A', ' brand a ', 'Brand B'], actorUserId: 'owner-1', timestamp: '2026-10-01T00:00:00.000Z',
+    })
+    expect(vendor).toMatchObject({ canonicalName: 'Acme Supply', aliases: ['ACME', 'North Shop'], openingBalancePaise: 0 })
+    expect(vendor.suppliedBrands).toEqual(['Brand A', 'Brand B'])
+  })
+
   it('converts rupees at the legacy boundary and keeps paise integral', () => {
     expect(rupeesToPaise(7141.3)).toBe(714_130)
     expect(rupeesToPaise(0.1 + 0.2)).toBe(30)

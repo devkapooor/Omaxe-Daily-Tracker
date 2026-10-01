@@ -17,6 +17,17 @@ export type VendorV2 = {
   updatedByUserId: string
 }
 
+export type CreateVendorV2Input = {
+  id: string
+  canonicalName: string
+  aliases?: string[]
+  contact?: string
+  address?: string
+  suppliedBrands?: string[]
+  actorUserId: string
+  timestamp: string
+}
+
 export type PurchaseV2 = {
   id: string
   vendorId: string
@@ -228,6 +239,44 @@ export type InvoiceBalanceV2 = {
 }
 
 const businessDatePattern = /^\d{4}-\d{2}-\d{2}$/
+
+function uniqueTrimmedValues(values: string[]) {
+  const seen = new Set<string>()
+  return values.flatMap((value) => {
+    const trimmed = value.trim()
+    const key = trimmed.toLocaleUpperCase('en-IN')
+    if (!trimmed || seen.has(key)) return []
+    seen.add(key)
+    return [trimmed]
+  })
+}
+
+export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
+  const id = input.id.trim()
+  const canonicalName = input.canonicalName.trim()
+  const actorUserId = input.actorUserId.trim()
+  if (!id || !canonicalName || !actorUserId) throw new Error('Vendor ID, name, and actor are required.')
+
+  const canonicalKey = canonicalName.toLocaleUpperCase('en-IN')
+  const aliases = uniqueTrimmedValues(input.aliases ?? [])
+    .filter((alias) => alias.toLocaleUpperCase('en-IN') !== canonicalKey)
+
+  return {
+    id,
+    canonicalName,
+    aliases,
+    contact: input.contact?.trim() ?? '',
+    address: input.address?.trim() ?? '',
+    suppliedBrands: uniqueTrimmedValues(input.suppliedBrands ?? []),
+    active: true,
+    openingBalancePaise: 0,
+    revision: 1,
+    createdAt: input.timestamp,
+    createdByUserId: actorUserId,
+    updatedAt: input.timestamp,
+    updatedByUserId: actorUserId,
+  }
+}
 
 function assertIntegerPaise(value: number, label: string) {
   if (!Number.isSafeInteger(value)) throw new Error(`${label} must be a safe integer amount in paise.`)

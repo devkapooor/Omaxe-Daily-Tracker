@@ -7,7 +7,13 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
-import { applySettlementCorrectionV2, createPurchaseV2, createSettlementV2 } from '../src/store/vendorLedgerV2Repository'
+import {
+  applyOwnerSettlementCorrectionV2,
+  applySettlementCorrectionV2,
+  createPurchaseV2,
+  createSettlementV2,
+  createVendorV2,
+} from '../src/store/vendorLedgerV2Repository'
 
 let testEnvironment: RulesTestEnvironment
 
@@ -388,6 +394,19 @@ describe('V2 vendor ledger capability enforcement', () => {
       .rejects.toThrow(/already registered/)
   })
 
+  it('creates owner-managed V2 vendors at zero and keeps retries idempotent', async () => {
+    await enableV2()
+    const input = {
+      id: 'vendor-created-1', canonicalName: 'New Vendor', aliases: ['NV'], actorUserId: 'owner-user', timestamp,
+    }
+    await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({
+      created: true, vendor: { openingBalancePaise: 0 },
+    })
+    await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({ created: false })
+    await expect(createVendorV2({ ...input, canonicalName: 'Different Vendor' }, userDb('owner-user')))
+      .rejects.toThrow(/already uses this ID/)
+  })
+
   it('posts invoice-linked and custom settlements atomically without exceeding balances', async () => {
     await enableV2()
     const purchasingDb = userDb('purchasing-user')
@@ -427,6 +446,17 @@ describe('V2 vendor ledger capability enforcement', () => {
     const accountAfterCorrection = await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))
     expect(accountAfterCorrection.data()?.outstandingPaise).toBe(10000)
     await assertFails(updateDoc(doc(userDb('owner-user'), 'vendorSettlementsV2', 'settlement-custom-1'), { amountPaise: 50000 }))
+
+    await expect(applyOwnerSettlementCorrectionV2({
+      id: 'owner-correction-linked-1', sourceRecordId: 'settlement-linked-1',
+      proposed: { date: '2026-10-01', amountPaise: 30000, mode: 'upi', notes: 'Owner corrected linked amount' },
+      reason: 'Invoice-linked amount entered incorrectly', actor: { id: 'owner-user', name: 'Owner' },
+      timestamp: '2026-10-01T02:00:00.000Z',
+    }, userDb('owner-user'))).resolves.toMatchObject({ adjustmentPaise: 10000 })
+    const linkedAccount = await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))
+    const linkedInvoice = await getDoc(doc(userDb('owner-user'), 'invoiceStatesV2', 'purchase-settlement-1'))
+    expect(linkedAccount.data()?.outstandingPaise).toBe(20000)
+    expect(linkedInvoice.data()?.openAmountPaise).toBe(70000)
   })
 
   it('enforces capability-specific cheque transitions and immutable identity', async () => {

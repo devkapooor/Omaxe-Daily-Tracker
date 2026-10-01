@@ -4,7 +4,10 @@ import {
   buildPurchasePostingV2,
   buildSettlementPostingV2,
   buildSettlementCorrectionV2,
+  buildVendorV2,
   isV2BusinessDate,
+  settlementCorrectionValuesV2,
+  type CreateVendorV2Input,
   type CreatePurchaseV2Input,
   type CreateSettlementV2Input,
   type InvoiceReservationV2,
@@ -158,6 +161,23 @@ export async function createPurchaseV2(input: CreatePurchaseV2Input, database: F
   }, database)
 }
 
+export async function createVendorV2(input: CreateVendorV2Input, database: Firestore = db) {
+  const vendor = buildVendorV2(input)
+  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const vendorRef = doc(refs.vendors, vendor.id)
+    const snapshot = await transaction.get(vendorRef)
+    if (snapshot.exists()) {
+      const existing = snapshot.data() as VendorV2
+      const exactRetry = existing.canonicalName === vendor.canonicalName &&
+        existing.createdByUserId === vendor.createdByUserId && existing.createdAt === vendor.createdAt
+      if (exactRetry) return { created: false, vendor: existing }
+      throw new Error('A V2 vendor already uses this ID.')
+    }
+    transaction.set(vendorRef, vendor)
+    return { created: true, vendor }
+  }, database)
+}
+
 export async function createSettlementV2(input: CreateSettlementV2Input, database: Firestore = db) {
   return runVendorLedgerV2Transaction(async (transaction, refs, config) => {
     if (!config.activationDate || !isV2BusinessDate(input.date, config.activationDate)) {
@@ -277,4 +297,60 @@ export async function applySettlementCorrectionV2(
     })
     return correction
   }, database)
+}
+
+export type ApplyOwnerSettlementCorrectionV2Input = {
+  id: string
+  sourceRecordId: string
+  proposed: Omit<VendorLedgerCorrectionRequestV2['proposed'], 'invoiceId'>
+  reason: string
+  actor: { id: string; name: string }
+  timestamp: string
+}
+
+export async function applyOwnerSettlementCorrectionV2(
+  input: ApplyOwnerSettlementCorrectionV2Input,
+  database: Firestore = db,
+) {
+  const request = await runVendorLedgerV2Transaction(async (transaction, refs) => {
+    const requestId = input.id.trim()
+    const sourceRecordId = input.sourceRecordId.trim()
+    if (!requestId || !sourceRecordId || !input.actor.id.trim() || !input.reason.trim()) {
+      throw new Error('Correction ID, settlement, owner, and reason are required.')
+    }
+    const requestRef = doc(refs.correctionRequests, requestId)
+    const stateRef = doc(refs.settlementStates, sourceRecordId)
+    const [requestSnapshot, stateSnapshot] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(stateRef),
+    ])
+    if (requestSnapshot.exists()) {
+      const existing = requestSnapshot.data() as VendorLedgerCorrectionRequestV2
+      if (existing.requestType === 'owner-edit' && existing.sourceRecordId === sourceRecordId) return existing
+      throw new Error('A different correction already uses this ID.')
+    }
+    const state = stateSnapshot.data() as VendorSettlementStateV2 | undefined
+    if (!stateSnapshot.exists() || !state) throw new Error('Settlement correction source state is missing.')
+    const before = settlementCorrectionValuesV2(state)
+    const correctionRequest: VendorLedgerCorrectionRequestV2 = {
+      id: requestId,
+      kind: 'settlement-correction',
+      sourceRecordId,
+      vendorId: state.vendorId,
+      sourceRevision: state.revision,
+      before,
+      proposed: { ...input.proposed, ...(state.invoiceId ? { invoiceId: state.invoiceId } : {}) },
+      reason: input.reason.trim(),
+      requestedByUserId: input.actor.id.trim(),
+      requestedBy: input.actor.name.trim(),
+      requestType: 'owner-edit',
+      status: 'pending',
+      createdAt: input.timestamp,
+    }
+    transaction.set(requestRef, correctionRequest)
+    return correctionRequest
+  }, database)
+
+  if (request.status === 'approved') return { alreadyApplied: true }
+  return applySettlementCorrectionV2(request.id, input.actor, input.timestamp, database)
 }
