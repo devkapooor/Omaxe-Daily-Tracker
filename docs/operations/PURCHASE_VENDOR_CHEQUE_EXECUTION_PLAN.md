@@ -233,14 +233,15 @@ This three-release route supersedes the active execution of the former Phases 5-
 
 #### Implementation Evidence
 
-- Added a local-only owner cutover planner for explicit vendor selection, zero-default openings, mandatory reasons for non-zero openings, one activation date, cheque leaves 1120-1199, and whole-system reconciliation totals.
+- Added an owner cutover planner for explicit vendor selection, zero-default openings, mandatory reasons for non-zero openings, one activation date, cheque leaves 1120-1199, and whole-system reconciliation totals.
 - Added an owner-only atomic initializer used only in the Firestore emulator rehearsal. It creates reviewed V2 vendors, audited opening ledger entries and account projections, the active cheque book, and the enabled configuration in one transaction.
 - Firestore emulator: 20 rules tests passed. The rehearsal proved owner-only access, exact opening reconciliation, automatic transaction rollback, single initialization, cheque-book setup, and preservation of seeded V1 vendor and loan records.
 - Read-only production preflight on 2026-10-01: `vendorLedgerV2Config` does not exist; checked V2 collections are empty; legacy `vendors` and `loans` remain present. No document was created, updated, or deleted.
 - Source validation: 45 tests passed; source ESLint, TypeScript, and production build passed with only the existing bundle-size warning.
-- Firestore ruleset `25536885-9170-4d44-ab34-c780baf6c04b` and Hosting version `cb56626dcf95668f` were deployed on 2026-10-01. The live endpoint returned HTTP 200.
+- Firestore ruleset `25536885-9170-4d44-ab34-c780baf6c04b` and Hosting version `1529958b0289e343` were deployed on 2026-10-01. The live endpoint returned HTTP 200 with the expected production bundle.
 - Post-deployment read-only verification found all checked V2 collections empty and no V2 configuration document. All 20 loan documents predate the deployment baseline; none was updated during deployment.
-- Production initialization was not run because the repository contains no owner-reviewed vendor names, opening balances, or activation date. These financial inputs must not be inferred.
+- Added a guarded owner-only production action using the rehearsed atomic initializer. It requires a valid reconciled schedule and the exact typed phrase `ACTIVATE V2`; changing any vendor, balance, reason, or date invalidates the confirmation.
+- Production initialization was not run because no owner-reviewed vendor names, opening balances, or activation date have been entered. These financial inputs must not be inferred.
 
 #### Rollback And Containment
 
