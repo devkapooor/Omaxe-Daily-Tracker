@@ -160,7 +160,7 @@ Every phase uses the same sequence:
 
 - Build an owner-only, disabled-by-default clean-start tool that first produces read-only controls and reports.
 - Do not reconstruct or migrate balances from unreliable legacy vendor, purchase, or payment data.
-- Generate verified starting-position previews only from inputs the owner explicitly approves.
+- Default every V2 vendor to zero outstanding and generate starting-position previews only for opening balances the owner explicitly enters and approves.
 - Rehearse any approved starting-position records only in the Firebase Emulator Suite.
 - Produce per-vendor opening controls and whole-system totals for the clean V2 starting position.
 
@@ -210,7 +210,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-001 | Vendor outstanding decreases only when the cheque becomes `Debited`. `Issued` and `Presented` cheques remain visible in the vendor ledger as pending cheque commitments without changing outstanding. | Approved 2026-10-01 | Phase 1 sign rules |
 | FD-002 | Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases its reserved invoice allocations in the same atomic transition. | Approved 2026-10-01 | Phase 1 transition rules |
 | FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. Exact activation date remains pending. | Partially approved 2026-10-01 | Phase 3 compatibility design |
-| FD-004 | Confirm whether every V2 vendor starts at zero outstanding or the owner may enter a separately verified opening balance without using legacy calculations. | Pending | Phase 4 ledger posting |
+| FD-004 | Every V2 vendor starts at zero outstanding. The owner alone may enter a separately verified opening balance; no legacy value is copied or calculated automatically. Whether changes remain available after ledger activity begins is still pending. | Partially approved 2026-10-01 | Phase 4 ledger posting |
 | FD-005 | Confirm whether V2 purchase, settlement, return, and cheque corrections require Action Centre approval or can be performed directly by users with correction capabilities. | Pending | Phase 2 permissions |
 | FD-006 | Confirm whether an immediate payment entered with a purchase should support all payment modes or only create a linked non-cheque settlement. | Pending | Phase 4 purchase UI |
 | FD-007 | Confirm whether vendor credit must allocate to the source invoice first and then FIFO, and who may override that order. | Pending | Phase 5 allocation rules |
@@ -249,3 +249,11 @@ No implementation phase may cross a decision marked `Pending`.
 - Because vendor outstanding is unchanged before debit, releasing a pending reservation creates no settlement reversal and does not alter outstanding.
 - The status change and reservation release must be atomic and idempotent.
 - Tests must prove that the release occurs exactly once, retries do not duplicate effects, unrelated allocations remain unchanged, and vendor outstanding remains unchanged.
+
+### V2 Vendor Opening Balance
+
+- Every newly created V2 vendor starts with zero outstanding.
+- No legacy vendor, purchase, or payment amount may prefill or calculate the V2 opening balance.
+- Only the owner may enter a separately verified opening balance.
+- Owner-entered opening balances require actor, timestamp, and reason audit fields.
+- The rule for changing an opening balance after that vendor has ledger activity remains pending owner confirmation.
