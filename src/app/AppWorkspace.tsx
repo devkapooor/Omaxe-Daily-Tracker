@@ -1,7 +1,7 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
-import type { Page, PlannedPayment, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { Page, PlannedPayment, UserAccount } from '@/domain/appTypes'
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
@@ -115,7 +115,6 @@ type AppWorkspaceProps = {
   savePayment: (draft: PaymentDraft) => Promise<void>
   savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   savePlannerBankBalance: (value: number, actor: string) => Promise<void>
-  saveVendor: (vendor: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
   showToast: (message: string) => void
@@ -125,8 +124,6 @@ type AppWorkspaceProps = {
   totalLoans: number
   totalVendorOutstanding: number
   users: UserAccount[]
-  vendors: VendorRecord[]
-  vendorOutstandingByName: Map<string, number>
 }
 
 export function AppWorkspace({
@@ -177,7 +174,6 @@ export function AppWorkspace({
   savePayment,
   savePlannedPayment,
   savePlannerBankBalance,
-  saveVendor,
   setDashboardMonthOffset,
   settingsAuditLog,
   showToast,
@@ -187,8 +183,6 @@ export function AppWorkspace({
   totalLoans,
   totalVendorOutstanding,
   users,
-  vendors,
-  vendorOutstandingByName,
 }: AppWorkspaceProps) {
   const confirmation = useConfirmationDialog()
   const approvalQueue = deriveApprovalQueue(cashoutCorrectionRequests, dailyCashouts)
@@ -273,12 +267,9 @@ export function AppWorkspace({
         {activePage === 'directory' ? (
           <section className="mt-1.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <DirectoryPage
-              currentUserRole={currentUser.role}
               isBusy={isBusy}
               partyOptions={directoryOptions.party}
               savedPartyNames={savedPartyNames}
-              vendors={vendors}
-              vendorOutstandingByName={vendorOutstandingByName}
               onAddParty={async (name) => {
                 await ensureNameInDirectory('people', name)
                 showToast(`Party saved: ${name}`)
@@ -286,10 +277,6 @@ export function AppWorkspace({
               onRenameParty={async (previousName, nextName) => {
                 const renamed = await renamePartyInDirectory(previousName, nextName)
                 if (renamed) showToast(`Party renamed: ${previousName} to ${nextName}`)
-              }}
-              onSaveVendor={async (vendor) => {
-                await saveVendor(vendor)
-                showToast(`Vendor saved: ${vendor.name}`)
               }}
             />
           </section>

@@ -30,7 +30,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors 
     () => vendors.filter((vendor) => !query || vendorIdentitySearchText(vendor).includes(query)),
     [query, vendors],
   )
-  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? vendors[0] ?? null
   const aliasReview = useMemo(
     () => currentUserRole === 'owner' ? buildVendorAliasReview(legacyVendorNames, vendors) : [],
     [currentUserRole, legacyVendorNames, vendors],
@@ -41,7 +41,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors 
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeading eyebrow="V2 vendor identity" title="Stable Vendor Directory" />
-          <FieldLabel className="w-full sm:max-w-sm" label="Search names, aliases, contacts, or brands">
+          <FieldLabel className="w-full sm:max-w-sm" label="Search vendor details">
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search V2 vendors" />
           </FieldLabel>
         </CardHeader>
@@ -82,9 +82,11 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors 
                     <TabsTrigger value="cheques">Cheques</TabsTrigger>
                   </TabsList>
                   <TabsContent value="overview" className="grid gap-2 pt-3 text-sm">
+                    <p><span className="text-muted-foreground">Owner:</span> {selectedVendor.ownerName || 'Not provided'}</p>
                     <p><span className="text-muted-foreground">Contact:</span> {selectedVendor.contact || 'Not provided'}</p>
                     <p><span className="text-muted-foreground">Address:</span> {selectedVendor.address || 'Not provided'}</p>
                     <p><span className="text-muted-foreground">Brands:</span> {selectedVendor.suppliedBrands.join(', ') || 'Not provided'}</p>
+                    <p><span className="text-muted-foreground">Notes:</span> {selectedVendor.notes || 'Not provided'}</p>
                     <p><span className="text-muted-foreground">Opening:</span> New V2 vendors default to zero; legacy balances are excluded.</p>
                   </TabsContent>
                   {Object.entries(emptyTabCopy).map(([tab, copy]) => (
@@ -99,7 +101,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, vendors 
         </CardContent>
       </Card>
 
-      {currentUserRole === 'owner' ? (
+      {currentUserRole === 'owner' && legacyVendorNames.length > 0 ? (
         <Card>
           <CardHeader>
             <SectionHeading eyebrow="Owner review" title="Legacy Name Matching" />

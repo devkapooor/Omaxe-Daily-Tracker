@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ShieldCheck } from 'lucide-react'
-import { today } from '@/app/uiHelpers'
+import { Plus, ShieldCheck, X } from 'lucide-react'
+import { normalizeName, today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import {
   openInvoiceBalancesV2,
@@ -49,6 +49,7 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
   const [tab, setTab] = useState('directory')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [vendorFormOpen, setVendorFormOpen] = useState(false)
   const [paymentTarget, setPaymentTarget] = useState({ vendorId: '', invoiceId: '' })
   const balances = useMemo(
     () => openInvoiceBalancesV2(ledger.purchases, ledger.allocations),
@@ -116,8 +117,18 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
             <TabsTrigger value="balances">Balances</TabsTrigger>
           </TabsList>
           <TabsContent value="directory" className="grid gap-3 pt-2">
-            <VendorCreateForm busy={busy} currentUser={currentUser} onRun={run} />
-            <VendorDirectoryV2 currentUserRole="owner" legacyVendorNames={[]} vendors={ledger.vendors} />
+            <Card>
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <SectionHeading eyebrow="Vendor directory" title="V2 Vendors" />
+                  <p className="mt-1 text-sm text-muted-foreground">Manage vendor profiles used by purchases, payments, balances, and cheques.</p>
+                </div>
+                <Button type="button" onClick={() => setVendorFormOpen(true)}>
+                  <Plus className="size-4" /> Add Vendor
+                </Button>
+              </CardContent>
+            </Card>
+            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} vendors={ledger.vendors} />
           </TabsContent>
           <TabsContent value="purchases" className="pt-2"><PurchaseFormV2 isBusy={busy} vendors={ledger.vendors} onSave={savePurchase} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>
@@ -129,14 +140,112 @@ export function VendorLedgerWorkspacePage({ currentUser }: Props) {
           </TabsContent>
         </Tabs>
       </div>
+      {vendorFormOpen ? (
+        <VendorCreateModal
+          busy={busy}
+          currentUser={currentUser}
+          onClose={() => setVendorFormOpen(false)}
+          onRun={run}
+          vendors={ledger.vendors}
+        />
+      ) : null}
     </section>
   )
 }
 
-function VendorCreateForm({ busy, currentUser, onRun }: { busy: boolean; currentUser: AppUser; onRun: (action: () => Promise<unknown>, success: string) => Promise<void> }) {
+function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
+  busy: boolean
+  currentUser: AppUser
+  onClose: () => void
+  onRun: (action: () => Promise<unknown>, success: string) => Promise<void>
+  vendors: ReturnType<typeof useVendorLedgerV2>['vendors']
+}) {
   const [name, setName] = useState('')
+  const [ownerName, setOwnerName] = useState('')
   const [contact, setContact] = useState('')
-  return <Card><CardHeader><SectionHeading eyebrow="Zero opening" title="Add V2 Vendor" /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); const savedName = name.trim(); void onRun(() => createVendorV2({ id: `vendor-${crypto.randomUUID()}`, canonicalName: savedName, contact, actorUserId: currentUser.id, timestamp: new Date().toISOString() }), `Vendor ${savedName} created at zero opening.`).then(() => { setName(''); setContact('') }).catch(() => undefined) }}><FieldLabel label="Vendor Name"><Input value={name} onChange={(event) => setName(event.target.value)} required /></FieldLabel><FieldLabel label="Contact"><Input value={contact} onChange={(event) => setContact(event.target.value)} /></FieldLabel><Button className="self-end" disabled={busy}>Add Vendor</Button></form></CardContent></Card>
+  const [address, setAddress] = useState('')
+  const [companiesProvided, setCompaniesProvided] = useState('')
+  const [notes, setNotes] = useState('')
+  const [formError, setFormError] = useState('')
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const savedName = normalizeName(name)
+    const savedOwnerName = normalizeName(ownerName)
+    const savedContact = contact.trim()
+    const savedAddress = address.trim()
+    const suppliedBrands = companiesProvided.split(',').map((company) => company.trim()).filter(Boolean)
+    if (!savedName || !savedOwnerName || !savedContact || !savedAddress || suppliedBrands.length === 0) {
+      setFormError('Vendor name, owner, contact, address, and at least one company are required.')
+      return
+    }
+    if (vendors.some((vendor) => vendor.active && normalizeName(vendor.canonicalName).toLocaleLowerCase('en-IN') === savedName.toLocaleLowerCase('en-IN'))) {
+      setFormError('An active vendor with this name already exists.')
+      return
+    }
+    setFormError('')
+    await onRun(() => createVendorV2({
+      id: `vendor-${crypto.randomUUID()}`,
+      canonicalName: savedName,
+      ownerName: savedOwnerName,
+      contact: savedContact,
+      address: savedAddress,
+      suppliedBrands,
+      notes: notes.trim(),
+      actorUserId: currentUser.id,
+      timestamp: new Date().toISOString(),
+    }), `Vendor ${savedName} created at zero opening.`)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/65 px-3 py-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="add-vendor-title">
+      <Card className="max-h-[92dvh] w-full max-w-[46rem] overflow-y-auto border-cyan-400/25 shadow-[0_24px_80px_rgba(1,10,20,0.65)]">
+        <CardHeader className="gap-3 border-b border-border/70">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Vendor directory</p>
+              <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add Vendor</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Create the vendor profile used across the V2 workspace.</p>
+            </div>
+            <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="Close add vendor form" onClick={onClose}>
+              <X className="size-5" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <form className="grid gap-3.5 md:grid-cols-2" onSubmit={(event) => void handleSubmit(event).catch(() => undefined)}>
+            {formError ? <p className="md:col-span-2 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm font-semibold text-rose-200">{formError}</p> : null}
+            <FieldLabel label="Vendor Name">
+              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Vendor name" required autoFocus />
+            </FieldLabel>
+            <FieldLabel label="Owner Name">
+              <Input value={ownerName} onChange={(event) => setOwnerName(event.target.value)} placeholder="Owner name" required />
+            </FieldLabel>
+            <FieldLabel label="Contact">
+              <Input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contact number" required />
+            </FieldLabel>
+            <FieldLabel label="Address">
+              <Input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Vendor address" required />
+            </FieldLabel>
+            <FieldLabel className="md:col-span-2" label="Companies Provided">
+              <Input value={companiesProvided} onChange={(event) => setCompaniesProvided(event.target.value)} placeholder="Example: ITC, HUL, Britannia" required />
+            </FieldLabel>
+            <FieldLabel className="md:col-span-2" label="Notes / Comments">
+              <Textarea className="min-h-24" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment terms, service quality, or stock rhythm" />
+            </FieldLabel>
+            <div className="md:col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3.5 py-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">Opening outstanding: INR 0.</strong> New vendors begin at zero so no legacy balance is copied into the V2 ledger.
+            </div>
+            <div className="flex flex-col-reverse gap-2 md:col-span-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
+              <Button disabled={busy}>{busy ? 'Saving...' : 'Save Vendor'}</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 function CorrectionForm({ busy, currentUser, onRun, states, vendors }: { busy: boolean; currentUser: AppUser; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; states: ReturnType<typeof useVendorLedgerV2>['settlementStates']; vendors: Record<string, string> }) {

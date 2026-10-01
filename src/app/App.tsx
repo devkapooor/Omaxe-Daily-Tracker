@@ -69,7 +69,6 @@ export default function App() {
     saveLoanEntry,
     saveOperationalSettings,
     savePayment,
-    saveVendor,
     deletePlannedPayment,
   } = useAppStore()
 
@@ -96,7 +95,6 @@ export default function App() {
     todayCashout,
     todayPaymentNet,
     totalLoans,
-    vendorOutstandingByName,
   } = useDashboardMetrics({
     dashboardMonthOffset,
     dailyCashouts,
@@ -253,7 +251,6 @@ export default function App() {
         savePayment={savePayment}
         savePlannedPayment={savePlannedPayment}
         savePlannerBankBalance={savePlannerBankBalance}
-        saveVendor={saveVendor}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}
         showToast={showToast}
@@ -264,8 +261,6 @@ export default function App() {
         totalVendorOutstanding={totalVendorOutstanding}
         users={users}
         savedPartyNames={nameDirectory.people}
-        vendors={vendors}
-        vendorOutstandingByName={vendorOutstandingByName}
       />
     </AppBackground>
   )

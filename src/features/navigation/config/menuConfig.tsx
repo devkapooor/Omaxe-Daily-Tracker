@@ -34,7 +34,7 @@ export function pageTitle(page: Page) {
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
-      return 'Directory'
+      return 'Party Directory'
     case 'expense':
       return 'Register'
     case 'cashout':
@@ -89,7 +89,7 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
   items.push(
     {
       icon: <Users className="size-4 shrink-0" />,
-      label: 'Directory',
+      label: 'Party Directory',
       page: 'directory',
       gradient: '',
       hoverClass: '',
