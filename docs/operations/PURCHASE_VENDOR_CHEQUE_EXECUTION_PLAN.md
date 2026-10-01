@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase: Phase 5 in progress - atomic settlement posting and custom-settlement correction foundation complete; invoice-linked corrections and Action Centre UI remain
+- Current phase: Lean Release A - visible owner preview
 - Production financial writes: prohibited during development and validation
 - Firebase plan: Spark-compatible; stop before implementation if a later requirement introduces a Blaze-only service
 - Release method: complete, validate, commit, and push each phase before starting the next phase
@@ -145,6 +145,80 @@ Every phase uses the same sequence:
 - Purchase updates remain denied; future corrections must use the audited compensating workflow rather than rewriting original financial evidence.
 - Full source suite passes with 39 tests; all 16 Firestore emulator scenarios, source ESLint, TypeScript, and production build pass.
 - V2 remains unmounted and disabled. No rules were deployed and no production record, V1 calculation, loan, expense, cashout, or cash movement was changed.
+
+## Lean Execution Route
+
+This three-release route supersedes the active execution of the former Phases 5-10. Their detailed requirements remain below as reference and post-launch backlog; they are not all required before the next visible delivery.
+
+### Lean Release A - Visible Owner Preview
+
+#### Scope
+
+- Add one owner-only `Vendor Ledger Preview` page.
+- Mount the completed V2 Vendor Directory, Purchase, Open Invoices, and Vendor Settlement components.
+- Use local preview fixtures only; do not enable the V2 feature flag or connect preview forms to production writes.
+- Show a clear `Preview - no records will be saved` banner.
+- Keep current Directory, Register, vendor balances, Payment Planner, loans, and all V1 calculations unchanged.
+
+#### Completion Gate
+
+- Owner can inspect the complete responsive workflow locally and on Hosting.
+- Source tests, ESLint, TypeScript, and production build pass.
+- No Firestore rules, schema, production data, or V2 activation changes are required.
+
+#### Credit Boundary
+
+- One UI integration pass, one validation pass, one commit/push, and one optional Hosting deployment.
+- No browser automation, migration tooling, Action Centre integration, or financial mutation testing.
+
+### Lean Release B - Minimum Operational Vendor Ledger
+
+#### Scope
+
+- Replace preview fixtures with the already-built guarded V2 repositories.
+- Support owner-managed vendors, purchases, cash/UPI/card/bank settlements, optional invoice allocation, and owner direct audited corrections.
+- Add a minimum unified Cheque Register for new V2 vendor cheques using active leaves 1120-1199.
+- Reduce vendor outstanding only when a new V2 vendor cheque becomes `Debited`.
+- Keep staff correction requests, vendor returns, legacy cheque import, expense-cheque unification, and Payment Planner integration deferred.
+
+#### Completion Gate
+
+- Emulator tests cover purchase, settlement, owner correction, cheque uniqueness, lifecycle, and debit posting.
+- V2 remains disabled in production after rules and Hosting deployment.
+- No legacy financial records or loan records are modified.
+
+#### Credit Boundary
+
+- Implement only missing owner correction and minimum cheque paths.
+- Reuse existing components and rules; no broad redesign or new reporting layer.
+
+### Lean Release C - Controlled Clean Start
+
+#### Scope
+
+- Produce one owner-reviewed cutover screen showing vendors, zero opening balances, optional owner-entered audited openings, and whole-system totals.
+- Select one all-vendor activation date.
+- Run one emulator rehearsal and one read-only production preflight.
+- Deploy rules and Hosting first; initialize and activate only after a separate explicit owner confirmation.
+
+#### Completion Gate
+
+- Opening controls reconcile exactly and rollback is documented.
+- V1 evidence remains preserved and excluded from V2 calculations.
+- Production initialization, activation, and deployment remain separately auditable actions.
+
+### Post-Launch Backlog
+
+- Staff correction requests and V2 Action Centre adapters.
+- Vendor returns and vendor-credit outcomes.
+- Import of 30 verified legacy open cheques as tracking-only records.
+- Existing expense-cheque deduplication and unified registration.
+- Payment Planner switch to the unified Cheque Register.
+- Additional dashboards, exports, automation, and migration conveniences.
+
+## Archived Detailed Roadmap
+
+The following former phases remain design reference only. Implement an item from them only when it enters a separately approved lean release.
 
 ## Phase 5 - Settlements and Allocations
 
