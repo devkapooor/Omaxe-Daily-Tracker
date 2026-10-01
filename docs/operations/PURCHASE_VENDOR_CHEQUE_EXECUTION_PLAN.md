@@ -115,14 +115,14 @@ Every phase uses the same sequence:
 ### Scope
 
 - Add vendor settlements as separate records rather than purchase mutations.
-- Add FIFO allocation proposals, authorized overrides, partial allocations, and allocation reversals.
+- Add optional invoice-linked payment allocations plus custom vendor-account payments with no invoice allocation.
 - Add compensating corrections with actor, reason, source revision, and reversal reference.
 - Integrate correction approvals with the Action Centre if selected in the Financial Decision Register.
 
 ### Completion Gate
 
-- Tests cover opening positions, partial payments, overpayments, reversals, stale requests, and idempotent retries.
-- Derived outstanding reconciles exactly from ledger events and allocations in emulator fixtures.
+- Tests cover opening positions, invoice-linked and custom payments, partial payments, overpayments, reversals, stale requests, and idempotent retries.
+- Derived outstanding reconciles exactly from all ledger events; invoice balances reconcile from invoice-linked allocations only.
 
 ## Phase 6 - Cheque Book and Cheque Register
 
@@ -145,7 +145,7 @@ Every phase uses the same sequence:
 
 - Add return records and Pending, Vendor Credit, Replacement, Cash Refund, and Rejected outcomes.
 - Apply financial effects only for owner-approved outcome rules.
-- Add allocation and reversal behavior for accepted credits and refunds.
+- Post accepted vendor credits and refunds to the vendor ledger without invoice allocation, with compensating reversal behavior for corrections.
 - Keep return descriptions free-text and do not change inventory quantities.
 
 ### Completion Gate
@@ -213,12 +213,13 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-004 | Every V2 vendor starts at zero outstanding. The owner alone may enter a separately verified opening balance; no legacy value is copied or calculated automatically. After recording, corrections use audited compensating adjustment entries and never overwrite the original opening entry. | Approved 2026-10-01 | Phase 4 ledger posting |
 | FD-005 | Staff submit purchase, settlement, return, and cheque correction requests through the Action Centre. The owner may apply direct audited corrections without submitting a separate approval request. | Approved 2026-10-01 | Phase 2 permissions |
 | FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
-| FD-007 | Confirm whether vendor credit must allocate to the source invoice first and then FIFO, and who may override that order. | Pending | Phase 5 allocation rules |
+| FD-007 | Vendor returns post as unallocated vendor-ledger credits and do not adjust individual invoices. Payments may be linked to a selected invoice for any amount up to its open value or entered as a custom unallocated vendor-account payment. | Approved 2026-10-01 | Phase 5 allocation rules |
 | FD-008 | Confirm how a cash refund is received: cash drawer, bank receipt, or a selectable destination, and which workflow records that receipt. | Pending | Phase 7 return effects |
 | FD-009 | Confirm whether cheque numbers 1120-1299 are a new available book and whether any imported open cheque uses a number in that range. | Pending verification | Phase 6 cheque book |
 | FD-010 | Confirm the 30 imported cheque statuses and totals after independent workbook reconciliation. | Pending verification | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
+| FD-013 | Confirm whether a custom payment may exceed current vendor outstanding and create a vendor advance/credit balance, or must be capped at outstanding. | Pending | Phase 5 settlement validation |
 
 ## Phase 0 Findings
 
@@ -277,3 +278,13 @@ No implementation phase may cross a decision marked `Pending`.
 - After saving a purchase, `Record payment for this invoice` opens Vendor Settlements with the vendor and invoice preselected; the user must still review and submit the payment separately.
 - Allocations connect settlements to invoices and derive the remaining invoice balance without rewriting the purchase total.
 - Tests must prove that retries and repeated shortcut use cannot duplicate a settlement or mutate the source purchase.
+
+### Vendor-Level Credits and Flexible Payments
+
+- An accepted vendor return posts one vendor-ledger credit and reduces net vendor outstanding without changing any invoice balance.
+- An invoice-linked payment may pay the selected invoice in full or partially, up to that invoice's open amount.
+- A custom payment reduces net vendor outstanding without selecting or changing an invoice.
+- The vendor view must display net vendor outstanding, total open invoice value, and unallocated credits/payments separately whenever those figures differ.
+- Invoice balances derive only from invoice-linked payments; vendor outstanding derives from all posting ledger events.
+- Corrections use compensating ledger events and never rewrite the original return credit or payment.
+- Tests must cover mixed invoice-linked payments, custom payments, return credits, and the difference between invoice totals and net vendor outstanding.
