@@ -15,6 +15,7 @@
 - Treat all production checks and exports as read-only.
 - Do not infer a financial meaning, opening balance, cheque state, allocation, return treatment, or cutover rule. Record the question and obtain owner confirmation first.
 - Keep Expenses, Loans, Cashout, Cash Movement, and their calculations outside this redesign.
+- Treat all existing loan records, balances, calculations, and workflows as protected and immutable for this redesign.
 - Keep the current vendor workflow operational until the owner approves a reconciled cutover report.
 - Never activate a new write path before its Firestore rules and emulator tests pass.
 - Never deploy automatically. Commit and push completed phases; request confirmation before deployment.
@@ -38,14 +39,14 @@ Every phase uses the same sequence:
 - Inventory current vendor, purchase, payment, cheque-planner, metrics, permissions, and Firestore rule behavior.
 - Define V2 record boundaries without changing current runtime behavior.
 - Define legacy compatibility, idempotency, uniqueness, revisions, corrections, and rollback.
-- Independently verify the cheque workbook controls before treating them as migration facts.
+- Independently verify the cheque workbook controls before deciding whether any cheque is eligible for the clean V2 starting position.
 - Record every financial question requiring owner confirmation.
 
 ### Completion Gate
 
 - Owner approves all decisions in the Financial Decision Register.
 - Collection names, money units, event signs, source-of-truth boundaries, and cutover rules are unambiguous.
-- Workbook control totals and cheque-number ranges are independently verified.
+- Any workbook data proposed for V2 is independently verified; unreliable legacy vendor balances are not migrated.
 - No application code or production data is changed in this phase.
 
 ## Phase 1 - Domain Foundation
@@ -84,8 +85,8 @@ Every phase uses the same sequence:
 ### Scope
 
 - Upgrade the Vendor Directory UI to use stable vendor IDs and searchable aliases.
-- Preserve legacy vendor names and balances as read-only compatibility data.
-- Add an owner-only alias-review tool that creates no production mapping until explicitly confirmed.
+- Preserve legacy vendor names and balances as read-only historical evidence, excluded from V2 calculations.
+- Add an owner-only alias-review tool for new V2 vendors; legacy vendor records are not treated as reliable financial input.
 - Add vendor details with empty V2 tabs ready for ledger, purchases, returns, and cheques.
 
 ### Completion Gate
@@ -102,7 +103,7 @@ Every phase uses the same sequence:
 - Enforce invoice-number uniqueness per vendor using deterministic reservation records.
 - Post purchase ledger effects atomically with source records and idempotency keys.
 - Add open-invoice views and derived balances without mutating invoice totals.
-- Keep the V1 purchase flow active until cutover; prevent mixed V1/V2 posting for the same invoice.
+- Keep the V1 purchase flow active until the owner-selected clean-start date; prevent mixed V1/V2 posting after activation.
 
 ### Completion Gate
 
@@ -153,21 +154,22 @@ Every phase uses the same sequence:
 - Replacement and rejected outcomes create no unintended monetary effect.
 - Cash refund behavior matches the owner-approved receipt and balance rules.
 
-## Phase 8 - Migration Toolkit and Dry Run
+## Phase 8 - Clean-Start Toolkit and Dry Run
 
 ### Scope
 
-- Build an owner-only, disabled-by-default migration tool that first produces read-only exports and reports.
-- Generate vendor alias candidates, duplicate/unmatched reports, opening-position reconstruction, cheque matches, and allocation proposals.
-- Import only into the Firebase Emulator Suite until the owner approves the final reconciliation artifact.
-- Produce per-vendor before/after controls and whole-system totals.
+- Build an owner-only, disabled-by-default clean-start tool that first produces read-only controls and reports.
+- Do not reconstruct or migrate balances from unreliable legacy vendor, purchase, or payment data.
+- Generate verified starting-position previews only from inputs the owner explicitly approves.
+- Rehearse any approved starting-position records only in the Firebase Emulator Suite.
+- Produce per-vendor opening controls and whole-system totals for the clean V2 starting position.
 
 ### Completion Gate
 
-- Every vendor difference is zero or explicitly resolved by the owner.
-- Workbook controls, cheque matches, available leaves, and imported statuses reconcile.
-- Re-running the migration is idempotent.
-- Production import remains disabled.
+- Every proposed V2 opening value has an owner-approved source; legacy balances are excluded.
+- Any approved cheque controls, available leaves, and starting statuses reconcile.
+- Re-running the clean-start preparation is idempotent.
+- Production initialization remains disabled.
 
 ## Phase 9 - Cutover Candidate
 
@@ -181,7 +183,7 @@ Every phase uses the same sequence:
 ### Completion Gate
 
 - Owner reviews the reconciliation report, release notes, rollback steps, and exact production actions.
-- Deployment and production migration remain separate explicit approvals.
+- Deployment and production initialization remain separate explicit approvals.
 - No production mutation occurs merely by deploying the inactive UI and rules.
 
 ## Phase 10 - Owner-Approved Cutover and Stabilization
@@ -189,13 +191,13 @@ Every phase uses the same sequence:
 ### Scope
 
 - Deploy only after explicit deployment approval.
-- Run production migration only after separate explicit import approval.
+- Initialize the clean V2 starting position only after separate explicit approval.
 - Activate V2 only after post-import reconciliation succeeds.
 - Monitor read-only controls and preserve V1 records and the cheque workbook as legacy evidence.
 
 ### Completion Gate
 
-- Production totals match the owner-approved controls.
+- V2 opening totals match the owner-approved clean-start controls.
 - No Expenses, Loans, Cashout, Cash Movement, or unrelated financial records changed.
 - Release is tagged and documented; rollback remains available without destructive writes.
 
@@ -207,8 +209,8 @@ No implementation phase may cross a decision marked `Pending`.
 | --- | --- | --- | --- |
 | FD-001 | Vendor outstanding decreases only when the cheque becomes `Debited`. `Issued` and `Presented` cheques remain visible in the vendor ledger as pending cheque commitments without changing outstanding. | Approved 2026-10-01 | Phase 1 sign rules |
 | FD-002 | Cancelling or bouncing an `Issued` or `Presented` cheque automatically releases its reserved invoice allocations in the same atomic transition. | Approved 2026-10-01 | Phase 1 transition rules |
-| FD-003 | Confirm the authoritative V1-to-V2 cutover boundary: a fixed business date or an owner-controlled per-vendor cutover. | Pending | Phase 3 compatibility design |
-| FD-004 | Confirm how current opening outstanding and open purchases should be represented in the V2 ledger without double counting. | Pending | Phase 4 ledger posting |
+| FD-003 | Start V2 as a separate clean vendor workflow. Preserve legacy vendor data as read-only evidence, but exclude it from V2 calculations and do not migrate or reconstruct it. Exact activation date remains pending. | Partially approved 2026-10-01 | Phase 3 compatibility design |
+| FD-004 | Confirm whether every V2 vendor starts at zero outstanding or the owner may enter a separately verified opening balance without using legacy calculations. | Pending | Phase 4 ledger posting |
 | FD-005 | Confirm whether V2 purchase, settlement, return, and cheque corrections require Action Centre approval or can be performed directly by users with correction capabilities. | Pending | Phase 2 permissions |
 | FD-006 | Confirm whether an immediate payment entered with a purchase should support all payment modes or only create a linked non-cheque settlement. | Pending | Phase 4 purchase UI |
 | FD-007 | Confirm whether vendor credit must allocate to the source invoice first and then FIFO, and who may override that order. | Pending | Phase 5 allocation rules |
@@ -216,7 +218,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-009 | Confirm whether cheque numbers 1120-1299 are a new available book and whether any imported open cheque uses a number in that range. | Pending verification | Phase 6 cheque book |
 | FD-010 | Confirm the 30 imported cheque statuses and totals after independent workbook reconciliation. | Pending verification | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
-| FD-012 | Confirm whether production cutover is all vendors together or may occur vendor by vendor. | Pending | Phase 8 migration design |
+| FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
 
 ## Phase 0 Findings
 
@@ -227,6 +229,8 @@ No implementation phase may cross a decision marked `Pending`.
 - Shared workspace metrics derive vendor outstanding from the current mutable V1 fields.
 - Adding V2 records without an explicit compatibility and cutover boundary would double count vendor balances and cheque commitments.
 - The proposed design remains Spark-compatible if it uses Firestore client transactions, rules, indexes, and emulator-tested owner tooling without Cloud Functions.
+- The owner has identified legacy vendor financial data as unreliable. It will remain preserved as read-only historical evidence but will not seed or influence V2 balances.
+- Existing loan balances and all loan records, calculations, and workflows are protected and must never be changed by this redesign.
 
 ## Approved Financial Behavior
 

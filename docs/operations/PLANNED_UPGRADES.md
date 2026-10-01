@@ -5,6 +5,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 ## Delivery Rules
 
 - Never modify, delete, migrate, backfill, or replace existing production financial records during development, testing, deployment, or upgrade work.
+- Existing loan records, balances, calculations, and workflows are protected and must not be changed by planned upgrades.
 - Treat production verification as read-only. Run every mutation test in the Firebase Emulator Suite or against clearly isolated non-production data.
 - Allow production records to change only through a deliberate action by an authorized user in an approved live financial workflow; never run automated correction or cleanup writes against live data.
 - Document how an upgrade preserves existing production data before implementation begins.
@@ -18,7 +19,7 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 | ID | Upgrade | Priority | Planned release | Plan requirement | Status | Blaze required |
 | --- | --- | --- | --- | --- | --- | --- |
 | UP-001 | Permission hardening | Critical | Release 1 | Enforce owner, manager, and billing capabilities in Firestore rules; protect immutable identity and audit fields; add rules tests. | Deployed 2026-10-01 | No |
-| UP-002 | Audited finance record corrections | Critical | Release 2 | Add owner-controlled correction or deletion flows for expenses, purchases, vendor payments, loans, and cash transfers, with before/after snapshots and reasons. | Planned | No |
+| UP-002 | Audited finance record corrections | Critical | Release 2 | Add owner-controlled correction or deletion flows for expenses, purchases, vendor payments, and cash transfers, with before/after snapshots and reasons. Loan records remain excluded and protected. | Planned | No |
 | UP-003 | Operations Action Centre | High | Release 3 | Build an owner-only approval hub first, then add missing cashouts, upcoming cheques, and overdue planned payments without adding dashboard clutter. | Approval phase deployed 2026-10-01 | No |
 | UP-004 | Export Centre | High | Release 3 | Allow owner-filtered CSV downloads for sales, expenses, purchases, payments, cashouts, and cash movements, including the applied date range. | Planned | No |
 | UP-005 | Automated finance and permission tests | Critical | Releases 1-3 | Cover dashboard totals, cash balances, payment allocation, correction workflows, date boundaries, and Firestore role enforcement. | Release 1 coverage deployed | No |
@@ -112,11 +113,11 @@ This is the master planning sheet for approved AlphaHub upgrades. Update the sta
 ### UP-010 Purchase, Vendor, and Cheque Ledger Redesign
 
 - Each phase follows start, check, resolve, validate, commit, and push before the next phase begins.
-- Existing production financial records remain unchanged throughout development and migration rehearsals.
+- Existing production financial records remain unchanged throughout development and clean-start rehearsals.
 - New financial behavior is implemented only after its corresponding owner decision is recorded.
 - V2 money is stored as integer paise while V1 rupee-number fields remain unchanged behind explicit compatibility boundaries.
-- Migration is blocked unless vendor-level and whole-system dry-run controls reconcile exactly.
-- Deployment, production migration, and feature activation are separate owner approvals.
+- V2 initialization is blocked unless vendor-level and whole-system dry-run controls reconcile exactly.
+- Deployment, production initialization, and feature activation are separate owner approvals.
 - The detailed sequence and financial decision register are maintained in `PURCHASE_VENDOR_CHEQUE_EXECUTION_PLAN.md`.
 
 ## Release Order
