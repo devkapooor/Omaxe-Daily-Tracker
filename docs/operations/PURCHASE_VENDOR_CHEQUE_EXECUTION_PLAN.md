@@ -143,16 +143,16 @@ Every phase uses the same sequence:
 
 ### Scope
 
-- Add return records and Pending, Vendor Credit, Replacement, Cash Refund, and Rejected outcomes.
+- Add return records and Pending, Vendor Credit, Replacement, and Rejected outcomes. Cash Refund is not supported.
 - Apply financial effects only for owner-approved outcome rules.
-- Post accepted vendor credits and refunds to the vendor ledger without invoice allocation, with compensating reversal behavior for corrections.
+- Post accepted vendor credits to the vendor ledger without invoice allocation, with compensating reversal behavior for corrections.
 - Keep return descriptions free-text and do not change inventory quantities.
 
 ### Completion Gate
 
 - Every outcome and partial accepted value is covered by tests.
 - Replacement and rejected outcomes create no unintended monetary effect.
-- Cash refund behavior matches the owner-approved receipt and balance rules.
+- Return outcomes never create cash-holder, Cash Movement, or bank-balance entries.
 
 ## Phase 8 - Clean-Start Toolkit and Dry Run
 
@@ -214,7 +214,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-005 | Staff submit purchase, settlement, return, and cheque correction requests through the Action Centre. The owner may apply direct audited corrections without submitting a separate approval request. | Approved 2026-10-01 | Phase 2 permissions |
 | FD-006 | Purchases and payments are always separate records that appear in one vendor ledger. After saving a purchase, a `Record payment for this invoice` shortcut opens Vendor Settlements with the vendor and invoice preselected. Cheques remain in the Cheque Register. | Approved 2026-10-01 | Phase 4 purchase UI |
 | FD-007 | Vendor returns post as unallocated vendor-ledger credits and do not adjust individual invoices. Payments may be linked to a selected invoice for any amount up to its open value or entered as a custom unallocated vendor-account payment. | Approved 2026-10-01 | Phase 5 allocation rules |
-| FD-008 | Confirm how a cash refund is received: cash drawer, bank receipt, or a selectable destination, and which workflow records that receipt. | Pending | Phase 7 return effects |
+| FD-008 | Vendors do not repay returns in cash. Remove `Cash Refund` as a supported return outcome; returns never create cash-holder, Cash Movement, or bank-balance entries. | Approved 2026-10-01 | Phase 7 return effects |
 | FD-009 | Confirm whether cheque numbers 1120-1299 are a new available book and whether any imported open cheque uses a number in that range. | Pending verification | Phase 6 cheque book |
 | FD-010 | Confirm the 30 imported cheque statuses and totals after independent workbook reconciliation. | Pending verification | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
@@ -290,3 +290,13 @@ No implementation phase may cross a decision marked `Pending`.
 - Invoice balances derive only from invoice-linked payments; vendor outstanding derives from all posting ledger events.
 - Corrections use compensating ledger events and never rewrite the original return credit or payment.
 - Tests must cover mixed invoice-linked payments, custom payments, return credits, exact-balance settlement, excess-payment rejection, concurrent submissions, idempotent retries, and the difference between invoice totals and net vendor outstanding.
+
+### Supported Vendor Return Outcomes
+
+- `Pending`: records the unresolved return with no financial effect.
+- `Vendor Credit`: posts an unallocated vendor-ledger credit and reduces net vendor outstanding.
+- `Replacement`: closes only when the replacement is recorded as received and has no monetary ledger effect.
+- `Rejected`: closes with a mandatory reason and has no financial effect.
+- `Cash Refund` is not available because vendors do not repay returns in cash.
+- Return workflows cannot create or modify cash-holder balances, Cash Movement records, or bank balances.
+- Tests must reject unsupported outcomes and prove that every supported return outcome leaves operational cash records unchanged.
