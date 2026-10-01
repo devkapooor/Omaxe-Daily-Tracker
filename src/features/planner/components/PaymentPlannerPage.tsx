@@ -195,7 +195,7 @@ export function PaymentPlannerPage({
               <GlowCard key={group.date} className="p-2.5" spotlightSize={160}>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-cyan-300">Deduction Date</p>
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-cyan-700">Deduction Date</p>
                     <p className="text-[13px] font-black text-foreground">{formatDisplayDate(group.date)}</p>
                   </div>
                   <Badge variant="outline">Total {money(group.totalAmount)}</Badge>

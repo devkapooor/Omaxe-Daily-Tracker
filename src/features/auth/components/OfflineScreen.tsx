@@ -4,10 +4,10 @@ import { Card, CardContent } from '@/shared/ui/card'
 export function OfflineScreen() {
   return (
     <main className="grid min-h-screen place-items-center px-4 py-8">
-      <Card variant="quiet" className="w-full max-w-xl rounded-[30px] shadow-[0_24px_70px_rgba(1,10,20,0.42)]">
+      <Card variant="quiet" className="w-full max-w-xl rounded-[30px] shadow-[0_24px_70px_rgba(38,78,118,0.18)]">
         <CardContent className="grid gap-5 p-8 text-center sm:p-10">
           <div className="mx-auto grid h-24 w-24 place-items-center rounded-[28px] border border-cyan-400/20 bg-cyan-500/10 shadow-[0_18px_42px_rgba(2,132,199,0.12)]">
-            <WifiOff className="h-10 w-10 text-cyan-300" />
+            <WifiOff className="h-10 w-10 text-cyan-700" />
           </div>
           <div className="space-y-2">
             <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-muted-foreground">Offline</p>

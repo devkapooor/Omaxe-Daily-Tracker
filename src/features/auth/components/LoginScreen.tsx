@@ -52,8 +52,8 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
 
   return (
     <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden px-4 py-8 text-foreground">
-      <div className="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 text-cyan-100/80">
-        <Building2 className="h-4 w-4 text-cyan-300" />
+      <div className="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 text-blue-700/80">
+        <Building2 className="h-4 w-4 text-cyan-600" />
         <span className="text-[11px] font-extrabold uppercase tracking-[0.26em]">AlphaHub</span>
       </div>
 
@@ -86,12 +86,12 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
             />
           </div>
 
-          <section className="relative overflow-hidden rounded-[24px] border border-cyan-200/12 bg-[linear-gradient(145deg,rgba(16,40,61,0.92),rgba(5,20,36,0.9))] p-5 shadow-[0_32px_90px_rgba(1,10,20,0.58)] backdrop-blur-2xl sm:p-6">
+          <section className="relative overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(244,248,252,0.94))] p-5 shadow-[0_32px_90px_rgba(38,78,118,0.2)] backdrop-blur-2xl sm:p-6">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 opacity-[0.035]"
               style={{
-                backgroundImage: 'linear-gradient(135deg,white 0.5px,transparent 0.5px),linear-gradient(45deg,white 0.5px,transparent 0.5px)',
+                backgroundImage: 'linear-gradient(135deg,#2563eb 0.5px,transparent 0.5px),linear-gradient(45deg,#22d3ee 0.5px,transparent 0.5px)',
                 backgroundSize: '28px 28px',
               }}
             />
@@ -102,26 +102,26 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: prefersReducedMotion ? 0 : 0.5, delay: 0.1 }}
-                className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-200 shadow-[0_12px_34px_rgba(8,145,178,0.18)]"
+                className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-200 bg-cyan-50 text-cyan-700 shadow-[0_12px_34px_rgba(8,145,178,0.12)]"
               >
                 <ShieldCheck className="h-5 w-5" />
               </motion.div>
-              <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-300">Secure Workspace</p>
-              <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-white">Welcome back</h1>
-              <p className="mt-1.5 text-xs leading-5 text-slate-300">Sign in with the account created for you by the owner.</p>
+              <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-700">Secure Workspace</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-foreground">Welcome back</h1>
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Sign in with the account created for you by the owner.</p>
             </div>
 
             <form className="relative mt-6 grid gap-3.5" onSubmit={handleLogin}>
-              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">
+              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
                 Email
                 <div className="relative">
-                  <Mail className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'email' ? 'text-cyan-300' : 'text-slate-500'}`} />
+                  <Mail className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'email' ? 'text-cyan-600' : 'text-muted-foreground'}`} />
                   <Input
                     aria-label="Email"
                     autoComplete="email"
                     placeholder="name@company.com"
                     type="email"
-                    className="h-10 border-blue-300/15 bg-blue-950/30 pl-10 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/60 focus-visible:ring-cyan-400/12"
+                    className="h-10 border-blue-200 bg-white/90 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12"
                     value={email}
                     onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
@@ -133,16 +133,16 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                 </div>
               </label>
 
-              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-300">
+              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
                 Password
                 <div className="relative">
-                  <Lock className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'password' ? 'text-cyan-300' : 'text-slate-500'}`} />
+                  <Lock className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'password' ? 'text-cyan-600' : 'text-muted-foreground'}`} />
                   <Input
                     aria-label="Password"
                     autoComplete="current-password"
                     placeholder="Enter password"
                     type={showPassword ? 'text' : 'password'}
-                    className="h-10 border-blue-300/15 bg-blue-950/30 pl-10 pr-10 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/60 focus-visible:ring-cyan-400/12"
+                    className="h-10 border-blue-200 bg-white/90 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12"
                     value={password}
                     onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
@@ -153,7 +153,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                   />
                   <button
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-1.5 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-cyan-400/10 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute right-1.5 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-cyan-50 hover:text-cyan-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     type="button"
                     onClick={() => setShowPassword((current) => !current)}
                   >
@@ -163,7 +163,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               </label>
 
               {(error || authError) ? (
-                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                   {error || authError}
                 </motion.p>
               ) : null}
@@ -188,7 +188,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               </motion.button>
             </form>
 
-            <p className="relative mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <p className="relative mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Owner-approved access only
             </p>
           </section>

@@ -16,7 +16,7 @@ import {
 
 function MobileLogCard({ children, subtitle, title, trailing }: { children: React.ReactNode; subtitle: string; title: string; trailing?: React.ReactNode }) {
   return (
-    <article className="rounded-2xl border border-border/70 bg-[linear-gradient(180deg,rgba(16,40,61,0.96),rgba(9,29,47,0.94))] p-3 shadow-[0_10px_22px_rgba(1,10,20,0.24)]">
+    <article className="rounded-2xl border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] p-3 shadow-[0_10px_22px_rgba(38,78,118,0.08)]">
       <div className="flex items-start justify-between gap-3">
         <div><p className="text-sm font-bold text-foreground">{title}</p><p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p></div>
         {trailing}
@@ -40,7 +40,7 @@ const salesColumns: LogTableColumn<DailySales>[] = [
   { id: 'cashSales', label: 'Cash', value: (entry) => entry.cashSales, cell: (entry) => money(entry.cashSales), align: 'right', sortDescFirst: true },
   { id: 'upiSales', label: 'UPI', value: (entry) => entry.upiSales, cell: (entry) => money(entry.upiSales), align: 'right', sortDescFirst: true },
   { id: 'otherSales', label: 'Card / Bank / Credit', value: (entry) => entry.cardSales + entry.bankTransferSales + entry.creditSales, cell: (entry) => `${money(entry.cardSales)} / ${money(entry.bankTransferSales)} / ${money(entry.creditSales)}`, align: 'right', sortDescFirst: true },
-  { id: 'returns', label: 'Returns', value: (entry) => entry.returnsDiscounts, cell: (entry) => <span className="text-rose-200">{money(entry.returnsDiscounts)}</span>, align: 'right', sortDescFirst: true },
+  { id: 'returns', label: 'Returns', value: (entry) => entry.returnsDiscounts, cell: (entry) => <span className="text-rose-700">{money(entry.returnsDiscounts)}</span>, align: 'right', sortDescFirst: true },
   { id: 'notes', label: 'Notes', value: (entry) => entry.notes, cell: (entry) => notesCell(entry.notes), sortable: false },
 ]
 
@@ -107,7 +107,7 @@ const purchaseColumns: LogTableColumn<Purchase>[] = [
   { id: 'category', label: 'Category', value: (entry) => entry.category, cell: (entry) => entry.category },
   { id: 'total', label: 'Total', value: (entry) => entry.purchaseAmount, cell: (entry) => <span className="font-semibold">{money(entry.purchaseAmount)}</span>, align: 'right', sortDescFirst: true },
   { id: 'paid', label: 'Paid', value: (entry) => entry.paidAmount, cell: (entry) => money(entry.paidAmount), align: 'right', sortDescFirst: true },
-  { id: 'unpaid', label: 'Unpaid', value: (entry) => entry.unpaidAmount, cell: (entry) => <span className={entry.unpaidAmount > 0 ? 'text-amber-200' : undefined}>{money(entry.unpaidAmount)}</span>, align: 'right', sortDescFirst: true },
+  { id: 'unpaid', label: 'Unpaid', value: (entry) => entry.unpaidAmount, cell: (entry) => <span className={entry.unpaidAmount > 0 ? 'text-amber-700' : undefined}>{money(entry.unpaidAmount)}</span>, align: 'right', sortDescFirst: true },
   { id: 'mode', label: 'Mode', value: (entry) => entry.paymentMode, cell: (entry) => <Badge variant="outline">{entry.paymentMode}</Badge> },
 ]
 
@@ -173,7 +173,7 @@ function LoanActions({ entry, onDelete }: { entry: LoanEntry; onDelete: (entry: 
       <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" aria-label={`Actions for ${entry.personName}`}><Ellipsis className="h-4 w-4" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Loan actions</DropdownMenuLabel>
-        <DropdownMenuItem className="text-rose-300 focus:bg-rose-500/10 focus:text-rose-200" onSelect={() => void onDelete(entry)}>Delete loan</DropdownMenuItem>
+        <DropdownMenuItem className="text-rose-700 focus:bg-rose-50 focus:text-rose-800" onSelect={() => void onDelete(entry)}>Delete loan</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -15,25 +15,25 @@
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Space Grotesk", "Manrope", "Segoe UI", sans-serif;
-  --color-background: #061525;
-  --color-foreground: #e5f0fc;
-  --color-card: #0d2134;
-  --color-card-foreground: #eaf4ff;
-  --color-popover: #10283d;
-  --color-popover-foreground: #eaf4ff;
-  --color-primary: #3b82f6;
-  --color-primary-foreground: #f8fbff;
-  --color-secondary: #142d43;
-  --color-secondary-foreground: #dcecff;
-  --color-muted: #0b1d30;
-  --color-muted-foreground: #9fb3c8;
-  --color-accent: #0c3547;
-  --color-accent-foreground: #b8f3ff;
-  --color-destructive: #e05264;
-  --color-destructive-foreground: #fff7f8;
-  --color-border: #29465f;
-  --color-input: #31516c;
-  --color-ring: #22d3ee;
+  --color-background: #f4f8fc;
+  --color-foreground: #102a43;
+  --color-card: #ffffff;
+  --color-card-foreground: #102a43;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #102a43;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eaf2ff;
+  --color-secondary-foreground: #1e3a5f;
+  --color-muted: #eef4fa;
+  --color-muted-foreground: #647b91;
+  --color-accent: #e6f7fb;
+  --color-accent-foreground: #0f5f78;
+  --color-destructive: #dc3f55;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #dbe7f2;
+  --color-input: #cbdbea;
+  --color-ring: #0ea5e9;
   --radius-sm: 0.5rem;
   --radius-md: 0.875rem;
   --radius-lg: 1.5rem;
@@ -68,9 +68,9 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     background-image:
-      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.1), transparent 22%),
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 28%),
-      linear-gradient(180deg, #0a1d30 0%, #061525 100%);
+      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.08), transparent 24%),
+      radial-gradient(circle at top right, rgba(37, 99, 235, 0.09), transparent 30%),
+      linear-gradient(180deg, #f8fbff 0%, #f1f6fb 100%);
   }
 
   h1,

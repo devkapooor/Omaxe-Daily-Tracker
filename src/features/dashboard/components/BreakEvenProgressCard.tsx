@@ -13,7 +13,7 @@ export function BreakEvenProgressCard({ performance, marginPercentage }: BreakEv
   if (breakEven.breakEvenSales === null || breakEven.progressPercentage === null) {
     return (
       <GlowCard glowColor="orange" className="p-3">
-        <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">Break-Even Progress</span>
+        <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Break-Even Progress</span>
         <strong className="mt-2 block text-lg font-black text-foreground">Margin setting required</strong>
         <p className="mt-1.5 text-[10px] font-semibold leading-relaxed text-muted-foreground">
           Add a margin above 0% in Settings to calculate the sales needed to cover monthly operating expenses.
@@ -29,8 +29,8 @@ export function BreakEvenProgressCard({ performance, marginPercentage }: BreakEv
     <GlowCard glowColor={breakEven.attained ? 'green' : 'orange'} className="p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">Break-Even Progress</span>
-          <strong className={breakEven.attained ? 'mt-1 block text-lg font-black text-emerald-300' : 'mt-1 block text-lg font-black text-foreground'}>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Break-Even Progress</span>
+          <strong className={breakEven.attained ? 'mt-1 block text-lg font-black text-emerald-700' : 'mt-1 block text-lg font-black text-foreground'}>
             {status}
           </strong>
         </div>
@@ -55,7 +55,7 @@ export function BreakEvenProgressCard({ performance, marginPercentage }: BreakEv
           <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
             {breakEven.attained ? 'Above Break-Even' : 'Amount Remaining'}
           </span>
-          <strong className={breakEven.attained ? 'mt-1 block text-sm font-black text-emerald-300' : 'mt-1 block text-sm font-black text-foreground'}>
+          <strong className={breakEven.attained ? 'mt-1 block text-sm font-black text-emerald-700' : 'mt-1 block text-sm font-black text-foreground'}>
             {money(breakEven.attained ? performance.sales - breakEven.breakEvenSales : breakEven.amountRemaining ?? 0)}
           </strong>
         </div>

@@ -195,11 +195,11 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
 
   return (
     <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/65 px-3 py-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="add-vendor-title">
-      <Card className="max-h-[92dvh] w-full max-w-[46rem] overflow-y-auto border-cyan-400/25 shadow-[0_24px_80px_rgba(1,10,20,0.65)]">
+      <Card className="max-h-[92dvh] w-full max-w-[46rem] overflow-y-auto border-cyan-200 shadow-[0_24px_80px_rgba(38,78,118,0.22)]">
         <CardHeader className="gap-3 border-b border-border/70">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Vendor directory</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Vendor directory</p>
               <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add Vendor</h2>
               <p className="mt-1 text-sm text-muted-foreground">Create the vendor profile used across the V2 workspace.</p>
             </div>
@@ -210,7 +210,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
         </CardHeader>
         <CardContent className="pt-4">
           <form className="grid gap-3.5 md:grid-cols-2" onSubmit={(event) => void handleSubmit(event).catch(() => undefined)}>
-            {formError ? <p className="md:col-span-2 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-sm font-semibold text-rose-200">{formError}</p> : null}
+            {formError ? <p className="md:col-span-2 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-semibold text-rose-700">{formError}</p> : null}
             <FieldLabel label="Vendor Name">
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Vendor name" required autoFocus />
             </FieldLabel>

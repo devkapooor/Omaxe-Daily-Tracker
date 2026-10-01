@@ -11,7 +11,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'grid w-full auto-cols-fr grid-flow-col items-center gap-0.75 rounded-[16px] border border-border/80 bg-[linear-gradient(180deg,rgba(16,40,61,0.96),rgba(9,29,47,0.94))] p-0.5 text-muted-foreground shadow-[0_8px_20px_rgba(1,10,20,0.24)]',
+      'grid w-full auto-cols-fr grid-flow-col items-center gap-0.75 rounded-[16px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,246,252,0.96))] p-0.5 text-muted-foreground shadow-[0_8px_20px_rgba(38,78,118,0.07)]',
       className,
     )}
     {...props}

@@ -94,13 +94,13 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-full w-[min(80vw,272px)] flex-col border-r border-border/80 bg-card/96 shadow-[24px_0_48px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 xl:hidden',
+          'fixed left-0 top-0 z-50 flex h-full w-[min(80vw,272px)] flex-col border-r border-border/80 bg-card/96 shadow-[24px_0_48px_rgba(38,78,118,0.16)] backdrop-blur-xl transition-transform duration-300 xl:hidden',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="border-b border-border/70 px-3 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-cyan-300/25 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-950/40">
+            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60">
               {initials}
             </span>
             <div className="min-w-0">
@@ -120,7 +120,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
                     type="button"
                     className={cn(
                       'flex w-full items-center gap-2 rounded-xl px-2.75 py-1.75 text-left text-[13px] font-semibold transition-colors',
-                      isActive ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary/65 hover:text-foreground',
+                      isActive ? 'bg-[linear-gradient(180deg,#4b91f7,#2563eb)] text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary/75 hover:text-foreground',
                     )}
                     onClick={() => handleSelect(item)}
                   >
@@ -169,7 +169,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
                     type="button"
                     className={cn(
                       'flex w-full items-center rounded-xl px-1.75 py-1.5 text-left text-[12px] font-semibold transition-colors',
-                      isActive ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary/65 hover:text-foreground',
+                      isActive ? 'bg-[linear-gradient(180deg,#4b91f7,#2563eb)] text-white shadow-sm' : 'text-muted-foreground hover:bg-secondary/75 hover:text-foreground',
                       isDesktopCollapsed ? 'justify-center gap-0' : 'gap-2.25',
                     )}
                     title={isDesktopCollapsed ? item.label : undefined}
@@ -191,7 +191,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
         {!isDesktopCollapsed ? (
           <div className="border-t border-border/70 px-2 py-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-cyan-300/25 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-950/40">
+              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60">
                 {initials}
               </span>
               {logoutItem ? (

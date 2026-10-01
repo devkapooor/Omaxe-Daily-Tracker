@@ -228,8 +228,8 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
         {error ? (
           <Card>
-            <CardContent className="flex items-start gap-3 py-5 text-sm text-rose-100">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-rose-300" />
+            <CardContent className="flex items-start gap-3 py-5 text-sm text-rose-700">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-none text-rose-600" />
               <div><strong className="block">Approval requests could not be loaded</strong><span className="text-xs text-muted-foreground">{error}</span></div>
             </CardContent>
           </Card>
@@ -242,7 +242,7 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
           <CardContent className="space-y-2.5">
             {queue.pending.length === 0 ? (
               <div className="grid place-items-center rounded-2xl border border-dashed border-border/80 bg-background/25 px-4 py-10 text-center">
-                <Inbox className="h-7 w-7 text-emerald-300" />
+                <Inbox className="h-7 w-7 text-emerald-600" />
                 <p className="mt-2 text-sm font-bold text-foreground">No approvals are waiting</p>
                 <p className="mt-1 text-xs text-muted-foreground">New requests will appear here automatically.</p>
               </div>
@@ -268,14 +268,14 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-left xl:text-right">
                     <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">{item.kind === 'cashout-correction' ? 'Cash Movement Impact' : item.kind === 'vendor-settlement-correction' ? 'Outstanding Impact' : 'Requested Return Value'}</span>
-                    <strong className="mt-1 block text-base font-black text-cyan-200">
+                    <strong className="mt-1 block text-base font-black text-cyan-700">
                       {money(item.kind === 'cashout-correction' ? item.cashMovementImpact : item.kind === 'vendor-settlement-correction' ? item.outstandingImpactPaise / 100 : item.sourceReturn.valuePaise / 100)}
                     </strong>
                   </div>
                 </div>
 
                 {item.isStale ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-900/60 bg-rose-950/25 p-2.5 text-xs text-rose-100">
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
                     <p><strong>Approval blocked.</strong> {item.staleReason}</p>
                   </div>

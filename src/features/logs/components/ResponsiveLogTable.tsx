@@ -74,8 +74,8 @@ const logTableFeatures = tableFeatures({
 })
 
 function SortIcon({ direction }: { direction: false | 'asc' | 'desc' }) {
-  if (direction === 'asc') return <ArrowUp className="h-3.5 w-3.5 text-cyan-300" />
-  if (direction === 'desc') return <ArrowDown className="h-3.5 w-3.5 text-cyan-300" />
+  if (direction === 'asc') return <ArrowUp className="h-3.5 w-3.5 text-cyan-700" />
+  if (direction === 'desc') return <ArrowDown className="h-3.5 w-3.5 text-cyan-700" />
   return <ArrowUpDown className="h-3.5 w-3.5" />
 }
 

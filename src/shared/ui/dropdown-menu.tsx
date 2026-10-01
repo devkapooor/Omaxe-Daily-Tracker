@@ -30,7 +30,7 @@ function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<ty
   return (
     <DropdownMenuPrimitive.SubContent
       className={cn(
-        'z-50 min-w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(1,10,20,0.5)]',
+        'z-50 min-w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(38,78,118,0.16)]',
         className,
       )}
       {...props}
@@ -44,7 +44,7 @@ function DropdownMenuContent({ className, sideOffset = 6, ...props }: React.Comp
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(1,10,20,0.5)]',
+          'z-50 min-w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(38,78,118,0.16)]',
           className,
         )}
         {...props}
@@ -77,7 +77,7 @@ function DropdownMenuCheckboxItem({ className, children, checked, ...props }: Re
       {...props}
     >
       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-        <DropdownMenuPrimitive.ItemIndicator><Check className="h-3.5 w-3.5 text-cyan-300" /></DropdownMenuPrimitive.ItemIndicator>
+        <DropdownMenuPrimitive.ItemIndicator><Check className="h-3.5 w-3.5 text-cyan-700" /></DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
     </DropdownMenuPrimitive.CheckboxItem>

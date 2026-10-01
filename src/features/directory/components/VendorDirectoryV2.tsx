@@ -79,7 +79,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
               }}
             >
               <span className="flex items-start justify-between gap-3">
-                <strong className="text-sm font-bold text-foreground group-hover:text-cyan-100">{vendor.canonicalName}</strong>
+                <strong className="text-sm font-bold text-foreground group-hover:text-cyan-700">{vendor.canonicalName}</strong>
                 <Badge variant={vendor.active ? 'success' : 'secondary'}>{vendor.active ? 'Active' : 'Inactive'}</Badge>
               </span>
               <span className="mt-2 block text-xs text-muted-foreground">{vendor.contact || 'No contact provided'}</span>
@@ -91,7 +91,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
 
       {selectedVendor ? (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/65 px-3 py-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="vendor-details-title">
-          <Card className="max-h-[92dvh] w-full max-w-[42rem] overflow-y-auto border-cyan-400/25 shadow-[0_24px_80px_rgba(1,10,20,0.65)]">
+          <Card className="max-h-[92dvh] w-full max-w-[42rem] overflow-y-auto border-cyan-200 shadow-[0_24px_80px_rgba(38,78,118,0.22)]">
             <CardHeader className="gap-3 border-b border-border/70">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -112,7 +112,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
               {selectedVendor.aliases.length > 0 ? <VendorDetail className="sm:col-span-2" label="Known As" value={selectedVendor.aliases.join(', ')} /> : null}
               <VendorDetail className="sm:col-span-2" label="Notes / Comments" value={selectedVendor.notes || 'Not provided'} />
               <div className="sm:col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3.5 py-3">
-                <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200">Opening Balance</span>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700">Opening Balance</span>
                 <strong className="mt-1 block text-base text-foreground">INR {(selectedVendor.openingBalancePaise / 100).toLocaleString('en-IN')}</strong>
               </div>
             </CardContent>

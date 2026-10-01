@@ -102,18 +102,18 @@ export function VendorLedgerPreviewPage() {
         <Card className="border-cyan-400/30 bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(34,211,238,0.07))]">
           <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <span className="rounded-xl border border-cyan-300/25 bg-cyan-400/10 p-2 text-cyan-200"><Eye className="size-5" /></span>
+              <span className="rounded-xl border border-cyan-200 bg-cyan-50 p-2 text-cyan-700"><Eye className="size-5" /></span>
               <div>
                 <div className="flex flex-wrap items-center gap-2"><h1 className="text-lg font-black text-foreground">Vendor Ledger Preview</h1><Badge variant="outline">Owner only</Badge></div>
                 <p className="mt-1 text-sm text-muted-foreground">Preview mode: entries stay in this browser session and are never sent to Firebase.</p>
-                <p className="mt-1 text-xs font-semibold text-cyan-100">{activity}</p>
+                <p className="mt-1 text-xs font-semibold text-cyan-800">{activity}</p>
               </div>
             </div>
             <Button type="button" variant="outline" onClick={resetPreview}><RotateCcw className="size-4" /> Reset demo</Button>
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/8 px-3 py-2 text-xs text-emerald-100">
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
           <ShieldCheck className="size-4 shrink-0" /> Production vendors, balances, purchases, payments, cheques, and loans are not read or changed here.
         </div>
 

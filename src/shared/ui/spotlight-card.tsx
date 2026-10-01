@@ -43,10 +43,10 @@ function ensureGlowStyles() {
     }
 
     [data-glow-card="true"]::before {
-      border: 1px solid hsl(var(--glow-hue) 48% 50% / 0.58);
+      border: 1px solid hsl(var(--glow-hue) 58% 62% / 0.28);
       box-shadow:
-        inset 0 1px 0 hsl(0 0% 100% / 0.04),
-        0 9px 20px hsl(0 0% 0% / 0.2);
+        inset 0 1px 0 hsl(0 0% 100% / 0.78),
+        0 9px 22px hsl(210 44% 34% / 0.09);
     }
 
     [data-glow-card="true"]::after {
@@ -54,11 +54,10 @@ function ensureGlowStyles() {
       background:
         radial-gradient(
           circle var(--spotlight-size) at var(--pointer-x) var(--pointer-y),
-          hsl(var(--glow-hue) 94% 72% / 0.2),
-          hsl(var(--glow-hue) 84% 58% / 0.08) 26%,
+          hsl(var(--glow-hue) 94% 72% / 0.13),
+          hsl(var(--glow-hue) 84% 64% / 0.05) 26%,
           transparent 66%
         );
-      mix-blend-mode: lighten;
     }
 
     [data-glow-card="false"]::after {
@@ -157,7 +156,7 @@ function GlowCard({
       ref={cardRef}
       data-glow-card={canInteract ? 'true' : 'false'}
       className={cn(
-        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(17,43,65,0.96),rgba(10,31,49,0.94))] text-card-foreground backdrop-blur-xl',
+        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] text-card-foreground backdrop-blur-xl',
         className,
       )}
       style={mergedStyle}

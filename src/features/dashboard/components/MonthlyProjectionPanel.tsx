@@ -49,7 +49,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
 
       <section className="grid gap-1.5 lg:grid-cols-2 xl:grid-cols-3">
         <GlowCard glowColor="blue" className="p-3">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">
             {performance.isCurrentMonth ? 'Month-End Outlook' : 'Completed Month Result'}
           </span>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -67,7 +67,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
               <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
                 {performance.isCurrentMonth ? 'Projected' : 'Estimated'} {resultIsProfit ? 'Profit' : 'Loss'}
               </span>
-              <strong className={resultIsProfit ? 'mt-1 block text-lg font-black text-emerald-300' : 'mt-1 block text-lg font-black text-rose-300'}>
+              <strong className={resultIsProfit ? 'mt-1 block text-lg font-black text-emerald-700' : 'mt-1 block text-lg font-black text-rose-700'}>
                 {money(Math.abs(performance.estimatedMarginResult))}
               </strong>
             </div>
@@ -78,7 +78,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
         <BreakEvenProgressCard performance={performance} marginPercentage={marginPercentage} />
 
         <GlowCard glowColor="blue" className="p-3">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-sky-300 sm:text-[11px]">Sales Mix</span>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Sales Mix</span>
           <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" aria-label={`Sales mix for ${performance.monthLabel}`}>
             {mixMeta.map((item) => (
               <span

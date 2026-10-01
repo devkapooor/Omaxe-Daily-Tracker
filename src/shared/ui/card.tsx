@@ -11,7 +11,7 @@ function Card({ className, variant = 'workspace', ...props }: CardProps) {
     return (
       <div
         className={cn(
-          'rounded-[16px] border border-border/80 bg-[linear-gradient(180deg,rgba(17,42,63,0.96),rgba(10,30,48,0.94))] text-card-foreground shadow-[0_12px_28px_rgba(1,10,20,0.3)] backdrop-blur-xl',
+          'rounded-[16px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] text-card-foreground shadow-[0_12px_28px_rgba(38,78,118,0.1)] backdrop-blur-xl',
           className,
         )}
         {...props}
@@ -22,7 +22,7 @@ function Card({ className, variant = 'workspace', ...props }: CardProps) {
   return (
     <GlowCard
       className={cn(
-        'border border-border/70 bg-card/90 text-card-foreground shadow-[0_10px_22px_rgba(0,0,0,0.18)]',
+        'border border-border/90 bg-card/96 text-card-foreground shadow-[0_10px_24px_rgba(38,78,118,0.09)]',
         className,
       )}
       {...props}

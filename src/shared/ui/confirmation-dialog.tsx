@@ -50,7 +50,7 @@ export function useConfirmationDialog() {
                   {options.details.map((detail) => <p key={detail}>{detail}</p>)}
                 </div>
               ) : null}
-              {options.warning ? <p className="text-sm font-semibold text-amber-200">{options.warning}</p> : null}
+              {options.warning ? <p className="text-sm font-semibold text-amber-800">{options.warning}</p> : null}
               {options.requireReason ? (
                 <FieldLabel label="Reason">
                   <Textarea value={reason} onChange={(event) => { setReason(event.target.value); setError('') }} />

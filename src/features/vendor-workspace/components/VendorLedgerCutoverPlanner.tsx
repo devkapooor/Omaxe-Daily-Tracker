@@ -121,7 +121,7 @@ function VendorLedgerCutoverPlanner({ currentUser }: { currentUser: AppUser }) {
         <CardHeader><SectionHeading eyebrow="Reconciliation" title="Owner Review Summary" /></CardHeader>
         <CardContent className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-3"><Summary label="Vendors" value={String(review.vendorCount)} /><Summary label="Audited Openings" value={String(review.adjustedOpeningCount)} /><Summary label="Total Opening" value={`INR ${(review.totalOpeningPaise / 100).toLocaleString('en-IN')}`} /></div>
-          {review.errors.length > 0 ? <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">{review.errors.map((error) => <p key={error}>{error}</p>)}</div> : <div className="flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm text-emerald-100"><ClipboardCheck className="size-4" /> Review candidate reconciles locally. This is not activation approval.</div>}
+          {review.errors.length > 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{review.errors.map((error) => <p key={error}>{error}</p>)}</div> : <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><ClipboardCheck className="size-4" /> Review candidate reconciles locally. This is not activation approval.</div>}
           <Button type="button" variant="outline" disabled={!review.ready} onClick={() => void copyReview()}>{copied ? 'Review Summary Copied' : 'Copy Review Summary'}</Button>
         </CardContent>
       </Card>
@@ -129,7 +129,7 @@ function VendorLedgerCutoverPlanner({ currentUser }: { currentUser: AppUser }) {
         <CardHeader><SectionHeading eyebrow="Irreversible clean start" title="Production Activation" /></CardHeader>
         <CardContent className="grid gap-3">
           <p className="text-sm text-muted-foreground">Activation creates only the reviewed V2 vendors, audited opening entries, cheque book 1120-1199, and V2 configuration in one transaction. It does not read or write loans or legacy financial records.</p>
-          <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-sm text-amber-100">After activation, this clean start cannot be initialized again. Recheck the vendor count, total opening, and activation date above.</div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">After activation, this clean start cannot be initialized again. Recheck the vendor count, total opening, and activation date above.</div>
           <FieldLabel label={`Type ${VENDOR_LEDGER_ACTIVATION_PHRASE} to confirm`}>
             <Input
               autoComplete="off"

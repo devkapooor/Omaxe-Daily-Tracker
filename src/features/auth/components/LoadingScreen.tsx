@@ -10,7 +10,7 @@ export function LoadingScreen({ message, mode = 'screen' }: LoadingScreenProps) 
   if (mode === 'page') {
     return (
       <div className="fixed inset-0 z-[135] flex items-center justify-center bg-slate-950/18 px-4 py-8 backdrop-blur-[2px]">
-        <Card variant="quiet" className="w-full max-w-sm rounded-[28px] shadow-[0_22px_64px_rgba(1,10,20,0.42)]">
+        <Card variant="quiet" className="w-full max-w-sm rounded-[28px] shadow-[0_22px_64px_rgba(38,78,118,0.18)]">
           <CardContent className="grid gap-4 p-6 text-center sm:p-7">
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-[24px] border border-cyan-400/20 bg-cyan-500/10 shadow-[0_14px_30px_rgba(2,132,199,0.12)]">
               <UniqueLoading size="sm" className="scale-[0.9]" />
@@ -28,7 +28,7 @@ export function LoadingScreen({ message, mode = 'screen' }: LoadingScreenProps) 
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-8">
-      <Card variant="quiet" className="w-full max-w-xl rounded-[30px] shadow-[0_24px_70px_rgba(1,10,20,0.42)]">
+      <Card variant="quiet" className="w-full max-w-xl rounded-[30px] shadow-[0_24px_70px_rgba(38,78,118,0.18)]">
         <CardContent className="grid gap-5 p-8 text-center sm:p-10">
           <div className="mx-auto grid h-24 w-24 place-items-center rounded-[28px] border border-cyan-400/20 bg-cyan-500/10 shadow-[0_18px_42px_rgba(2,132,199,0.12)]">
             <UniqueLoading size="md" />
