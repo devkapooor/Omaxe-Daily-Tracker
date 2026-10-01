@@ -219,7 +219,7 @@ No implementation phase may cross a decision marked `Pending`.
 | FD-010 | Confirm the 30 imported cheque statuses and totals after independent workbook reconciliation. | Pending verification | Phase 8 dry run |
 | FD-011 | Confirm whether legacy expense cheques remain permanently separate from the new vendor cheque register. | Pending | Phase 6 planner integration |
 | FD-012 | Confirm whether the clean V2 workflow activates for all vendors on one date or may activate vendor by vendor. | Pending | Phase 8 activation design |
-| FD-013 | Confirm whether a custom payment may exceed current vendor outstanding and create a vendor advance/credit balance, or must be capped at outstanding. | Pending | Phase 5 settlement validation |
+| FD-013 | Custom payments are capped at the vendor's current positive outstanding. They cannot create a vendor advance or credit balance. | Approved 2026-10-01 | Phase 5 settlement validation |
 
 ## Phase 0 Findings
 
@@ -284,7 +284,9 @@ No implementation phase may cross a decision marked `Pending`.
 - An accepted vendor return posts one vendor-ledger credit and reduces net vendor outstanding without changing any invoice balance.
 - An invoice-linked payment may pay the selected invoice in full or partially, up to that invoice's open amount.
 - A custom payment reduces net vendor outstanding without selecting or changing an invoice.
+- A custom payment must be greater than zero and cannot exceed the vendor's current positive outstanding at transaction time.
+- Custom payments cannot create an advance or vendor credit balance.
 - The vendor view must display net vendor outstanding, total open invoice value, and unallocated credits/payments separately whenever those figures differ.
 - Invoice balances derive only from invoice-linked payments; vendor outstanding derives from all posting ledger events.
 - Corrections use compensating ledger events and never rewrite the original return credit or payment.
-- Tests must cover mixed invoice-linked payments, custom payments, return credits, and the difference between invoice totals and net vendor outstanding.
+- Tests must cover mixed invoice-linked payments, custom payments, return credits, exact-balance settlement, excess-payment rejection, concurrent submissions, idempotent retries, and the difference between invoice totals and net vendor outstanding.
