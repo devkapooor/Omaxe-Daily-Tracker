@@ -230,7 +230,7 @@ export function AppWorkspace({
             <Button
               type="button"
               variant="outline"
-              className="border-warning/30 bg-white/80 text-warning hover:border-warning/45 hover:bg-warning/10 hover:text-warning"
+              className="border-warning/30 bg-white/80 text-warning hover:border-warning/45 hover:bg-warning/10 hover:text-warning dark:bg-card/80"
               onClick={() => {
                 void importLegacyData().then((imported) => {
                   if (imported) showToast('Legacy browser data imported into Firebase.')

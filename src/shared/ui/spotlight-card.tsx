@@ -156,7 +156,7 @@ function GlowCard({
       ref={cardRef}
       data-glow-card={canInteract ? 'true' : 'false'}
       className={cn(
-        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] text-card-foreground backdrop-blur-xl',
+        'rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] text-card-foreground backdrop-blur-xl dark:bg-none dark:bg-card',
         className,
       )}
       style={mergedStyle}

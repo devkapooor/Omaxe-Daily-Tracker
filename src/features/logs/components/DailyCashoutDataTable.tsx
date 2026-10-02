@@ -102,7 +102,7 @@ export function DailyCashoutDataTable({ entries, onDelete, onEdit, onView }: Dai
       searchPlaceholder="Search name, date, audit status or particulars"
       searchText={(entry) => `${dailyCashoutSearchText(entry)} ${auditLabel(entry.auditStatus)}`}
       mobileCard={(entry) => (
-        <article className="rounded-2xl border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] p-3 shadow-[0_10px_22px_rgba(38,78,118,0.08)]">
+        <article className="rounded-2xl border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] p-3 shadow-[0_10px_22px_rgba(38,78,118,0.08)] dark:bg-none dark:bg-card dark:shadow-black/20">
           <div className="flex items-start justify-between gap-3">
             <div><p className="text-sm font-bold text-foreground">{formatDisplayDate(entry.date)}</p><p className="mt-0.5 text-xs font-semibold text-muted-foreground">{entry.recordedBy}</p></div>
             <RowActions entry={entry} onDelete={onDelete} onEdit={onEdit} onView={onView} />

@@ -26,7 +26,7 @@ export function DashboardPage({
     <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
       <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-700">Monthly Performance</span>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">Monthly Performance</span>
           <strong className="mt-0.5 block text-lg font-black text-foreground">{performance.monthLabel}</strong>
         </div>
         <DashboardRangeFilter value={monthOffset} onChange={setMonthOffset} />

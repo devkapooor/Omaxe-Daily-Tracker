@@ -11,7 +11,7 @@ export function AppBackground({ children }: PropsWithChildren) {
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.06),transparent_46%)] opacity-90"
       />
-      <div className="relative z-10 min-h-screen bg-[linear-gradient(180deg,rgba(248,251,255,0.82),rgba(241,246,251,0.94))]">
+      <div className="relative z-10 min-h-screen bg-[linear-gradient(180deg,rgba(248,251,255,0.82),rgba(241,246,251,0.94))] dark:bg-none dark:bg-background/95">
         {children}
       </div>
     </div>

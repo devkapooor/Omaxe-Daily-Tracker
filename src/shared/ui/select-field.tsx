@@ -202,7 +202,7 @@ export function SelectField({
   const panel = isOpen
     ? createPortal(
         <div
-          className="fixed z-[90] rounded-[22px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,250,254,0.98))] p-2 shadow-[0_28px_60px_rgba(38,78,118,0.18)] backdrop-blur-xl"
+          className="fixed z-[90] rounded-[22px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,250,254,0.98))] p-2 shadow-[0_28px_60px_rgba(38,78,118,0.18)] backdrop-blur-xl dark:bg-none dark:bg-popover dark:shadow-black/35"
           ref={panelRef}
           style={{
             left: panelStyle.left,
@@ -232,7 +232,7 @@ export function SelectField({
                       option.disabled && 'cursor-not-allowed opacity-45',
                       !option.disabled && !isHighlighted && 'hover:bg-secondary/70',
                       isHighlighted && 'bg-secondary/80',
-                      isSelected && 'border border-cyan-200 bg-cyan-50 text-cyan-800',
+                      isSelected && 'border border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-info/30 dark:bg-info/10 dark:text-info',
                     )}
                     disabled={option.disabled}
                     id={`${generatedId}-option-${index}`}
@@ -246,7 +246,7 @@ export function SelectField({
                     onMouseEnter={() => setHighlightedIndex(index)}
                   >
                     <span>{option.label}</span>
-                    {isSelected ? <Check className="h-4 w-4 text-cyan-700" /> : null}
+                    {isSelected ? <Check className="h-4 w-4 text-cyan-700 dark:text-info" /> : null}
                   </button>
                 )
               })
@@ -266,7 +266,7 @@ export function SelectField({
             aria-expanded={isOpen}
             aria-haspopup="listbox"
             className={cn(
-              'flex h-8 w-full rounded-xl border border-input bg-white/95 px-2.5 py-1.25 pr-9 text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(38,78,118,0.04)] transition-[border-color,box-shadow,background] outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:bg-muted/70 disabled:opacity-70',
+              'flex h-8 w-full rounded-xl border border-input bg-white/95 px-2.5 py-1.25 pr-9 text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(38,78,118,0.04)] transition-[border-color,box-shadow,background] outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:bg-muted/70 disabled:opacity-70 dark:bg-card dark:shadow-none',
               isOpen && 'border-ring ring-4 ring-ring/12',
               className,
             )}
@@ -321,7 +321,7 @@ export function SelectField({
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           className={cn(
-            'flex h-8 w-full items-center justify-between rounded-xl border border-input bg-white/95 px-2.5 py-1.25 text-left text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(38,78,118,0.04)] outline-none transition-[border-color,box-shadow,background] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:bg-muted/70 disabled:opacity-70',
+            'flex h-8 w-full items-center justify-between rounded-xl border border-input bg-white/95 px-2.5 py-1.25 text-left text-[12px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(38,78,118,0.04)] outline-none transition-[border-color,box-shadow,background] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/12 disabled:cursor-not-allowed disabled:bg-muted/70 disabled:opacity-70 dark:bg-card dark:shadow-none',
             isOpen && 'border-ring ring-4 ring-ring/12',
             className,
           )}

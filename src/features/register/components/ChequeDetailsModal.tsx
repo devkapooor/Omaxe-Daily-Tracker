@@ -23,7 +23,7 @@ export function ChequeDetailsModal({
 }: ChequeDetailsModalProps) {
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="w-full max-w-md rounded-[24px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,250,254,0.98))] p-5 shadow-[0_24px_70px_rgba(38,78,118,0.2)]">
+      <div className="w-full max-w-md rounded-[24px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,250,254,0.98))] p-5 shadow-[0_24px_70px_rgba(38,78,118,0.2)] dark:bg-none dark:bg-card dark:shadow-black/35">
         <div className="space-y-1">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Cheque Details</p>
           <h3 className="text-xl font-black tracking-tight text-foreground">Enter cheque information</h3>

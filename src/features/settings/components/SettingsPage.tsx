@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
 import type { UserAccount } from '@/domain/appTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
@@ -11,6 +11,7 @@ import { NativeSelect } from '@/shared/ui/native-select'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { getActiveTheme, saveTheme, subscribeToTheme, type Theme } from '@/shared/lib/theme'
 
 type SettingsPageProps = {
   currentUser: AppUser
@@ -45,7 +46,10 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
+  const [theme, setTheme] = useState<Theme>(getActiveTheme)
   const canManageUsers = currentUser.role === 'owner'
+
+  useEffect(() => subscribeToTheme(setTheme), [])
 
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase()
@@ -327,8 +331,26 @@ export function SettingsPage({
           </Card>
         </TabsContent>
 
-        <TabsContent value="password" className="min-h-0">
-          <Card className="max-w-2xl">
+        <TabsContent value="password" className="grid min-h-0 max-w-2xl gap-4 overflow-y-auto">
+          <Card variant="quiet">
+            <CardContent className="flex items-center justify-between gap-4 pt-3">
+              <div>
+                <p className="text-sm font-bold text-foreground">Dark appearance</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Saved on this device only.</p>
+              </div>
+              <button
+                aria-checked={theme === 'dark'}
+                aria-label="Use dark appearance"
+                className={`relative h-7 w-12 flex-none rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${theme === 'dark' ? 'border-primary bg-primary' : 'border-input bg-muted'}`}
+                role="switch"
+                type="button"
+                onClick={() => saveTheme(theme === 'dark' ? 'light' : 'dark')}
+              >
+                <span className={`absolute left-0 top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow-sm transition-transform ${theme === 'dark' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </CardContent>
+          </Card>
+          <Card>
             <CardHeader className="pb-3">
               <SectionHeading eyebrow="Security" title="Update My Password" />
             </CardHeader>

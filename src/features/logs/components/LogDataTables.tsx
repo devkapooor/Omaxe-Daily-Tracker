@@ -16,7 +16,7 @@ import {
 
 function MobileLogCard({ children, subtitle, title, trailing }: { children: React.ReactNode; subtitle: string; title: string; trailing?: React.ReactNode }) {
   return (
-    <article className="rounded-2xl border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] p-3 shadow-[0_10px_22px_rgba(38,78,118,0.08)]">
+    <article className="rounded-2xl border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,254,0.96))] p-3 shadow-[0_10px_22px_rgba(38,78,118,0.08)] dark:bg-none dark:bg-card dark:shadow-black/20">
       <div className="flex items-start justify-between gap-3">
         <div><p className="text-sm font-bold text-foreground">{title}</p><p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p></div>
         {trailing}

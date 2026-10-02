@@ -24,7 +24,7 @@ function CoverageRow({ label, coverage }: { label: string; coverage: RecordingCo
 export function RecordingHealthCard({ performance }: { performance: MonthlyPerformanceMetrics }) {
   return (
     <GlowCard glowColor="neutral" className="p-3">
-      <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Recording Health</span>
+      <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Recording Health</span>
       <strong className="mt-1 block text-base font-black text-foreground">Calendar-day coverage</strong>
       <div className="mt-2 space-y-2">
         <CoverageRow label="Sales" coverage={performance.recordingHealth.sales} />

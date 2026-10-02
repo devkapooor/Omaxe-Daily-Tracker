@@ -94,13 +94,13 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-full w-[min(80vw,272px)] flex-col border-r border-border/80 bg-card/96 shadow-[24px_0_48px_rgba(38,78,118,0.16)] backdrop-blur-xl transition-transform duration-300 xl:hidden',
+          'fixed left-0 top-0 z-50 flex h-full w-[min(80vw,272px)] flex-col border-r border-border/80 bg-card/96 shadow-[24px_0_48px_rgba(38,78,118,0.16)] backdrop-blur-xl transition-transform duration-300 xl:hidden dark:shadow-black/30',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         <div className="border-b border-border/70 px-3 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60">
+            <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60 dark:shadow-blue-950/60">
               {initials}
             </span>
             <div className="min-w-0">
@@ -191,7 +191,7 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
         {!isDesktopCollapsed ? (
           <div className="border-t border-border/70 px-2 py-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60">
+              <span className="grid h-8.5 w-8.5 place-items-center rounded-xl border border-blue-300 bg-linear-to-b from-blue-500 to-blue-700 font-black text-[12px] text-white shadow-lg shadow-blue-200/60 dark:shadow-blue-950/60">
                 {initials}
               </span>
               {logoutItem ? (

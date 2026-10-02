@@ -52,8 +52,8 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
 
   return (
     <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden px-4 py-8 text-foreground">
-      <div className="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 text-blue-700/80">
-        <Building2 className="h-4 w-4 text-cyan-600" />
+      <div className="pointer-events-none absolute left-1/2 top-6 z-10 flex -translate-x-1/2 items-center gap-2 text-blue-700/80 dark:text-blue-300/90">
+        <Building2 className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
         <span className="text-[11px] font-extrabold uppercase tracking-[0.26em]">AlphaHub</span>
       </div>
 
@@ -86,7 +86,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
             />
           </div>
 
-          <section className="relative overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(244,248,252,0.94))] p-5 shadow-[0_32px_90px_rgba(38,78,118,0.2)] backdrop-blur-2xl sm:p-6">
+          <section className="relative overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(145deg,rgba(255,255,255,0.96),rgba(244,248,252,0.94))] p-5 shadow-[0_32px_90px_rgba(38,78,118,0.2)] backdrop-blur-2xl sm:p-6 dark:border-border dark:bg-none dark:bg-card/95 dark:shadow-black/40">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 opacity-[0.035]"
@@ -102,11 +102,11 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: prefersReducedMotion ? 0 : 0.5, delay: 0.1 }}
-                className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-200 bg-cyan-50 text-cyan-700 shadow-[0_12px_34px_rgba(8,145,178,0.12)]"
+                className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-200 bg-cyan-50 text-cyan-700 shadow-[0_12px_34px_rgba(8,145,178,0.12)] dark:border-info/30 dark:bg-info/10 dark:text-info"
               >
                 <ShieldCheck className="h-5 w-5" />
               </motion.div>
-              <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-700">Secure Workspace</p>
+              <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-700 dark:text-info">Secure Workspace</p>
               <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-foreground">Welcome back</h1>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Sign in with the account created for you by the owner.</p>
             </div>
@@ -121,7 +121,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                     autoComplete="email"
                     placeholder="name@company.com"
                     type="email"
-                    className="h-10 border-blue-200 bg-white/90 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12"
+                    className="h-10 border-blue-200 bg-white/90 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12 dark:border-input dark:bg-background/70"
                     value={email}
                     onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
@@ -142,7 +142,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                     autoComplete="current-password"
                     placeholder="Enter password"
                     type={showPassword ? 'text' : 'password'}
-                    className="h-10 border-blue-200 bg-white/90 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12"
+                    className="h-10 border-blue-200 bg-white/90 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-cyan-400 focus-visible:ring-cyan-400/12 dark:border-input dark:bg-background/70"
                     value={password}
                     onBlur={() => setFocusedField(null)}
                     onChange={(event) => {
@@ -153,7 +153,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                   />
                   <button
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-1.5 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-cyan-50 hover:text-cyan-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="absolute right-1.5 top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-cyan-50 hover:text-cyan-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-info/10 dark:hover:text-info"
                     type="button"
                     onClick={() => setShowPassword((current) => !current)}
                   >
@@ -163,7 +163,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               </label>
 
               {(error || authError) ? (
-                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-destructive/30 dark:bg-destructive/10 dark:text-destructive">
                   {error || authError}
                 </motion.p>
               ) : null}

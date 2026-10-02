@@ -152,7 +152,7 @@ export function CashMovementForm({
               {legacyBalances
                 .filter((entry) => entry.amount !== 0 || entry.cashoutCount > 0 || entry.transferInCount > 0 || entry.transferOutCount > 0)
                 .map((entry) => (
-                  <div key={entry.holder} className="rounded-[16px] border border-amber-200 bg-white/70 p-3">
+                  <div key={entry.holder} className="rounded-[16px] border border-amber-200 bg-white/70 p-3 dark:border-warning/30 dark:bg-card/70">
                     <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-amber-700">{entry.label}</p>
                     <p className="mt-1 text-sm font-bold">{money(entry.amount)}</p>
                     <p className="mt-1 text-xs text-amber-700/80">

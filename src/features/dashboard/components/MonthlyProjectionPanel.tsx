@@ -49,7 +49,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
 
       <section className="grid gap-1.5 lg:grid-cols-2 xl:grid-cols-3">
         <GlowCard glowColor="blue" className="p-3">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">
             {performance.isCurrentMonth ? 'Month-End Outlook' : 'Completed Month Result'}
           </span>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -78,7 +78,7 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
         <BreakEvenProgressCard performance={performance} marginPercentage={marginPercentage} />
 
         <GlowCard glowColor="blue" className="p-3">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Sales Mix</span>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Sales Mix</span>
           <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" aria-label={`Sales mix for ${performance.monthLabel}`}>
             {mixMeta.map((item) => (
               <span

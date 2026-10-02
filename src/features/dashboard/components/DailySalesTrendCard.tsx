@@ -78,7 +78,7 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
     <GlowCard glowColor="blue" className="p-3 lg:col-span-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px]">Daily Sales Trend</span>
+          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Daily Sales Trend</span>
           <strong className="mt-1 block text-base font-black text-foreground">Selected month vs preceding month</strong>
         </div>
         <div className="flex flex-wrap gap-3 text-[9px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
