@@ -34,8 +34,20 @@ const mixMeta = [
   { key: 'returns', label: 'Returns', color: 'bg-rose-500' },
 ] as const
 
+function percentageOfMix(value: number, total: number) {
+  return total > 0 ? (value / total) * 100 : 0
+}
+
+function formatPercentage(value: number) {
+  return `${value.toFixed(value === 0 ? 0 : 1)}%`
+}
+
 export function MonthlyProjectionPanel({ performance, marginPercentage }: MonthlyProjectionPanelProps) {
   const mixTotal = Object.values(performance.salesMix).reduce((total, value) => total + value, 0)
+  const salesMix = mixMeta.map((item) => ({
+    ...item,
+    percentage: percentageOfMix(performance.salesMix[item.key], mixTotal),
+  }))
   const resultIsProfit = performance.estimatedMarginResult >= 0
 
   return (
@@ -79,23 +91,24 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
 
         <GlowCard glowColor="blue" className="p-3">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Sales Mix</span>
-          <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" aria-label={`Sales mix for ${performance.monthLabel}`}>
-            {mixMeta.map((item) => (
+          <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`Sales mix percentages for ${performance.monthLabel}`}>
+            {salesMix.map((item) => (
               <span
                 key={item.key}
                 className={item.color}
-                style={{ width: `${mixTotal > 0 ? (performance.salesMix[item.key] / mixTotal) * 100 : 0}%` }}
+                style={{ width: `${item.percentage}%` }}
+                title={`${item.label}: ${formatPercentage(item.percentage)}`}
               />
             ))}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {mixMeta.map((item) => (
+            {salesMix.map((item) => (
               <div key={item.key} className="rounded-xl border border-border/60 bg-background/35 px-2.5 py-2">
                 <span className="flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
                   <span className={`h-2 w-2 rounded-full ${item.color}`} />
                   {item.label}
                 </span>
-                <strong className="mt-1 block text-sm font-black text-foreground">{money(performance.salesMix[item.key])}</strong>
+                <strong className="mt-1 block text-sm font-black text-foreground">{formatPercentage(item.percentage)}</strong>
               </div>
             ))}
           </div>
