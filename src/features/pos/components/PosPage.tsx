@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { today } from '@/app/uiHelpers'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -107,7 +106,6 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
 
   return <section className="min-h-0 flex-1 overflow-y-auto pr-1">
     <div className="grid gap-2.5">
-      <Card><CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow="Isolated Firestore Sandbox" title="POS (Test)" description="Trial billing only. No production sales, cash, purchases, or finance records are used." /><Badge variant="warning">TEST ONLY</Badge></CardHeader></Card>
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
       <div className="flex flex-wrap gap-2">{(['checkout', 'dashboard', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'outline'} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'dashboard' ? <ChartPie /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
 
