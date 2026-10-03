@@ -1101,5 +1101,146 @@ service cloud.firestore {
         );
       allow delete: if false;
     }
+
+    // POS (Test) is deliberately isolated below this single sandbox document.
+    // No rule in this block grants access to a production collection.
+    match /posSandboxes/{sandboxId} {
+      allow read: if sandboxId == 'test' && isStaff();
+      allow create, update, delete: if sandboxId == 'test' && isOwner();
+
+      match /products/{productId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isOwner() &&
+          request.resource.data.barcode is string &&
+          request.resource.data.currentQuantity is int &&
+          request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
+          request.resource.data.revision == 1 &&
+          request.resource.data.createdByUid == request.auth.uid;
+        allow update: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.revision == resource.data.revision + 1 &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.createdByUid == resource.data.createdByUid &&
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'barcode', 'name', 'searchName', 'category', 'brand', 'vendor', 'sellingPricePaise',
+              'active', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'
+            ]) ||
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'currentQuantity', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
+              ]) &&
+              request.resource.data.currentQuantity is int &&
+              request.resource.data.updatedByUid == request.auth.uid &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.actorUid == request.auth.uid &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionBefore == resource.data.revision &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionAfter == request.resource.data.revision &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.beforeQuantity == resource.data.currentQuantity &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.afterQuantity == request.resource.data.currentQuantity
+            )
+          );
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /productCosts/{productId} {
+        allow read: if sandboxId == 'test' && isManagerOrOwner();
+        allow create, update: if sandboxId == 'test' && isManagerOrOwner() &&
+          request.resource.data.productId == productId &&
+          request.resource.data.updatedByUid == request.auth.uid &&
+          (request.resource.data.costPaise == null || (request.resource.data.costPaise is int && request.resource.data.costPaise >= 0));
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /stockMovements/{movementId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == movementId &&
+          request.resource.data.actorUid == request.auth.uid &&
+          request.resource.data.quantityDelta is int &&
+          request.resource.data.beforeQuantity is int &&
+          request.resource.data.afterQuantity is int &&
+          request.resource.data.afterQuantity == request.resource.data.beforeQuantity + request.resource.data.quantityDelta &&
+          request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore + 1;
+        allow update: if false;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /bills/{billId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == billId &&
+          request.resource.data.testOnly == true &&
+          request.resource.data.status == 'finalized' &&
+          request.resource.data.createdByUid == request.auth.uid &&
+          request.resource.data.subtotalPaise is int && request.resource.data.subtotalPaise >= 0 &&
+          request.resource.data.totalPaise is int && request.resource.data.totalPaise >= 0 &&
+          request.resource.data.lines is list && request.resource.data.lines.size() > 0 && request.resource.data.lines.size() <= 200 &&
+          request.resource.data.payments is list &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/sequences/$(request.resource.data.financialYear)).data.lastNumber == request.resource.data.sequenceNumber &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.billId == billId &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.revision == 1;
+        allow update: if false;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /billStates/{billId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.billId == billId && request.resource.data.state == 'active' && request.resource.data.revision == 1 && request.resource.data.updatedByUid == request.auth.uid;
+        allow update: if sandboxId == 'test' && isOwner() && request.resource.data.billId == resource.data.billId && request.resource.data.revision == resource.data.revision + 1;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /heldCarts/{cartId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.createdByUid == request.auth.uid && request.resource.data.updatedByUid == request.auth.uid && request.resource.data.revision == 1;
+        allow update: if sandboxId == 'test' && isStaff() && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.createdByUid == resource.data.createdByUid && request.resource.data.updatedByUid == request.auth.uid && request.resource.data.revision == resource.data.revision + 1;
+        allow delete: if sandboxId == 'test' && isStaff();
+      }
+
+      match /approvals/{approvalId} {
+        allow read: if sandboxId == 'test' && (isOwner() || (isStaff() && resource.data.requestedByUid == request.auth.uid));
+        allow create: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.requestedByUid == request.auth.uid &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.type in ['void', 'return'] &&
+          request.resource.data.reason is string && request.resource.data.reason.size() > 0;
+        allow update: if sandboxId == 'test' && isOwner() && resource.data.status == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedByUid', 'reviewedByName', 'reviewReason']) &&
+          request.resource.data.status in ['approved', 'rejected', 'stale'] &&
+          request.resource.data.reviewedByUid == request.auth.uid;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /events/{eventId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.actorUid == request.auth.uid && request.resource.data.type is string;
+        allow update: if false;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /sequences/{financialYear} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.financialYear == financialYear && request.resource.data.lastNumber == 1 && request.resource.data.updatedByUid == request.auth.uid;
+        allow update: if sandboxId == 'test' && isStaff() && request.resource.data.financialYear == resource.data.financialYear && request.resource.data.lastNumber == resource.data.lastNumber + 1 && request.resource.data.updatedByUid == request.auth.uid;
+        allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /configuration/{configId} {
+        allow read: if sandboxId == 'test' && ((configId == 'checkout' && isStaff()) || isOwner());
+        allow create, update, delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /importRuns/{runId} {
+        allow read, create, update, delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /resetRuns/{runId} {
+        allow read, create, update, delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /{unknownCollection}/{documentId} {
+        allow read, write: if false;
+      }
+    }
   }
 }

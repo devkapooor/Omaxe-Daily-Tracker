@@ -66,7 +66,7 @@ beforeAll(async () => {
     projectId,
     firestore: { rules: readFileSync('firestore.rules', 'utf8') },
   })
-})
+}, 30_000)
 
 beforeEach(async () => {
   await testEnvironment.clearFirestore()
@@ -231,6 +231,64 @@ describe('Firestore role enforcement', () => {
     await assertFails(updateDoc(doc(userDb('manager-user'), requestPath), { status: 'approved' }))
     await assertFails(updateDoc(doc(userDb('billing-user'), requestPath), { status: 'approved' }))
     await assertFails(updateDoc(doc(userDb('disabled-user'), requestPath), { status: 'approved' }))
+  })
+})
+
+describe('POS test sandbox isolation', () => {
+  const product = {
+    barcode: '890000000001', name: 'Test Product', searchName: 'test product', category: 'Test', brand: 'Brand', vendor: 'Vendor',
+    sellingPricePaise: 1000, currentQuantity: -2, revision: 1, active: true,
+    createdAt: timestamp, createdByUid: 'owner-user', createdByName: 'owner-user',
+    updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user',
+  }
+
+  it('lets staff read products while protecting costs and owner configuration', async () => {
+    const owner = userDb('owner-user')
+    await setDoc(doc(owner, 'posSandboxes', 'test', 'products', 'p-1'), product)
+    await setDoc(doc(owner, 'posSandboxes', 'test', 'productCosts', 'p-1'), { productId: 'p-1', costPaise: 600, sourceValue: '6', importRunId: 'run', updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user' })
+    await setDoc(doc(owner, 'posSandboxes', 'test', 'configuration', 'admin'), { importPolicy: 'owner-only' })
+    await setDoc(doc(owner, 'posSandboxes', 'test', 'configuration', 'checkout'), { billingMaxDiscountPercentage: 5 })
+
+    await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'products', 'p-1')))
+    await assertFails(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'productCosts', 'p-1')))
+    await assertSucceeds(getDoc(doc(userDb('manager-user'), 'posSandboxes', 'test', 'productCosts', 'p-1')))
+    await assertFails(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'configuration', 'admin')))
+    await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'configuration', 'checkout')))
+  })
+
+  it('requires a linked append-only movement for quantity revisions', async () => {
+    const owner = userDb('owner-user')
+    await setDoc(doc(owner, 'posSandboxes', 'test', 'products', 'p-1'), product)
+    const billing = userDb('billing-user')
+    await assertFails(updateDoc(doc(billing, 'posSandboxes', 'test', 'products', 'p-1'), { currentQuantity: -3, revision: 2, lastMovementId: 'missing', updatedAt: timestamp, updatedByUid: 'billing-user', updatedByName: 'billing-user' }))
+
+    const batch = writeBatch(billing)
+    batch.update(doc(billing, 'posSandboxes', 'test', 'products', 'p-1'), { currentQuantity: -3, revision: 2, lastMovementId: 'move-1', updatedAt: timestamp, updatedByUid: 'billing-user', updatedByName: 'billing-user' })
+    batch.set(doc(billing, 'posSandboxes', 'test', 'stockMovements', 'move-1'), { id: 'move-1', productId: 'p-1', actorUid: 'billing-user', actorName: 'billing-user', actorRole: 'billing', type: 'sale', quantityDelta: -1, beforeQuantity: -2, afterQuantity: -3, productRevisionBefore: 1, productRevisionAfter: 2, businessDate: '2026-10-03', createdAt: timestamp })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(owner, 'posSandboxes', 'test', 'stockMovements', 'move-1'), { quantityDelta: 99 }))
+  })
+
+  it('keeps bills and events immutable while approvals are owner-only', async () => {
+    const billing = userDb('billing-user')
+    const owner = userDb('owner-user')
+    const billPath = ['posSandboxes', 'test', 'bills', 'bill-1'] as const
+    const finalizeBatch = writeBatch(billing)
+    finalizeBatch.set(doc(billing, 'posSandboxes', 'test', 'sequences', '2026-27'), { financialYear: '2026-27', lastNumber: 1, updatedByUid: 'billing-user' })
+    finalizeBatch.set(doc(billing, 'posSandboxes', 'test', 'billStates', 'bill-1'), { billId: 'bill-1', state: 'active', revision: 1, updatedByUid: 'billing-user' })
+    finalizeBatch.set(doc(billing, ...billPath), { id: 'bill-1', receiptNumber: 'TEST-2026-27-000001', financialYear: '2026-27', sequenceNumber: 1, testOnly: true, status: 'finalized', createdByUid: 'billing-user', subtotalPaise: 1000, totalPaise: 1000, lines: [{ id: 'l1' }], payments: [{ method: 'cash', amountPaise: 1000 }] })
+    await assertSucceeds(finalizeBatch.commit())
+    await assertFails(updateDoc(doc(owner, ...billPath), { totalPaise: 0 }))
+    await setDoc(doc(billing, 'posSandboxes', 'test', 'approvals', 'a-1'), { type: 'void', billId: 'bill-1', reason: 'Wrong scan', status: 'pending', requestedByUid: 'billing-user', requestedByName: 'billing-user', requestedAt: timestamp })
+    await assertFails(updateDoc(doc(billing, 'posSandboxes', 'test', 'approvals', 'a-1'), { status: 'approved' }))
+    await assertSucceeds(updateDoc(doc(owner, 'posSandboxes', 'test', 'approvals', 'a-1'), { status: 'rejected', reviewedAt: timestamp, reviewedByUid: 'owner-user', reviewedByName: 'owner-user', reviewReason: 'Not supported' }))
+  })
+
+  it('blocks staff imports, reset state, and every non-test sandbox', async () => {
+    const billing = userDb('billing-user')
+    await assertFails(setDoc(doc(billing, 'posSandboxes', 'test', 'importRuns', 'run-1'), { status: 'running' }))
+    await assertFails(setDoc(doc(billing, 'posSandboxes', 'test', 'resetRuns', 'active'), { status: 'running' }))
+    await assertFails(setDoc(doc(userDb('owner-user'), 'posSandboxes', 'production', 'products', 'p-1'), product))
   })
 })
 
