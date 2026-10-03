@@ -5,6 +5,7 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 ## Environment and evidence
 
 - Production financial records, loans, party balances, and existing backups are protected. Production checks are read-only; all writes, auth-account changes, settings changes, imports and activation tests require emulators or isolated non-production data.
+- Loan data, calculations, workflows, permissions, and loan-specific UI are strictly out of scope; stop and ask before any task or shared refactor could affect them.
 - A local Vite URL does not imply an isolated database: inspect the configured project before any test. Automatic local sign-in uses real Firebase credentials and is not an emulator.
 - Use owner, manager, billing, disabled, and unauthenticated fixtures, plus isolated vendor and party fixtures. Never create test records in production.
 - Record commit, timestamp, environment/project, role, scenario, observed result, severity, and evidence path. Redact credentials and business data.
