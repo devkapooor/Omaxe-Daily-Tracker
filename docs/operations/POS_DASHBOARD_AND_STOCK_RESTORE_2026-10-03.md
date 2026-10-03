@@ -18,11 +18,13 @@ Dashboard release: `21a65d1`, deployed to https://alphahub-f137b.web.app.
 - Archived its stale active marker under `posSandboxes/test/resetRuns/interrupted-*`, with cancellation reason and timestamp. Remaining bill and audit records were preserved.
 - Archived the previous completed import record under `posSandboxes/test/importRuns/<checksum>-before-restore-*`, then restarted the approved CSV import through the live owner's Admin screen.
 - Approved checksum: `e234dae109bc90988879e5af6789d90e0b4be59bb90f93d0cffb0dbaa521a65b`.
-- Current committed import progress: **3,675 of 6,069 products**, status `running`. **2,394 products remain.**
-- Firebase client reported `resource-exhausted: Quota exceeded` repeatedly on the next batch. Billing is disabled on the project. Further retries were stopped.
+- Initial restore paused at 3,675 products after Firebase reported `resource-exhausted: Quota exceeded` on the free plan.
+- After the owner upgraded to Blaze, confirmed project billing enabled and resumed the same import without resetting any data. Final verified counts: **6,069 products and 6,069 cost documents**, import status `completed`. Opening quantities include 379 negative and 3,294 zero-stock items, matching the approved CSV.
 
 ## Resume
 
-After the daily quota resets, or after the owner enables Firebase billing, open POS (Test) → Admin and select `data/pos/omaxe-opening-stock-2026-10-02.approved.csv` again. The matching checksum resumes at row 3,675; do not reset the sandbox or delete the import record.
+Restoration is complete. Do not reset the sandbox or reimport the completed CSV.
 
-After completion, verify 6,069 products and costs and run a barcode checkout/void test. Full-stock restoration and that final billing verification are still pending; the dashboard release is complete.
+Live barcode verification passed using barcode `4005292651707` and receipt `TEST-2026-27-000006`: scanning, automatic payment selection, cash change, held-cart resume, split payment, receipt creation, stock decrement, void approval and stock restoration. Main finance collection counts were unchanged and no browser errors occurred. The verification bill was voided.
+
+POS (Test) is ready for sandbox barcode billing at https://alphahub-f137b.web.app. It remains test-only and does not issue production tax invoices or write production sales/finance records.
