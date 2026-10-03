@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import {
   activateVendorLedgerV2,
   applyOwnerSettlementCorrectionV2,
@@ -693,6 +693,8 @@ describe('Payroll access and audit enforcement', () => {
 
     await assertSucceeds(getDoc(doc(manager, 'salarySlips', slipId)))
     await assertSucceeds(getDoc(doc(manager, 'salarySlipRevisions', salaryRevisionId(slipId, 1))))
+    await assertSucceeds(getDocs(query(collection(manager, 'salarySlipRevisions'), where('slipId', '==', slipId), where('employeeUserId', '==', 'manager-user'))))
+    await assertSucceeds(getDocs(query(collection(manager, 'payrollEvents'), where('slipId', '==', slipId), where('employeeUserId', '==', 'manager-user'))))
     await assertFails(getDoc(doc(billing, 'salarySlips', slipId)))
     await assertFails(getDoc(doc(manager, 'payrollSettings', 'config')))
     await assertFails(getDoc(doc(manager, 'payrollProfiles', 'manager-user')))

@@ -1,6 +1,6 @@
 import { deleteApp, initializeApp } from 'firebase/app'
 import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth'
-import { deleteDoc, doc, setDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { defaultPurchasingCapabilities } from '@/domain/purchasingCapabilities'
 import { auth, db, firebaseConfig } from '@/shared/lib/firebase'
 import type { CreateUserInput, StoreCollectionState } from '@/store/storeShared'
@@ -116,6 +116,9 @@ export function createAuthActions({
     }
     if (settingsAuditLog.some((entry) => normalizeName(entry.actor).toLowerCase() === targetName)) {
       referenceReasons.add('settings audit history recorded under this user name')
+    }
+    if ((await getDoc(doc(db, 'payrollProfiles', userId))).exists()) {
+      referenceReasons.add('payroll setup or salary history linked to this user ID')
     }
 
     if (referenceReasons.size > 0) {

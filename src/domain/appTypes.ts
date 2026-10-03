@@ -34,7 +34,7 @@ export type VendorLedgerV2Config = {
   updatedByUserId?: string
 }
 
-export type Page = 'dashboard' | 'actions' | 'vendor-preview' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'actions' | 'vendor-preview' | 'directory' | 'expense' | 'cashout' | 'movement' | 'planner' | 'payroll' | 'logs' | 'settings'
 
 export type LoanStatus = 'Open' | 'Settled'
 
@@ -182,3 +182,4 @@ export type NameDirectory = {
   people: string[]
   vendors: string[]
 }
+

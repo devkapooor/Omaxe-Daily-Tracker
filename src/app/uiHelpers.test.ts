@@ -13,6 +13,8 @@ describe('owner-only route resolution', () => {
     expect(resolveActivePage('manager', 'vendor-preview')).toBe('vendor-preview')
     expect(resolveActivePage('billing', 'actions')).toBe('expense')
     expect(resolveActivePage('billing', 'vendor-preview')).toBe('vendor-preview')
+    expect(resolveActivePage('manager', 'payroll')).toBe('payroll')
+    expect(resolveActivePage('billing', 'payroll')).toBe('payroll')
   })
 
   it('adds the Action Centre navigation item only for the owner', () => {
@@ -22,5 +24,9 @@ describe('owner-only route resolution', () => {
     expect(pagesFor('billing')).not.toContain('actions')
     expect(pagesFor('manager')).toContain('vendor-preview')
     expect(pagesFor('billing')).toContain('vendor-preview')
+    expect(pagesFor('owner')).toContain('payroll')
+    expect(pagesFor('manager')).toContain('payroll')
+    expect(pagesFor('billing')).toContain('payroll')
   })
 })
+

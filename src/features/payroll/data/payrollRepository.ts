@@ -146,6 +146,7 @@ export function subscribeEmployeeSalarySlips(
 
 export function subscribeSalarySlipHistory(
   slipId: string,
+  employeeUserId: string,
   onData: (history: { revisions: SalarySlipRevision[]; events: PayrollEvent[] }) => void,
   onError: (error: Error) => void,
 ) {
@@ -156,11 +157,11 @@ export function subscribeSalarySlipHistory(
     events: [...events].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
   })
   const unsubscribers: Unsubscribe[] = [
-    onSnapshot(query(collection(db, 'salarySlipRevisions'), where('slipId', '==', slipId)), (snapshot) => {
+    onSnapshot(query(collection(db, 'salarySlipRevisions'), where('slipId', '==', slipId), where('employeeUserId', '==', employeeUserId)), (snapshot) => {
       revisions = parseCollection(snapshot.docs, parseSalarySlipRevision)
       emit()
     }, (error) => onError(error)),
-    onSnapshot(query(collection(db, 'payrollEvents'), where('slipId', '==', slipId)), (snapshot) => {
+    onSnapshot(query(collection(db, 'payrollEvents'), where('slipId', '==', slipId), where('employeeUserId', '==', employeeUserId)), (snapshot) => {
       events = parseCollection(snapshot.docs, parsePayrollEvent)
       emit()
     }, (error) => onError(error)),

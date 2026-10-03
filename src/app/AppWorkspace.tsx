@@ -27,6 +27,7 @@ import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
+import { PayrollPage } from '@/features/payroll/components/PayrollPage'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -405,6 +406,12 @@ export function AppWorkspace({
           </section>
         ) : null}
 
+        {activePage === 'payroll' ? (
+          <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
+            <PayrollPage currentUser={currentUser} users={users} showToast={showToast} />
+          </section>
+        ) : null}
+
         {activePage === 'logs' && currentUser.role === 'owner' ? (
           <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <LogsPage
@@ -497,3 +504,4 @@ export function AppWorkspace({
     </main>
   )
 }
+
