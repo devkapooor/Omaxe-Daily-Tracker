@@ -6,6 +6,7 @@ import {
   runTransaction,
   serverTimestamp,
   where,
+  type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
@@ -171,26 +172,27 @@ export async function savePayrollSettings(input: {
   issuer: PayrollIssuer
   defaultPaidWeeklyOffDays: number
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   if (!input.issuer.name.trim()) throw new Error('Employer name is required.')
   if (!Number.isSafeInteger(input.defaultPaidWeeklyOffDays) || input.defaultPaidWeeklyOffDays < 0 || input.defaultPaidWeeklyOffDays > 31) {
     throw new Error('Default paid weekly offs must be between 0 and 31.')
   }
   const id = eventId()
-  await runTransaction(db, async (transaction) => {
-    transaction.set(doc(db, 'payrollSettings', 'config'), {
+  await runTransaction(database, async (transaction) => {
+    transaction.set(doc(database, 'payrollSettings', 'config'), {
       issuer: {
         name: input.issuer.name.trim(),
         ...(input.issuer.address?.trim() ? { address: input.issuer.address.trim() } : {}),
         ...(input.issuer.contact?.trim() ? { contact: input.issuer.contact.trim() } : {}),
       },
       defaultPaidWeeklyOffDays: input.defaultPaidWeeklyOffDays,
+      lastEventId: id,
       updatedAt: serverTimestamp(),
       updatedByUid: input.actor.uid,
       updatedByName: input.actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', id), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', id), eventDocument({
       id,
       type: 'settings-updated',
       actorUid: input.actor.uid,
@@ -203,25 +205,27 @@ export async function savePayrollProfile(input: {
   employeeUserId: string
   enabled: boolean
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   if (!input.employeeUserId.trim()) throw new Error('Employee uid is required.')
-  const profileRef = doc(db, 'payrollProfiles', input.employeeUserId)
+  const profileRef = doc(database, 'payrollProfiles', input.employeeUserId)
   const id = eventId()
-  await runTransaction(db, async (transaction) => {
+  await runTransaction(database, async (transaction) => {
     const profileSnapshot = await transaction.get(profileRef)
     const existing = profileSnapshot.exists() ? parsePayrollProfile(profileSnapshot.data()) : null
+    const existingData = profileSnapshot.data()
     transaction.set(profileRef, {
       employeeUserId: input.employeeUserId,
       enabled: input.enabled,
-      createdAt: existing?.createdAt ?? serverTimestamp(),
+      lastEventId: id,
+      createdAt: existingData?.createdAt ?? serverTimestamp(),
       createdByUid: existing?.createdByUid ?? input.actor.uid,
       createdByName: existing?.createdByName ?? input.actor.name,
       updatedAt: serverTimestamp(),
       updatedByUid: input.actor.uid,
       updatedByName: input.actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', id), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', id), eventDocument({
       id,
       type: 'profile-updated',
       actorUid: input.actor.uid,
@@ -239,7 +243,7 @@ export async function createPayrollTerm(input: {
   requiredDailyMinutes: number
   supersedesTermId?: string
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   requireMonth(input.effectiveFromMonth)
   if (!Number.isSafeInteger(input.monthlySalaryPaise) || input.monthlySalaryPaise <= 0) throw new Error('Monthly salary must be greater than zero.')
@@ -248,12 +252,12 @@ export async function createPayrollTerm(input: {
   }
   const id = `payroll-term-${crypto.randomUUID()}`
   const auditId = eventId()
-  await runTransaction(db, async (transaction) => {
-    const profileSnapshot = await transaction.get(doc(db, 'payrollProfiles', input.employeeUserId))
+  await runTransaction(database, async (transaction) => {
+    const profileSnapshot = await transaction.get(doc(database, 'payrollProfiles', input.employeeUserId))
     if (!profileSnapshot.exists() || !parsePayrollProfile(profileSnapshot.data()).enabled) throw new Error('Enable payroll for this employee first.')
     let revision = 1
     if (input.supersedesTermId) {
-      const previousSnapshot = await transaction.get(doc(db, 'payrollTerms', input.supersedesTermId))
+      const previousSnapshot = await transaction.get(doc(database, 'payrollTerms', input.supersedesTermId))
       if (!previousSnapshot.exists()) throw new Error('The salary term being replaced was not found.')
       const previous = parsePayrollTerm(previousSnapshot.data())
       if (previous.employeeUserId !== input.employeeUserId || previous.effectiveFromMonth !== input.effectiveFromMonth) {
@@ -261,19 +265,20 @@ export async function createPayrollTerm(input: {
       }
       revision = previous.revision + 1
     }
-    transaction.set(doc(db, 'payrollTerms', id), {
+    transaction.set(doc(database, 'payrollTerms', id), {
       id,
       employeeUserId: input.employeeUserId,
       effectiveFromMonth: input.effectiveFromMonth,
       monthlySalaryPaise: input.monthlySalaryPaise,
       requiredDailyMinutes: input.requiredDailyMinutes,
       revision,
+      auditEventId: auditId,
       ...(input.supersedesTermId ? { supersedesTermId: input.supersedesTermId } : {}),
       createdAt: serverTimestamp(),
       createdByUid: input.actor.uid,
       createdByName: input.actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', auditId), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', auditId), eventDocument({
       id: auditId,
       type: 'term-created',
       actorUid: input.actor.uid,
@@ -290,31 +295,33 @@ export async function savePayrollMonth(input: {
   payrollMonth: string
   paidWeeklyOffDays: number
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   requireMonth(input.payrollMonth)
   if (!Number.isSafeInteger(input.paidWeeklyOffDays) || input.paidWeeklyOffDays < 0 || input.paidWeeklyOffDays > 31) {
     throw new Error('Paid weekly offs must be between 0 and 31.')
   }
-  const monthRef = doc(db, 'payrollMonths', input.payrollMonth)
+  const monthRef = doc(database, 'payrollMonths', input.payrollMonth)
   const id = eventId()
-  await runTransaction(db, async (transaction) => {
+  await runTransaction(database, async (transaction) => {
     const monthSnapshot = await transaction.get(monthRef)
     const existing = monthSnapshot.exists() ? parsePayrollMonth(monthSnapshot.data()) : null
+    const existingData = monthSnapshot.data()
     if ((existing?.finalizedSlipCount ?? 0) > 0) throw new Error('Weekly offs are locked because this month already has finalized salary slips.')
     transaction.set(monthRef, {
       id: input.payrollMonth,
       payrollMonth: input.payrollMonth,
       paidWeeklyOffDays: input.paidWeeklyOffDays,
       finalizedSlipCount: existing?.finalizedSlipCount ?? 0,
-      createdAt: existing?.createdAt ?? serverTimestamp(),
+      lastEventId: id,
+      createdAt: existingData?.createdAt ?? serverTimestamp(),
       createdByUid: existing?.createdByUid ?? input.actor.uid,
       createdByName: existing?.createdByName ?? input.actor.name,
       updatedAt: serverTimestamp(),
       updatedByUid: input.actor.uid,
       updatedByName: input.actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', id), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', id), eventDocument({
       id,
       type: 'month-configured',
       actorUid: input.actor.uid,
@@ -337,16 +344,16 @@ export async function saveSalaryDraft(input: {
   earnings: PayrollAdjustment[]
   deductions: PayrollAdjustment[]
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   requireMonth(input.payrollMonth)
   const id = salarySlipId(input.employeeUserId, input.payrollMonth)
-  const draftRef = doc(db, 'payrollDrafts', id)
-  await runTransaction(db, async (transaction) => {
+  const draftRef = doc(database, 'payrollDrafts', id)
+  await runTransaction(database, async (transaction) => {
     const [profileSnapshot, termSnapshot, monthSnapshot, existingSnapshot] = await Promise.all([
-      transaction.get(doc(db, 'payrollProfiles', input.employeeUserId)),
-      transaction.get(doc(db, 'payrollTerms', input.termId)),
-      transaction.get(doc(db, 'payrollMonths', input.payrollMonth)),
+      transaction.get(doc(database, 'payrollProfiles', input.employeeUserId)),
+      transaction.get(doc(database, 'payrollTerms', input.termId)),
+      transaction.get(doc(database, 'payrollMonths', input.payrollMonth)),
       transaction.get(draftRef),
     ])
     if (!profileSnapshot.exists() || !parsePayrollProfile(profileSnapshot.data()).enabled) throw new Error('Payroll is not enabled for this employee.')
@@ -367,6 +374,7 @@ export async function saveSalaryDraft(input: {
       deductions: input.deductions,
     })
     const existing = existingSnapshot.exists() ? parseSalaryDraft(existingSnapshot.data()) : null
+    const existingData = existingSnapshot.data()
     transaction.set(draftRef, {
       id,
       employeeUserId: input.employeeUserId,
@@ -379,7 +387,7 @@ export async function saveSalaryDraft(input: {
       paidLeaveMinutes: input.paidLeaveMinutes,
       earnings: input.earnings,
       deductions: input.deductions,
-      createdAt: existing?.createdAt ?? serverTimestamp(),
+      createdAt: existingData?.createdAt ?? serverTimestamp(),
       createdByUid: existing?.createdByUid ?? input.actor.uid,
       createdByName: existing?.createdByName ?? input.actor.name,
       updatedAt: serverTimestamp(),
@@ -390,22 +398,22 @@ export async function saveSalaryDraft(input: {
   return id
 }
 
-export async function finalizeSalarySlip(draftId: string, actor: PayrollActor) {
+export async function finalizeSalarySlip(draftId: string, actor: PayrollActor, database: Firestore = db) {
   requireActor(actor)
   const event = eventId()
-  await runTransaction(db, async (transaction) => {
-    const draftRef = doc(db, 'payrollDrafts', draftId)
+  await runTransaction(database, async (transaction) => {
+    const draftRef = doc(database, 'payrollDrafts', draftId)
     const draftSnapshot = await transaction.get(draftRef)
     if (!draftSnapshot.exists()) throw new Error('Salary draft was not found.')
     const draft = parseSalaryDraft(draftSnapshot.data())
-    const slipRef = doc(db, 'salarySlips', draft.id)
+    const slipRef = doc(database, 'salarySlips', draft.id)
     const [slipSnapshot, profileSnapshot, termSnapshot, monthSnapshot, settingsSnapshot, userSnapshot] = await Promise.all([
       transaction.get(slipRef),
-      transaction.get(doc(db, 'payrollProfiles', draft.employeeUserId)),
-      transaction.get(doc(db, 'payrollTerms', draft.termId)),
-      transaction.get(doc(db, 'payrollMonths', draft.payrollMonth)),
-      transaction.get(doc(db, 'payrollSettings', 'config')),
-      transaction.get(doc(db, 'users', draft.employeeUserId)),
+      transaction.get(doc(database, 'payrollProfiles', draft.employeeUserId)),
+      transaction.get(doc(database, 'payrollTerms', draft.termId)),
+      transaction.get(doc(database, 'payrollMonths', draft.payrollMonth)),
+      transaction.get(doc(database, 'payrollSettings', 'config')),
+      transaction.get(doc(database, 'users', draft.employeeUserId)),
     ])
     if (slipSnapshot.exists()) throw new Error('This employee already has a finalized salary slip for the month.')
     if (!profileSnapshot.exists() || !parsePayrollProfile(profileSnapshot.data()).enabled) throw new Error('Payroll is not enabled for this employee.')
@@ -451,7 +459,7 @@ export async function finalizeSalarySlip(draftId: string, actor: PayrollActor) {
       updatedByUid: actor.uid,
       updatedByName: actor.name,
     })
-    transaction.set(doc(db, 'salarySlipRevisions', revisionId), {
+    transaction.set(doc(database, 'salarySlipRevisions', revisionId), {
       id: revisionId,
       slipId: draft.id,
       revision,
@@ -467,7 +475,7 @@ export async function finalizeSalarySlip(draftId: string, actor: PayrollActor) {
       createdByUid: actor.uid,
       createdByName: actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', event), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', event), eventDocument({
       id: event,
       type: 'slip-finalized',
       actorUid: actor.uid,
@@ -478,8 +486,9 @@ export async function finalizeSalarySlip(draftId: string, actor: PayrollActor) {
       revision,
       reason: 'Initial salary slip finalized.',
     }))
-    transaction.update(doc(db, 'payrollMonths', draft.payrollMonth), {
+    transaction.update(doc(database, 'payrollMonths', draft.payrollMonth), {
       finalizedSlipCount: month.finalizedSlipCount + 1,
+      lastEventId: event,
       lockedAt: month.lockedAt ?? serverTimestamp(),
       updatedAt: serverTimestamp(),
       updatedByUid: actor.uid,
@@ -500,16 +509,16 @@ export async function reviseSalarySlip(input: {
   deductions: PayrollAdjustment[]
   reason: string
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   if (!input.reason.trim()) throw new Error('A correction reason is required.')
   const event = eventId()
-  await runTransaction(db, async (transaction) => {
-    const slipRef = doc(db, 'salarySlips', input.slipId)
+  await runTransaction(database, async (transaction) => {
+    const slipRef = doc(database, 'salarySlips', input.slipId)
     const [slipSnapshot, termSnapshot, settingsSnapshot] = await Promise.all([
       transaction.get(slipRef),
-      transaction.get(doc(db, 'payrollTerms', input.termId)),
-      transaction.get(doc(db, 'payrollSettings', 'config')),
+      transaction.get(doc(database, 'payrollTerms', input.termId)),
+      transaction.get(doc(database, 'payrollSettings', 'config')),
     ])
     if (!slipSnapshot.exists() || !termSnapshot.exists() || !settingsSnapshot.exists()) throw new Error('Salary slip setup could not be found.')
     const slip = parseSalarySlip(slipSnapshot.data())
@@ -530,7 +539,7 @@ export async function reviseSalarySlip(input: {
     const revision = slip.currentRevision + 1
     const revisionId = salaryRevisionId(slip.id, revision)
     const payment = deriveSalaryPaymentSummary(calculation.netPayPaise, slip.totalPaidPaise)
-    transaction.set(doc(db, 'salarySlipRevisions', revisionId), {
+    transaction.set(doc(database, 'salarySlipRevisions', revisionId), {
       id: revisionId,
       slipId: slip.id,
       revision,
@@ -546,7 +555,7 @@ export async function reviseSalarySlip(input: {
       createdByUid: input.actor.uid,
       createdByName: input.actor.name,
     })
-    transaction.set(doc(db, 'payrollEvents', event), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', event), eventDocument({
       id: event,
       type: 'slip-revised',
       actorUid: input.actor.uid,
@@ -579,12 +588,12 @@ export async function recordSalaryPayment(input: {
   paymentMethod: PayrollPaymentMethod
   paymentReference?: string
   actor: PayrollActor
-}) {
+}, database: Firestore = db) {
   requireActor(input.actor)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) throw new Error('Choose a valid payment date.')
   const event = eventId()
-  await runTransaction(db, async (transaction) => {
-    const slipRef = doc(db, 'salarySlips', input.slipId)
+  await runTransaction(database, async (transaction) => {
+    const slipRef = doc(database, 'salarySlips', input.slipId)
     const slipSnapshot = await transaction.get(slipRef)
     if (!slipSnapshot.exists()) throw new Error('Salary slip was not found.')
     const slip = parseSalarySlip(slipSnapshot.data())
@@ -592,7 +601,7 @@ export async function recordSalaryPayment(input: {
     if (slip.outstandingPaise <= 0) throw new Error('This salary slip has no outstanding amount to pay.')
     const amountPaise = slip.outstandingPaise
     const payment = deriveSalaryPaymentSummary(slip.currentCalculation.netPayPaise, slip.totalPaidPaise + amountPaise)
-    transaction.set(doc(db, 'payrollEvents', event), eventDocument({
+    transaction.set(doc(database, 'payrollEvents', event), eventDocument({
       id: event,
       type: 'payment-recorded',
       actorUid: input.actor.uid,

@@ -20,6 +20,7 @@ export type PayrollActor = {
 export type PayrollSettings = {
   issuer: PayrollIssuer
   defaultPaidWeeklyOffDays: number
+  lastEventId: string
   updatedAt: string
   updatedByUid: string
   updatedByName: string
@@ -28,6 +29,7 @@ export type PayrollSettings = {
 export type PayrollProfile = {
   employeeUserId: string
   enabled: boolean
+  lastEventId: string
   createdAt: string
   createdByUid: string
   createdByName: string
@@ -43,6 +45,7 @@ export type PayrollTerm = {
   monthlySalaryPaise: number
   requiredDailyMinutes: number
   revision: number
+  auditEventId: string
   supersedesTermId?: string
   createdAt: string
   createdByUid: string
@@ -76,6 +79,7 @@ export type PayrollMonth = {
   payrollMonth: string
   paidWeeklyOffDays: number
   finalizedSlipCount: number
+  lastEventId: string
   lockedAt?: string
   createdAt: string
   createdByUid: string

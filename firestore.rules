@@ -59,6 +59,51 @@ service cloud.firestore {
       return value is int && value > 0;
     }
 
+    function isPayrollRole(role) {
+      return role in ['manager', 'billing'];
+    }
+
+    function validPayrollMonthKey(value) {
+      return value is string && value.size() == 7;
+    }
+
+    function validPayrollActor(data, uidField, timestampField) {
+      return data[uidField] == request.auth.uid && data[timestampField] == request.time;
+    }
+
+    function validPayrollEventLink(eventId, eventType) {
+      return eventId is string &&
+        getAfter(/databases/$(database)/documents/payrollEvents/$(eventId)).data.id == eventId &&
+        getAfter(/databases/$(database)/documents/payrollEvents/$(eventId)).data.type == eventType &&
+        getAfter(/databases/$(database)/documents/payrollEvents/$(eventId)).data.actorUid == request.auth.uid;
+    }
+
+    function validPayrollCalculation(data) {
+      return validPayrollMonthKey(data.payrollMonth) &&
+        isPositivePaise(data.monthlySalaryPaise) &&
+        data.requiredDailyMinutes is int && data.requiredDailyMinutes > 0 && data.requiredDailyMinutes <= 1440 &&
+        data.paidWeeklyOffDays is int && data.paidWeeklyOffDays >= 0 && data.paidWeeklyOffDays <= 31 &&
+        data.workedMinutes is int && data.workedMinutes >= 0 &&
+        data.paidLeaveMinutes is int && data.paidLeaveMinutes >= 0 &&
+        data.earnings is list && data.deductions is list &&
+        data.calendarDays is int && data.calendarDays >= 28 && data.calendarDays <= 31 &&
+        data.expectedMinutes is int && data.expectedMinutes > 0 &&
+        data.weeklyOffMinutes is int && data.weeklyOffMinutes >= 0 &&
+        data.payableMinutes is int && data.payableMinutes >= 0 &&
+        data.basePayPaise is int && data.basePayPaise >= 0 &&
+        data.earningsPaise is int && data.earningsPaise >= 0 &&
+        data.deductionsPaise is int && data.deductionsPaise >= 0 &&
+        data.netPayPaise is int && data.netPayPaise >= 0;
+    }
+
+    function validSalaryRevisionLink(data, documentId) {
+      return data.currentRevisionId is string &&
+        getAfter(/databases/$(database)/documents/salarySlipRevisions/$(data.currentRevisionId)).data.id == data.currentRevisionId &&
+        getAfter(/databases/$(database)/documents/salarySlipRevisions/$(data.currentRevisionId)).data.slipId == documentId &&
+        getAfter(/databases/$(database)/documents/salarySlipRevisions/$(data.currentRevisionId)).data.revision == data.currentRevision &&
+        getAfter(/databases/$(database)/documents/salarySlipRevisions/$(data.currentRevisionId)).data.employeeUserId == data.employeeUserId;
+    }
+
     function validV2Identity(data, documentId) {
       return hasDocumentId(data, documentId) &&
         data.revision is int &&
@@ -555,7 +600,192 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isStaff() || (isSignedIn() && request.auth.uid == userId);
-      allow create, update, delete: if isOwner();
+      allow create, update: if isOwner();
+      allow delete: if isOwner() && !exists(/databases/$(database)/documents/payrollProfiles/$(userId));
+    }
+
+    match /payrollSettings/{documentId} {
+      allow read: if isOwner();
+      allow create, update: if documentId == 'config' && isOwner() &&
+        request.resource.data.issuer is map &&
+        request.resource.data.issuer.name is string && request.resource.data.issuer.name.size() > 0 &&
+        request.resource.data.defaultPaidWeeklyOffDays is int &&
+        request.resource.data.defaultPaidWeeklyOffDays >= 0 && request.resource.data.defaultPaidWeeklyOffDays <= 31 &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        validPayrollEventLink(request.resource.data.lastEventId, 'settings-updated');
+      allow delete: if false;
+    }
+
+    match /payrollProfiles/{documentId} {
+      allow read: if isOwner();
+      allow create: if isOwner() &&
+        request.resource.data.employeeUserId == documentId &&
+        request.resource.data.enabled is bool &&
+        request.resource.data.createdByUid == request.auth.uid && request.resource.data.createdAt == request.time &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        validPayrollEventLink(request.resource.data.lastEventId, 'profile-updated') &&
+        get(/databases/$(database)/documents/users/$(documentId)).data.role in ['manager', 'billing'];
+      allow update: if isOwner() &&
+        request.resource.data.employeeUserId == resource.data.employeeUserId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdByUid == resource.data.createdByUid &&
+        request.resource.data.createdByName == resource.data.createdByName &&
+        request.resource.data.enabled is bool &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        validPayrollEventLink(request.resource.data.lastEventId, 'profile-updated');
+      allow delete: if false;
+    }
+
+    match /payrollTerms/{documentId} {
+      allow read: if isOwner();
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId &&
+        request.resource.data.employeeUserId is string &&
+        validPayrollMonthKey(request.resource.data.effectiveFromMonth) &&
+        isPositivePaise(request.resource.data.monthlySalaryPaise) &&
+        request.resource.data.requiredDailyMinutes is int &&
+        request.resource.data.requiredDailyMinutes > 0 && request.resource.data.requiredDailyMinutes <= 1440 &&
+        request.resource.data.revision is int && request.resource.data.revision >= 1 &&
+        request.resource.data.createdByUid == request.auth.uid && request.resource.data.createdAt == request.time &&
+        validPayrollEventLink(request.resource.data.auditEventId, 'term-created') &&
+        get(/databases/$(database)/documents/payrollProfiles/$(request.resource.data.employeeUserId)).data.enabled == true;
+      allow update, delete: if false;
+    }
+
+    match /payrollMonths/{documentId} {
+      allow read: if isOwner();
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId && request.resource.data.payrollMonth == documentId &&
+        validPayrollMonthKey(documentId) &&
+        request.resource.data.paidWeeklyOffDays is int &&
+        request.resource.data.paidWeeklyOffDays >= 0 && request.resource.data.paidWeeklyOffDays <= 31 &&
+        request.resource.data.finalizedSlipCount == 0 &&
+        request.resource.data.createdByUid == request.auth.uid && request.resource.data.createdAt == request.time &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        validPayrollEventLink(request.resource.data.lastEventId, 'month-configured');
+      allow update: if isOwner() &&
+        request.resource.data.id == resource.data.id && request.resource.data.payrollMonth == resource.data.payrollMonth &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdByUid == resource.data.createdByUid &&
+        request.resource.data.createdByName == resource.data.createdByName &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        (
+          (
+            resource.data.finalizedSlipCount == 0 && request.resource.data.finalizedSlipCount == 0 &&
+            request.resource.data.paidWeeklyOffDays is int &&
+            request.resource.data.paidWeeklyOffDays >= 0 && request.resource.data.paidWeeklyOffDays <= 31 &&
+            validPayrollEventLink(request.resource.data.lastEventId, 'month-configured')
+          ) ||
+          (
+            request.resource.data.finalizedSlipCount == resource.data.finalizedSlipCount + 1 &&
+            request.resource.data.paidWeeklyOffDays == resource.data.paidWeeklyOffDays &&
+            validPayrollEventLink(request.resource.data.lastEventId, 'slip-finalized')
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /payrollDrafts/{documentId} {
+      allow read: if isOwner();
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId &&
+        request.resource.data.employeeUserId is string &&
+        validPayrollMonthKey(request.resource.data.payrollMonth) &&
+        isPayrollRole(request.resource.data.employeeRole) &&
+        request.resource.data.termId is string &&
+        request.resource.data.paidWeeklyOffDays is int && request.resource.data.paidWeeklyOffDays >= 0 &&
+        request.resource.data.workedMinutes is int && request.resource.data.workedMinutes >= 0 &&
+        request.resource.data.paidLeaveMinutes is int && request.resource.data.paidLeaveMinutes >= 0 &&
+        request.resource.data.earnings is list && request.resource.data.deductions is list &&
+        request.resource.data.createdByUid == request.auth.uid && request.resource.data.createdAt == request.time &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt');
+      allow update: if isOwner() &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.employeeUserId == resource.data.employeeUserId &&
+        request.resource.data.payrollMonth == resource.data.payrollMonth &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdByUid == resource.data.createdByUid &&
+        request.resource.data.createdByName == resource.data.createdByName &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt');
+      allow delete: if isOwner();
+    }
+
+    match /salarySlips/{documentId} {
+      allow read: if isOwner() || (isStaff() && resource.data.employeeUserId == request.auth.uid);
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId &&
+        request.resource.data.employeeUserId is string &&
+        isPayrollRole(request.resource.data.employeeRole) &&
+        validPayrollMonthKey(request.resource.data.payrollMonth) &&
+        request.resource.data.currentRevision == 1 &&
+        validPayrollCalculation(request.resource.data.currentCalculation) &&
+        request.resource.data.totalPaidPaise == 0 && request.resource.data.paymentState == 'unpaid' &&
+        request.resource.data.outstandingPaise == request.resource.data.currentCalculation.netPayPaise &&
+        request.resource.data.overpaidPaise == 0 &&
+        request.resource.data.finalizedByUid == request.auth.uid && request.resource.data.finalizedAt == request.time &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        validPayrollEventLink(request.resource.data.lastEventId, 'slip-finalized') &&
+        validSalaryRevisionLink(request.resource.data, documentId);
+      allow update: if isOwner() &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.employeeUserId == resource.data.employeeUserId &&
+        request.resource.data.employeeName == resource.data.employeeName &&
+        request.resource.data.employeeRole == resource.data.employeeRole &&
+        request.resource.data.payrollMonth == resource.data.payrollMonth &&
+        request.resource.data.finalizedAt == resource.data.finalizedAt &&
+        request.resource.data.finalizedByUid == resource.data.finalizedByUid &&
+        request.resource.data.finalizedByName == resource.data.finalizedByName &&
+        validPayrollActor(request.resource.data, 'updatedByUid', 'updatedAt') &&
+        (
+          (
+            request.resource.data.currentRevision == resource.data.currentRevision + 1 &&
+            request.resource.data.totalPaidPaise == resource.data.totalPaidPaise &&
+            validPayrollCalculation(request.resource.data.currentCalculation) &&
+            validPayrollEventLink(request.resource.data.lastEventId, 'slip-revised') &&
+            validSalaryRevisionLink(request.resource.data, documentId)
+          ) ||
+          (
+            request.resource.data.currentRevision == resource.data.currentRevision &&
+            request.resource.data.currentRevisionId == resource.data.currentRevisionId &&
+            request.resource.data.currentCalculation == resource.data.currentCalculation &&
+            request.resource.data.totalPaidPaise > resource.data.totalPaidPaise &&
+            request.resource.data.outstandingPaise == 0 &&
+            request.resource.data.paymentState == 'paid' &&
+            validPayrollEventLink(request.resource.data.lastEventId, 'payment-recorded')
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /salarySlipRevisions/{documentId} {
+      allow read: if isOwner() || (isStaff() && resource.data.employeeUserId == request.auth.uid);
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId && request.resource.data.slipId is string &&
+        request.resource.data.revision is int && request.resource.data.revision >= 1 &&
+        request.resource.data.employeeUserId is string && isPayrollRole(request.resource.data.employeeRole) &&
+        validPayrollMonthKey(request.resource.data.payrollMonth) &&
+        request.resource.data.issuer is map && request.resource.data.issuer.name is string &&
+        request.resource.data.term is map && request.resource.data.calculation is map &&
+        validPayrollCalculation(request.resource.data.calculation) &&
+        request.resource.data.reason is string && request.resource.data.reason.size() > 0 &&
+        request.resource.data.createdByUid == request.auth.uid && request.resource.data.createdAt == request.time &&
+        getAfter(/databases/$(database)/documents/salarySlips/$(request.resource.data.slipId)).data.currentRevisionId == documentId;
+      allow update, delete: if false;
+    }
+
+    match /payrollEvents/{documentId} {
+      allow read: if isOwner() || (
+        isStaff() && resource.data.keys().hasAny(['employeeUserId']) && resource.data.employeeUserId == request.auth.uid
+      );
+      allow create: if isOwner() &&
+        request.resource.data.id == documentId && request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.actorName is string && request.resource.data.actorName.size() > 0 &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.type in [
+          'settings-updated', 'profile-updated', 'term-created', 'month-configured',
+          'slip-finalized', 'slip-revised', 'payment-recorded'
+        ];
+      allow update, delete: if false;
     }
 
     match /appMetadata/nameDirectory {

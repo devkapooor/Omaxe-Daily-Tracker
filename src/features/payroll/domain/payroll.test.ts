@@ -72,9 +72,9 @@ describe('payroll calculations', () => {
 
 describe('payroll terms and payment state', () => {
   const terms: PayrollTerm[] = [
-    { id: 'old', employeeUserId: 'staff-1', effectiveFromMonth: '2026-01', monthlySalaryPaise: 2_000_000, requiredDailyMinutes: 480, revision: 1, createdAt: '2026-01-01', createdByUid: 'owner', createdByName: 'Owner' },
-    { id: 'sept-v1', employeeUserId: 'staff-1', effectiveFromMonth: '2026-09', monthlySalaryPaise: 2_500_000, requiredDailyMinutes: 480, revision: 1, createdAt: '2026-09-01', createdByUid: 'owner', createdByName: 'Owner' },
-    { id: 'sept-v2', employeeUserId: 'staff-1', effectiveFromMonth: '2026-09', monthlySalaryPaise: 2_600_000, requiredDailyMinutes: 420, revision: 2, supersedesTermId: 'sept-v1', createdAt: '2026-09-02', createdByUid: 'owner', createdByName: 'Owner' },
+    { id: 'old', employeeUserId: 'staff-1', effectiveFromMonth: '2026-01', monthlySalaryPaise: 2_000_000, requiredDailyMinutes: 480, revision: 1, auditEventId: 'event-old', createdAt: '2026-01-01', createdByUid: 'owner', createdByName: 'Owner' },
+    { id: 'sept-v1', employeeUserId: 'staff-1', effectiveFromMonth: '2026-09', monthlySalaryPaise: 2_500_000, requiredDailyMinutes: 480, revision: 1, auditEventId: 'event-v1', createdAt: '2026-09-01', createdByUid: 'owner', createdByName: 'Owner' },
+    { id: 'sept-v2', employeeUserId: 'staff-1', effectiveFromMonth: '2026-09', monthlySalaryPaise: 2_600_000, requiredDailyMinutes: 420, revision: 2, auditEventId: 'event-v2', supersedesTermId: 'sept-v1', createdAt: '2026-09-02', createdByUid: 'owner', createdByName: 'Owner' },
   ]
 
   it('selects the latest term effective for September', () => {

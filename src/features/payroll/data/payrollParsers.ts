@@ -72,6 +72,7 @@ export function parsePayrollSettings(value: unknown): PayrollSettings {
   return {
     issuer: issuer(data.issuer),
     defaultPaidWeeklyOffDays: integerValue(data.defaultPaidWeeklyOffDays, 'default paid weekly off days'),
+    lastEventId: stringValue(data.lastEventId, 'settings event id'),
     updatedAt: payrollTimestamp(data.updatedAt),
     updatedByUid: stringValue(data.updatedByUid, 'settings actor uid'),
     updatedByName: stringValue(data.updatedByName, 'settings actor name'),
@@ -83,6 +84,7 @@ export function parsePayrollProfile(value: unknown): PayrollProfile {
   return {
     employeeUserId: stringValue(data.employeeUserId, 'employee uid'),
     enabled: booleanValue(data.enabled, 'payroll profile status'),
+    lastEventId: stringValue(data.lastEventId, 'profile event id'),
     createdAt: payrollTimestamp(data.createdAt),
     createdByUid: stringValue(data.createdByUid, 'profile creator uid'),
     createdByName: stringValue(data.createdByName, 'profile creator name'),
@@ -101,6 +103,7 @@ export function parsePayrollTerm(value: unknown): PayrollTerm {
     monthlySalaryPaise: integerValue(data.monthlySalaryPaise, 'monthly salary', 1),
     requiredDailyMinutes: integerValue(data.requiredDailyMinutes, 'required daily minutes', 1),
     revision: integerValue(data.revision, 'term revision', 1),
+    auditEventId: stringValue(data.auditEventId, 'term event id'),
     ...(optionalString(data.supersedesTermId) ? { supersedesTermId: optionalString(data.supersedesTermId) } : {}),
     createdAt: payrollTimestamp(data.createdAt),
     createdByUid: stringValue(data.createdByUid, 'term creator uid'),
@@ -115,6 +118,7 @@ export function parsePayrollMonth(value: unknown): PayrollMonth {
     payrollMonth: stringValue(data.payrollMonth, 'payroll month'),
     paidWeeklyOffDays: integerValue(data.paidWeeklyOffDays, 'paid weekly off days'),
     finalizedSlipCount: integerValue(data.finalizedSlipCount, 'finalized slip count'),
+    lastEventId: stringValue(data.lastEventId, 'month event id'),
     ...(data.lockedAt ? { lockedAt: payrollTimestamp(data.lockedAt) } : {}),
     createdAt: payrollTimestamp(data.createdAt),
     createdByUid: stringValue(data.createdByUid, 'month creator uid'),

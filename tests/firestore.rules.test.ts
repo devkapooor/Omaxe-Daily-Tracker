@@ -21,6 +21,18 @@ import {
   transitionVendorChequeV2,
   withdrawSettlementCorrectionRequestV2,
 } from '../src/store/vendorLedgerV2Repository'
+import {
+  createPayrollTerm,
+  finalizeSalarySlip,
+  recordSalaryPayment,
+  reviseSalarySlip,
+  savePayrollMonth,
+  savePayrollProfile,
+  savePayrollSettings,
+  saveSalaryDraft,
+  salaryRevisionId,
+  salarySlipId,
+} from '../src/features/payroll/data/payrollRepository'
 
 let testEnvironment: RulesTestEnvironment
 
@@ -634,5 +646,109 @@ describe('V2 vendor ledger capability enforcement', () => {
     await expect(resolveVendorReturnV2('workflow-return', { outcome: 'vendor-credit', creditedValuePaise: 10000, outcomeReason: 'Credit note verified', actor: { id: 'billing-user', name: 'Billing' }, timestamp: '2026-10-01T02:00:00.000Z' }, userDb('billing-user'))).rejects.toThrow()
     await expect(resolveVendorReturnV2('workflow-return', { outcome: 'vendor-credit', creditedValuePaise: 10000, outcomeReason: 'Credit note verified', actor: { id: 'owner-user', name: 'Owner' }, timestamp: '2026-10-01T02:00:00.000Z' }, userDb('owner-user'))).resolves.toMatchObject({ nextAccountState: { outstandingPaise: 70000 } })
     expect((await getDoc(doc(userDb('owner-user'), 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
+  })
+})
+
+describe('Payroll access and audit enforcement', () => {
+  const ownerActor = { uid: 'owner-user', name: 'Owner' }
+  const payrollMonth = '2026-09'
+
+  async function finalizeManagerSalary() {
+    const owner = userDb('owner-user')
+    await savePayrollSettings({
+      issuer: { name: 'AlphaHub' },
+      defaultPaidWeeklyOffDays: 4,
+      actor: ownerActor,
+    }, owner)
+    await savePayrollProfile({ employeeUserId: 'manager-user', enabled: true, actor: ownerActor }, owner)
+    const termId = await createPayrollTerm({
+      employeeUserId: 'manager-user',
+      effectiveFromMonth: payrollMonth,
+      monthlySalaryPaise: 3000000,
+      requiredDailyMinutes: 480,
+      actor: ownerActor,
+    }, owner)
+    await savePayrollMonth({ payrollMonth, paidWeeklyOffDays: 4, actor: ownerActor }, owner)
+    const draftId = await saveSalaryDraft({
+      employeeUserId: 'manager-user',
+      employeeName: 'Manager',
+      employeeRole: 'manager',
+      payrollMonth,
+      termId,
+      paidWeeklyOffDays: 4,
+      workedMinutes: 12480,
+      paidLeaveMinutes: 0,
+      earnings: [],
+      deductions: [],
+      actor: ownerActor,
+    }, owner)
+    await finalizeSalarySlip(draftId, ownerActor, owner)
+    return { owner, termId, slipId: salarySlipId('manager-user', payrollMonth) }
+  }
+
+  it('finalizes atomically and keeps payroll setup owner-only', async () => {
+    const { slipId } = await finalizeManagerSalary()
+    const manager = userDb('manager-user')
+    const billing = userDb('billing-user')
+
+    await assertSucceeds(getDoc(doc(manager, 'salarySlips', slipId)))
+    await assertSucceeds(getDoc(doc(manager, 'salarySlipRevisions', salaryRevisionId(slipId, 1))))
+    await assertFails(getDoc(doc(billing, 'salarySlips', slipId)))
+    await assertFails(getDoc(doc(manager, 'payrollSettings', 'config')))
+    await assertFails(getDoc(doc(manager, 'payrollProfiles', 'manager-user')))
+    await assertFails(getDoc(doc(manager, 'payrollMonths', payrollMonth)))
+    await assertFails(getDoc(doc(manager, 'payrollDrafts', slipId)))
+  })
+
+  it('allows audited payment and revision while preserving immutable evidence', async () => {
+    const { owner, termId, slipId } = await finalizeManagerSalary()
+    await recordSalaryPayment({
+      slipId,
+      expectedRevision: 1,
+      paymentDate: '2026-10-01',
+      paymentMethod: 'Bank Transfer',
+      paymentReference: 'PAY-1',
+      actor: ownerActor,
+    }, owner)
+    await reviseSalarySlip({
+      slipId,
+      expectedRevision: 1,
+      termId,
+      paidWeeklyOffDays: 4,
+      workedMinutes: 12540,
+      paidLeaveMinutes: 0,
+      earnings: [],
+      deductions: [],
+      reason: 'Corrected one hour of worked time.',
+      actor: ownerActor,
+    }, owner)
+
+    const slip = await getDoc(doc(owner, 'salarySlips', slipId))
+    expect(slip.data()).toMatchObject({ currentRevision: 2, paymentState: 'additional-due' })
+    await assertFails(updateDoc(doc(owner, 'salarySlipRevisions', salaryRevisionId(slipId, 1)), { reason: 'Changed' }))
+    await assertFails(deleteDoc(doc(owner, 'salarySlipRevisions', salaryRevisionId(slipId, 2))))
+    await assertFails(updateDoc(doc(owner, 'payrollEvents', slip.data()?.lastEventId), { reason: 'Changed' }))
+  })
+
+  it('blocks staff writes and protects users referenced by payroll', async () => {
+    const { slipId } = await finalizeManagerSalary()
+    const manager = userDb('manager-user')
+    const owner = userDb('owner-user')
+
+    await expect(saveSalaryDraft({
+      employeeUserId: 'manager-user',
+      employeeName: 'Manager',
+      employeeRole: 'manager',
+      payrollMonth: '2026-10',
+      termId: 'not-authorized',
+      paidWeeklyOffDays: 4,
+      workedMinutes: 0,
+      paidLeaveMinutes: 0,
+      earnings: [],
+      deductions: [],
+      actor: { uid: 'manager-user', name: 'Manager' },
+    }, manager)).rejects.toThrow()
+    await assertFails(updateDoc(doc(manager, 'salarySlips', slipId), { outstandingPaise: 0 }))
+    await assertFails(deleteDoc(doc(owner, 'users', 'manager-user')))
   })
 })
