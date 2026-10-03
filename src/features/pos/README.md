@@ -6,6 +6,8 @@ This module is an isolated barcode-billing sandbox. Every Firestore path starts 
 
 The browser accepts only the approved normalized CSV. It does not load XLSX files or add an XLSX runtime dependency. Owner import validates exactly 6,069 unique product IDs and barcodes, including 379 negative and 3,294 zero opening quantities. It writes deterministic product and protected-cost documents in 175-row chunks (350 writes), records source values and checksums, and resumes from the last completed row when the same CSV is selected again.
 
+A completed import cannot be repeated: selecting the same CSV again preserves current stock and reports that it was already imported.
+
 The approved source files are:
 
 - `data/pos/omaxe-opening-stock-2026-10-02.approved.csv`

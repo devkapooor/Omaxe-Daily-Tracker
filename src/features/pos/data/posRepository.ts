@@ -414,6 +414,9 @@ export async function importPosProducts(args: {
   const runId = args.checksum
   const runRef = posDoc('importRuns', runId)
   const existing = await getDoc(runRef)
+  if (existing.exists() && existing.data().status === 'completed') {
+    throw new Error('This stock CSV has already been imported. Existing stock has been preserved.')
+  }
   const completedRows = existing.exists() && existing.data().status === 'running' ? Number(existing.data().completedRows ?? 0) : 0
   const startedAt = existing.data()?.startedAt ?? nowIso()
   await setDoc(runRef, {

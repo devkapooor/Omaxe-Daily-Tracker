@@ -58,7 +58,10 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const scannerRef = useRef<HTMLInputElement>(null)
   const subtotal = posSubtotal(cart)
   let discount: PosDiscount = { mode: 'none', amountPaise: 0 }
-  try { discount = calculateDiscount(subtotal, discountMode, Number(discountValue || 0)); discount.overrideReason = discountReason.trim() || undefined } catch { /* form validation is shown on submit */ }
+  try {
+    discount = calculateDiscount(subtotal, discountMode, Number(discountValue || 0))
+    if (discountReason.trim()) discount.overrideReason = discountReason.trim()
+  } catch { /* form validation is shown on submit */ }
   const total = subtotal - discount.amountPaise
   const categories = useMemo(() => Array.from(new Set(sandbox.products.map((product) => product.category).filter(Boolean))).sort(), [sandbox.products])
   const brands = useMemo(() => Array.from(new Set(sandbox.products.map((product) => product.brand).filter(Boolean))).sort(), [sandbox.products])
