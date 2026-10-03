@@ -71,7 +71,7 @@ export function PurchaseFormV2({ isBusy, onRecordPayment, onSave, vendors }: Pur
     <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="V2 purchase" title="Record Invoice" />
-        <p className="text-sm text-muted-foreground">Invoice facts only. Payments are recorded separately in Vendor Settlements.</p>
+        <p className="text-xs text-muted-foreground">Payments are recorded separately.</p>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto">
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
@@ -102,7 +102,7 @@ export function PurchaseFormV2({ isBusy, onRecordPayment, onSave, vendors }: Pur
 
         {savedPurchase ? (
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">Purchase saved. No payment was created.</p>
+            <p className="text-xs text-muted-foreground">Invoice saved without a payment.</p>
             <Button type="button" variant="outline" onClick={() => onRecordPayment(savedPurchase.purchaseId, savedPurchase.vendorId)}>
               Record payment for this invoice
             </Button>

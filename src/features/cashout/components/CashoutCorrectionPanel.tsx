@@ -30,7 +30,7 @@ export function CashoutCorrectionPanel({ currentUser, dailyCashouts, requests, o
     <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="Controlled Corrections" title="My Recent Cashouts" />
-        <p className="text-xs font-semibold text-muted-foreground">Request a correction within 7 calendar days. The saved cashout changes only after owner approval.</p>
+        <p className="text-xs font-semibold text-muted-foreground">7-day window · Owner approval required</p>
       </CardHeader>
       <CardContent className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-2">
         <div className="space-y-2">

@@ -108,10 +108,9 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               </motion.div>
               <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.24em] text-cyan-700 dark:text-info">Secure Workspace</p>
               <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-foreground">Welcome back</h1>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Sign in with the account created for you by the owner.</p>
             </div>
 
-            <form className="relative mt-6 grid gap-3.5" onSubmit={handleLogin}>
+            <form className="relative mt-4 grid gap-3.5" onSubmit={handleLogin}>
               <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
                 Email
                 <div className="relative">
@@ -188,9 +187,6 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               </motion.button>
             </form>
 
-            <p className="relative mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Owner-approved access only
-            </p>
           </section>
         </motion.div>
       </motion.div>

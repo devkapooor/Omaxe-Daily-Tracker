@@ -127,17 +127,16 @@ export function CashMovementForm({
       <CardHeader>
         <SectionHeading eyebrow="Cash Control" title="Move Counter Cash To Bank" />
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+      <CardContent className="flex flex-1 flex-col gap-3">
+        <div className="grid grid-cols-2 gap-1.5 xl:grid-cols-3">
           {userOptions.map((user) => (
-            <div key={user.id} className="rounded-[18px] border border-border/70 bg-secondary/55 p-3.5">
-              <span className="block text-xs font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
-                {user.name}
+            <div key={user.id} className="rounded-[18px] border border-border/70 bg-secondary/55 p-2 sm:p-2.5">
+              <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.2em]">
+                Pending Cash · {user.name}
               </span>
-              <strong className="mt-2 block text-xl font-black tracking-tight text-foreground">
+              <strong className="mt-0.5 block text-lg font-black tracking-tight text-foreground sm:mt-1 sm:text-xl">
                 {money(user.amount)}
               </strong>
-              <p className="mt-2 text-xs font-medium text-muted-foreground">Pending counter cash balance owned by this login</p>
             </div>
           ))}
         </div>

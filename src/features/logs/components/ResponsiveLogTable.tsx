@@ -176,10 +176,9 @@ export function ResponsiveLogTable<TData extends RowData>({
       </div>
 
       {filteredCount === 0 ? (
-        <div className="grid min-h-40 place-items-center rounded-2xl border border-dashed border-border/80 bg-secondary/20 px-4 text-center">
+        <div className="grid min-h-24 place-items-center rounded-2xl border border-dashed border-border/80 bg-secondary/20 px-4 text-center">
           <div>
             <p className="text-sm font-semibold text-foreground">{emptyTitle}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Try another search or adjust the log range.</p>
           </div>
         </div>
       ) : (

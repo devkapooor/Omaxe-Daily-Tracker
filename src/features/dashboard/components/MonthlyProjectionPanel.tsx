@@ -59,39 +59,39 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
         <SummaryCard label="Cash Collected" value={money(performance.cashCollected)} comparison={comparison(performance.cashCollected, performance.previous.cashCollected)} />
       </div>
 
-      <section className="grid gap-1.5 lg:grid-cols-2 xl:grid-cols-3">
-        <GlowCard glowColor="blue" className="p-3">
+      <section className="grid auto-rows-fr items-stretch gap-1.5 lg:grid-cols-2 xl:grid-cols-3">
+        <GlowCard glowColor="blue" className="h-full p-2.5">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">
             {performance.isCurrentMonth ? 'Month-End Outlook' : 'Completed Month Result'}
           </span>
-          <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <div>
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">Average Daily Sales</span>
-              <strong className="mt-1 block text-lg font-black text-foreground">{money(performance.averageDailySales)}</strong>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+            <div className="min-w-0">
+              <span className="block text-[9px] font-extrabold uppercase leading-tight tracking-[0.12em] text-muted-foreground xl:whitespace-nowrap">Average Daily Sales</span>
+              <strong className="mt-0.5 block text-base font-black text-foreground">{money(performance.averageDailySales)}</strong>
             </div>
-            <div>
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="min-w-0">
+              <span className="block text-[9px] font-extrabold uppercase leading-tight tracking-[0.12em] text-muted-foreground xl:whitespace-nowrap">
                 {performance.isCurrentMonth ? 'Projected Sales' : 'Final Sales'}
               </span>
-              <strong className="mt-1 block text-lg font-black text-foreground">{money(performance.outlookSales)}</strong>
+              <strong className="mt-0.5 block text-base font-black text-foreground">{money(performance.outlookSales)}</strong>
             </div>
-            <div>
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="min-w-0">
+              <span className="block text-[9px] font-extrabold uppercase leading-tight tracking-[0.12em] text-muted-foreground xl:whitespace-nowrap">
                 {performance.isCurrentMonth ? 'Projected' : 'Estimated'} {resultIsProfit ? 'Profit' : 'Loss'}
               </span>
-              <strong className={resultIsProfit ? 'mt-1 block text-lg font-black text-emerald-700' : 'mt-1 block text-lg font-black text-rose-700'}>
+              <strong className={resultIsProfit ? 'mt-0.5 block text-base font-black text-emerald-700' : 'mt-0.5 block text-base font-black text-rose-700'}>
                 {money(Math.abs(performance.estimatedMarginResult))}
               </strong>
             </div>
           </div>
-          <p className="mt-2 text-[9px] font-semibold text-muted-foreground">Estimated using {marginPercentage}% margin and configured monthly operating expenses.</p>
+          <p className="mt-1.5 text-[9px] font-semibold leading-snug text-muted-foreground">Estimated using {marginPercentage}% margin and configured monthly operating expenses.</p>
         </GlowCard>
 
         <BreakEvenProgressCard performance={performance} marginPercentage={marginPercentage} />
 
-        <GlowCard glowColor="blue" className="p-3">
+        <GlowCard glowColor="blue" className="h-full p-2.5">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Sales Mix</span>
-          <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`Sales mix percentages for ${performance.monthLabel}`}>
+          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`Sales mix percentages for ${performance.monthLabel}`}>
             {salesMix.map((item) => (
               <span
                 key={item.key}
@@ -101,14 +101,14 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
               />
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {salesMix.map((item) => (
-              <div key={item.key} className="rounded-xl border border-border/60 bg-background/35 px-2.5 py-2">
+              <div key={item.key} className="rounded-xl border border-border/60 bg-background/35 px-2 py-1.5">
                 <span className="flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
                   <span className={`h-2 w-2 rounded-full ${item.color}`} />
                   {item.label}
                 </span>
-                <strong className="mt-1 block text-sm font-black text-foreground">{formatPercentage(item.percentage)}</strong>
+                <strong className="mt-0.5 block text-sm font-black text-foreground">{formatPercentage(item.percentage)}</strong>
               </div>
             ))}
           </div>

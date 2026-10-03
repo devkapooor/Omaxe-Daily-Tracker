@@ -211,7 +211,7 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
             <SectionHeading
               eyebrow="Owner Workspace"
               title="Action Centre"
-              description="Review approval requests individually. Source financial records change only after a confirmed approval."
+              description="Financial records change only after approval."
             />
             <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'}>
               {queue.pendingCount} pending
@@ -221,7 +221,7 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
         {isLoading && !error ? (
           <Card>
-            <CardContent className="flex items-center gap-3 py-6 text-sm font-semibold text-muted-foreground">
+            <CardContent className="flex items-center gap-3 py-4 text-sm font-semibold text-muted-foreground">
               <Clock3 className="h-5 w-5 animate-pulse text-primary" /> Loading approval requests...
             </CardContent>
           </Card>
@@ -236,14 +236,13 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
         {!isLoading && !error ? <Card>
           <CardHeader>
-            <SectionHeading eyebrow="Needs Review" title="Pending Approvals" description="Oldest requests are shown first." />
+            <SectionHeading eyebrow="Needs Review" title="Pending Approvals" />
           </CardHeader>
           <CardContent className="space-y-2.5">
             {queue.pending.length === 0 ? (
-              <div className="grid place-items-center rounded-2xl border border-dashed border-border/80 bg-background/25 px-4 py-10 text-center">
+              <div className="grid place-items-center rounded-2xl border border-dashed border-border/80 bg-background/25 px-4 py-5 text-center">
                 <Inbox className="h-7 w-7 text-emerald-600" />
                 <p className="mt-2 text-sm font-bold text-foreground">No approvals are waiting</p>
-                <p className="mt-1 text-xs text-muted-foreground">New requests will appear here automatically.</p>
               </div>
             ) : null}
 
@@ -311,7 +310,7 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
         {!isLoading && !error ? <Card>
           <CardHeader>
-            <SectionHeading eyebrow="Audit Snapshot" title="Recent Decisions" description="Latest 20 decisions. Older history remains available in Logs." />
+            <SectionHeading eyebrow="Audit Snapshot" title="Recent Decisions" description="Latest 20 · Full history in Logs" />
           </CardHeader>
           <CardContent>
             {queue.recent.length === 0 ? (

@@ -104,7 +104,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
       <div className="grid gap-3 pb-4">
         <Card className="border-cyan-400/25 bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(34,211,238,0.07))]">
           <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h1 className="text-lg font-black">Vendor Ledger V2</h1><p className="text-sm text-muted-foreground">Clean-start purchases, payments, corrections, and vendor cheques.</p></div>
+            <h1 className="text-lg font-black">Vendor Ledger V2</h1>
             <Badge variant="success"><ShieldCheck className="mr-1 size-3" /> Active from {ledger.config.activationDate}</Badge>
           </CardContent>
         </Card>
@@ -200,8 +200,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Vendor directory</p>
-              <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add Vendor</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Create the vendor profile used across the V2 workspace.</p>
+              <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add V2 Vendor</h2>
             </div>
             <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="Close add vendor form" onClick={onClose}>
               <X className="size-5" />

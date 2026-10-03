@@ -31,7 +31,7 @@ function Card({ className, variant = 'workspace', ...props }: CardProps) {
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex flex-col gap-1 p-2.5 sm:p-3', className)} {...props} />
+  return <div className={cn('flex flex-col gap-0.75 p-2 sm:p-2.5', className)} {...props} />
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
@@ -39,11 +39,11 @@ function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
-  return <p className={cn('text-xs leading-5 text-muted-foreground sm:text-sm', className)} {...props} />
+  return <p className={cn('text-[11px] leading-4 text-muted-foreground sm:text-xs', className)} {...props} />
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('px-2.5 pb-2.5 sm:px-3 sm:pb-3', className)} {...props} />
+  return <div className={cn('px-2 pb-2 sm:px-2.5 sm:pb-2.5', className)} {...props} />
 }
 
 export { Card, CardHeader, CardTitle, CardDescription, CardContent }

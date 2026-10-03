@@ -82,7 +82,7 @@ export function VendorSettlementFormV2(props: VendorSettlementFormV2Props) {
     <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
         <SectionHeading eyebrow="V2 settlement" title="Record Vendor Payment" />
-        <p className="text-sm text-muted-foreground">Payments are separate from purchases. Cheques must be recorded in the Cheque Register.</p>
+        <p className="text-xs text-muted-foreground">Record cheques in the Cheque Register.</p>
       </CardHeader>
       <CardContent className="flex-1 overflow-y-auto">
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>

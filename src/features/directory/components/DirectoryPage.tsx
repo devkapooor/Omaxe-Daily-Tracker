@@ -95,8 +95,7 @@ export function DirectoryPage({
       <div className="grid gap-2.5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <Card className="xl:flex xl:min-h-0 xl:flex-col">
           <CardHeader className="pb-3">
-            <SectionHeading eyebrow="Party directory" title="Add Party" />
-            <p className="text-sm text-muted-foreground">Party names remain available for expenses and loan records.</p>
+            <SectionHeading eyebrow="Party directory" title="Add Expense / Loan Party" />
           </CardHeader>
           <CardContent>
             <form className="grid gap-3.5" onSubmit={handlePartySubmit}>

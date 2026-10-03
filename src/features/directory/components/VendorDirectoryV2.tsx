@@ -52,7 +52,6 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
         <CardHeader className="gap-3 border-b border-border/60 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <SectionHeading eyebrow={`${vendors.length} ${vendors.length === 1 ? 'vendor' : 'vendors'}`} title="Vendors" />
-            <p className="mt-1 text-sm text-muted-foreground">Profiles used across purchases, payments, balances, and cheques.</p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
             <FieldLabel className="w-full sm:w-72" label="Search">
@@ -97,7 +96,6 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
                 <div>
                   <div className="mb-2"><Badge variant={selectedVendor.active ? 'success' : 'secondary'}>{selectedVendor.active ? 'Active vendor' : 'Inactive vendor'}</Badge></div>
                   <h2 id="vendor-details-title" className="text-xl font-black text-foreground">{selectedVendor.canonicalName}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Vendor profile details</p>
                 </div>
                 <Button ref={closeButtonRef} type="button" size="icon" variant="ghost" aria-label="Close vendor details" onClick={() => setSelectedVendorId(null)}>
                   <X className="size-5" />
@@ -124,7 +122,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
         <Card>
           <CardHeader>
             <SectionHeading eyebrow="Owner review" title="Legacy Name Matching" />
-            <p className="text-sm text-muted-foreground">Review only. These matches do not copy balances or write aliases.</p>
+            <p className="text-xs text-muted-foreground">Review only · No balances or aliases change</p>
           </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {aliasReview.map((candidate) => (

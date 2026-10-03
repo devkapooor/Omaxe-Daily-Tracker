@@ -197,10 +197,10 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
           <div className={`-mt-4 flex px-1 text-[9px] font-bold text-muted-foreground ${axisDays.length === 1 ? 'justify-center' : 'justify-between'}`}>
             {axisDays.map((day) => <span key={day}>Day {day}</span>)}
           </div>
-          <p className="mt-2 text-[9px] font-semibold text-muted-foreground">Hover, tap, or use arrow keys to inspect a day. Gaps indicate days with no recorded sales; no values are inferred.</p>
+          <p className="mt-1.5 text-[9px] font-semibold text-muted-foreground">Select a day to inspect · Gaps are unrecorded</p>
         </div>
       ) : (
-        <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-background/30 px-3 py-8 text-center text-xs font-semibold text-muted-foreground">
+        <div className="mt-2 rounded-xl border border-dashed border-border/80 bg-background/30 px-3 py-5 text-center text-xs font-semibold text-muted-foreground">
           No recorded sales are available for this comparison.
         </div>
       )}
