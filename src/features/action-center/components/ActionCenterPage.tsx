@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Inbox, XCircle } from 'lucide-react'
 import { formatDisplayDate, formatDisplayDateTime, money } from '@/app/uiHelpers'
 import { DailyCashoutDetailsModal } from '@/features/cashout/components/DailyCashoutDetailsModal'
@@ -17,6 +17,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
 type ActionCenterPageProps = {
+  testPosPanel?: ReactNode
   error: string | null
   isLoading: boolean
   queue: ApprovalQueue
@@ -148,7 +149,7 @@ function VendorReturnDecision({
   )
 }
 
-export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn }: ActionCenterPageProps) {
+export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn, testPosPanel }: ActionCenterPageProps) {
   const confirmation = useConfirmationDialog()
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<ApprovalActionItem | null>(null)
@@ -326,6 +327,7 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
         </Card> : null}
       </div>
 
+      {testPosPanel}
       <DailyCashoutDetailsModal entry={selectedItem?.kind === 'cashout-correction' ? selectedItem.sourceCashout ?? null : null} onClose={() => setSelectedItem(null)} />
       {confirmation.dialog}
     </section>
