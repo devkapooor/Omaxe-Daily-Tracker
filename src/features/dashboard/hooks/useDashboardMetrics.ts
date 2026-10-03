@@ -61,7 +61,9 @@ export function useDashboardMetrics({
     normalizedLoans: loans,
     openLoanCount: workspaceMetrics.liabilities.openLoanCount,
     pendingCashNow: workspaceMetrics.pendingCash,
-    plannerMetrics: workspaceMetrics.planner,
+    legacyChequeItems: workspaceMetrics.planner.groupedSchedule
+      .flatMap((group) => group.items)
+      .filter((item) => item.source !== 'manual-plan'),
     totalVendorOutstanding: workspaceMetrics.liabilities.totalVendorOutstanding,
     todayCashout: workspaceMetrics.registerToday.cashout,
     todayPaymentNet: workspaceMetrics.registerToday.paymentNet,

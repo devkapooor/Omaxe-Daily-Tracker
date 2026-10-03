@@ -268,7 +268,7 @@ Current app settings include:
 
 - `monthlyOperationalExpense`
 - `marginPercentage`
-- `currentBankBalance`
+- `currentBankBalance` (legacy Payment Planner compatibility; no active editor)
 - `operationalExpenseBreakdown`
 
 `operationalExpenseBreakdown` currently contains:
@@ -305,20 +305,20 @@ Current shared derived snapshot includes:
 - `vendorOutstandingByName`
 - `pendingCash`
 - `dashboardTables`
-- `planner`
+- `planner` (legacy compatibility read model used only for legacy-cheque visibility)
 - `monthlyReports`
 
-This document is a shared read model derived from source finance records and metadata. Monthly Dashboard performance additionally uses the shared monthly domain helper; V2 account state and unified planner composition remain separate. Retained monthlyReports and dashboardTables fields do not imply those removed screens/panels are active.
+This document is a shared read model derived from source finance records and metadata. Monthly Dashboard performance additionally uses the shared monthly domain helper. Retained `planner`, `monthlyReports`, and `dashboardTables` fields do not imply those removed screens or panels are active.
 
 ## Storage Notes
 
 - Firebase Authentication stores credentials.
 - Firestore stores app records and app metadata.
-- `appMetadata/workspaceMetrics` stores the shared derived read model used by the main finance dashboards and planner views.
+- `appMetadata/workspaceMetrics` stores the shared derived read model used by the main finance dashboards and legacy-cheque compatibility flow.
 - Legacy browser-only data can still be imported once.
 - `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` drive the retained legacy vendor metric, including the current dashboard liability binding. V2 workspace balances use V2 account states; cleanup does not switch financial sources.
-- Planner availability uses `currentBankBalance`, not counter cash.
-- `Cash Movement` records affect pending cash and bank totals; planner records do not.
+- Historical planner availability used `currentBankBalance`, not counter cash; the planner screen and its write actions are removed.
+- `Cash Movement` records affect pending cash and bank totals; preserved planner records do not.
 - Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.
 - Loan notes are additive and optional; historical loan documents can omit them.
 - `Sales` log rows remain read-only because they are derived from daily cashout history.

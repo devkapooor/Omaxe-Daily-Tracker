@@ -31,7 +31,7 @@ export function CheckoutPaymentPanel({ totalPaise, mode, split, cashReceived, di
   return <div className="grid gap-3">
     <fieldset disabled={disabled} className="grid gap-2">
       <legend className="mb-2 text-sm font-bold">Payment method</legend>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {checkoutPaymentMethods.map((method) => <Button key={method.value} type="button" aria-pressed={mode === method.value} variant={mode === method.value ? 'default' : 'outline'} onClick={() => onMethod(method.value)}>{method.label}</Button>)}
         <Button className="col-span-2" type="button" aria-pressed={mode === 'split'} variant={mode === 'split' ? 'default' : 'outline'} onClick={() => setSplitOpen(true)}>Split payments</Button>
       </div>

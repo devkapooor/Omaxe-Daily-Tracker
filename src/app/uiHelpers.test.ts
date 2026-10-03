@@ -27,9 +27,11 @@ describe('owner-only route resolution', () => {
     expect(pagesFor('owner')).toContain('payroll')
     expect(pagesFor('manager')).toContain('payroll')
     expect(pagesFor('billing')).toContain('payroll')
+    expect(pagesFor('owner')).not.toContain('planner')
+    expect(pagesFor('manager')).not.toContain('planner')
+    expect(pagesFor('billing')).not.toContain('planner')
     expect(pagesFor('owner')).toContain('pos-test')
     expect(pagesFor('manager')).toContain('pos-test')
     expect(pagesFor('billing')).toContain('pos-test')
   })
 })
-

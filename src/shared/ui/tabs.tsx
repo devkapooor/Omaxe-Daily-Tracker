@@ -11,7 +11,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'grid w-full auto-cols-fr grid-flow-col items-center gap-0.75 rounded-[16px] border border-border/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,246,252,0.96))] p-0.5 text-muted-foreground shadow-[0_8px_20px_rgba(38,78,118,0.07)] dark:bg-none dark:bg-card dark:shadow-black/20',
+      'grid w-full auto-cols-fr grid-flow-col items-center gap-0.5 rounded border border-border bg-muted p-0.5 text-muted-foreground shadow-none',
       className,
     )}
     {...props}
@@ -26,7 +26,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex min-h-7 items-center justify-center rounded-lg px-2 py-1 text-[9px] leading-none font-semibold whitespace-nowrap tracking-[0.02em] transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=active]:bg-[linear-gradient(180deg,#4b91f7,#2563eb)] data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_6px_16px_rgba(37,99,235,0.24)] min-w-0 sm:text-[10px]',
+      'inline-flex min-h-8 min-w-0 items-center justify-center rounded-sm px-3 py-1.5 text-xs leading-none font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm',
       className,
     )}
     {...props}

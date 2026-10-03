@@ -15,18 +15,18 @@ export function SummaryCard({
   }
 }) {
   return (
-    <GlowCard className="p-2.5">
-      <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-cyan-700 sm:text-[11px]">{label}</span>
-      <strong className="mt-1 block text-[1.3rem] font-black tracking-[-0.03em] text-foreground sm:text-[1.55rem]">{value}</strong>
-      {updated ? <p className="mt-0.75 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/90">{updated}</p> : null}
+    <GlowCard className="min-h-32 p-4">
+      <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+      <strong className="mt-2 block break-words font-mono text-2xl font-semibold tracking-tight tabular-nums text-foreground">{value}</strong>
+      {updated ? <p className="mt-1 text-[11px] font-medium text-muted-foreground">{updated}</p> : null}
       {comparison ? (
         <p
           className={
             comparison.tone === 'positive'
-              ? 'mt-1.5 text-[10px] font-bold text-emerald-700'
+            ? 'mt-2 text-[11px] font-medium text-emerald-700'
               : comparison.tone === 'negative'
-                ? 'mt-1.5 text-[10px] font-bold text-rose-700'
-                : 'mt-1.5 text-[10px] font-bold text-muted-foreground'
+                ? 'mt-2 text-[11px] font-medium text-rose-700'
+                : 'mt-2 text-[11px] font-medium text-muted-foreground'
           }
         >
           {comparison.label}

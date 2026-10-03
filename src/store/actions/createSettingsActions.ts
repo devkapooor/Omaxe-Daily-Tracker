@@ -31,15 +31,6 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     )
   }
 
-  async function savePlannerBankBalance(currentBankBalance: number, actor: string) {
-    if (!Number.isFinite(currentBankBalance) || currentBankBalance < 0) {
-      throw new Error('Current bank balance must be zero or more.')
-    }
-
-    await setDoc(doc(db, 'appMetadata', 'appSettings'), { currentBankBalance }, { merge: true })
-    await pushSettingsAudit(`Planner bank balance updated: ${currentBankBalance}`, actor)
-  }
-
   async function saveMonthlyReportMargin(month: string, marginPercentage: number, actor: string) {
     if (!/^\d{4}-\d{2}$/.test(month)) {
       throw new Error('Month must be in YYYY-MM format.')
@@ -68,6 +59,5 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
   return {
     saveMonthlyReportMargin,
     saveOperationalSettings,
-    savePlannerBankBalance,
   }
 }

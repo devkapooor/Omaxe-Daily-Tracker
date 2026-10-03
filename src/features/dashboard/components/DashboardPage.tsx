@@ -23,11 +23,11 @@ export function DashboardPage({
   totalVendorOutstanding,
 }: DashboardPageProps) {
   return (
-    <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-      <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-3 rounded-md border border-border bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:bg-card">
         <div>
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">Monthly Performance</span>
-          <strong className="mt-0.5 block text-lg font-black text-foreground">{performance.monthLabel}</strong>
+          <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">Monthly Performance</span>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-foreground">{performance.monthLabel}</h1>
         </div>
         <DashboardRangeFilter value={monthOffset} onChange={setMonthOffset} />
       </div>

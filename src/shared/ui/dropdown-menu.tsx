@@ -14,7 +14,7 @@ function DropdownMenuSubTrigger({ className, inset, children, ...props }: React.
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
-        'flex cursor-default items-center rounded-lg px-2 py-1.5 text-xs outline-none focus:bg-accent data-[state=open]:bg-accent',
+        'flex cursor-default items-center rounded-sm px-2 py-2 text-[13px] outline-none focus:bg-accent data-[state=open]:bg-accent',
         inset && 'pl-8',
         className,
       )}
@@ -30,7 +30,7 @@ function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<ty
   return (
     <DropdownMenuPrimitive.SubContent
       className={cn(
-        'z-50 min-w-40 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(38,78,118,0.16)]',
+        'z-50 min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg',
         className,
       )}
       {...props}
@@ -44,7 +44,7 @@ function DropdownMenuContent({ className, sideOffset = 6, ...props }: React.Comp
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-44 overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-[0_18px_48px_rgba(38,78,118,0.16)]',
+          'z-50 min-w-44 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg',
           className,
         )}
         {...props}
@@ -57,7 +57,7 @@ function DropdownMenuItem({ className, inset, ...props }: React.ComponentProps<t
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-lg px-2 py-1.5 text-xs outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-sm px-2 py-2 text-[13px] outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         inset && 'pl-8',
         className,
       )}
@@ -71,7 +71,7 @@ function DropdownMenuCheckboxItem({ className, children, checked, ...props }: Re
     <DropdownMenuPrimitive.CheckboxItem
       checked={checked}
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-lg py-1.5 pl-8 pr-2 text-xs outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-sm py-2 pl-8 pr-2 text-[13px] outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
       {...props}
@@ -88,7 +88,7 @@ function DropdownMenuRadioItem({ className, children, ...props }: React.Componen
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-lg py-1.5 pl-8 pr-2 text-xs outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-sm py-2 pl-8 pr-2 text-[13px] outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       )}
       {...props}
@@ -102,7 +102,7 @@ function DropdownMenuRadioItem({ className, children, ...props }: React.Componen
 }
 
 function DropdownMenuLabel({ className, inset, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & { inset?: boolean }) {
-  return <DropdownMenuPrimitive.Label className={cn('px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground', inset && 'pl-8', className)} {...props} />
+  return <DropdownMenuPrimitive.Label className={cn('px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', inset && 'pl-8', className)} {...props} />
 }
 
 function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {

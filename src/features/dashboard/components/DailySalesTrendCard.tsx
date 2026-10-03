@@ -114,13 +114,13 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
   }
 
   return (
-    <GlowCard glowColor="blue" className="p-3 lg:col-span-2">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <GlowCard glowColor="blue" className="p-4 lg:col-span-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 sm:text-[11px] dark:text-blue-300">Daily Sales Trend</span>
-          <strong className="mt-1 block text-base font-black text-foreground">Selected month vs preceding month</strong>
+          <span className="block text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">Daily Sales Trend</span>
+          <strong className="mt-1 block text-base font-semibold text-foreground">Selected month vs preceding month</strong>
         </div>
-        <div className="flex flex-wrap gap-3 text-[9px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="flex flex-wrap gap-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan-400" />Selected</span>
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-500" />Preceding</span>
         </div>
@@ -128,7 +128,7 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
 
       {values.length > 0 ? (
         <div className="mt-2">
-          <div className="flex items-center justify-between text-[9px] font-bold text-muted-foreground">
+          <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
             <span>{money(maxValue)}</span>
             <span>Daily value</span>
           </div>
@@ -143,7 +143,7 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
           >
             {activePoint && activeX !== null ? (
               <div
-                className="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-border/80 bg-popover/95 px-2.5 py-2 text-[10px] font-bold text-popover-foreground shadow-lg backdrop-blur-sm"
+                className="pointer-events-none absolute z-10 min-w-36 rounded-sm border border-border bg-popover px-3 py-2.5 text-xs font-medium text-popover-foreground shadow-lg"
                 style={{
                   left: `${(tooltipLeft / chart.width) * 100}%`,
                   top: `${(tooltipTop / chart.height) * 100}%`,
@@ -151,9 +151,9 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
                 }}
                 aria-live="polite"
               >
-                <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">Day {activePoint.day}</span>
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Day {activePoint.day}</span>
                 <span className="mt-1 flex items-center justify-between gap-3"><span className="text-cyan-600 dark:text-cyan-300">Selected</span>{tooltipValue(activePoint.selected)}</span>
-                <span className="mt-0.5 flex items-center justify-between gap-3"><span className="text-slate-500 dark:text-slate-300">Preceding</span>{tooltipValue(activePoint.previous)}</span>
+                <span className="mt-0.5 flex items-center justify-between gap-3"><span className="text-muted-foreground">Preceding</span>{tooltipValue(activePoint.previous)}</span>
               </div>
             ) : null}
             <svg
@@ -194,13 +194,13 @@ export function DailySalesTrendCard({ performance }: { performance: MonthlyPerfo
               ) : null}
             </svg>
           </div>
-          <div className={`-mt-4 flex px-1 text-[9px] font-bold text-muted-foreground ${axisDays.length === 1 ? 'justify-center' : 'justify-between'}`}>
+          <div className={`-mt-4 flex px-1 text-[11px] font-medium text-muted-foreground ${axisDays.length === 1 ? 'justify-center' : 'justify-between'}`}>
             {axisDays.map((day) => <span key={day}>Day {day}</span>)}
           </div>
           <p className="mt-1.5 text-[9px] font-semibold text-muted-foreground">Select a day to inspect · Gaps are unrecorded</p>
         </div>
       ) : (
-        <div className="mt-2 rounded-xl border border-dashed border-border/80 bg-background/30 px-3 py-5 text-center text-xs font-semibold text-muted-foreground">
+        <div className="mt-3 rounded-sm border border-dashed border-border bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
           No recorded sales are available for this comparison.
         </div>
       )}

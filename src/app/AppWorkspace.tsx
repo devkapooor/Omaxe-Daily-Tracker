@@ -1,15 +1,13 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
-import type { Page, PlannedPayment, UserAccount } from '@/domain/appTypes'
-import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
-import { mergeV2ChequesIntoPlanner } from '@/domain/unifiedPaymentPlanner'
+import type { Page, UserAccount } from '@/domain/appTypes'
+import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
   type DashboardMonthOffset,
   type LegacyCashBalance,
   type PendingCashUserBalance,
-  canOpenPlanner,
   canOpenSettings,
   formatDisplayDate,
   legacyCashHolderLabel,
@@ -21,18 +19,17 @@ import { CashoutPage } from '@/features/cashout/components/CashoutPage'
 import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
-import { PaymentPlannerPage } from '@/features/planner/components/PaymentPlannerPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
 import { PayrollPage } from '@/features/payroll/components/PayrollPage'
+import { PosPage } from '@/features/pos/components/PosPage'
+import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
-import { PosPage } from '@/features/pos/components/PosPage'
-import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
 import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
@@ -49,7 +46,6 @@ import {
 type AppWorkspaceProps = {
   activePage: Page
   appSettings: {
-    currentBankBalance: number
     marginPercentage: number
     monthlyOperationalExpense: number
     operationalExpenseBreakdown: OperationalExpenseBreakdown
@@ -73,7 +69,6 @@ type AppWorkspaceProps = {
   data: FinanceData
   deleteDailyCashoutEntry: (entryId: string) => Promise<void>
   deleteLoanEntry: (loanId: string) => Promise<void>
-  deletePlannedPayment: (paymentId: string) => Promise<void>
   deleteUserAccount: (userId: string, actor: string) => Promise<void>
   editDailyCashoutEntry: (cashoutId: string, proposed: CashoutCorrectionValues, reason: string, actor: AppUser) => Promise<void>
   directoryOptions: {
@@ -99,7 +94,7 @@ type AppWorkspaceProps = {
   marginPercentage: number
   monthlyPerformance: MonthlyPerformanceMetrics
   normalizedLoans: LoanEntry[]
-  plannerMetrics: WorkspaceMetrics['planner']
+  legacyChequeItems: PlannerScheduleItemSnapshot[]
   onLogout: () => void
   onPageChange: (page: Page) => void
   pendingCashNow: {
@@ -111,7 +106,6 @@ type AppWorkspaceProps = {
     userBalances: PendingCashUserBalance[]
     totalCounterCash: number
   }
-  plannedPayments: PlannedPayment[]
   renamePartyInDirectory: (previousName: string, nextName: string) => Promise<boolean>
   savedPartyNames: string[]
   saveCashTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
@@ -124,8 +118,6 @@ type AppWorkspaceProps = {
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
-  savePlannedPayment: (draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  savePlannerBankBalance: (value: number, actor: string) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
   showToast: (message: string) => void
@@ -153,7 +145,6 @@ export function AppWorkspace({
   data,
   deleteDailyCashoutEntry,
   deleteLoanEntry,
-  deletePlannedPayment,
   deleteUserAccount,
   editDailyCashoutEntry,
   directoryOptions,
@@ -166,11 +157,10 @@ export function AppWorkspace({
   marginPercentage,
   monthlyPerformance,
   normalizedLoans,
-  plannerMetrics,
+  legacyChequeItems,
   onLogout,
   onPageChange,
   pendingCashNow,
-  plannedPayments,
   renamePartyInDirectory,
   savedPartyNames,
   saveCashTransfer,
@@ -183,8 +173,6 @@ export function AppWorkspace({
   saveLoanEntry,
   saveOperationalSettings,
   savePayment,
-  savePlannedPayment,
-  savePlannerBankBalance,
   setDashboardMonthOffset,
   settingsAuditLog,
   showToast,
@@ -204,14 +192,8 @@ export function AppWorkspace({
     settlementStates: vendorLedger.settlementStates,
     vendorNames,
   })
-  const unifiedPlannerSchedule = mergeV2ChequesIntoPlanner(
-    appSettings.currentBankBalance,
-    plannerMetrics.groupedSchedule,
-    vendorLedger.cheques,
-    vendorLedger.vendors,
-  )
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-[1320px] overflow-hidden">
+    <main className="mx-auto flex h-[100dvh] w-full overflow-hidden">
       <AppTopBar
         currentUser={currentUser}
         activePage={activePage}
@@ -219,7 +201,7 @@ export function AppWorkspace({
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-1 pb-1.25 pt-13 sm:px-1.5 xl:px-2 xl:py-1.75">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-16 sm:px-4 xl:px-6 xl:py-5">
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
@@ -313,7 +295,7 @@ export function AppWorkspace({
           <VendorLedgerWorkspacePage
             currentUser={currentUser}
             ledger={vendorLedger}
-            legacyChequeItems={plannerMetrics.groupedSchedule.flatMap((group) => group.items).filter((item) => item.source !== 'manual-plan')}
+            legacyChequeItems={legacyChequeItems}
           />
         ) : null}
 
@@ -384,30 +366,6 @@ export function AppWorkspace({
                 showToast(
                   `Cash movement saved: ${money(draft.amount)} from ${fromName} to ${toName}`,
                 )
-              }}
-            />
-          </section>
-        ) : null}
-
-        {activePage === 'planner' && canOpenPlanner(currentUser.role) ? (
-          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
-            <PaymentPlannerPage
-              currentBankBalance={appSettings.currentBankBalance}
-              currentUserName={currentUser.name}
-              groupedSchedule={unifiedPlannerSchedule}
-              plannedPayments={plannedPayments}
-              totalCounterCash={plannerMetrics.totalCounterCash}
-              onSaveBankBalance={async (value) => {
-                await savePlannerBankBalance(value, currentUser.name)
-                showToast('Planner bank balance updated.')
-              }}
-              onSavePlannedPayment={async (draft) => {
-                await savePlannedPayment(draft)
-                showToast(`Planned payment saved: ${draft.title}`)
-              }}
-              onDeletePlannedPayment={async (paymentId) => {
-                await deletePlannedPayment(paymentId)
-                showToast('Manual planned payment deleted.')
               }}
             />
           </section>
@@ -511,4 +469,3 @@ export function AppWorkspace({
     </main>
   )
 }
-

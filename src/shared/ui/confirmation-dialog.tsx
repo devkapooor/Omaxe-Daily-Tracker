@@ -39,14 +39,14 @@ export function useConfirmationDialog() {
 
   const dialog = options && typeof document !== 'undefined'
     ? createPortal(
-        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/65 px-3 py-5 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/40 px-3 py-5">
           <Card aria-modal="true" className="w-full max-w-lg" role="dialog">
             <CardHeader>
               <h2 className="text-lg font-black text-foreground">{options.title}</h2>
             </CardHeader>
             <CardContent className="space-y-4">
               {options.details?.length ? (
-                <div className="space-y-1 rounded-xl border border-border/70 bg-secondary/35 p-3 text-sm">
+                  <div className="space-y-1 rounded-md border border-border bg-muted p-3 text-sm">
                   {options.details.map((detail) => <p key={detail}>{detail}</p>)}
                 </div>
               ) : null}

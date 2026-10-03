@@ -2,7 +2,7 @@ import { deleteDoc, deleteField, doc, setDoc, writeBatch, type WriteBatch } from
 import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
 import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, PlannedPayment, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
   normalizeLoanRecord,
@@ -463,30 +463,6 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     })
   }
 
-  async function savePlannedPayment(draft: Omit<PlannedPayment, 'id' | 'createdAt' | 'updatedAt'>) {
-    const title = normalizeName(draft.title)
-    if (!title) throw new Error('A payment title is required.')
-    if (!draft.date) throw new Error('A planned deduction date is required.')
-    if (!Number.isFinite(draft.amount) || draft.amount <= 0) throw new Error('Planned payment amount must be greater than zero.')
-
-    const id = `planned-payment-${crypto.randomUUID()}`
-    const timestamp = nowIso()
-    await setDoc(doc(db, 'plannedPayments', id), {
-      id,
-      title,
-      date: draft.date,
-      amount: draft.amount,
-      notes: draft.notes.trim(),
-      createdBy: normalizeName(draft.createdBy),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-  }
-
-  async function deletePlannedPayment(paymentId: string) {
-    await deleteDoc(doc(db, 'plannedPayments', paymentId))
-  }
-
   async function deleteCashTransferEntry(transferId: string) {
     if (!transferId.trim()) throw new Error('Cash transfer id is required.')
     await deleteDoc(doc(db, 'cashTransfers', transferId))
@@ -556,7 +532,6 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     deleteDailyCashoutEntry,
     deleteExpenseEntry,
     deleteLoanEntry,
-    deletePlannedPayment,
     deletePaymentEntry,
     deletePurchaseEntry,
     deleteSettingsAuditEntry,
@@ -567,7 +542,6 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     saveDailyCashoutEntry,
     saveLoanEntry,
     savePayment,
-    savePlannedPayment,
     savePurchase,
     saveSales,
     saveVendor,

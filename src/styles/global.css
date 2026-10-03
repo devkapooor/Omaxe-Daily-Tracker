@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -14,35 +14,71 @@
   }
 }
 
+/* Keep scrollable app panels subtle and consistent with the Stitch shell. */
+:root * {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(96 165 250 / 25%) transparent;
+}
+
+:root *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+:root *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root *::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgb(96 165 250 / 20%);
+  transition: background-color 0.2s ease;
+}
+
+:root *:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(96 165 250 / 45%);
+}
+
+:root *::-webkit-scrollbar-thumb:hover {
+  background-color: #3b82f6;
+}
+
+@media (forced-colors: active) {
+  :root * {
+    scrollbar-color: auto;
+  }
+}
+
 @theme {
-  --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Space Grotesk", "Manrope", "Segoe UI", sans-serif;
-  --color-background: #f4f8fc;
-  --color-foreground: #102a43;
+  --font-sans: "Hanken Grotesk", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Hanken Grotesk", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-background: #f8f9ff;
+  --color-foreground: #0b1c30;
   --color-card: #ffffff;
-  --color-card-foreground: #102a43;
+  --color-card-foreground: #0b1c30;
   --color-popover: #ffffff;
   --color-popover-foreground: #102a43;
   --color-primary: #2563eb;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #eaf2ff;
-  --color-secondary-foreground: #1e3a5f;
-  --color-muted: #eef4fa;
-  --color-muted-foreground: #647b91;
-  --color-accent: #e6f7fb;
-  --color-accent-foreground: #0f5f78;
-  --color-destructive: #dc3f55;
+  --color-secondary: #eff4ff;
+  --color-secondary-foreground: #434655;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #eff6ff;
+  --color-accent-foreground: #1d4ed8;
+  --color-destructive: #e11d48;
   --color-destructive-foreground: #ffffff;
-  --color-success: #15803d;
-  --color-warning: #a16207;
+  --color-success: #059669;
+  --color-warning: #d97706;
   --color-info: #0369a1;
-  --color-border: #dbe7f2;
-  --color-input: #cbdbea;
-  --color-ring: #0ea5e9;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1.5rem;
-  --radius-xl: 2rem;
+  --color-border: #e2e8f0;
+  --color-input: #cbd5e1;
+  --color-ring: #2563eb;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
 }
 
 :root {
@@ -51,43 +87,43 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-background: #212121;
-  --color-foreground: #ececec;
-  --color-card: #2f2f2f;
-  --color-card-foreground: #ececec;
-  --color-popover: #2f2f2f;
-  --color-popover-foreground: #ececec;
+  --color-background: #051424;
+  --color-foreground: #d4e4fa;
+  --color-card: #0d1c2d;
+  --color-card-foreground: #d4e4fa;
+  --color-popover: #122131;
+  --color-popover-foreground: #d4e4fa;
   --color-primary: #3b82f6;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #383838;
-  --color-secondary-foreground: #e5e7eb;
-  --color-muted: #333333;
-  --color-muted-foreground: #b4b4b4;
-  --color-accent: #353f4d;
-  --color-accent-foreground: #dbeafe;
-  --color-destructive: #fb7185;
-  --color-destructive-foreground: #1f1115;
-  --color-success: #4ade80;
+  --color-secondary: #1c2b3c;
+  --color-secondary-foreground: #d4e4fa;
+  --color-muted: #122131;
+  --color-muted-foreground: #a7b6ca;
+  --color-accent: #1c2b3c;
+  --color-accent-foreground: #d4e4fa;
+  --color-destructive: #ffb4ab;
+  --color-destructive-foreground: #690005;
+  --color-success: #34d399;
   --color-warning: #fbbf24;
-  --color-info: #38bdf8;
-  --color-border: #454545;
-  --color-input: #565656;
-  --color-ring: #38bdf8;
-  --color-cyan-50: #17343b;
-  --color-cyan-200: #215565;
-  --color-cyan-700: #67e8f9;
-  --color-cyan-800: #a5f3fc;
-  --color-emerald-50: #1d3529;
-  --color-emerald-200: #285b40;
-  --color-emerald-700: #4ade80;
-  --color-amber-50: #3b321f;
-  --color-amber-200: #755b24;
+  --color-info: #5de6ff;
+  --color-border: #273647;
+  --color-input: #464554;
+  --color-ring: #5de6ff;
+  --color-cyan-50: #102d3a;
+  --color-cyan-200: #2a7083;
+  --color-cyan-700: #5de6ff;
+  --color-cyan-800: #a2eeff;
+  --color-emerald-50: #0e302e;
+  --color-emerald-200: #1b5b50;
+  --color-emerald-700: #34d399;
+  --color-amber-50: #352b1b;
+  --color-amber-200: #705628;
   --color-amber-700: #fbbf24;
   --color-amber-800: #fcd34d;
-  --color-rose-50: #3b2328;
+  --color-rose-50: #3b2028;
   --color-rose-200: #7f3d4c;
-  --color-rose-700: #fb7185;
-  --color-rose-800: #fda4af;
+  --color-rose-700: #ffb4ab;
+  --color-rose-800: #ffd7d2;
 }
 
 @layer base {
@@ -100,34 +136,19 @@
     font-size: 16px;
   }
 
-  @media (min-width: 1024px) {
-    html {
-      font-size: 12.5px;
-    }
-  }
-
-  @media (min-width: 1536px) {
-    html {
-      font-size: 12px;
-    }
-  }
-
   body {
     @apply min-h-screen overflow-hidden bg-background text-foreground antialiased;
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    background-image:
-      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.08), transparent 24%),
-      radial-gradient(circle at top right, rgba(37, 99, 235, 0.09), transparent 30%),
-      linear-gradient(180deg, #f8fbff 0%, #f1f6fb 100%);
+    background-image: none;
   }
 
   :root[data-theme="dark"] body {
     background-image:
-      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.045), transparent 24%),
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.06), transparent 30%),
-      linear-gradient(180deg, #212121 0%, #1f1f1f 100%);
+      radial-gradient(circle at 14% 8%, rgba(34, 211, 238, 0.035), transparent 24%),
+      radial-gradient(circle at top right, rgba(59, 130, 246, 0.055), transparent 30%),
+      linear-gradient(180deg, #051424 0%, #010f1f 100%);
   }
 
   h1,

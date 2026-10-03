@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react'
 import {
   ArrowRightLeft,
-  Banknote,
-  CalendarClock,
   ClipboardCheck,
   LayoutDashboard,
+  Banknote,
   LogOut,
   Logs,
   ReceiptText,
@@ -45,8 +44,6 @@ export function pageTitle(page: Page) {
       return 'Cashout'
     case 'movement':
       return 'Cash Movement'
-    case 'planner':
-      return 'Payment Planner'
     case 'payroll':
       return 'Payroll'
     case 'logs':
@@ -139,29 +136,16 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       activeClass: 'bg-secondary text-foreground',
       action: 'page',
     },
-  )
-
-  if (currentUser.role === 'owner' || currentUser.role === 'manager') {
-    items.push({
-      icon: <CalendarClock className="size-4 shrink-0" />,
-      label: 'Payment Planner',
-      page: 'planner',
+    {
+      icon: <Banknote className="size-4 shrink-0" />,
+      label: 'Payroll',
+      page: 'payroll',
       gradient: '',
       hoverClass: '',
       activeClass: 'bg-secondary text-foreground',
       action: 'page',
-    })
-  }
-
-  items.push({
-    icon: <Banknote className="size-4 shrink-0" />,
-    label: 'Payroll',
-    page: 'payroll',
-    gradient: '',
-    hoverClass: '',
-    activeClass: 'bg-secondary text-foreground',
-    action: 'page',
-  })
+    },
+  )
 
   if (currentUser.role === 'owner') {
     items.push({
@@ -196,4 +180,3 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
 
   return items
 }
-

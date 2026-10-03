@@ -2,7 +2,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import type { HTMLAttributes } from 'react'
 import { cn } from '@/shared/lib/utils'
 
-const statusPanelVariants = cva('rounded-xl border px-3 py-2 text-sm font-semibold', {
+const statusPanelVariants = cva('rounded-md border px-3 py-2.5 text-[13px] font-medium', {
   variants: {
     variant: {
       info: 'border-info/20 bg-info/8 text-info',

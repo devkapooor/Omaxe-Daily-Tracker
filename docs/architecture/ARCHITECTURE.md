@@ -13,7 +13,7 @@ AlphaHub is a Firebase-first, single-store operations app with:
 - live Firestore subscriptions
 - role-based page access
 - compact desktop sidebar plus mobile drawer navigation
-- Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Payment Planner, Logs and Settings
+- Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Logs and Settings
 - installable PWA packaging for Chrome/mobile standalone launch
 - online-only offline handling for cached or installed opens
 
@@ -139,9 +139,9 @@ src/
 `src/store/storeSubscriptions.ts`
 
 - hydrates Firestore collections and metadata into local state
-- keeps users, settings, finance records, planner entries, logs, and `workspaceMetrics` live
+- keeps users, settings, finance records, legacy planned-payment records, logs, and `workspaceMetrics` live
 
-`src/store/vendorLedgerV2Repository.ts` owns guarded V2 transactions. The workspace-level `useVendorLedgerV2` subscription is shared with Action Centre and Payment Planner rather than adding one listener per page.
+`src/store/vendorLedgerV2Repository.ts` owns guarded V2 transactions. The workspace-level `useVendorLedgerV2` subscription is shared with Action Centre and Vendor Workspace rather than adding one listener per page.
 
 ## Current Navigation Model
 
@@ -154,7 +154,6 @@ Owner sees:
 - `Register`
 - `Cashout`
 - `Cash Movement`
-- `Payment Planner`
 - `Logs`
 - `Settings`
 
@@ -165,7 +164,6 @@ Manager sees:
 - `Register`
 - `Cashout`
 - `Cash Movement`
-- `Payment Planner`
 - `Settings`
 
 Billing sees:
@@ -186,7 +184,6 @@ Internal page ids still use:
 - `expense` for the `Register` workspace
 - `cashout`
 - `movement`
-- `planner`
 - `logs`
 - `settings`
 
@@ -222,7 +219,7 @@ App opened without internet
 
 - The app is intentionally single-store and does not implement multi-store routing.
 - Monthly Dashboard performance uses the shared pure deriveMonthlyPerformance helper over subscribed source records; settings, liabilities and cash summaries still use workspaceMetrics. Retained monthly-report/table fields are compatibility data, not active dashboard panels.
-- Payment Planner merges legacy expense/payment schedules and manual plans with issued/presented V2 cheques using the shared mergeV2ChequesIntoPlanner helper. It does not change cashout or cash-movement balances.
+- Payment Planner has been removed. Historical `plannedPayments`, `currentBankBalance`, and `workspaceMetrics.planner` data remain read-only compatibility data for audit safety and legacy-cheque visibility; no active screen writes them.
 - `Cash Movement` remains separate from `Cashout` and separate from the removed shift-handover experiment.
 - Active cash ownership now uses Firebase user IDs end to end for cashouts, transfers, balance cards, and transfer logs.
 - Legacy slot fields such as `recordedByHolder`, `from`, and `toPerson` are compatibility-only fields for older documents and are not written by new runtime flows.

@@ -17,7 +17,7 @@ import { AuroraBackground } from '@/shared/ui/aurora-background'
 import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
 
 function isPage(value: string | null): value is Page {
-  return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'planner' || value === 'payroll' || value === 'logs' || value === 'settings'
+  return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'payroll' || value === 'logs' || value === 'settings'
 }
 
 export default function App() {
@@ -47,11 +47,8 @@ export default function App() {
     isBusy,
     loans,
     nameDirectory,
-    plannedPayments,
     profileLoaded,
     renamePartyInDirectory,
-    savePlannerBankBalance,
-    savePlannedPayment,
     settingsAuditLog,
     signIn,
     signOutCurrentUser,
@@ -69,7 +66,6 @@ export default function App() {
     saveLoanEntry,
     saveOperationalSettings,
     savePayment,
-    deletePlannedPayment,
   } = useAppStore()
 
   const [activePage, setActivePage] = useState<Page>(() => {
@@ -90,7 +86,7 @@ export default function App() {
     marginPercentage,
     normalizedLoans,
     pendingCashNow,
-    plannerMetrics,
+    legacyChequeItems,
     totalVendorOutstanding,
     todayCashout,
     todayPaymentNet,
@@ -220,7 +216,6 @@ export default function App() {
         data={data}
         deleteDailyCashoutEntry={deleteDailyCashoutEntry}
         deleteLoanEntry={deleteLoanEntry}
-        deletePlannedPayment={deletePlannedPayment}
         deleteUserAccount={deleteUserAccount}
         editDailyCashoutEntry={editDailyCashoutEntry}
         directoryOptions={directoryOptions}
@@ -236,8 +231,7 @@ export default function App() {
         onLogout={() => void signOutCurrentUser()}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}
-        plannerMetrics={plannerMetrics}
-        plannedPayments={plannedPayments}
+        legacyChequeItems={legacyChequeItems}
         renamePartyInDirectory={renamePartyInDirectory}
         saveCashTransfer={saveCashTransfer}
         saveCashout={saveCashout}
@@ -249,8 +243,6 @@ export default function App() {
         saveLoanEntry={saveLoanEntry}
         saveOperationalSettings={saveOperationalSettings}
         savePayment={savePayment}
-        savePlannedPayment={savePlannedPayment}
-        savePlannerBankBalance={savePlannerBankBalance}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}
         showToast={showToast}
@@ -265,5 +257,4 @@ export default function App() {
     </AppBackground>
   )
 }
-
 

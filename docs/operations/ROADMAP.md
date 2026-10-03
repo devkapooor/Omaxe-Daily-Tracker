@@ -35,6 +35,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Delivery Rules
 
+- At the end of every approved implementation phase, create a dedicated Git checkpoint commit and a dated summary of scope, verification, review status, and known gaps. Do not deploy unless separately requested and confirmed.
 - Never modify, delete, migrate, backfill, or replace existing production financial records during development, testing, deployment, or upgrade work.
 - Existing loan records, balances, calculations, and workflows are protected and must not be changed by planned upgrades.
 - Treat production verification as read-only. Run every mutation test in the Firebase Emulator Suite or against clearly isolated non-production data.

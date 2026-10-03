@@ -8,7 +8,7 @@ type FieldLabelProps = PropsWithChildren<{
 
 export function FieldLabel({ children, className, label }: FieldLabelProps) {
   return (
-    <label className={cn('grid gap-1 text-[12px] font-semibold text-foreground', className)}>
+    <label className={cn('grid gap-1.5 text-[13px] font-medium text-foreground', className)}>
       <span>{label}</span>
       {children}
     </label>

@@ -427,13 +427,10 @@ export function useAppStore() {
     isBusy,
     loans,
     monthlyReports,
-    plannedPayments,
     profileLoaded: loadedCollections.users,
     renamePartyInDirectory: actions.renamePartyInDirectory,
     nameDirectory,
     deletePaymentEntry: actions.deletePaymentEntry,
-    savePlannerBankBalance: actions.savePlannerBankBalance,
-    savePlannedPayment: actions.savePlannedPayment,
     saveCashTransfer: actions.saveCashTransfer,
     saveCashout: actions.saveCashout,
     saveDailyCashoutEntry: actions.saveDailyCashoutEntry,
@@ -458,7 +455,6 @@ export function useAppStore() {
     deletePurchaseEntry: actions.deletePurchaseEntry,
     deleteSettingsAuditEntry: actions.deleteSettingsAuditEntry,
     ensureNameInDirectory: actions.ensureNameInDirectory,
-    deletePlannedPayment: actions.deletePlannedPayment,
   }
 }
 

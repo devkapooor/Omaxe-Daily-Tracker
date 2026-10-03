@@ -260,14 +260,14 @@ because old records do not store enough allocation provenance
 to rebuild purchase-level paid/unpaid state without risking live totals
 ```
 
-## Payment Planner Logic
+## Legacy Planner Compatibility
 
-Planner schedule items are built from:
+The Payment Planner screen and all planner write actions are removed. The retained compatibility schedule is still derived from:
 
 ```text
 all expenses where paymentMode = "Cheque" and chequePayDate exists
 + all payments where type = "Paid" and entryType = "vendor-payment" and paymentMode = "Cheque"
-+ all manual planned payments
++ preserved manual planned payments
 ```
 
 Then:
@@ -280,13 +280,12 @@ for each planner item:
   status = runningBalance >= 0 ? "available" : "deficit"
 ```
 
-Planner notes:
+Compatibility notes:
 
-- AppWorkspace passes this legacy/manual schedule through mergeV2ChequesIntoPlanner. It adds issued/presented V2 cheques, excludes legacy rows sharing their normalized cheque numbers, and rebuilds running balances from the configured bank balance.
-- counter cash is shown for reference only
-- planner records do not alter pending cash balances
-- planner does not currently ingest loan-repayment cheques
-- the legacy/manual schedule is persisted into workspaceMetrics.planner; the unified display is composed by the shared V2 planner helper
+- `workspaceMetrics.planner` remains temporarily so Vendor Workspace can show legacy expense/vendor cheques as read-only records.
+- Manual planned payments remain preserved for history and user-account deletion safeguards, but are filtered out of Vendor Workspace.
+- `currentBankBalance` remains stored for compatibility and has no active editor.
+- Preserved planner records do not alter pending cash balances.
 
 ## Daily Cashout Delete Resync
 

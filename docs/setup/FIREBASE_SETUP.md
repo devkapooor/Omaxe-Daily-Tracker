@@ -46,7 +46,7 @@ After that:
 - `loans`
 - `dailyCashouts`
 - `cashTransfers`
-- `plannedPayments`
+- `plannedPayments` (preserved legacy records; no active app writer)
 - `settingsAudit`
 - `appMetadata/appSettings`
 - `appMetadata/nameDirectory`

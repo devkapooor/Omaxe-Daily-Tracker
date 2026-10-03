@@ -15,12 +15,13 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 ## Authentication and navigation
 
 - Verify Firebase email/password sign-in, sign-out, password updates, profile validation, disabled/deleted-user denial, and restricted-page fallback.
-- Owner sees Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Payment Planner, Logs and Settings.
-- Manager sees Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Payment Planner and Settings.
+- Owner sees Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Logs and Settings.
+- Manager sees Vendor Workspace, Party Directory, Register, Cashout, Cash Movement and Settings.
 - Billing sees Vendor Workspace, Party Directory, Register, Cashout, Cash Movement and Settings.
 - Owner creates staff accounts from Settings without losing the owner's session. Non-owner settings remain restricted.
 - Verify active menu state, collapsed sidebar, fluid mobile drawer, keyboard focus, modal close controls and disabled/loading/error/empty states.
 - Refresh/reopen preserves valid navigation. The internal vendor-preview key must continue to open Vendor Workspace after the folder rename.
+- A stale saved `planner` page key falls back to Dashboard and never renders a removed route.
 - Use shared responsive layouts at narrow and wide widths. Do not introduce device-model branches or separate mobile implementations.
 
 ## Dashboard
