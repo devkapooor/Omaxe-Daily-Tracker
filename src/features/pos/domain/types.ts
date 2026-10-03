@@ -158,3 +158,19 @@ export type PosImportValidation = {
   zeroQuantityCount: number
   errors: string[]
 }
+
+export type PosBillState = {
+  billId: string
+  state: 'active' | 'voided' | 'partially-returned'
+  revision: number
+  returnedQuantities?: Record<string, number>
+}
+
+export type PosRefundEvent = {
+  id: string
+  type: string
+  billId?: string
+  refundDate?: string | null
+  refundAmountPaise?: number
+  refundMethod?: PosPaymentMethod | null
+}

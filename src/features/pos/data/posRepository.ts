@@ -35,6 +35,7 @@ import {
   POS_SANDBOX_ID,
   type PosApprovalRequest,
   type PosBill,
+  type PosBillState,
   type PosCartLine,
   type PosCheckoutConfig,
   type PosDiscount,
@@ -43,6 +44,7 @@ import {
   type PosImportValidation,
   type PosPaymentAllocation,
   type PosProduct,
+  type PosRefundEvent,
 } from '../domain/types'
 
 const root = () => doc(db, 'posSandboxes', POS_SANDBOX_ID)
@@ -99,6 +101,22 @@ export function subscribeHeldCarts(callback: (carts: PosHeldCart[]) => void, onE
 export function subscribeRecentBills(callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
   return onSnapshot(query(posCollection('bills'), orderBy('createdAt', 'desc'), limit(50)), (snapshot) => {
     callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill))
+  }, onError)
+}
+
+export function subscribePosDashboardBills(from: string, to: string, callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
+  return onSnapshot(query(posCollection('bills'), where('businessDate', '>=', from), where('businessDate', '<=', to), orderBy('businessDate')), (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill))
+  }, onError)
+}
+
+export function subscribePosBillStates(callback: (states: PosBillState[]) => void, onError: (error: Error) => void) {
+  return onSnapshot(posCollection('billStates'), (snapshot) => callback(snapshot.docs.map((item) => item.data() as PosBillState)), onError)
+}
+
+export function subscribePosDashboardRefunds(from: string, to: string, callback: (refunds: PosRefundEvent[]) => void, onError: (error: Error) => void) {
+  return onSnapshot(query(posCollection('events'), where('refundDate', '>=', from), where('refundDate', '<=', to), orderBy('refundDate')), (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosRefundEvent))
   }, onError)
 }
 

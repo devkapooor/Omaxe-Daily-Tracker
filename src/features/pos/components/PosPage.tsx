@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, Barcode, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2 } from 'lucide-react'
+import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { today } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
@@ -27,9 +27,10 @@ import {
 } from '../data/posRepository'
 import { printTestReceipt } from './receipt'
 import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
+import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
 
-type Tab = 'checkout' | 'bills' | 'admin'
+type Tab = 'checkout' | 'dashboard' | 'bills' | 'admin'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' }, { value: 'bank-transfer', label: 'Bank Transfer' },
 ]
@@ -102,7 +103,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     <div className="grid gap-2.5">
       <Card><CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow="Isolated Firestore Sandbox" title="POS (Test)" description="Trial billing only. No production sales, cash, purchases, or finance records are used." /><Badge variant="warning">TEST ONLY</Badge></CardHeader></Card>
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
-      <div className="flex flex-wrap gap-2">{(['checkout', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'outline'} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
+      <div className="flex flex-wrap gap-2">{(['checkout', 'dashboard', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'outline'} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'dashboard' ? <ChartPie /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
 
       {tab === 'checkout' ? <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)]">
         <div className="grid min-w-0 content-start gap-2.5">
@@ -124,6 +125,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
         </CardContent></Card>
       </div> : null}
 
+      {tab === 'dashboard' ? <PosDashboard /> : null}
       {tab === 'bills' ? <BillsPanel bills={sandbox.bills} products={sandbox.products} currentUser={currentUser} showToast={showToast} /> : null}
       {tab === 'admin' && currentUser.role === 'owner' ? <AdminPanel currentUser={currentUser} discountLimit={sandbox.config.billingMaxDiscountPercentage} showToast={showToast} /> : null}
     </div>
