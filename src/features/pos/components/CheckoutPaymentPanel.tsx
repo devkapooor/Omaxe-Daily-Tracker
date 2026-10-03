@@ -61,7 +61,7 @@ function SplitPaymentDialog({ totalPaise, initial, onCancel, onApply }: { totalP
     dialog?.showModal()
     return () => { if (dialog?.open) dialog.close() }
   }, [])
-  return <dialog ref={dialogRef} aria-labelledby="split-payment-title" onCancel={(event) => { event.preventDefault(); onCancel() }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl backdrop:bg-slate-950/60">
+  return <dialog ref={dialogRef} aria-labelledby="split-payment-title" onCancel={(event) => { event.preventDefault(); onCancel() }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl backdrop:bg-slate-950/60">
     <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); if (!error) onApply(amounts) }}>
       <div><h2 id="split-payment-title" className="text-lg font-black">Split payments</h2><p className="text-sm text-muted-foreground">Divide {money(totalPaise)} between two or more payment methods.</p></div>
       <div className="grid grid-cols-2 gap-3">{checkoutPaymentMethods.map((method, index) => <FieldLabel key={method.value} label={method.label}><Input autoFocus={index === 0} type="number" min="0" step="0.01" value={amounts[method.value]} onChange={(event) => setAmounts((current) => ({ ...current, [method.value]: event.target.value }))} placeholder="0.00" /></FieldLabel>)}</div>
