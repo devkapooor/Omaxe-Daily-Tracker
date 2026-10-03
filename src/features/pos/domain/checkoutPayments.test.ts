@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildCheckoutPayment, emptySplitPayments } from './checkoutPayments'
 
 describe('checkout payment selection', () => {
-  it.each(['cash', 'upi', 'card', 'bank-transfer'] as const)('allocates the full total automatically for %s', (method) => {
+  it.each(['cash', 'upi', 'card'] as const)('allocates the full total automatically for %s', (method) => {
     expect(buildCheckoutPayment(12345, method, emptySplitPayments()).payments).toEqual([{ method, amountPaise: 12345 }])
   })
   it('calculates cash change without recording the excess as sales', () => {

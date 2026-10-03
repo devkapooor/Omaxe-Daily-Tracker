@@ -1,13 +1,14 @@
 import { rupeesToPaise, validateSettlement } from './posDomain'
 import type { PosPaymentAllocation, PosPaymentMethod } from './types'
 
-export type CheckoutPaymentMode = PosPaymentMethod | 'split'
-export type SplitPaymentAmounts = Record<PosPaymentMethod, string>
-export const checkoutPaymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
+export type CheckoutPaymentMethod = Exclude<PosPaymentMethod, 'bank-transfer'>
+export type CheckoutPaymentMode = CheckoutPaymentMethod | 'split'
+export type SplitPaymentAmounts = Record<CheckoutPaymentMethod, string>
+export const checkoutPaymentMethods: Array<{ value: CheckoutPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' }, { value: 'bank-transfer', label: 'Bank Transfer' },
+  { value: 'card', label: 'Card' },
 ]
-export const emptySplitPayments = (): SplitPaymentAmounts => ({ cash: '', upi: '', card: '', 'bank-transfer': '' })
+export const emptySplitPayments = (): SplitPaymentAmounts => ({ cash: '', upi: '', card: '' })
 
 export function buildCheckoutPayment(totalPaise: number, mode: CheckoutPaymentMode, split: SplitPaymentAmounts, cashReceived?: string) {
   const payments: PosPaymentAllocation[] = mode === 'split'
