@@ -1,0 +1,41 @@
+{
+  "sourceWorkbook": {
+    "name": "CUrrent Stock 2 OCt.xlsx",
+    "size": 569549,
+    "lastModified": "2026-10-03T13:20:32.227Z",
+    "sha256": "b4601e7a2cc5349adf17a81180cdb97db49c6cc12c05f4a6ec5bc55e8e139a16"
+  },
+  "approvedCsv": {
+    "name": "omaxe-opening-stock-2026-10-02.approved.csv",
+    "size": 2201901,
+    "sha256": "e234dae109bc90988879e5af6789d90e0b4be59bb90f93d0cffb0dbaa521a65b"
+  },
+  "worksheet": "CUrrent Stock 2 OCt",
+  "sourceRange": "A1:K6070",
+  "sourceHeaders": [
+    "productId",
+    "productName",
+    "barcode",
+    "quantity",
+    "sellingPrice",
+    "printedMrp",
+    "costPrice",
+    "vendorName",
+    "categoryName",
+    "subCategoryOf",
+    "brand"
+  ],
+  "validation": {
+    "rowCount": 6069,
+    "uniqueProductIds": 6069,
+    "uniqueBarcodes": 6069,
+    "negativeQuantityCount": 379,
+    "zeroQuantityCount": 3294,
+    "missingSellingPriceCount": 0,
+    "missingCostCount": 0,
+    "missingVendorCount": 0,
+    "missingCategoryCount": 0,
+    "missingBrandCount": 0
+  },
+  "normalization": "Identifiers, quantities, and monetary values preserved. Display/search text trimmed and internal whitespace collapsed. No GST, HSN, stock, cost, or price values inferred or corrected."
+}
