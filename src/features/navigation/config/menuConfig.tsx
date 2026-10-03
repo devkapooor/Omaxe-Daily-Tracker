@@ -8,6 +8,7 @@ import {
   LogOut,
   Logs,
   ReceiptText,
+  ScanBarcode,
   Settings,
   TestTube2,
   Users,
@@ -32,6 +33,8 @@ export function pageTitle(page: Page) {
       return 'Dashboard'
     case 'actions':
       return 'Action Centre'
+    case 'pos-test':
+      return 'POS (Test)'
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
@@ -78,6 +81,16 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       action: 'page',
     })
   }
+
+  items.push({
+    icon: <ScanBarcode className="size-4 shrink-0" />,
+    label: 'POS (Test)',
+    page: 'pos-test',
+    gradient: '',
+    hoverClass: '',
+    activeClass: 'bg-amber-100 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100',
+    action: 'page',
+  })
 
   items.push({
     icon: <TestTube2 className="size-4 shrink-0" />,

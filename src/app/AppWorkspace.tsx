@@ -31,6 +31,8 @@ import { PayrollPage } from '@/features/payroll/components/PayrollPage'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
+import { PosPage } from '@/features/pos/components/PosPage'
+import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
 import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
@@ -299,7 +301,12 @@ export function AppWorkspace({
                 showToast(error instanceof Error ? error.message : 'Unable to resolve this vendor return.')
               }
             }}
+            testPosPanel={<PosActionCentrePanel currentUser={currentUser} showToast={showToast} />}
           />
+        ) : null}
+
+        {activePage === 'pos-test' ? (
+          <PosPage currentUser={currentUser} showToast={showToast} />
         ) : null}
 
         {activePage === 'vendor-preview' ? (
