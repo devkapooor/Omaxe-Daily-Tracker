@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Barcode, Boxes, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { AlertTriangle, Barcode, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { today } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
@@ -13,25 +13,23 @@ import { StatusPanel } from '@/shared/ui/status-panel'
 import { usePosSandbox } from '../hooks/usePosSandbox'
 import { calculateDiscount, paiseToRupees, posSubtotal, rupeesToPaise } from '../domain/posDomain'
 import { parseApprovedPosCsv, sha256Hex } from '../domain/csvImport'
-import type { PosBill, PosCartLine, PosDiscount, PosPaymentAllocation, PosPaymentMethod, PosProduct } from '../domain/types'
+import type { PosBill, PosCartLine, PosDiscount, PosPaymentMethod, PosProduct } from '../domain/types'
 import {
-  adjustPosStock,
   deleteHeldCart,
   finalizePosBill,
   findPosProductByBarcode,
-  getPosCost,
   importPosProducts,
   mapTemporaryItem,
   requestBillAction,
   resetPosSandbox,
   saveHeldCart,
-  savePosCost,
-  saveSaleFacingProduct,
   updateDiscountLimit,
 } from '../data/posRepository'
 import { printTestReceipt } from './receipt'
+import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
+import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
 
-type Tab = 'checkout' | 'products' | 'bills' | 'admin'
+type Tab = 'checkout' | 'bills' | 'admin'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' }, { value: 'bank-transfer', label: 'Bank Transfer' },
 ]
@@ -39,18 +37,16 @@ const money = (paise: number) => `₹${paiseToRupees(paise).toLocaleString('en-I
 
 export function PosPage({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
   const [tab, setTab] = useState<Tab>('checkout')
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [brand, setBrand] = useState('')
-  const sandbox = usePosSandbox({ prefix: search, category, brand })
+  const sandbox = usePosSandbox({})
   const [cart, setCart] = useState<PosCartLine[]>([])
   const [customerName, setCustomerName] = useState('')
   const [customerMobile, setCustomerMobile] = useState('')
   const [discountMode, setDiscountMode] = useState<PosDiscount['mode']>('none')
   const [discountValue, setDiscountValue] = useState('0')
   const [discountReason, setDiscountReason] = useState('')
-  const [payments, setPayments] = useState<Record<PosPaymentMethod, string>>({ cash: '', upi: '', card: '', 'bank-transfer': '' })
-  const [cashTendered, setCashTendered] = useState('')
+  const [paymentMode, setPaymentMode] = useState<CheckoutPaymentMode>('cash')
+  const [splitPayments, setSplitPayments] = useState<SplitPaymentAmounts>(emptySplitPayments)
+  const [cashReceived, setCashReceived] = useState<string | null>(null)
   const [unknownBarcode, setUnknownBarcode] = useState('')
   const [unknownDescription, setUnknownDescription] = useState('')
   const [unknownPrice, setUnknownPrice] = useState('')
@@ -63,8 +59,9 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     if (discountReason.trim()) discount.overrideReason = discountReason.trim()
   } catch { /* form validation is shown on submit */ }
   const total = subtotal - discount.amountPaise
-  const categories = useMemo(() => Array.from(new Set(sandbox.products.map((product) => product.category).filter(Boolean))).sort(), [sandbox.products])
-  const brands = useMemo(() => Array.from(new Set(sandbox.products.map((product) => product.brand).filter(Boolean))).sort(), [sandbox.products])
+  let paymentError = ''
+  try { buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined) }
+  catch (error) { paymentError = error instanceof Error ? error.message : 'Payment is invalid.' }
 
   function addProduct(product: PosProduct) {
     setCart((current) => {
@@ -86,14 +83,14 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   }
 
   function resetCart() {
-    setCart([]); setCustomerName(''); setCustomerMobile(''); setDiscountMode('none'); setDiscountValue('0'); setDiscountReason(''); setPayments({ cash: '', upi: '', card: '', 'bank-transfer': '' }); setCashTendered('')
+    setCart([]); setCustomerName(''); setCustomerMobile(''); setDiscountMode('none'); setDiscountValue('0'); setDiscountReason(''); setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null)
   }
 
   async function checkout() {
     setBusy(true)
     try {
-      const allocations: PosPaymentAllocation[] = paymentMethods.map(({ value }) => ({ method: value, amountPaise: rupeesToPaise(Number(payments[value] || 0)) })).filter((payment) => payment.amountPaise > 0)
-      const bill = await finalizePosBill({ businessDate: today(), lines: cart, discount, payments: allocations, customerName, customerMobile, ...(cashTendered ? { cashTenderedPaise: rupeesToPaise(Number(cashTendered)) } : {}) }, currentUser)
+      const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
+      const bill = await finalizePosBill({ businessDate: today(), lines: cart, discount, payments: settlement.payments, customerName, customerMobile, ...(settlement.cashTenderedPaise !== undefined ? { cashTenderedPaise: settlement.cashTenderedPaise } : {}) }, currentUser)
       resetCart()
       showToast(`Test bill finalized: ${bill.receiptNumber}`)
       printTestReceipt(bill, 'thermal')
@@ -105,48 +102,32 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     <div className="grid gap-2.5">
       <Card><CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow="Isolated Firestore Sandbox" title="POS (Test)" description="Trial billing only. No production sales, cash, purchases, or finance records are used." /><Badge variant="warning">TEST ONLY</Badge></CardHeader></Card>
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
-      <div className="flex flex-wrap gap-2">{(['checkout', 'products', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'outline'} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'products' ? <Boxes /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
+      <div className="flex flex-wrap gap-2">{(['checkout', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'outline'} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
 
-      {tab === 'checkout' ? <div className="grid gap-2.5 xl:grid-cols-[1.2fr_.8fr]">
-        <div className="grid content-start gap-2.5">
+      {tab === 'checkout' ? <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)]">
+        <div className="grid min-w-0 content-start gap-2.5">
           <Card><CardContent className="grid gap-3 pt-4">
             <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}><Input ref={scannerRef} autoFocus inputMode="numeric" aria-label="Barcode scanner input" placeholder="Scan barcode, then Enter" className="text-lg font-bold" /><Button><Barcode />Scan</Button></form>
             {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); setCart((current) => [...current, { id: crypto.randomUUID(), kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }]); setUnknownBarcode('') }}><Plus />Add unresolved item</Button></div> : null}
           </CardContent></Card>
-          <Card><CardHeader><SectionHeading eyebrow="Manual lookup" title="Products" /></CardHeader><CardContent className="grid gap-3"><div className="grid gap-2 sm:grid-cols-3"><FieldLabel label="Name prefix"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Starts with..." /></FieldLabel><FieldLabel label="Category"><NativeSelect value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All</option>{categories.map((value) => <option key={value}>{value}</option>)}</NativeSelect></FieldLabel><FieldLabel label="Brand"><NativeSelect value={brand} onChange={(event) => setBrand(event.target.value)}><option value="">All</option>{brands.map((value) => <option key={value}>{value}</option>)}</NativeSelect></FieldLabel></div><div className="grid max-h-72 gap-2 overflow-y-auto">{sandbox.products.map((product) => <button type="button" key={product.id} className="flex items-center justify-between rounded-xl border border-border p-3 text-left hover:bg-secondary/50" onClick={() => addProduct(product)}><span><strong>{product.name}</strong><small className="block text-muted-foreground">{product.barcode} · {product.category} · {product.brand}</small></span><span className="text-right"><strong>{money(product.sellingPricePaise)}</strong><small className={`block ${product.currentQuantity <= 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>Stock {product.currentQuantity}</small></span></button>)}</div></CardContent></Card>
+          <Card aria-label="Cart items"><CardHeader><SectionHeading eyebrow={`${cart.length} lines`} title="Test Cart" /></CardHeader><CardContent className="grid gap-3">
+          {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className="rounded-xl border p-3"><div className="flex justify-between gap-2"><div><strong>{line.description}</strong><small className="block text-muted-foreground">{line.barcode} {line.kind === 'temporary' ? '· UNRESOLVED' : ''}</small></div><Button aria-label={`Remove ${line.description}`} size="icon" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 /></Button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-1"><Button aria-label={`Decrease quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><span className="min-w-8 text-center font-bold">{line.quantity}</span><Button aria-label={`Increase quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></div><strong>{money(line.quantity * line.unitPricePaise)}</strong></div>{line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="mt-2 text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}</div>)}
+          </CardContent></Card>
         </div>
-        <Card><CardHeader><SectionHeading eyebrow={`${cart.length} lines`} title="Test Cart" /></CardHeader><CardContent className="grid gap-3">
-          {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan or select a product.</p> : cart.map((line) => <div key={line.id} className="rounded-xl border p-3"><div className="flex justify-between gap-2"><div><strong>{line.description}</strong><small className="block text-muted-foreground">{line.barcode} {line.kind === 'temporary' ? '· UNRESOLVED' : ''}</small></div><Button size="icon" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 /></Button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-1"><Button size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><span className="min-w-8 text-center font-bold">{line.quantity}</span><Button size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></div><strong>{money(line.quantity * line.unitPricePaise)}</strong></div>{line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="mt-2 text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}</div>)}
+        <Card aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Checkout" title="Payment & Total" /></CardHeader><CardContent className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Customer Name (Optional)"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></FieldLabel><FieldLabel label="Mobile (Optional)"><Input value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></FieldLabel></div>
           <div className="grid gap-2 sm:grid-cols-3"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel><FieldLabel label="Override Reason"><Input value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Required above limit" /></FieldLabel></div>
-          <div className="grid grid-cols-2 gap-2">{paymentMethods.map((method) => <FieldLabel key={method.value} label={method.label}><Input type="number" min="0" step="0.01" value={payments[method.value]} onChange={(event) => setPayments((current) => ({ ...current, [method.value]: event.target.value }))} /></FieldLabel>)}</div><FieldLabel label="Cash Tendered (for change)"><Input type="number" min="0" step="0.01" value={cashTendered} onChange={(event) => setCashTendered(event.target.value)} /></FieldLabel>
           <div className="rounded-xl bg-secondary/50 p-3 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Discount</span><strong>− {money(discount.amountPaise)}</strong></div><div className="mt-2 flex justify-between text-lg"><span>Total</span><strong>{money(total)}</strong></div></div>
-          <div className="grid gap-2 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { resetCart(); showToast('Cart held in POS sandbox.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize TEST Bill'}</Button></div>
-          {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
+          <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
+          <div className="grid gap-2 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { resetCart(); showToast('Cart held in POS sandbox.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize TEST Bill'}</Button></div>
+          {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
         </CardContent></Card>
       </div> : null}
 
-      {tab === 'products' ? <ProductsPanel currentUser={currentUser} products={sandbox.products} search={search} setSearch={setSearch} showToast={showToast} /> : null}
       {tab === 'bills' ? <BillsPanel bills={sandbox.bills} products={sandbox.products} currentUser={currentUser} showToast={showToast} /> : null}
       {tab === 'admin' && currentUser.role === 'owner' ? <AdminPanel currentUser={currentUser} discountLimit={sandbox.config.billingMaxDiscountPercentage} showToast={showToast} /> : null}
     </div>
   </section>
-}
-
-function ProductsPanel({ currentUser, products, search, setSearch, showToast }: { currentUser: AppUser; products: PosProduct[]; search: string; setSearch: (value: string) => void; showToast: (message: string) => void }) {
-  const [selected, setSelected] = useState<PosProduct | null>(null)
-  const [details, setDetails] = useState({ barcode: '', name: '', category: '', brand: '', vendor: '', sellingPrice: '', active: true })
-  const [cost, setCost] = useState('')
-  const [delta, setDelta] = useState('')
-  const [reason, setReason] = useState('')
-  const [reference, setReference] = useState('')
-  function selectProduct(product: PosProduct) {
-    setSelected(product)
-    setDetails({ barcode: product.barcode, name: product.name, category: product.category, brand: product.brand, vendor: product.vendor, sellingPrice: String(paiseToRupees(product.sellingPricePaise)), active: product.active })
-    setCost('')
-    if (currentUser.role !== 'billing') void getPosCost(product.id).then((value) => setCost(value === null ? '' : String(paiseToRupees(value)))).catch((error: Error) => showToast(error.message))
-  }
-  return <Card><CardHeader><SectionHeading eyebrow="Audited sandbox inventory" title="Products & Stock" description="All active roles may update sale details and post reasoned stock movements. Costs remain protected." /></CardHeader><CardContent className="grid gap-3"><FieldLabel label="Product name prefix"><Input value={search} onChange={(event) => setSearch(event.target.value)} /></FieldLabel><div className="grid gap-2 lg:grid-cols-2">{products.map((product) => <button type="button" key={product.id} onClick={() => selectProduct(product)} className={`rounded-xl border p-3 text-left ${selected?.id === product.id ? 'border-primary bg-primary/5' : ''}`}><strong>{product.name}</strong><p className="text-xs text-muted-foreground">{product.barcode} · Stock {product.currentQuantity} · Rev {product.revision}</p></button>)}</div>{selected ? <div className="grid gap-3 rounded-xl border p-3"><div><strong>{selected.name}</strong><p className="text-xs text-muted-foreground">Current stock {selected.currentQuantity}; negative values are preserved and allowed.</p></div><div className="grid gap-2 sm:grid-cols-3"><FieldLabel label="Barcode"><Input value={details.barcode} onChange={(event) => setDetails((current) => ({ ...current, barcode: event.target.value }))} /></FieldLabel><FieldLabel label="Product Name"><Input value={details.name} onChange={(event) => setDetails((current) => ({ ...current, name: event.target.value }))} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={details.sellingPrice} onChange={(event) => setDetails((current) => ({ ...current, sellingPrice: event.target.value }))} /></FieldLabel><FieldLabel label="Category"><Input value={details.category} onChange={(event) => setDetails((current) => ({ ...current, category: event.target.value }))} /></FieldLabel><FieldLabel label="Brand"><Input value={details.brand} onChange={(event) => setDetails((current) => ({ ...current, brand: event.target.value }))} /></FieldLabel><FieldLabel label="Vendor"><Input value={details.vendor} onChange={(event) => setDetails((current) => ({ ...current, vendor: event.target.value }))} /></FieldLabel><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={details.active} onChange={(event) => setDetails((current) => ({ ...current, active: event.target.checked }))} />Active for sale</label><Button className="sm:col-span-2" onClick={() => void saveSaleFacingProduct(selected.id, { barcode: details.barcode.trim(), name: details.name.trim(), category: details.category.trim(), brand: details.brand.trim(), vendor: details.vendor.trim(), sellingPricePaise: rupeesToPaise(Number(details.sellingPrice)), active: details.active }, selected.revision, currentUser).then(() => showToast('Sale-facing product details updated.')).catch((error: Error) => showToast(error.message))}>Save sale details</Button></div>{currentUser.role !== 'billing' ? <div className="grid gap-2 rounded-xl bg-secondary/40 p-3 sm:grid-cols-[1fr_auto]"><FieldLabel label="Protected Cost (Owner/Manager only)"><Input type="number" min="0" step="0.01" value={cost} onChange={(event) => setCost(event.target.value)} placeholder="Blank means missing" /></FieldLabel><Button className="self-end" variant="outline" onClick={() => void savePosCost(selected.id, cost === '' ? null : rupeesToPaise(Number(cost)), currentUser).then(() => showToast('Protected product cost updated.')).catch((error: Error) => showToast(error.message))}>Save cost</Button></div> : null}<div className="grid gap-2 sm:grid-cols-3"><FieldLabel label="Quantity change"><Input type="number" step="1" value={delta} onChange={(event) => setDelta(event.target.value)} placeholder="e.g. 12 or -2" /></FieldLabel><FieldLabel label="Mandatory reason"><Input value={reason} onChange={(event) => setReason(event.target.value)} /></FieldLabel><FieldLabel label="Source reference (Optional)"><Input value={reference} onChange={(event) => setReference(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" onClick={() => void adjustPosStock(selected.id, Number(delta), reason, reference, currentUser).then(() => { setDelta(''); setReason(''); showToast('Sandbox stock movement posted.') }).catch((error: Error) => showToast(error.message))}>Post stock adjustment</Button></div></div> : null}</CardContent></Card>
 }
 
 function BillsPanel({ bills, products, currentUser, showToast }: { bills: PosBill[]; products: PosProduct[]; currentUser: AppUser; showToast: (message: string) => void }) {
