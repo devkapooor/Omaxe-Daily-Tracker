@@ -12,6 +12,30 @@ export type PayrollIssuer = {
   contact?: string
 }
 
+export type PayrollActor = {
+  uid: string
+  name: string
+}
+
+export type PayrollSettings = {
+  issuer: PayrollIssuer
+  defaultPaidWeeklyOffDays: number
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
+export type PayrollProfile = {
+  employeeUserId: string
+  enabled: boolean
+  createdAt: string
+  createdByUid: string
+  createdByName: string
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
 export type PayrollTerm = {
   id: string
   employeeUserId: string
@@ -45,6 +69,105 @@ export type SalaryCalculation = SalaryCalculationInput & {
   earningsPaise: number
   deductionsPaise: number
   netPayPaise: number
+}
+
+export type PayrollMonth = {
+  id: string
+  payrollMonth: string
+  paidWeeklyOffDays: number
+  finalizedSlipCount: number
+  lockedAt?: string
+  createdAt: string
+  createdByUid: string
+  createdByName: string
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
+export type SalaryDraft = {
+  id: string
+  employeeUserId: string
+  employeeName: string
+  employeeRole: 'manager' | 'billing'
+  payrollMonth: string
+  termId: string
+  paidWeeklyOffDays: number
+  workedMinutes: number
+  paidLeaveMinutes: number
+  earnings: PayrollAdjustment[]
+  deductions: PayrollAdjustment[]
+  createdAt: string
+  createdByUid: string
+  createdByName: string
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
+export type SalarySlip = {
+  id: string
+  employeeUserId: string
+  employeeName: string
+  employeeRole: 'manager' | 'billing'
+  payrollMonth: string
+  currentRevision: number
+  currentRevisionId: string
+  currentCalculation: SalaryCalculation
+  totalPaidPaise: number
+  paymentState: SalaryPaymentState
+  outstandingPaise: number
+  overpaidPaise: number
+  finalizedAt: string
+  finalizedByUid: string
+  finalizedByName: string
+  lastEventId: string
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
+export type SalarySlipRevision = {
+  id: string
+  slipId: string
+  revision: number
+  employeeUserId: string
+  employeeName: string
+  employeeRole: 'manager' | 'billing'
+  payrollMonth: string
+  issuer: PayrollIssuer
+  term: PayrollTerm
+  calculation: SalaryCalculation
+  reason: string
+  createdAt: string
+  createdByUid: string
+  createdByName: string
+}
+
+export type PayrollEventType =
+  | 'settings-updated'
+  | 'profile-updated'
+  | 'term-created'
+  | 'month-configured'
+  | 'slip-finalized'
+  | 'slip-revised'
+  | 'payment-recorded'
+
+export type PayrollEvent = {
+  id: string
+  type: PayrollEventType
+  actorUid: string
+  actorName: string
+  createdAt: string
+  employeeUserId?: string
+  payrollMonth?: string
+  slipId?: string
+  revision?: number
+  reason?: string
+  amountPaise?: number
+  paymentDate?: string
+  paymentMethod?: PayrollPaymentMethod
+  paymentReference?: string
 }
 
 export type SalaryPaymentState = 'unpaid' | 'paid' | 'additional-due' | 'overpaid'
@@ -176,4 +299,3 @@ export function rupeesToPayrollPaise(rupees: number) {
   requireSafeInteger(paise, 'Amount')
   return paise
 }
-
