@@ -160,6 +160,7 @@ export const emptyWorkspaceMetrics: WorkspaceMetrics = {
     totalSales: 0,
     cashSales: 0,
     upiSales: 0,
+    cardSales: 0,
     creditSales: 0,
     returns: 0,
     cashExpenses: 0,

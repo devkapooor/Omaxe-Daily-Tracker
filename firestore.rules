@@ -1277,29 +1277,32 @@ service cloud.firestore {
           request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
           request.resource.data.revision == 1 &&
           request.resource.data.createdByUid == request.auth.uid;
-        allow update: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.revision == resource.data.revision + 1 &&
-          request.resource.data.createdAt == resource.data.createdAt &&
-          request.resource.data.createdByUid == resource.data.createdByUid &&
-          (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'barcode', 'name', 'searchName', 'category', 'brand', 'vendor', 'sellingPricePaise',
-              'active', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'
-            ]) ||
+        allow update: if sandboxId == 'test' && (
+          (isOwner() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['searchTokens']) &&
+            request.resource.data.searchTokens is list && request.resource.data.searchTokens.size() <= 500) ||
+          (isStaff() &&
+            request.resource.data.revision == resource.data.revision + 1 &&
+            request.resource.data.createdAt == resource.data.createdAt &&
+            request.resource.data.createdByUid == resource.data.createdByUid &&
             (
               request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'currentQuantity', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
-              ]) &&
-              request.resource.data.currentQuantity is int &&
-              request.resource.data.updatedByUid == request.auth.uid &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.actorUid == request.auth.uid &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionBefore == resource.data.revision &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionAfter == request.resource.data.revision &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.beforeQuantity == resource.data.currentQuantity &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.afterQuantity == request.resource.data.currentQuantity
-            )
-          );
+                'barcode', 'name', 'searchName', 'searchTokens', 'category', 'brand', 'vendor', 'sellingPricePaise',
+                'active', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'
+              ]) ||
+              (
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'currentQuantity', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
+                ]) &&
+                request.resource.data.currentQuantity is int &&
+                request.resource.data.updatedByUid == request.auth.uid &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.actorUid == request.auth.uid &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionBefore == resource.data.revision &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionAfter == request.resource.data.revision &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.beforeQuantity == resource.data.currentQuantity &&
+                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.afterQuantity == request.resource.data.currentQuantity
+              )
+            )));
         allow delete: if sandboxId == 'test' && isOwner();
       }
 

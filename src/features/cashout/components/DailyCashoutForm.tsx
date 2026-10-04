@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { DailyCashoutEntry } from '@/domain/appTypes'
 import { formatDisplayDate, numberValue, today } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
@@ -7,6 +7,8 @@ import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { calculateCashoutAudit, drawerTotalFromDenominations, formatDrawerParticulars } from '@/domain/cashoutCorrections'
+import { getPosCashoutPaymentMix } from '@/features/pos/data/posRepository'
+import type { PosPaymentMethod } from '@/features/pos/domain/types'
 
 type DailyCashoutFormProps = {
   currentUserId: string
@@ -18,6 +20,7 @@ type DailyCashoutFormProps = {
 type DailyDetailsDraft = {
   cashExpense: number
   cashSales: number
+  cardSales: number
   creditSales: number
   date: string
   expectedCash: number
@@ -35,6 +38,11 @@ type DrawerFormState = {
   denom500: string
 }
 
+type PosMixState = { date: string; error: string; billCount: number; refundPaise: number; methods: Record<PosPaymentMethod, number> }
+const emptyPosMix: PosMixState = { date: '', error: '', billCount: 0, refundPaise: 0, methods: { cash: 0, upi: 0, card: 0, 'bank-transfer': 0 } }
+const rupeesFromPaise = (paise: number) => String(paise / 100)
+const formatRupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
 const emptyDrawerFormState: DrawerFormState = {
   change: '0',
   denom10: '0',
@@ -47,8 +55,10 @@ const emptyDrawerFormState: DrawerFormState = {
 
 export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpenses, onSave }: DailyCashoutFormProps) {
   const [entryDate, setEntryDate] = useState(today())
+  const [posMix, setPosMix] = useState<PosMixState>(emptyPosMix)
   const [cashSale, setCashSale] = useState('0')
   const [upiSale, setUpiSale] = useState('0')
+  const [cardSale, setCardSale] = useState('0')
   const [creditSale, setCreditSale] = useState('0')
   const [cashExpense, setCashExpense] = useState(() => String(todayCashExpenses))
   const [cashExpenseEdited, setCashExpenseEdited] = useState(false)
@@ -59,12 +69,35 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const cashSaleValue = numberValue(cashSale)
-  const upiSaleValue = numberValue(upiSale)
+  useEffect(() => {
+    let active = true
+    getPosCashoutPaymentMix(entryDate).then((summary) => {
+      if (!active) return
+      setPosMix({ date: entryDate, error: '', ...summary })
+      setCashSale(rupeesFromPaise(summary.methods.cash))
+      setUpiSale(rupeesFromPaise(summary.methods.upi))
+      setCardSale(rupeesFromPaise(summary.methods.card))
+    }).catch((cause: unknown) => {
+      if (!active) return
+      setPosMix({ ...emptyPosMix, date: entryDate, error: cause instanceof Error ? cause.message : 'Unable to load POS totals.' })
+      setCashSale('0')
+      setUpiSale('0')
+      setCardSale('0')
+    })
+    return () => { active = false }
+  }, [entryDate])
+
+  const posMixForDate = posMix.date === entryDate
+  const posMixLoading = !posMixForDate
+  const displayPosMix = posMixForDate ? posMix : emptyPosMix
+  const cashSaleValue = numberValue(posMixForDate ? cashSale : '0')
+  const upiSaleValue = numberValue(posMixForDate ? upiSale : '0')
+  const cardSaleValue = numberValue(posMixForDate ? cardSale : '0')
   const creditSaleValue = numberValue(creditSale)
   const cashExpenseInputValue = !cashExpenseEdited && entryDate === today() ? String(todayCashExpenses) : cashExpense
   const cashExpenseValue = numberValue(cashExpenseInputValue)
   const systemAuditValue = numberValue(systemAudit)
+  const machineCardTotal = upiSaleValue + cardSaleValue
   const expectedCash = cashSaleValue - cashExpenseValue
   const drawerDenominations = {
     denom500: numberValue(drawerState.denom500),
@@ -79,8 +112,9 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
 
   function resetForm() {
     setEntryDate(today())
-    setCashSale('0')
-    setUpiSale('0')
+    setCashSale(rupeesFromPaise(posMix.methods.cash))
+    setUpiSale(rupeesFromPaise(posMix.methods.upi))
+    setCardSale(rupeesFromPaise(posMix.methods.card))
     setCreditSale('0')
     setCashExpense(String(todayCashExpenses))
     setCashExpenseEdited(false)
@@ -101,6 +135,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
       date: entryDate,
       cashSales: cashSaleValue,
       upiSales: upiSaleValue,
+      cardSales: cardSaleValue,
       creditSales: creditSaleValue,
       cashExpense: cashExpenseValue,
       systemAudit: systemAuditValue,
@@ -124,6 +159,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
         recordedBy: currentUserName,
         recordedByUserId: currentUserId,
         upiSales: pendingDraft.upiSales,
+        cardSales: pendingDraft.cardSales,
         cashSales: pendingDraft.cashSales,
         returns: 0,
         creditSales: pendingDraft.creditSales,
@@ -170,23 +206,23 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
               />
             </FieldLabel>
 
-            <FieldLabel label="Cash Sale Recorded (a)">
-              <Input type="number" min="0" step="1" value={cashSale} onChange={(event) => setCashSale(event.target.value)} />
+            <FieldLabel label="Cash Sale Recorded">
+              <Input type="number" step="0.01" value={posMixForDate ? cashSale : '0'} onChange={(event) => setCashSale(event.target.value)} />
             </FieldLabel>
 
-            <FieldLabel label="UPI Sale Recorded (b)">
-              <Input type="number" min="0" step="1" value={upiSale} onChange={(event) => setUpiSale(event.target.value)} />
+            <FieldLabel label="Machine Total (UPI + Card)">
+              <Input type="number" step="0.01" value={machineCardTotal} readOnly />
             </FieldLabel>
 
-            <FieldLabel label="Credit Sale Recorded (c)">
+            <FieldLabel label="Credit Sale Recorded">
               <Input type="number" min="0" step="1" value={creditSale} onChange={(event) => setCreditSale(event.target.value)} />
             </FieldLabel>
 
-            <FieldLabel label="Cash Expense (d)">
+            <FieldLabel label="Cash Expense">
               <Input type="number" min="0" step="1" value={cashExpenseInputValue} onChange={(event) => { setCashExpense(event.target.value); setCashExpenseEdited(true) }} />
             </FieldLabel>
 
-            <FieldLabel label="Expected Cash (a-d)">
+            <FieldLabel label="Expected Cash (Cash Sales - Cash Expense)">
               <Input type="number" value={expectedCash} readOnly />
             </FieldLabel>
 
@@ -198,9 +234,25 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
               <Input value={currentUserName} readOnly />
             </FieldLabel>
 
+            <div className="rounded-lg border border-border/70 bg-secondary/35 p-3 text-sm xl:col-span-3" aria-live="polite">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <strong>POS totals for {formatDisplayDate(entryDate)}</strong>
+                <span className="text-xs text-muted-foreground">{posMixLoading ? 'Loading…' : displayPosMix.error ? 'Unavailable' : `${displayPosMix.billCount} active bills`}</span>
+              </div>
+              {displayPosMix.error ? <p className="mt-1 text-xs text-destructive">{displayPosMix.error} POS totals could not be loaded. Enter Cash and Credit manually; UPI/Card will be saved as zero unless the POS connection is restored.</p> : <>
+                <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                  <span>Cash (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.cash)}</strong></span>
+                  <span>UPI (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.upi)}</strong></span>
+                  <span>Card (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.card)}</strong></span>
+                  {displayPosMix.methods['bank-transfer'] !== 0 ? <span>Legacy Bank Transfer (existing POS bills only): <strong className="text-foreground">{formatRupees(displayPosMix.methods['bank-transfer'])}</strong></span> : null}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">The combined machine total is shown above; POS UPI and Card amounts are saved separately. Approved refunds are already deducted by tender mode; total approved refunds: <strong className="text-foreground">{formatRupees(displayPosMix.refundPaise)}</strong>. Cash and Credit remain editable.</p>
+              </>}
+            </div>
+
             {error && <p className="text-sm font-semibold text-destructive xl:col-span-3">{error}</p>}
 
-            <Button className="xl:col-span-3" type="submit">
+            <Button className="xl:col-span-3" type="submit" disabled={posMixLoading}>
               Continue To Cash Drawer
             </Button>
           </form>

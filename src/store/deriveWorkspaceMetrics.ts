@@ -308,6 +308,7 @@ export function deriveWorkspaceMetrics(args: {
         date: latestClosedDay,
         cashSales: latestCashoutEntries.reduce((total, entry) => total + entry.cashSales, 0),
         upiSales: latestCashoutEntries.reduce((total, entry) => total + entry.upiSales, 0),
+        cardSales: latestCashoutEntries.reduce((total, entry) => total + (entry.cardSales ?? 0), 0),
         creditSales: latestCashoutEntries.reduce((total, entry) => total + entry.creditSales, 0),
         returns: latestCashoutEntries.reduce((total, entry) => total + entry.returns, 0),
         totalSales: 0,
@@ -320,6 +321,7 @@ export function deriveWorkspaceMetrics(args: {
         totalSales: 0,
         cashSales: 0,
         upiSales: 0,
+        cardSales: 0,
         creditSales: 0,
         returns: 0,
         cashExpenses: 0,
@@ -330,6 +332,7 @@ export function deriveWorkspaceMetrics(args: {
   latestClosedDaySummary.totalSales =
     latestClosedDaySummary.cashSales +
     latestClosedDaySummary.upiSales +
+    latestClosedDaySummary.cardSales +
     latestClosedDaySummary.creditSales -
     latestClosedDaySummary.returns
   latestClosedDaySummary.cashToHand = latestClosedDaySummary.cashSales - latestClosedDaySummary.cashExpenses

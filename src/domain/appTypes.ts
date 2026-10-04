@@ -60,6 +60,8 @@ export type DailyCashoutEntry = {
   recordedByUserId?: string
   recordedByHolder?: LegacyCashHolder
   upiSales: number
+  /** Optional for backwards compatibility; absent on historical cashouts. */
+  cardSales?: number
   cashSales: number
   returns: number
   creditSales: number
@@ -92,6 +94,8 @@ export type DrawerDenominations = {
 export type CashoutCorrectionValues = {
   cashSales: number
   upiSales: number
+  /** Optional on historical correction requests created before Card was tracked. */
+  cardSales?: number
   creditSales: number
   returns: number
   cashExpense: number

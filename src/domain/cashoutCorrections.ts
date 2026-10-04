@@ -55,6 +55,7 @@ export function normalizeCorrectionValues(values: CashoutCorrectionValues): Cash
   return {
     cashSales: nonNegative(values.cashSales),
     upiSales: nonNegative(values.upiSales),
+    cardSales: nonNegative(values.cardSales ?? 0),
     creditSales: nonNegative(values.creditSales),
     returns: nonNegative(values.returns),
     cashExpense: nonNegative(values.cashExpense),
@@ -76,6 +77,7 @@ export function cashoutCorrectionValuesEqual(left: CashoutCorrectionValues, righ
   const b = normalizeCorrectionValues(right)
   return a.cashSales === b.cashSales &&
     a.upiSales === b.upiSales &&
+    a.cardSales === b.cardSales &&
     a.creditSales === b.creditSales &&
     a.returns === b.returns &&
     a.cashExpense === b.cashExpense &&
@@ -128,6 +130,7 @@ export function correctionValuesFromEntry(entry: DailyCashoutEntry): CashoutCorr
   return normalizeCorrectionValues({
     cashSales: entry.cashSales,
     upiSales: entry.upiSales,
+    cardSales: entry.cardSales ?? 0,
     creditSales: entry.creditSales,
     returns: entry.returns,
     cashExpense: cashExpenseFromEntry(entry),
@@ -143,6 +146,8 @@ export function cashoutEntryFromCorrection(
   updatedAt: string,
 ): DailyCashoutEntry {
   const values = normalizeCorrectionValues(rawValues)
+  const persistedValues = { ...values }
+  if (entry.cardSales === undefined && values.cardSales === 0) delete persistedValues.cardSales
   const drawerTotal = drawerTotalFromDenominations(values.drawerDenominations)
   const { auditDifference, auditMessage, auditStatus } = calculateCashoutAudit(values.cashAudit, drawerTotal)
   const denominations = values.drawerDenominations
@@ -150,7 +155,7 @@ export function cashoutEntryFromCorrection(
 
   return {
     ...entry,
-    ...values,
+    ...persistedValues,
     drawerTotal,
     auditDifference,
     auditStatus,

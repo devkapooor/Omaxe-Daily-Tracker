@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { AppUser } from '@/domain/financeTypes'
-import { calculateDiscount, financialYearForDate, formatTestReceiptNumber, validateDiscount, validateImportRows, validateSettlement } from './posDomain'
+import { calculateDiscount, financialYearForDate, formatPosReceiptNumber, validateDiscount, validateImportRows, validateSettlement } from './posDomain'
 import { parseApprovedPosCsv } from './csvImport'
 
 const billing = { id: 'billing-1', name: 'Bill', role: 'billing' } as AppUser
 const manager = { id: 'manager-1', name: 'Manager', role: 'manager' } as AppUser
 
 describe('POS test calculations', () => {
-  it('uses April-March financial years and a separate test sequence format', () => {
+  it('uses April-March financial years and TNS date-timestamp receipt numbers', () => {
     expect(financialYearForDate('2026-04-01')).toBe('2026-27')
     expect(financialYearForDate('2027-03-31')).toBe('2026-27')
-    expect(formatTestReceiptNumber('2026-27', 1)).toBe('TEST-2026-27-000001')
+    expect(formatPosReceiptNumber('2026-10-04', '2026-10-04T12:13:14.567Z', 278)).toBe('TNS-20261004-174314567-000278')
   })
 
   it('requires exact split settlement in integer paise', () => {

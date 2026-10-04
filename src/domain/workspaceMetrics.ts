@@ -131,6 +131,7 @@ export type WorkspaceMetrics = {
     totalSales: number
     cashSales: number
     upiSales: number
+    cardSales: number
     creditSales: number
     returns: number
     cashExpenses: number

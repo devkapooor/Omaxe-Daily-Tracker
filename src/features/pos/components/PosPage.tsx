@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { today } from '@/app/uiHelpers'
@@ -15,20 +15,18 @@ import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs } from '@/shared/ui/tabs'
 import { usePosSandbox } from '../hooks/usePosSandbox'
 import { calculateDiscount, paiseToRupees, posSubtotal, rupeesToPaise } from '../domain/posDomain'
-import { parseApprovedPosCsv, sha256Hex } from '../domain/csvImport'
 import type { PosBill, PosCartLine, PosDiscount, PosPaymentMethod, PosProduct } from '../domain/types'
 import {
   deleteHeldCart,
   finalizePosBill,
   findPosProductByBarcode,
-  importPosProducts,
+  searchPosProductsByName,
   mapTemporaryItem,
   requestBillAction,
-  resetPosSandbox,
   saveHeldCart,
   updateDiscountLimit,
 } from '../data/posRepository'
-import { printTestReceipt } from './receipt'
+import { printPosReceipt } from './receipt'
 import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
 import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
@@ -40,6 +38,12 @@ const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
 ]
 const money = (paise: number) => `₹${paiseToRupees(paise).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+function productMrp(product: PosProduct) {
+  const raw = Object.entries(product.sourceValues ?? {}).find(([key]) => key.trim().toLowerCase() === 'printed mrp')?.[1]
+  if (!raw?.trim()) return null
+  const amount = Number(raw.replace(/[₹,\s]/g, ''))
+  return Number.isFinite(amount) && amount >= 0 ? `MRP ${money(rupeesToPaise(amount))}` : null
+}
 
 export function PosPage({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
   const handover = useCashierHandover()
@@ -57,9 +61,28 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const [unknownBarcode, setUnknownBarcode] = useState('')
   const [unknownDescription, setUnknownDescription] = useState('')
   const [unknownPrice, setUnknownPrice] = useState('')
+  const [productSearch, setProductSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<PosProduct[]>([])
+  const [searchingProducts, setSearchingProducts] = useState(false)
+  const [productSearchError, setProductSearchError] = useState('')
   const [busy, setBusy] = useState(false)
   const scannerRef = useRef<HTMLInputElement>(null)
   const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
+  useEffect(() => {
+    const term = productSearch.trim()
+    let active = true
+    if (term.length < 2) return () => { active = false }
+    const timer = window.setTimeout(() => {
+      setSearchingProducts(true)
+      setProductSearchError('')
+      void searchPosProductsByName(term).then((results) => {
+        if (active) setSearchResults(results)
+      }).catch((error: unknown) => {
+        if (active) setProductSearchError(error instanceof Error ? error.message : 'Product search failed.')
+      }).finally(() => { if (active) setSearchingProducts(false) })
+    }, 250)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [productSearch])
   const subtotal = posSubtotal(cart)
   const cartQuantity = cart.reduce((quantity, line) => quantity + line.quantity, 0)
   let discount: PosDiscount = { mode: 'none', amountPaise: 0 }
@@ -90,7 +113,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     try {
       const product = await findPosProductByBarcode(barcode)
       if (product?.active) addProduct(product)
-      else { setUnknownBarcode(barcode); setUnknownDescription(''); setUnknownPrice(''); showToast('Unknown barcode. Add it as a temporary test item.') }
+      else { setUnknownBarcode(barcode); setUnknownDescription(''); setUnknownPrice(''); showToast('Unknown barcode. Add it as a temporary item.') }
     } catch (error) { showToast(error instanceof Error ? error.message : 'Barcode lookup failed.') }
     finally { if (scannerRef.current) scannerRef.current.value = ''; scannerRef.current?.focus() }
   }
@@ -110,28 +133,27 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
       const bill = await finalizePosBill({ businessDate: today(), lines: cart, discount, payments: settlement.payments, customerName, customerMobile, ...(settlement.cashTenderedPaise !== undefined ? { cashTenderedPaise: settlement.cashTenderedPaise } : {}) }, currentUser)
       clearCart()
-      showToast(`Test bill finalized: ${bill.receiptNumber}`)
-      printTestReceipt(bill, 'thermal')
-    } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to finalize test bill.') }
+      showToast(`Bill finalized: ${bill.receiptNumber}`)
+      printPosReceipt(bill, 'thermal')
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to finalize bill.') }
     finally { setBusy(false) }
   }
 
   return <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
     <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
-      <PageHeader title="POS (Test)" tools={(
+      <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="POS Test sections" className={`${currentUser.role === 'owner' ? 'grid-cols-4' : 'grid-cols-3'} grid min-w-max`}>
+            <PageHeaderTabsList aria-label="POS sections" className={`${currentUser.role === 'owner' ? 'grid-cols-4' : 'grid-cols-3'} grid min-w-max`}>
               <PageHeaderTab value="checkout"><ShoppingCart />Checkout</PageHeaderTab>
               <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
               {currentUser.role === 'owner' ? <PageHeaderTab value="admin"><Settings2 />Admin</PageHeaderTab> : null}
             </PageHeaderTabsList>
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS-Test cash payments less approved cash refunds since that count.">
+          <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
             <span className="text-xs text-muted-foreground">Cash Drawer</span>
             <strong className="font-mono text-sm font-semibold tabular-nums text-success">{cashDrawerPaise === null ? 'Set up drawer' : money(cashDrawerPaise)}</strong>
-            <span className="rounded-sm border border-info/30 bg-info/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-info">Test</span>
           </div>
         </div>
       )} />
@@ -145,9 +167,18 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
         <div className="grid min-w-0 gap-card-gap">
           <Card><CardContent className="grid gap-3 pt-4">
             <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}><Input ref={scannerRef} autoFocus inputMode="numeric" aria-label="Barcode scanner input" placeholder="Scan barcode, then Enter" className="text-lg font-bold" /><Button><Barcode />Scan</Button></form>
+            <div className="grid gap-2">
+              <Input value={productSearch} onChange={(event) => { const value = event.target.value; setProductSearch(value); setSearchResults([]); setProductSearchError(''); setSearchingProducts(value.trim().length >= 2) }} aria-label="Search products by name" placeholder="Find product by name (e.g. carry bag)" />
+              {productSearch.trim().length >= 2 ? <div className="grid max-h-56 gap-1 overflow-y-auto" aria-live="polite">
+                {productSearchError ? <p role="alert" className="text-sm text-destructive">{productSearchError}</p> : searchingProducts ? <p className="text-sm text-muted-foreground">Searching products…</p> : searchResults.length === 0 ? <p className="text-sm text-muted-foreground">No products match those name words.</p> : searchResults.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm">
+                  <span className="min-w-0"><strong className="block truncate">{product.name}</strong><span className="text-xs text-muted-foreground">{product.barcode} · Stock {product.currentQuantity}</span></span>
+                  <span className="flex shrink-0 items-center gap-2">{productMrp(product) ? <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">{productMrp(product)}</span> : null}<Button size="sm" type="button" disabled={!product.active} onClick={() => addProduct(product)}>{product.active ? 'Add' : 'Inactive'}</Button></span>
+                </div>)}
+              </div> : null}
+            </div>
             {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); setCart((current) => [...current, { id: crypto.randomUUID(), kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }]); setUnknownBarcode('') }}><Plus />Add unresolved item</Button></div> : null}
           </CardContent></Card>
-          <Card aria-label="Cart items"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Checkout" title="Test Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-3">
+          <Card aria-label="Cart items"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Checkout" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-3">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className="rounded-xl border p-3"><div className="flex justify-between gap-2"><div><strong>{line.description}</strong><small className="block text-muted-foreground">{line.barcode} {line.kind === 'temporary' ? '· UNRESOLVED' : ''}</small></div><Button aria-label={`Remove ${line.description}`} size="icon" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 /></Button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-1"><Button aria-label={`Decrease quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><span className="min-w-8 text-center font-bold">{line.quantity}</span><Button aria-label={`Increase quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></div><strong>{money(line.quantity * line.unitPricePaise)}</strong></div>{line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="mt-2 text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}</div>)}
           </CardContent></Card>
         </div>
@@ -157,7 +188,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
           <div className="rounded-xl bg-secondary/50 p-3 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Discount</span><strong>− {money(discount.amountPaise)}</strong></div><div className="mt-2 flex justify-between text-lg"><span>Total</span><strong>{money(total)}</strong></div></div>
           <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
           {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
-          <div className="mt-auto grid gap-2 border-t border-border pt-4 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held in POS sandbox.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize TEST Bill'}</Button></div>
+          <div className="mt-auto grid gap-2 border-t border-border pt-4 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div>
         </CardContent></Card>
       </div> : null}
 
@@ -175,11 +206,11 @@ function BillsPanel({ bills, products, currentUser, showToast }: { bills: PosBil
   const [voidReasons, setVoidReasons] = useState<Record<string, string>>({})
   const [returnBill, setReturnBill] = useState<PosBill | null>(null)
   return <>
-    <div className="grid gap-2.5">{bills.length === 0 ? <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No test bills yet.</CardContent></Card> : bills.map((bill) => <Card key={bill.id}>
-      <CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow={bill.businessDate} title={bill.receiptNumber} description={bill.createdByName + ' · ' + bill.lines.length + ' lines · ' + money(bill.totalPaise)} /><div className="flex shrink-0 flex-wrap justify-end gap-1"><Button size="sm" variant="outline" onClick={() => printTestReceipt(bill, 'thermal')}><Printer />80mm</Button><Button size="sm" variant="outline" onClick={() => printTestReceipt(bill, 'a4')}><Printer />A4</Button><Button size="sm" variant="outline" onClick={() => setReturnBill(bill)}>Return</Button></div></CardHeader>
+    <div className="grid gap-2.5">{bills.length === 0 ? <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No bills yet.</CardContent></Card> : bills.map((bill) => <Card key={bill.id}>
+      <CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow={bill.businessDate} title={bill.receiptNumber} description={bill.createdByName + ' · ' + bill.lines.length + ' lines · ' + money(bill.totalPaise)} /><div className="flex shrink-0 flex-wrap justify-end gap-1"><Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'thermal')}><Printer />80mm</Button><Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'a4')}><Printer />A4</Button><Button size="sm" variant="outline" onClick={() => setReturnBill(bill)}>Return</Button></div></CardHeader>
       <CardContent className="grid gap-3">
         <details className="rounded-lg border px-3 py-2"><summary className="cursor-pointer text-sm font-medium">View bill items</summary><div className="mt-2 grid gap-2">{bill.lines.map((line) => <div key={line.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/30 p-2 text-xs"><span><strong>{line.description}</strong> · {line.quantity} × {money(line.unitPricePaise)}</span>{line.kind === 'temporary' ? <div className="flex min-w-60 flex-1 gap-2"><NativeSelect aria-label={'Map ' + line.description} value={mapping[line.id] ?? ''} onChange={(event) => setMapping((current) => ({ ...current, [line.id]: event.target.value }))}><option value="">Map unresolved item...</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · stock {product.currentQuantity}</option>)}</NativeSelect><Button size="sm" onClick={() => { const product = products.find((candidate) => candidate.id === mapping[line.id]); if (!product) return; void mapTemporaryItem(bill.id, line.id, product.id, product.revision, currentUser).then(() => showToast('Temporary item mapped with original sale date.')).catch((error: Error) => showToast(error.message)) }}>Map</Button></div> : null}</div>)}</div></details>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-3"><Input className="min-w-52 flex-1" aria-label={'Void reason for ' + bill.receiptNumber} value={voidReasons[bill.id] ?? ''} onChange={(event) => setVoidReasons((current) => ({ ...current, [bill.id]: event.target.value }))} placeholder="Mandatory request reason" /><Button size="sm" variant="destructive" onClick={() => void requestBillAction({ type: 'void', billId: bill.id, reason: voidReasons[bill.id] ?? '' }, currentUser).then(() => { setVoidReasons((current) => ({ ...current, [bill.id]: '' })); showToast('TEST void request sent to Action Centre.') }).catch((error: Error) => showToast(error.message))}><RotateCcw />Request void</Button></div>
+        <div className="flex flex-wrap items-center gap-2 border-t pt-3"><Input className="min-w-52 flex-1" aria-label={'Void reason for ' + bill.receiptNumber} value={voidReasons[bill.id] ?? ''} onChange={(event) => setVoidReasons((current) => ({ ...current, [bill.id]: event.target.value }))} placeholder="Mandatory request reason" /><Button size="sm" variant="destructive" onClick={() => void requestBillAction({ type: 'void', billId: bill.id, reason: voidReasons[bill.id] ?? '' }, currentUser).then(() => { setVoidReasons((current) => ({ ...current, [bill.id]: '' })); showToast('Void request sent to Action Centre.') }).catch((error: Error) => showToast(error.message))}><RotateCcw />Request void</Button></div>
       </CardContent>
     </Card>)}</div>
     {returnBill ? <ReturnDialog key={returnBill.id} bill={returnBill} currentUser={currentUser} showToast={showToast} onClose={() => setReturnBill(null)} /> : null}
@@ -201,7 +232,7 @@ function ReturnDialog({ bill, currentUser, showToast, onClose }: { bill: PosBill
     setBusy(true)
     try {
       await requestBillAction({ type: 'return', billId: bill.id, reason, returnCondition: condition, returnLines, refundDate, refundAmountPaise: rupeesToPaise(Number(refundAmount || paiseToRupees(bill.totalPaise))), refundMethod, ...(refundReference.trim() ? { refundReference: refundReference.trim() } : {}) }, currentUser)
-      showToast('TEST ' + condition + ' return sent to Action Centre.')
+      showToast(condition + ' return sent to Action Centre.')
       onClose()
     } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to request return.') }
     finally { setBusy(false) }
@@ -220,19 +251,5 @@ function ReturnDialog({ bill, currentUser, showToast, onClose }: { bill: PosBill
 
 function AdminPanel({ currentUser, discountLimit, showToast }: { currentUser: AppUser; discountLimit: number | null; showToast: (message: string) => void }) {
   const [limitValue, setLimitValue] = useState(discountLimit === null ? '' : String(discountLimit))
-  const [file, setFile] = useState<File | null>(null)
-  const [importSummary, setImportSummary] = useState('')
-  const [progress, setProgress] = useState('')
-  const [confirmation, setConfirmation] = useState('')
-  async function runImport() {
-    if (!file) return
-    try {
-      const parsed = parseApprovedPosCsv(await file.text())
-      setImportSummary(`${parsed.validation.rowCount} rows · ${parsed.validation.negativeQuantityCount} negative · ${parsed.validation.zeroQuantityCount} zero · ${parsed.validation.errors.length} errors`)
-      const checksum = await sha256Hex(file)
-      await importPosProducts({ rows: parsed.products, validation: parsed.validation, file, checksum, sourceHeaders: parsed.sourceHeaders, actor: currentUser, onProgress: (count) => setProgress(`${count}/${parsed.products.length} products imported`) })
-      showToast('Approved POS stock CSV import completed.')
-    } catch (error) { showToast(error instanceof Error ? error.message : 'Import failed.') }
-  }
-  return <div className="grid gap-2.5 lg:grid-cols-2"><Card><CardHeader><SectionHeading eyebrow="Owner only" title="Discount Control" /></CardHeader><CardContent className="grid gap-2"><FieldLabel label="Billing maximum percentage (blank disables)"><Input type="number" min="0" max="100" step="0.01" value={limitValue} onChange={(event) => setLimitValue(event.target.value)} /></FieldLabel><Button onClick={() => void updateDiscountLimit(limitValue === '' ? null : Number(limitValue), currentUser).then(() => showToast('POS test discount limit updated.')).catch((error: Error) => showToast(error.message))}>Save limit</Button></CardContent></Card><Card><CardHeader><SectionHeading eyebrow="Owner only · quota sensitive" title="Approved CSV Import" description="Select the normalized CSV. XLSX is intentionally unsupported at runtime." /></CardHeader><CardContent className="grid gap-2"><Input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />{importSummary ? <p className="text-xs">{importSummary}</p> : null}{progress ? <p className="text-xs font-bold">{progress}</p> : null}<Button disabled={!file} onClick={() => void runImport()}>Validate & import 6,069 products</Button></CardContent></Card><Card className="lg:col-span-2"><CardHeader><SectionHeading eyebrow="Exceptional destructive action" title="Reset POS Test Sandbox" description="Deletes only records under posSandboxes/test in resumable batches." /></CardHeader><CardContent className="grid gap-2"><StatusPanel variant="warning">This removes all test bills, stock, events, approvals, and import history. Production records are outside the deletion paths.</StatusPanel><FieldLabel label="Type RESET POS TEST SANDBOX"><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FieldLabel><Button variant="destructive" disabled={confirmation !== 'RESET POS TEST SANDBOX'} onClick={() => void resetPosSandbox(currentUser, (name, deleted) => setProgress(`${deleted} records deleted · ${name}`)).then((deleted) => { setConfirmation(''); showToast(`POS test sandbox reset: ${deleted} records deleted.`) }).catch((error: Error) => showToast(error.message))}><Trash2 />Reset sandbox</Button></CardContent></Card></div>
+  return <div className="grid gap-2.5 lg:grid-cols-2"><Card><CardHeader><SectionHeading eyebrow="Owner only" title="Discount Control" /></CardHeader><CardContent className="grid gap-2"><FieldLabel label="Billing maximum percentage (blank disables)"><Input type="number" min="0" max="100" step="0.01" value={limitValue} onChange={(event) => setLimitValue(event.target.value)} /></FieldLabel><Button onClick={() => void updateDiscountLimit(limitValue === '' ? null : Number(limitValue), currentUser).then(() => showToast('POS discount limit updated.')).catch((error: Error) => showToast(error.message))}>Save limit</Button></CardContent></Card></div>
 }

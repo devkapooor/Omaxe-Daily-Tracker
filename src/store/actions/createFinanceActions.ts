@@ -3,6 +3,7 @@ import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
 import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
+import { cardSalesAfterCashoutChange } from '@/domain/cashoutSales'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
   normalizeLoanRecord,
@@ -30,7 +31,7 @@ function sortByBusinessOrder<T extends { date: string; createdAt: string }>(item
 }
 
 export function createFinanceActions({ ensureNameInDirectory, getState, setIsBusy }: FinanceActionArgs) {
-  function writeSalesSyncToBatch(batch: WriteBatch, date: string, nextDailyCashouts: DailyCashoutEntry[], financeData: FinanceData) {
+  function writeSalesSyncToBatch(batch: WriteBatch, date: string, nextDailyCashouts: DailyCashoutEntry[], financeData: FinanceData, previousDailyCashouts: DailyCashoutEntry[]) {
     const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
     const salesId = salesDocId(singleStoreId, date)
     const existingSales = financeData.sales.find((sale) => sale.id === salesId)
@@ -44,7 +45,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
     const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
     const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
-    const cardSales = existingSales?.cardSales ?? 0
+    const cardSales = cardSalesAfterCashoutChange(existingSales?.cardSales ?? 0, previousDailyCashouts, nextDailyCashouts, date)
     const bankTransferSales = existingSales?.bankTransferSales ?? 0
     const timestamp = nowIso()
     batch.set(doc(db, 'sales', salesId), {
@@ -65,7 +66,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   async function syncSalesForDate(date: string, nextDailyCashouts: DailyCashoutEntry[]) {
-    const { financeData } = getState()
+    const { financeData, dailyCashouts } = getState()
     const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
     const salesId = salesDocId(singleStoreId, date)
     const existingSales = financeData.sales.find((sale) => sale.id === salesId)
@@ -81,7 +82,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
     const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
     const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
-    const cardSales = existingSales?.cardSales ?? 0
+    const cardSales = cardSalesAfterCashoutChange(existingSales?.cardSales ?? 0, dailyCashouts, nextDailyCashouts, date)
     const bankTransferSales = existingSales?.bankTransferSales ?? 0
     const timestamp = nowIso()
 
@@ -368,7 +369,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const existingSales = financeData.sales.find((sale) => sale.storeId === singleStoreId && sale.date === draft.date)
     const mergedCashSales = (existingSales?.cashSales ?? 0) + draft.cashSales
     const mergedUpiSales = (existingSales?.upiSales ?? 0) + draft.upiSales
-    const mergedCardSales = existingSales?.cardSales ?? 0
+    const mergedCardSales = (existingSales?.cardSales ?? 0) + (draft.cardSales ?? 0)
     const mergedBankTransferSales = existingSales?.bankTransferSales ?? 0
     const mergedCreditSales = (existingSales?.creditSales ?? 0) + draft.creditSales
     const mergedReturns = (existingSales?.returnsDiscounts ?? 0) + draft.returns

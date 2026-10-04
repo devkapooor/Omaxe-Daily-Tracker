@@ -33,7 +33,7 @@ export function pageTitle(page: Page) {
     case 'actions':
       return 'Action Centre'
     case 'pos-test':
-      return 'POS (Test)'
+      return 'POS'
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
@@ -81,11 +81,11 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
 
   items.push({
     icon: <ScanBarcode className="size-4 shrink-0" />,
-    label: 'POS (Test)',
+    label: 'POS',
     page: 'pos-test',
     gradient: '',
     hoverClass: '',
-    activeClass: 'bg-amber-100 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100',
+    activeClass: 'bg-secondary text-foreground',
     action: 'page',
   })
 

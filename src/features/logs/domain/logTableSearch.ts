@@ -15,6 +15,7 @@ export function dailyCashoutSearchText(entry: DailyCashoutEntry) {
     entry.date,
     formatDisplayDate(entry.date),
     entry.recordedBy,
+    entry.cardSales === undefined ? 'card not recorded' : String(entry.cardSales),
     entry.auditStatus ?? 'matched',
     entry.actualCashParticulars,
     entry.pendingCashParticulars,

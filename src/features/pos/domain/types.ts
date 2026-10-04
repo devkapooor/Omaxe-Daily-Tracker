@@ -6,6 +6,7 @@ export const POS_EXPECTED_NEGATIVE_QUANTITY_COUNT = 379
 export const POS_EXPECTED_ZERO_QUANTITY_COUNT = 3294
 
 export type PosActor = Pick<AppUser, 'id' | 'name' | 'role'>
+/** Bank Transfer remains here only to read legacy receipts; checkout offers Cash, UPI, and Card. */
 export type PosPaymentMethod = 'cash' | 'upi' | 'card' | 'bank-transfer'
 export type PosReturnCondition = 'sellable' | 'damaged'
 
@@ -14,6 +15,7 @@ export type PosProduct = {
   barcode: string
   name: string
   searchName: string
+  searchTokens?: string[]
   category: string
   brand: string
   vendor: string

@@ -24,6 +24,7 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
   const [values, setValues] = useState<NumericFields>({
     cashSales: initial.cashSales,
     upiSales: initial.upiSales,
+    cardSales: initial.cardSales,
     creditSales: initial.creditSales,
     returns: initial.returns,
     cashExpense: initial.cashExpense,
@@ -83,6 +84,7 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <AmountField label="Cash Sales" value={values.cashSales} onChange={(value) => setNumericField('cashSales', value)} />
               <AmountField label="UPI Sales" value={values.upiSales} onChange={(value) => setNumericField('upiSales', value)} />
+              <AmountField label={entry.cardSales === undefined ? 'Card Sales (not captured on legacy record)' : 'Card Sales'} value={values.cardSales ?? 0} onChange={(value) => setNumericField('cardSales', value)} />
               <AmountField label="Credit Sales" value={values.creditSales} onChange={(value) => setNumericField('creditSales', value)} />
               <AmountField label="Returns" value={values.returns} onChange={(value) => setNumericField('returns', value)} />
               <AmountField label="Cash Expense" value={values.cashExpense} onChange={(value) => setNumericField('cashExpense', value)} />

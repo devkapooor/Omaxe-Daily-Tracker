@@ -10,6 +10,34 @@ export function paiseToRupees(value: number) {
   return value / 100
 }
 
+export function normalizePosProductSearch(value: string) {
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ')
+}
+
+export function posProductSearchTokens(name: string) {
+  const words = normalizePosProductSearch(name).split(' ').filter((word) => word.length >= 2)
+  return [...new Set(words.flatMap((word) => {
+    const characters = Array.from(word)
+    return characters.slice(1).map((_, index) => characters.slice(0, index + 2).join(''))
+  }))]
+}
+
+export function upcEanEquivalentBarcode(barcode: string) {
+  if (!/^\d+$/.test(barcode)) return null
+  const validGtin = (value: string) => {
+    const body = value.slice(0, -1)
+    const expected = Number(value.at(-1))
+    let sum = 0
+    for (let index = body.length - 1, position = 0; index >= 0; index -= 1, position += 1) {
+      sum += Number(body[index]) * (position % 2 === 0 ? 3 : 1)
+    }
+    return (10 - sum % 10) % 10 === expected
+  }
+  if (barcode.length === 12 && validGtin(barcode)) return `0${barcode}`
+  if (barcode.length === 13 && barcode.startsWith('0') && validGtin(barcode)) return barcode.slice(1)
+  return null
+}
+
 export function posSubtotal(lines: PosCartLine[]) {
   return lines.reduce((sum, line) => sum + line.unitPricePaise * line.quantity, 0)
 }
@@ -64,8 +92,19 @@ export function financialYearForDate(businessDate: string) {
   return `${start}-${String((start + 1) % 100).padStart(2, '0')}`
 }
 
-export function formatTestReceiptNumber(financialYear: string, sequence: number) {
-  return `TEST-${financialYear}-${String(sequence).padStart(6, '0')}`
+export function formatPosReceiptNumber(businessDate: string, createdAt: string, sequence: number) {
+  const [year, month, day] = businessDate.split('-')
+  const timeParts = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+    hourCycle: 'h23',
+  }).formatToParts(new Date(createdAt))
+  const part = (type: Intl.DateTimeFormatPartTypes) => timeParts.find((item) => item.type === type)?.value ?? ''
+  const timestamp = `${part('hour')}${part('minute')}${part('second')}${part('fractionalSecond')}`
+  return `TNS-${year}${month}${day}-${timestamp}-${String(sequence).padStart(6, '0')}`
 }
 
 export function validateImportRows(rows: PosImportRow[]): PosImportValidation {

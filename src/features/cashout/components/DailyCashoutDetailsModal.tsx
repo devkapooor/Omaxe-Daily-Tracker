@@ -56,6 +56,7 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Created At" value={formatDisplayDateTime(entry.createdAt)} />
           <DetailBlock label="Cash Sales" value={money(entry.cashSales)} />
           <DetailBlock label="UPI Sales" value={money(entry.upiSales)} />
+          <DetailBlock label="Card Sales" value={entry.cardSales === undefined ? 'Not recorded on this entry' : money(entry.cardSales)} />
           <DetailBlock label="Credit Sales" value={money(entry.creditSales)} />
           <DetailBlock label="Returns" value={money(entry.returns)} />
           <DetailBlock label="Cash Expense" value={money(entry.cashExpense ?? 0)} />

@@ -73,9 +73,9 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
 
       <div className="grid gap-card-gap xl:grid-cols-2">
         <Card>
-          <CardHeader><SectionHeading eyebrow="Collections" title="Payment Mix" description="Net collections by payment method." /></CardHeader>
+          <CardHeader><SectionHeading eyebrow="Collections" title="Payment Mix" description="Net sales received by Cash, UPI, and Card. Legacy transfer records appear only if present." /></CardHeader>
           <CardContent className="grid gap-3">
-            {metrics.methods.map((method) => {
+            {metrics.methods.filter((method) => method.value !== 'bank-transfer' || method.collectedPaise !== 0 || method.refundedPaise !== 0).map((method) => {
               const Icon = paymentIcons[method.value]
               const share = metrics.salesPaise > 0 ? method.collectedPaise * 100 / metrics.salesPaise : 0
               return <div key={method.value} className="grid gap-1.5">

@@ -39,6 +39,7 @@ export type MonthlyPerformanceMetrics = MonthlyTotals & {
   salesMix: {
     cash: number
     upi: number
+    card: number
     credit: number
     returns: number
   }
@@ -195,10 +196,11 @@ export function deriveMonthlyPerformance({
       (mix, entry) => ({
         cash: mix.cash + entry.cashSales,
         upi: mix.upi + entry.upiSales,
+        card: mix.card + (entry.cardSales ?? 0),
         credit: mix.credit + entry.creditSales,
         returns: mix.returns + entry.returns,
       }),
-      { cash: 0, upi: 0, credit: 0, returns: 0 },
+      { cash: 0, upi: 0, card: 0, credit: 0, returns: 0 },
     ),
     averageDailySales,
     outlookSales,

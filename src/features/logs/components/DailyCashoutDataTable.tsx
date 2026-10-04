@@ -76,11 +76,11 @@ export function DailyCashoutDataTable({ entries, onDelete, onEdit, onView }: Dai
     {
       id: 'sales',
       label: 'Sales',
-      value: (entry) => entry.cashSales + entry.upiSales + entry.creditSales - entry.returns,
+      value: (entry) => entry.cashSales + entry.upiSales + (entry.cardSales ?? 0) + entry.creditSales - entry.returns,
       cell: (entry) => (
         <div>
-          <p className="font-semibold">{money(entry.cashSales + entry.upiSales + entry.creditSales - entry.returns)}</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)}</p>
+          <p className="font-semibold">{money(entry.cashSales + entry.upiSales + (entry.cardSales ?? 0) + entry.creditSales - entry.returns)}</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">Cash {money(entry.cashSales)} | UPI {money(entry.upiSales)} | Card {entry.cardSales === undefined ? '—' : money(entry.cardSales)}</p>
         </div>
       ),
       sortDescFirst: true,
@@ -108,9 +108,9 @@ export function DailyCashoutDataTable({ entries, onDelete, onEdit, onView }: Dai
             <RowActions entry={entry} onDelete={onDelete} onEdit={onEdit} onView={onView} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/55 pt-3 text-xs">
-            <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Sales</p><p className="mt-0.5 font-semibold">{money(entry.cashSales + entry.upiSales + entry.creditSales - entry.returns)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Sales</p><p className="mt-0.5 font-semibold">{money(entry.cashSales + entry.upiSales + (entry.cardSales ?? 0) + entry.creditSales - entry.returns)}</p></div>
             <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Drawer</p><p className="mt-0.5 font-semibold">{money(entry.drawerTotal ?? entry.remainingBalance)}</p></div>
-            <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cash / UPI</p><p className="mt-0.5 font-semibold">{money(entry.cashSales)} / {money(entry.upiSales)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cash / UPI / Card</p><p className="mt-0.5 font-semibold">{money(entry.cashSales)} / {money(entry.upiSales)} / {entry.cardSales === undefined ? '—' : money(entry.cardSales)}</p></div>
             <div><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Audit</p><div className="mt-1"><Badge variant={auditVariant(entry.auditStatus)}>{auditLabel(entry.auditStatus)}</Badge></div></div>
           </div>
         </article>

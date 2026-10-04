@@ -2,7 +2,7 @@ import type { PosBill, PosBillState, PosPaymentMethod, PosProduct, PosRefundEven
 
 const dashboardMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' }, { value: 'bank-transfer', label: 'Bank Transfer' },
+  { value: 'card', label: 'Card' }, { value: 'bank-transfer', label: 'Legacy Bank Transfer (historical)' },
 ]
 
 export function calculatePosDashboard(bills: PosBill[], states: PosBillState[], refunds: PosRefundEvent[], from: string, to: string, products: PosProduct[] = []) {

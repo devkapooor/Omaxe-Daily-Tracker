@@ -102,7 +102,7 @@ function HandoverDialog({ currentUser, ledger, ready, kind, setupOnly, error, bu
   try { readings.card = amount(card) } catch { /* Show a dash until the reading is valid. */ }
   return <dialog ref={ref} aria-labelledby="handover-title" onCancel={(event) => event.preventDefault()} className="fixed inset-0 z-[200] m-auto max-h-[92dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-xl backdrop:bg-slate-950/50 backdrop:backdrop-blur-sm">
     <h2 id="handover-title" className="text-lg font-semibold">{ledger?.initialized ? `${kind === 'logout' ? 'Closing' : 'Opening'} cashier handover` : 'Set up the shared cash drawer'}</h2>
-    <p className="mt-1 text-sm text-muted-foreground">{currentUser.name} · {date} · Shared counter / POS (Test)</p>
+    <p className="mt-1 text-sm text-muted-foreground">{currentUser.name} · {date} · Shared counter / POS</p>
     {error || validation ? <p role="alert" className="my-3 text-sm text-destructive">{error || validation}</p> : null}
     {!ready ? <p className="my-4 text-sm">Checking your billing participation and saved handover…</p> : !ledger?.initialized ? <div className="my-4 space-y-3 text-sm">
       <p>Opening cash: ₹0 at 00:00 IST on 4 October. Existing bills, refunds and stock will be preserved. Setup imports only the reconciliation baseline.</p>

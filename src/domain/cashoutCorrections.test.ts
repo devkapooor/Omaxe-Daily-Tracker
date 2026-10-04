@@ -4,6 +4,7 @@ import {
   calculateCashoutAudit,
   cashoutCorrectionValuesEqual,
   cashoutEntryFromCorrection,
+  correctionValuesFromEntry,
   denominationsFromEntry,
   drawerTotalFromDenominations,
 } from './cashoutCorrections'
@@ -35,6 +36,21 @@ describe('cashout corrections', () => {
       denom10: 22,
       change: 2,
     })
+  })
+
+  it('treats legacy Card sales as not recorded and does not backfill them during correction', () => {
+    expect(correctionValuesFromEntry(legacyEntry).cardSales).toBe(0)
+    const corrected = cashoutEntryFromCorrection(legacyEntry, {
+      cashSales: legacyEntry.cashSales,
+      upiSales: legacyEntry.upiSales,
+      cardSales: 0,
+      creditSales: legacyEntry.creditSales,
+      returns: legacyEntry.returns,
+      cashExpense: 0,
+      cashAudit: legacyEntry.cashAudit,
+      drawerDenominations: denominationsFromEntry(legacyEntry),
+    }, 'Owner', '2026-10-01T00:00:00.000Z')
+    expect(corrected).not.toHaveProperty('cardSales')
   })
 
   it('calculates drawer totals and each audit state', () => {

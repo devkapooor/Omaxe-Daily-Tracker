@@ -9,7 +9,7 @@ import { CASHOUT_CORRECTION_WINDOW_DAYS } from '@/config/appConfig'
 
 type CashoutCorrectionActionArgs = {
   getState: () => StoreCollectionState
-  writeSalesSyncToBatch: (batch: WriteBatch, date: string, entries: DailyCashoutEntry[], financeData: FinanceData) => void
+  writeSalesSyncToBatch: (batch: WriteBatch, date: string, entries: DailyCashoutEntry[], financeData: FinanceData, previousEntries: DailyCashoutEntry[]) => void
 }
 
 export function createCashoutCorrectionActions({ getState, writeSalesSyncToBatch }: CashoutCorrectionActionArgs) {
@@ -82,7 +82,7 @@ export function createCashoutCorrectionActions({ getState, writeSalesSyncToBatch
     const nextEntries = state.dailyCashouts.map((candidate) => candidate.id === entry.id ? correctedEntry : candidate)
     const batch = writeBatch(db)
     batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
-    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData)
+    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData, state.dailyCashouts)
     batch.update(doc(db, 'cashoutCorrectionRequests', request.id), {
       status: 'approved', reviewedAt: timestamp, reviewedByUserId: actor.id, reviewedBy: actor.name, reviewReason: 'Approved by owner.',
     })
@@ -139,7 +139,7 @@ export function createCashoutCorrectionActions({ getState, writeSalesSyncToBatch
     const batch = writeBatch(db)
     batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
     batch.set(doc(db, 'cashoutCorrectionRequests', requestId), request)
-    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData)
+    writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData, state.dailyCashouts)
     await batch.commit()
   }
 

@@ -1,6 +1,6 @@
-# POS (Test)
+# POS
 
-This module is an isolated barcode-billing sandbox. Every Firestore path starts at `posSandboxes/test`; it does not use production sales, cashout, cash movement, purchasing, vendor, loan, payroll, dashboard, or financial collections.
+The POS module currently stores its bills and supporting records under the existing `posSandboxes/test` Firestore path. These include actual counter sales, including bills punched on 2026-10-04; the path name does not mean those sales are disposable test data. Do not reset, move, or reclassify the records as part of a UI-label change.
 
 ## Import
 
@@ -15,10 +15,6 @@ The approved source files are:
 
 ## Firestore collections
 
-`products`, `productCosts`, `stockMovements`, `bills`, `billStates`, `heldCarts`, `approvals`, `events`, `sequences`, `configuration`, `importRuns`, and `resetRuns` are subcollections of `posSandboxes/test`.
+`products`, `productCosts`, `stockMovements`, `bills`, `billStates`, `heldCarts`, `approvals`, `events`, `sequences`, `configuration`, and `importRuns` are subcollections of `posSandboxes/test`.
 
-Bills, stock movements, and events are append-only except for the explicit owner-only sandbox reset. Bill status and returned quantities live in separate revisioned `billStates` documents, so finalized receipt evidence is never edited. Costs are stored separately and are unreadable by billing users.
-
-## Reset
-
-Reset requires the exact text `RESET POS TEST SANDBOX`. It deletes only known sandbox subcollections in 200-document batches and stores progress in `resetRuns/active` until the final batch, allowing an interrupted reset to resume without touching any non-POS path.
+Bills, stock movements, and events are append-only. Bill status and returned quantities live in separate revisioned `billStates` documents, so finalized receipt evidence is never edited. Costs are stored separately and are unreadable by billing users. No sandbox-reset operation is available in the POS Admin UI or repository API.

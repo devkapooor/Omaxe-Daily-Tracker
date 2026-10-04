@@ -2,7 +2,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  documentId,
   getDoc,
   getDocs,
   limit,
@@ -25,10 +24,13 @@ import { cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepos
 import { HANDOVER_START, applyPayments, handoverDate, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
 import {
   financialYearForDate,
-  formatTestReceiptNumber,
+  formatPosReceiptNumber,
+  normalizePosProductSearch,
   posSubtotal,
+  posProductSearchTokens,
   validateDiscount,
   validateSettlement,
+  upcEanEquivalentBarcode,
 } from '../domain/posDomain'
 import {
   POS_EXPECTED_PRODUCT_COUNT,
@@ -45,9 +47,11 @@ import {
   type PosImportRow,
   type PosImportValidation,
   type PosPaymentAllocation,
+  type PosPaymentMethod,
   type PosProduct,
   type PosRefundEvent,
 } from '../domain/types'
+import { calculatePosDashboard } from '../domain/posDashboard'
 
 const root = () => doc(db, 'posSandboxes', POS_SANDBOX_ID)
 const posCollection = (name: string) => collection(root(), name)
@@ -74,10 +78,43 @@ export function subscribePosProducts(
   }, (error) => onError(error))
 }
 
+export async function searchPosProductsByName(value: string) {
+  const normalized = normalizePosProductSearch(value)
+  const terms = normalized.split(' ').filter(Boolean)
+  if (!terms.length || terms[0].length < 2) return []
+  // Search the narrowest word first so multi-word searches are not starved by
+  // the first term's candidate limit (for example, "extra mint").
+  const indexTerm = [...terms].sort((left, right) => left.length - right.length)[0]
+  const [tokenMatches, namePrefixMatches] = await Promise.all([
+    getDocs(query(posCollection('products'), where('searchTokens', 'array-contains', indexTerm), limit(500))),
+    getDocs(query(posCollection('products'), orderBy('searchName'), startAt(normalized), endAt(`${normalized}\uf8ff`), limit(50))),
+  ])
+  const products = new Map([...tokenMatches.docs, ...namePrefixMatches.docs].map((item) => [item.id, { id: item.id, ...item.data() } as PosProduct]))
+  return [...products.values()]
+    .filter((product) => {
+      const searchable = normalizePosProductSearch(product.name)
+      return terms.every((term) => searchable.includes(term))
+    })
+}
+
 export async function findPosProductByBarcode(barcode: string) {
-  const snapshot = await getDocs(query(posCollection('products'), where('barcode', '==', barcode.trim()), limit(1)))
-  const item = snapshot.docs[0]
-  return item ? ({ id: item.id, ...item.data() } as PosProduct) : null
+  const value = barcode.trim()
+  const find = async (candidate: string) => {
+    const snapshot = await getDocs(query(posCollection('products'), where('barcode', '==', candidate), limit(1)))
+    const item = snapshot.docs[0]
+    return item ? ({ id: item.id, ...item.data() } as PosProduct) : null
+  }
+  const exact = await find(value)
+  if (exact) return exact
+  const alternatives = new Set<string>()
+  if (/^0\d+$/.test(value)) alternatives.add(value.slice(1))
+  const equivalent = upcEanEquivalentBarcode(value)
+  if (equivalent) alternatives.add(equivalent)
+  for (const candidate of alternatives) {
+    const match = await find(candidate)
+    if (match) return match
+  }
+  return null
 }
 
 export async function getPosCost(productId: string) {
@@ -120,6 +157,48 @@ export function subscribePosDashboardRefunds(from: string, to: string, callback:
   return onSnapshot(query(posCollection('events'), where('refundDate', '>=', from), where('refundDate', '<=', to), orderBy('refundDate')), (snapshot) => {
     callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosRefundEvent))
   }, onError)
+}
+
+type PosCashoutPaymentMix = {
+  billCount: number
+  refundPaise: number
+  methods: Record<PosPaymentMethod, number>
+}
+const cashoutMixCache = new Map<string, { expiresAt: number; value: PosCashoutPaymentMix }>()
+const cashoutMixRequests = new Map<string, Promise<PosCashoutPaymentMix>>()
+
+/** Fetch only the selected business day's bills/refunds and states for those bills. */
+export function getPosCashoutPaymentMix(date: string): Promise<PosCashoutPaymentMix> {
+  const cached = cashoutMixCache.get(date)
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value)
+  const pending = cashoutMixRequests.get(date)
+  if (pending) return pending
+  const request = loadPosCashoutPaymentMix(date).then((value) => {
+    cashoutMixCache.set(date, { value, expiresAt: Date.now() + 30_000 })
+    return value
+  }).finally(() => cashoutMixRequests.delete(date))
+  cashoutMixRequests.set(date, request)
+  return request
+}
+
+async function loadPosCashoutPaymentMix(date: string): Promise<PosCashoutPaymentMix> {
+  const [billSnapshot, refundSnapshot] = await Promise.all([
+    getDocs(query(posCollection('bills'), where('businessDate', '==', date))),
+    getDocs(query(posCollection('events'), where('refundDate', '==', date))),
+  ])
+  const bills = billSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill)
+  const refunds = refundSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosRefundEvent)
+  const stateSnapshots = await Promise.all(Array.from({ length: Math.ceil(bills.length / 30) }, (_, index) => {
+    const billIds = bills.slice(index * 30, (index + 1) * 30).map((bill) => bill.id)
+    return getDocs(query(posCollection('billStates'), where('billId', 'in', billIds)))
+  }))
+  const states = stateSnapshots.flatMap((snapshot) => snapshot.docs.map((item) => item.data() as PosBillState))
+  const metrics = calculatePosDashboard(bills, states, refunds, date, date)
+  return {
+    billCount: metrics.billCount,
+    refundPaise: metrics.refundsPaise,
+    methods: Object.fromEntries(metrics.methods.map((method) => [method.value, method.netPaise])) as Record<PosPaymentMethod, number>,
+  }
 }
 
 export function subscribePosApprovals(callback: (requests: PosApprovalRequest[]) => void, onError: (error: Error) => void) {
@@ -172,7 +251,7 @@ type FinalizeInput = {
 export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
   if (!navigator.onLine) throw new Error('Checkout is disabled while offline.')
   if (input.lines.length === 0) throw new Error('Cart is empty.')
-  if (input.lines.length > 200) throw new Error('A test bill is limited to 200 lines.')
+  if (input.lines.length > 200) throw new Error('A bill is limited to 200 lines.')
   if (input.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isInteger(line.unitPricePaise) || line.unitPricePaise < 0)) {
     throw new Error('Every line must have a whole positive quantity and a valid price.')
   }
@@ -212,7 +291,7 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     const sequenceNumber = Number(sequenceSnapshot.data()?.lastNumber ?? 0) + 1
     const timestamp = nowIso()
     const countDate = handoverDate(timestamp)
-    const receiptNumber = formatTestReceiptNumber(financialYear, sequenceNumber)
+    const receiptNumber = formatPosReceiptNumber(input.businessDate, timestamp, sequenceNumber)
     const cashPaid = input.payments.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + payment.amountPaise, 0)
     const cashTenderedPaise = input.cashTenderedPaise ?? cashPaid
     if (cashTenderedPaise < cashPaid) throw new Error('Cash tendered cannot be less than the cash allocation.')
@@ -280,7 +359,7 @@ export async function saveSaleFacingProduct(productId: string, values: Pick<PosP
     const product = snapshot.data() as PosProduct
     if (product.revision !== expectedRevision) throw new Error('Product changed on another terminal. Refresh and retry.')
     const timestamp = nowIso()
-    transaction.update(productRef, { ...values, searchName: values.name.trim().toLowerCase(), revision: product.revision + 1, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name })
+    transaction.update(productRef, { ...values, searchName: values.name.trim().toLowerCase(), searchTokens: posProductSearchTokens(values.name), revision: product.revision + 1, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name })
     transaction.set(posDoc('events', crypto.randomUUID()), { type: 'product-details-updated', productId, beforeRevision: product.revision, afterRevision: product.revision + 1, createdAt: timestamp, ...actorFields(actor) })
   })
 }
@@ -331,7 +410,7 @@ export async function requestBillAction(input: Omit<PosApprovalRequest, 'id' | '
   if (!input.reason.trim()) throw new Error('A reason is required.')
   const billSnapshot = await getDoc(posDoc('bills', input.billId))
   const stateSnapshot = await getDoc(posDoc('billStates', input.billId))
-  if (!billSnapshot.exists() || !stateSnapshot.exists()) throw new Error('Test bill not found.')
+  if (!billSnapshot.exists() || !stateSnapshot.exists()) throw new Error('Bill not found.')
   const bill = billSnapshot.data() as PosBill
   const requestId = crypto.randomUUID()
   await setDoc(posDoc('approvals', requestId), {
@@ -410,7 +489,7 @@ export async function approvePosRequest(requestId: string, actor: AppUser): Prom
       }
     })
     transaction.update(stateRef, { state: request.type === 'void' ? 'voided' : 'partially-returned', revision: state.revision + 1, returnedQuantities: returned, updatedAt: timestamp, updatedByUid: actor.id })
-    transaction.update(requestRef, { status: 'approved', handoverDate: handoverDate(timestamp), reviewedAt: timestamp, reviewedByUid: actor.id, reviewedByName: actor.name, reviewReason: 'Approved in POS (Test) Action Centre.' })
+    transaction.update(requestRef, { status: 'approved', handoverDate: handoverDate(timestamp), reviewedAt: timestamp, reviewedByUid: actor.id, reviewedByName: actor.name, reviewReason: 'Approved in POS Action Centre.' })
     transaction.set(posDoc('events', crypto.randomUUID()), { type: request.type === 'void' ? 'bill-voided' : 'bill-return-approved', billId: request.billId, approvalId: request.id, refundDate: request.refundDate ?? null, refundAmountPaise: request.refundAmountPaise ?? 0, refundMethod: request.refundMethod ?? null, returnCondition: request.returnCondition ?? null, createdAt: timestamp, ...actorFields(actor) })
     return 'approved' as const
   })
@@ -476,7 +555,7 @@ export async function importPosProducts(args: {
     const timestamp = nowIso()
     chunk.forEach((row) => {
       batch.set(posDoc('products', row.productId), {
-        barcode: row.barcode, name: row.name, searchName: row.name.toLowerCase(), category: row.category, brand: row.brand, vendor: row.vendor,
+        barcode: row.barcode, name: row.name, searchName: row.name.toLowerCase(), searchTokens: posProductSearchTokens(row.name), category: row.category, brand: row.brand, vendor: row.vendor,
         sellingPricePaise: row.sellingPricePaise, currentQuantity: row.openingQuantity, revision: 1, active: true,
         sourceValues: row.sourceValues, importRunId: runId, createdAt: timestamp, createdByUid: args.actor.id, createdByName: args.actor.name,
         updatedAt: timestamp, updatedByUid: args.actor.id, updatedByName: args.actor.name,
@@ -489,32 +568,4 @@ export async function importPosProducts(args: {
     args.onProgress?.(nextCompleted)
   }
   await updateDoc(runRef, { status: 'completed', completedRows: args.rows.length, completedAt: nowIso(), updatedAt: nowIso() })
-}
-
-const RESET_COLLECTIONS = ['products', 'productCosts', 'stockMovements', 'bills', 'billStates', 'heldCarts', 'approvals', 'events', 'sequences', 'importRuns', 'configuration'] as const
-
-export async function resetPosSandbox(actor: AppUser, onProgress?: (collectionName: string, deleted: number) => void) {
-  if ((await getDoc(handoverRef())).exists()) throw new Error('Reset is disabled because the shared drawer contains live handover history.')
-  const resetRef = posDoc('resetRuns', 'active')
-  const existing = await getDoc(resetRef)
-  let collectionIndex = Number(existing.data()?.collectionIndex ?? 0)
-  let deleted = Number(existing.data()?.deleted ?? 0)
-  await setDoc(resetRef, { status: 'running', collectionIndex, deleted, startedAt: existing.data()?.startedAt ?? nowIso(), updatedAt: nowIso(), ...actorFields(actor) }, { merge: true })
-  for (; collectionIndex < RESET_COLLECTIONS.length; collectionIndex += 1) {
-    const collectionName = RESET_COLLECTIONS[collectionIndex]
-    while (true) {
-      const snapshot = await getDocs(query(posCollection(collectionName), orderBy(documentId()), limit(200)))
-      if (snapshot.empty) break
-      const batch = writeBatch(db)
-      snapshot.docs.forEach((item) => batch.delete(item.ref))
-      await batch.commit()
-      deleted += snapshot.size
-      await updateDoc(resetRef, { collectionIndex, deleted, updatedAt: nowIso() })
-      onProgress?.(collectionName, deleted)
-    }
-    await updateDoc(resetRef, { collectionIndex: collectionIndex + 1, updatedAt: nowIso() })
-  }
-  await deleteDoc(resetRef)
-  await deleteDoc(root())
-  return deleted
 }

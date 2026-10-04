@@ -30,6 +30,7 @@ type ActionCenterPageProps = {
 const valueRows = [
   ['Cash Sales', 'cashSales'],
   ['UPI Sales', 'upiSales'],
+  ['Card Sales', 'cardSales'],
   ['Credit Sales', 'creditSales'],
   ['Returns', 'returns'],
   ['Cash Expense', 'cashExpense'],
@@ -59,7 +60,7 @@ function ChangeGrid({ item }: { item: Extract<ApprovalActionItem, { kind: 'casho
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
             {valueRows.map(([label, key]) => (
               <p key={key} className="flex justify-between gap-2 text-muted-foreground">
-                <span>{label}</span><strong className="text-foreground">{money(item[side][key])}</strong>
+                <span>{label}</span><strong className="text-foreground">{money(item[side][key] ?? 0)}</strong>
               </p>
             ))}
             <p className="col-span-2 mt-1 flex justify-between gap-2 border-t border-border/60 pt-1.5 text-muted-foreground">

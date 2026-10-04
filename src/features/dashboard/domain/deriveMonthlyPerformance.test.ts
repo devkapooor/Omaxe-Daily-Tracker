@@ -102,6 +102,19 @@ describe('deriveMonthlyPerformance', () => {
     expect(result.recordingHealth.cashouts).toEqual({ recordedDays: 2, coverageDays: 10, latestDate: '2026-10-03' })
   })
 
+  it('keeps newly recorded Card sales separate in the monthly cashout mix', () => {
+    const cardCashout = { ...dailyCashout('cashout-card', '2026-10-03', 90_000), upiSales: 26_619, cardSales: 410 }
+    const result = deriveMonthlyPerformance({
+      currentDate: '2026-10-10',
+      dashboardMonthOffset: 0,
+      data,
+      dailyCashouts: [cardCashout],
+      marginPercentage: 20,
+      monthlyOperationalExpense: 0,
+    })
+    expect(result.salesMix).toMatchObject({ upi: 26_619, card: 410 })
+  })
+
   it('uses the full calendar month and removes daily requirements for completed months', () => {
     const result = deriveMonthlyPerformance({
       currentDate: '2026-10-10',
