@@ -2,7 +2,7 @@
 
 Date: 2026-10-04
 Status: User-reviewed and accepted locally
-Deployment: Not deployed
+Deployment: Deployed with the combined UI and cashier-handover release on 2026-10-04
 
 ## Completed
 

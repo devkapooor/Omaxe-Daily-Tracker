@@ -1,7 +1,7 @@
 # Cashier handover verification
 
 Date: 2026-10-04
-Release status: Local implementation complete; deployment pending user approval.
+Release status: Deployed and live-verified on 2026-10-04. Production drawer initialization remains pending owner action.
 
 ## Automated evidence
 
@@ -28,11 +28,13 @@ Used synthetic owner/billing accounts and `demo-alphahub-browser` Auth/Firestore
 
 Local screenshot evidence (ignored): `logs/handover-opening-desktop.png`, `logs/handover-closing-mobile.png`, `logs/handover-owner-review.png`.
 
-## Required release steps
+## Release result
 
-1. Obtain the user's approval for the combined handover/UI deployment.
-2. Deploy Hosting, Firestore rules and indexes together using the production build, with local credentials and emulator flags excluded.
-3. Verify production read-only. Existing financial/loan records must remain unchanged.
-4. Owner deliberately initializes the POS handover baseline through the app before staff resume checkout. Setup reads existing POS history and writes only isolated handover/participant records.
+- User approved the combined handover/UI deployment.
+- Firebase Hosting, Firestore rules, and indexes deployed successfully to `alphahub-f137b`.
+- The production build excluded local credentials and emulator flags. Live Hosting referenced `assets/index-CR8EKS0L.js`.
+- Read-only live verification confirmed owner sign-in, dashboard access, and the POS shared-drawer setup state without Firestore permission errors.
+- Existing financial and loan records were not migrated, rewritten, or changed during deployment verification.
+- Owner must deliberately initialize the POS handover baseline through the app before staff resume checkout. Setup reads existing POS history and writes only isolated handover/participant records.
 
 The shared counter has revision-based count invalidation, not an exclusive physical counting lock. Staff must pause billing while counting. Outside POS cash movements are explained in notes and surfaced as discrepancies, as approved.

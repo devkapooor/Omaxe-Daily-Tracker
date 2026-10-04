@@ -2,7 +2,7 @@
 
 Date: 2026-10-04
 Status: User-reviewed and accepted locally ("looks good commit phase 3B")
-Deployment: Not deployed
+Deployment: Deployed with the combined UI and cashier-handover release on 2026-10-04
 Previous checkpoint: `16da39d` (Phase 3A)
 
 ## Completed
@@ -45,4 +45,4 @@ Use `git log --oneline -- docs/operations/PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_
 - Release inspection found that the owner's selected-month display guard also hid employee salary slips. The guard now applies to owner month filtering; staff retain their subscribed salary-slip history.
 - The new UI still requires Bank Deposit/CDM selection. Firestore validates the method when present and accepts older clients that omit it, allowing already-open production sessions to continue bank transfers during rollout. Sender permissions remain unchanged.
 - Verification after these corrections: focused ESLint, 299 app tests, 30 live rules-suite tests on an isolated emulator, and TypeScript compilation passed.
-- Deployment has not occurred. The user requested production deployment plus an important new feature; the feature and whether it ships before or after this deployment are awaiting clarification.
+- Production follow-up: Phase 3B shipped with the mandatory cashier-handover release on 2026-10-04. Live owner sign-in and the POS setup state were verified read-only after Hosting, Firestore rules, and indexes deployed successfully.

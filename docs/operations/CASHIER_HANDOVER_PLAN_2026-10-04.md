@@ -1,7 +1,7 @@
 ﻿# Mandatory cashier handover and reconciliation
 
 Date: 2026-10-04
-Status: Implemented locally; isolated verification complete. Deployment requires explicit user approval.
+Status: Implemented, verified, and deployed to Firebase Hosting and Firestore on 2026-10-04. Production drawer initialization remains a deliberate owner action.
 Release order: Complete handover before the combined release with approved UI updates. Phase 3C remains queued.
 
 ## Confirmed policy
@@ -33,7 +33,7 @@ See [verification evidence](./CASHIER_HANDOVER_VERIFICATION_2026-10-04.md).
 
 Vitest discovery is restricted to active `src/` and `tests/` suites. Archived copies under `output/` previously ran duplicate tests against the same emulator projects.
 
-Deployment is pending user approval. Build with auto-login credentials cleared and emulator mode disabled. After approval, deploy hosting/rules/indexes together, verify production read-only, and have the owner deliberately initialize the POS drawer before billing resumes.
+Hosting, Firestore rules, and indexes were deployed together on 2026-10-04 from checkpoint `72f9c38`, with auto-login credentials cleared and emulator mode disabled. Live owner login, the released asset, and POS drawer setup access were verified read-only. The owner must deliberately initialize the production POS drawer before billing resumes.
 
 ## Operating limits
 

@@ -15,13 +15,13 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
-- [x] Implement and locally validate [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. See [verification evidence](./CASHIER_HANDOVER_VERIFICATION_2026-10-04.md). Combined deployment remains pending explicit user approval; Phase 3C stays queued.
+- [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. The owner must still deliberately initialize the production POS drawer before billing resumes. Phase 3C stays queued.
 
-- [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP pass. Rules tests remain blocked by missing Java; no rules were changed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). Hosting deployment remains pending separate confirmation.
+- [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP passed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). The resulting source structure shipped with the combined 2026-10-04 release; cleanup did not migrate or rewrite production records.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
 - [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
 - [x] Complete the Settings redesign (Phase 2C); the user approved the local result. See [Phase 2C checkpoint](./UI_REDESIGN_PHASE_2C_SETTINGS_2026-10-04.md). Existing workflows and loan-data safeguards were preserved.
-- [ ] Shared page-header/card-stack consolidation: Phase 3A and Phase 3B completed and accepted locally. See [Phase 3B checkpoint](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md). Next: Phase 3C (Vendor Workspace, POS Test, Action Centre), pending separate approval; follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
+- [ ] Shared page-header/card-stack consolidation: Phase 3A and Phase 3B completed, accepted, and deployed on 2026-10-04. See [Phase 3B checkpoint](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md). Next: Phase 3C (Vendor Workspace, POS Test, Action Centre), pending separate approval; follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.

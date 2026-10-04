@@ -37,7 +37,7 @@ Every phase requires separate user approval before implementation, local visual 
 
 ### Phase 3A — Foundation and pilot
 
-Status: Completed and accepted locally; checkpoint `16da39d`. See [Phase 3A summary](./PHASE_3A_SHARED_PAGE_HEADER_CHECKPOINT_2026-10-04.md).
+Status: Completed, accepted, and deployed on 2026-10-04; checkpoint `16da39d`. See [Phase 3A summary](./PHASE_3A_SHARED_PAGE_HEADER_CHECKPOINT_2026-10-04.md).
 
 - Define the shared primitives and their responsive/dark-mode contracts.
 - Migrate Settings and Party Directory as the pilot pages.
@@ -46,7 +46,7 @@ Status: Completed and accepted locally; checkpoint `16da39d`. See [Phase 3A summ
 
 ### Phase 3B — Operational pages
 
-Status: Completed and accepted locally on 2026-10-04. See [Phase 3B summary](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md). No deployment performed.
+Status: Completed, accepted, and deployed on 2026-10-04. See [Phase 3B summary](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md).
 
 - Migrate Cashout, Cash Movement, and Payroll page frames and top-level stacks.
 - Preserve all existing entry, approval, salary, and audit workflows.
