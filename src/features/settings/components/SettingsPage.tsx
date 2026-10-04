@@ -175,7 +175,7 @@ export function SettingsPage({
 
   return (
     <section className="grid min-h-0 gap-2.5 overflow-hidden">
-      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
+      <Tabs defaultValue={canManageUsers ? 'staff' : 'password'} className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
         <Card className="shrink-0">
           <CardContent className="flex min-h-[72px] flex-col justify-center gap-2.5 p-2.5 xl:flex-row xl:items-center xl:justify-between xl:px-4 xl:py-3">
             <div className="min-w-0">

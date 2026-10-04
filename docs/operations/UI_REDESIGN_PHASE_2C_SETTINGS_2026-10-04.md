@@ -7,6 +7,7 @@
 - Preserved the existing owner-only create/delete and Operations access, read-only staff directory visibility for non-owners, search behavior, and deletion safeguards.
 - Confirmed the current Payroll integration uses the shared active Billing/Manager account list. New eligible staff already appear in Payroll automatically; enrollment and salary terms remain configured in Payroll. No Payroll behavior or records were changed.
 - The user approved the local Settings appearance on 2026-10-04. No loan data, calculations, workflows, or permissions were changed.
+- Post-acceptance follow-up: corrected the owner default tab key to `staff` after the tab was renamed; non-owners continue to default to `password`.
 
 ## Verification and release status
 
@@ -14,6 +15,7 @@
 - `npm test` passed: 56 test files, 299 tests.
 - `npm run build` passed. Vite continues to report the existing large JavaScript chunk warning.
 - `git diff --check` passed.
+- The post-acceptance default-tab correction also passed targeted ESLint, all 299 tests, and the production build.
 - No production deployment was made.
 
 ## Next step
