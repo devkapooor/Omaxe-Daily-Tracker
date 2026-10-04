@@ -275,6 +275,7 @@ export function deriveWorkspaceMetrics(args: {
 
   const registerToday = {
     cashout: financeData.cashouts.filter((cashout) => cashout.date === generatedForDate).reduce((total, cashout) => total + cashout.amount, 0),
+    cashExpenses: financeData.cashouts.filter((cashout) => cashout.date === generatedForDate && cashout.paymentMode === 'Cash').reduce((total, cashout) => total + cashout.amount, 0),
     paymentPaid: financeData.payments.filter((payment) => payment.date === generatedForDate && payment.type === 'Paid').reduce((total, payment) => total + payment.amount, 0),
     paymentReceived: financeData.payments.filter((payment) => payment.date === generatedForDate && payment.type === 'Received').reduce((total, payment) => total + payment.amount, 0),
     paymentNet: 0,

@@ -130,6 +130,7 @@ export type CashTransfer = {
   toType: 'person' | 'bank'
   toPerson?: LegacyCashHolder
   toUserId?: string
+  bankDepositMethod?: 'bank' | 'cdm'
   amount: number
   reason: string
   createdBy: string

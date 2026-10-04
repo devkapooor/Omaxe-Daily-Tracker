@@ -141,6 +141,7 @@ export const emptyWorkspaceMetrics: WorkspaceMetrics = {
   },
   registerToday: {
     cashout: 0,
+    cashExpenses: 0,
     paymentPaid: 0,
     paymentReceived: 0,
     paymentNet: 0,

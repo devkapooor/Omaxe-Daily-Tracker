@@ -81,14 +81,13 @@ export default function App() {
   const {
     monthlyPerformance,
     directoryOptions,
-    latestClosedDay,
-    latestClosedDaySummary,
     marginPercentage,
     normalizedLoans,
     pendingCashNow,
     legacyChequeItems,
     totalVendorOutstanding,
     todayCashout,
+    todayCashExpenses,
     todayPaymentNet,
     totalLoans,
   } = useDashboardMetrics({
@@ -223,8 +222,6 @@ export default function App() {
         importLegacyData={importLegacyData}
         isBusy={isBusy}
         isPageLoaderVisible={isPageLoaderVisible}
-        latestClosedDay={latestClosedDay}
-        latestClosedDaySummary={latestClosedDaySummary}
         marginPercentage={marginPercentage}
         monthlyPerformance={monthlyPerformance}
         normalizedLoans={normalizedLoans}
@@ -248,6 +245,7 @@ export default function App() {
         showToast={showToast}
         toast={toast}
         todayCashout={todayCashout}
+        todayCashExpenses={todayCashExpenses}
         todayPaymentNet={todayPaymentNet}
         totalLoans={totalLoans}
         totalVendorOutstanding={totalVendorOutstanding}

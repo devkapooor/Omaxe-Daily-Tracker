@@ -123,13 +123,22 @@ describe('Firestore role enforcement', () => {
   it('restricts billing cash movement to the signed-in user', async () => {
     const billing = userDb('billing-user')
     const baseTransfer = {
-      id: 'transfer-1', date: '2026-10-01', toType: 'bank', amount: 100,
+      id: 'transfer-1', date: '2026-10-01', toType: 'bank', bankDepositMethod: 'bank', amount: 100,
       reason: 'Deposit', createdBy: 'billing-user', createdAt: timestamp,
     }
 
     await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-1'), { ...baseTransfer, fromUserId: 'billing-user' }))
     await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-2'), { ...baseTransfer, id: 'transfer-2', fromUserId: 'manager-user' }))
     await assertSucceeds(setDoc(doc(userDb('manager-user'), 'cashTransfers', 'transfer-3'), { ...baseTransfer, id: 'transfer-3', fromUserId: 'billing-user' }))
+    const bankTransferWithoutMethod = {
+      id: 'transfer-4', date: '2026-10-01', toType: 'bank', amount: 100,
+      reason: 'Deposit', createdBy: 'billing-user', createdAt: timestamp, fromUserId: 'billing-user',
+    }
+    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-4'), bankTransferWithoutMethod))
+    await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-5'), {
+      id: 'transfer-5', date: '2026-10-01', fromUserId: 'billing-user', toType: 'person', toUserId: 'manager-user',
+      amount: 100, reason: 'Cash handover', createdBy: 'billing-user', createdAt: timestamp,
+    }))
   })
 
   it('keeps audit history owner-readable and append-only', async () => {

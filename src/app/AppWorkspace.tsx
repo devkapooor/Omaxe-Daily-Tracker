@@ -79,18 +79,6 @@ type AppWorkspaceProps = {
   importLegacyData: () => Promise<boolean>
   isBusy: boolean
   isPageLoaderVisible: boolean
-  latestClosedDay: string | null
-  latestClosedDaySummary: {
-    date: string | null
-    totalSales: number
-    cashSales: number
-    upiSales: number
-    creditSales: number
-    returns: number
-    cashExpenses: number
-    cashToHand: number
-    transfersToday: number
-  }
   marginPercentage: number
   monthlyPerformance: MonthlyPerformanceMetrics
   normalizedLoans: LoanEntry[]
@@ -123,6 +111,7 @@ type AppWorkspaceProps = {
   showToast: (message: string) => void
   toast: AppToast | null
   todayCashout: number
+  todayCashExpenses: number
   todayPaymentNet: number
   totalLoans: number
   totalVendorOutstanding: number
@@ -152,8 +141,6 @@ export function AppWorkspace({
   importLegacyData,
   isBusy,
   isPageLoaderVisible,
-  latestClosedDay,
-  latestClosedDaySummary,
   marginPercentage,
   monthlyPerformance,
   normalizedLoans,
@@ -178,6 +165,7 @@ export function AppWorkspace({
   showToast,
   toast,
   todayCashout,
+  todayCashExpenses,
   todayPaymentNet,
   totalLoans,
   totalVendorOutstanding,
@@ -336,8 +324,7 @@ export function AppWorkspace({
             correctionRequests={cashoutCorrectionRequests}
             currentUser={currentUser}
             dailyCashouts={dailyCashouts}
-            latestClosedDay={latestClosedDay}
-            latestClosedDayExpenses={latestClosedDaySummary.cashExpenses}
+            todayCashExpenses={todayCashExpenses}
             onSave={saveDailyCashoutEntry}
             onSubmitCorrection={submitCashoutCorrectionRequest}
             onWithdrawCorrection={withdrawCashoutCorrectionRequest}
@@ -345,7 +332,7 @@ export function AppWorkspace({
           />
         ) : null}
         {activePage === 'movement' ? (
-          <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
               currentUserId={currentUser.id}
               currentUserName={currentUser.name}
@@ -373,7 +360,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'payroll' ? (
-          <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <PayrollPage currentUser={currentUser} users={users} showToast={showToast} />
           </section>
         ) : null}

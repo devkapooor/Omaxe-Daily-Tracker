@@ -595,7 +595,10 @@ service cloud.firestore {
         data.reason.size() > 0 &&
         data.createdBy is string &&
         data.createdAt is string &&
-        (data.toType == 'bank' || (data.toUserId is string && data.toUserId != data.fromUserId));
+        (
+          (data.toType == 'bank' && data.bankDepositMethod in ['bank', 'cdm']) ||
+          (data.toType == 'person' && data.toUserId is string && data.toUserId != data.fromUserId && !('bankDepositMethod' in data))
+        );
     }
 
     match /users/{userId} {

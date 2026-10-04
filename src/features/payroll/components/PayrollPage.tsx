@@ -5,6 +5,7 @@ import type { AppUser } from '@/domain/financeTypes'
 import {
   calculateSalary,
   hoursAndMinutesToMinutes,
+  isPayrollMonth,
   rupeesToPayrollPaise,
   selectPayrollTerm,
   type PayrollAdjustment,
@@ -30,9 +31,12 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
+import { PageCardStack } from '@/shared/ui/page-card-stack'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
@@ -179,35 +183,43 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
 
   if (currentUser.role !== 'owner') {
     return (
-      <section className="space-y-2.5">
-        <SectionHeading eyebrow="Payroll" title="My Salary Slips" description="Finalized salary slips and their revision history." />
+      <PageLayout header={<PageHeader title="My Salary Slips" />}>
         {payroll.error ? <StatusPanel variant="destructive">{payroll.error}</StatusPanel> : null}
         {payroll.loading ? <StatusPanel>Loading salary slips...</StatusPanel> : null}
         {!payroll.loading && payroll.slips.length === 0 ? <StatusPanel>No finalized salary slips are available yet.</StatusPanel> : null}
-        <div className="grid gap-3 lg:grid-cols-2">{payroll.slips.map((slip) => <Card key={slip.id}><CardContent className="flex items-center justify-between gap-3 pt-3"><div><p className="font-bold">{slip.payrollMonth}</p><p className="text-xs text-muted-foreground">Net {money(slip.currentCalculation.netPayPaise)}</p></div><div className="flex items-center gap-2"><Badge variant={paymentBadge(slip.paymentState)}>{slip.paymentState.replace('-', ' ')}</Badge><Button size="sm" variant="outline" onClick={() => setSelectedSlip(slip)}><Eye className="size-3.5" /> View</Button></div></CardContent></Card>)}</div>
+        <div className="grid gap-card-gap lg:grid-cols-2">{payroll.slips.map((slip) => <Card key={slip.id}><CardContent className="flex items-center justify-between gap-3 pt-3"><div><p className="font-bold">{slip.payrollMonth}</p><p className="text-xs text-muted-foreground">Net {money(slip.currentCalculation.netPayPaise)}</p></div><div className="flex items-center gap-2"><Badge variant={paymentBadge(slip.paymentState)}>{slip.paymentState.replace('-', ' ')}</Badge><Button size="sm" variant="outline" onClick={() => setSelectedSlip(slip)}><Eye className="size-3.5" /> View</Button></div></CardContent></Card>)}</div>
         {selectedSlip ? <SalarySlipDetails slip={selectedSlip} onClose={() => setSelectedSlip(null)} /> : null}
-      </section>
+      </PageLayout>
     )
   }
 
   return (
-    <section className="space-y-2.5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SectionHeading eyebrow="Payroll" title="Monthly Payroll" description="Prepare, finalize, revise, and record salary payments without affecting other finance modules." />
-        <FieldLabel label="Payroll Month"><Input className="w-44" min="2026-09" type="month" value={payrollMonth} onChange={(event) => { setPayrollMonth(event.target.value); setEntryEmployeeId(''); setSelectedSlip(null) }} /></FieldLabel>
-      </div>
+    <Tabs defaultValue="monthly" className="min-h-0 flex-1">
+      <PageLayout header={(
+        <PageHeader title="Payroll" tools={(
+          <div className="flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <PageHeaderTabsList aria-label="Payroll sections" className="grid grid-cols-3">
+              <PageHeaderTab value="monthly">Monthly</PageHeaderTab>
+              <PageHeaderTab value="staff">Staff</PageHeaderTab>
+              <PageHeaderTab value="employer">Employer</PageHeaderTab>
+            </PageHeaderTabsList>
+            <label className="flex shrink-0 items-center justify-between gap-1.5 text-xs font-medium text-muted-foreground sm:justify-start">
+              <span>Month</span>
+              <Input aria-label="Payroll month" className="h-8 w-36" min="2026-09" type="month" value={payrollMonth} onChange={(event) => { const nextMonth = event.target.value; if (!isPayrollMonth(nextMonth)) return; setPayrollMonth(nextMonth); setEntryEmployeeId(''); setSelectedSlip(null) }} />
+            </label>
+          </div>
+        )} />
+      )}>
       {error || payroll.error ? <StatusPanel variant="destructive">{error || payroll.error}</StatusPanel> : null}
       {payroll.loading ? <StatusPanel>Loading payroll...</StatusPanel> : null}
 
-      <div className="grid gap-2.5 sm:grid-cols-3">
+      <PageCardStack className="sm:grid-cols-3">
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Net Payroll</p><p className="mt-1 text-lg font-black">{money(summary.net)}</p></CardContent></Card>
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Paid</p><p className="mt-1 text-lg font-black text-success">{money(summary.paid)}</p></CardContent></Card>
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Outstanding</p><p className="mt-1 text-lg font-black text-warning">{money(summary.outstanding)}</p></CardContent></Card>
-      </div>
+      </PageCardStack>
 
-      <Tabs defaultValue="monthly">
-        <TabsList className="grid-cols-3"><TabsTrigger value="monthly">Monthly Payroll</TabsTrigger><TabsTrigger value="staff">Staff Setup</TabsTrigger><TabsTrigger value="employer">Employer</TabsTrigger></TabsList>
-        <TabsContent value="monthly" className="space-y-2.5">
+        <TabsContent value="monthly" className="m-0 grid gap-card-gap">
           <Card><CardHeader><SectionHeading eyebrow="Month Settings" title="Paid Weekly Offs" description="This count locks after the first slip is finalized." /></CardHeader><CardContent><form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() => savePayrollMonth({ payrollMonth, paidWeeklyOffDays: Number(form.get('paidWeeklyOffDays')), actor }), 'Payroll month configured.') }}><FieldLabel label="Days"><Input className="w-32" defaultValue={String(weeklyOffDays)} disabled={(payroll.month?.finalizedSlipCount ?? 0) > 0} max="31" min="0" name="paidWeeklyOffDays" type="number" /></FieldLabel><Button disabled={busy || (payroll.month?.finalizedSlipCount ?? 0) > 0}>Save</Button>{(payroll.month?.finalizedSlipCount ?? 0) > 0 ? <Badge variant="secondary">Locked</Badge> : null}</form></CardContent></Card>
 
           <div className="grid gap-2.5">{candidates.map((user) => {
@@ -223,14 +235,14 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
           {selectedSlip ? <SalarySlipDetails slip={selectedSlip} onClose={() => setSelectedSlip(null)} /> : null}
         </TabsContent>
 
-        <TabsContent value="staff" className="space-y-4">
+        <TabsContent value="staff" className="m-0 space-y-4">
           <div className="grid gap-3">{candidates.map((user) => <Card key={user.id}><CardContent className="flex items-center justify-between gap-3 pt-3"><div><p className="font-bold">{user.name}</p><p className="text-xs text-muted-foreground">{user.role} · {enabledIds.has(user.id) ? 'Payroll enabled' : 'Not enrolled'}</p></div><Button size="sm" variant="outline" onClick={() => setSetupEmployeeId(user.id)}>Manage</Button></CardContent></Card>)}</div>
           {setupEmployeeId ? (() => { const user = candidates.find((item) => item.id === setupEmployeeId); if (!user) return null; return <Card><CardHeader><SectionHeading eyebrow="Payroll Terms" title={user.name} description="Terms become effective from the selected month and remain immutable." /></CardHeader><CardContent className="space-y-4"><div className="flex items-center gap-2"><Button disabled={busy} variant={enabledIds.has(user.id) ? 'destructive' : 'default'} onClick={() => void run(() => savePayrollProfile({ employeeUserId: user.id, enabled: !enabledIds.has(user.id), actor }), enabledIds.has(user.id) ? 'Payroll disabled for staff member.' : 'Payroll enabled for staff member.')}>{enabledIds.has(user.id) ? 'Disable Payroll' : 'Enable Payroll'}</Button><Button variant="ghost" onClick={() => setSetupEmployeeId('')}>Close</Button></div>{enabledIds.has(user.id) ? <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const effectiveFromMonth = String(form.get('effectiveFromMonth')); const superseded = payroll.terms.filter((term) => term.employeeUserId === user.id && term.effectiveFromMonth === effectiveFromMonth).sort((a, b) => b.revision - a.revision)[0]; void run(() => createPayrollTerm({ employeeUserId: user.id, effectiveFromMonth, monthlySalaryPaise: rupeesToPayrollPaise(Number(form.get('monthlySalary'))), requiredDailyMinutes: hoursAndMinutesToMinutes(Number(form.get('dailyHours')), Number(form.get('dailyMinutes'))), supersedesTermId: superseded?.id, actor }), 'Salary terms saved.') }}><FieldLabel label="Effective Month"><Input defaultValue={payrollMonth} min="2026-09" name="effectiveFromMonth" type="month" /></FieldLabel><FieldLabel label="Monthly Salary"><Input min="0.01" name="monthlySalary" required step="0.01" type="number" /></FieldLabel><FieldLabel label="Daily Hours"><Input defaultValue="8" max="24" min="0" name="dailyHours" type="number" /></FieldLabel><FieldLabel label="Daily Minutes"><Input defaultValue="0" max="59" min="0" name="dailyMinutes" type="number" /></FieldLabel><div className="sm:col-span-2 lg:col-span-4"><Button disabled={busy}>Save Terms</Button></div></form> : null}</CardContent></Card> })() : null}
         </TabsContent>
 
-        <TabsContent value="employer"><Card className="max-w-3xl"><CardHeader><SectionHeading eyebrow="Salary Slip Issuer" title="Employer Details" /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() => savePayrollSettings({ issuer: { name: String(form.get('name')), address: String(form.get('address')), contact: String(form.get('contact')) }, defaultPaidWeeklyOffDays: Number(form.get('defaultPaidWeeklyOffDays')), actor }), 'Payroll settings saved.') }}><FieldLabel label="Employer Name"><Input defaultValue={payroll.settings?.issuer.name ?? defaultPayrollSettings.issuer.name} name="name" required /></FieldLabel><FieldLabel label="Contact"><Input defaultValue={payroll.settings?.issuer.contact ?? ''} name="contact" /></FieldLabel><FieldLabel className="sm:col-span-2" label="Address"><Textarea defaultValue={payroll.settings?.issuer.address ?? ''} name="address" /></FieldLabel><FieldLabel label="Default Weekly Offs"><Input defaultValue={String(payroll.settings?.defaultPaidWeeklyOffDays ?? 4)} max="31" min="0" name="defaultPaidWeeklyOffDays" type="number" /></FieldLabel><div className="sm:col-span-2"><Button disabled={busy}>Save Employer Details</Button></div></form></CardContent></Card></TabsContent>
-      </Tabs>
+        <TabsContent value="employer" className="m-0"><Card className="max-w-3xl"><CardHeader><SectionHeading eyebrow="Salary Slip Issuer" title="Employer Details" /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() => savePayrollSettings({ issuer: { name: String(form.get('name')), address: String(form.get('address')), contact: String(form.get('contact')) }, defaultPaidWeeklyOffDays: Number(form.get('defaultPaidWeeklyOffDays')), actor }), 'Payroll settings saved.') }}><FieldLabel label="Employer Name"><Input defaultValue={payroll.settings?.issuer.name ?? defaultPayrollSettings.issuer.name} name="name" required /></FieldLabel><FieldLabel label="Contact"><Input defaultValue={payroll.settings?.issuer.contact ?? ''} name="contact" /></FieldLabel><FieldLabel className="sm:col-span-2" label="Address"><Textarea defaultValue={payroll.settings?.issuer.address ?? ''} name="address" /></FieldLabel><FieldLabel label="Default Weekly Offs"><Input defaultValue={String(payroll.settings?.defaultPaidWeeklyOffDays ?? 4)} max="31" min="0" name="defaultPaidWeeklyOffDays" type="number" /></FieldLabel><div className="sm:col-span-2"><Button disabled={busy}>Save Employer Details</Button></div></form></CardContent></Card></TabsContent>
+      </PageLayout>
       {confirmation.dialog}
-    </section>
+    </Tabs>
   )
 }

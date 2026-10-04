@@ -11,6 +11,7 @@ import { calculateCashoutAudit, drawerTotalFromDenominations, formatDrawerPartic
 type DailyCashoutFormProps = {
   currentUserId: string
   currentUserName: string
+  todayCashExpenses: number
   onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void> | void
 }
 
@@ -44,12 +45,13 @@ const emptyDrawerFormState: DrawerFormState = {
   denom500: '0',
 }
 
-export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: DailyCashoutFormProps) {
+export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpenses, onSave }: DailyCashoutFormProps) {
   const [entryDate, setEntryDate] = useState(today())
   const [cashSale, setCashSale] = useState('0')
   const [upiSale, setUpiSale] = useState('0')
   const [creditSale, setCreditSale] = useState('0')
-  const [cashExpense, setCashExpense] = useState('0')
+  const [cashExpense, setCashExpense] = useState(() => String(todayCashExpenses))
+  const [cashExpenseEdited, setCashExpenseEdited] = useState(false)
   const [systemAudit, setSystemAudit] = useState('0')
   const [drawerState, setDrawerState] = useState<DrawerFormState>(emptyDrawerFormState)
   const [pendingDraft, setPendingDraft] = useState<DailyDetailsDraft | null>(null)
@@ -60,7 +62,8 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
   const cashSaleValue = numberValue(cashSale)
   const upiSaleValue = numberValue(upiSale)
   const creditSaleValue = numberValue(creditSale)
-  const cashExpenseValue = numberValue(cashExpense)
+  const cashExpenseInputValue = !cashExpenseEdited && entryDate === today() ? String(todayCashExpenses) : cashExpense
+  const cashExpenseValue = numberValue(cashExpenseInputValue)
   const systemAuditValue = numberValue(systemAudit)
   const expectedCash = cashSaleValue - cashExpenseValue
   const drawerDenominations = {
@@ -79,7 +82,8 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
     setCashSale('0')
     setUpiSale('0')
     setCreditSale('0')
-    setCashExpense('0')
+    setCashExpense(String(todayCashExpenses))
+    setCashExpenseEdited(false)
     setSystemAudit('0')
     setDrawerState(emptyDrawerFormState)
     setPendingDraft(null)
@@ -156,7 +160,10 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
                 type="date"
                 value={entryDate}
                 onChange={(event) => {
-                  setEntryDate(event.target.value)
+                  const nextDate = event.target.value
+                  setEntryDate(nextDate)
+                  setCashExpense(nextDate === today() ? String(todayCashExpenses) : '0')
+                  setCashExpenseEdited(false)
                   setError('')
                 }}
                 required
@@ -176,7 +183,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, onSave }: Dai
             </FieldLabel>
 
             <FieldLabel label="Cash Expense (d)">
-              <Input type="number" min="0" step="1" value={cashExpense} onChange={(event) => setCashExpense(event.target.value)} />
+              <Input type="number" min="0" step="1" value={cashExpenseInputValue} onChange={(event) => { setCashExpense(event.target.value); setCashExpenseEdited(true) }} />
             </FieldLabel>
 
             <FieldLabel label="Expected Cash (a-d)">

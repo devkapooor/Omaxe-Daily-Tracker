@@ -455,6 +455,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       ...(transfer.fromUserId ? { fromUserId: transfer.fromUserId } : {}),
       toType: transfer.toType,
       ...(transfer.toUserId ? { toUserId: transfer.toUserId } : {}),
+      ...(transfer.bankDepositMethod ? { bankDepositMethod: transfer.bankDepositMethod } : {}),
       amount: transfer.amount,
       reason: transfer.reason,
       createdBy: transfer.createdBy,

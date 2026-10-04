@@ -218,11 +218,16 @@ type TransferLogTableProps = {
   partyName: (entry: CashTransfer, side: 'from' | 'to') => string
 }
 
+function transferDestinationName(entry: CashTransfer, partyName: TransferLogTableProps['partyName']) {
+  if (entry.toType !== 'bank' || !entry.bankDepositMethod) return partyName(entry, 'to')
+  return entry.bankDepositMethod === 'cdm' ? 'Bank · CDM Machine' : 'Bank · Bank Deposit'
+}
+
 export function TransferLogTable({ entries, partyName }: TransferLogTableProps) {
   const columns = useMemo<LogTableColumn<CashTransfer>[]>(() => [
     { id: 'date', label: 'Date', value: (entry) => entry.date, cell: (entry) => <span className="font-semibold">{formatDisplayDate(entry.date)}</span>, hideable: false, sortDescFirst: true },
     { id: 'from', label: 'From', value: (entry) => partyName(entry, 'from'), cell: (entry) => partyName(entry, 'from') },
-    { id: 'to', label: 'To', value: (entry) => partyName(entry, 'to'), cell: (entry) => <span className="font-semibold">{partyName(entry, 'to')}</span> },
+    { id: 'to', label: 'To', value: (entry) => transferDestinationName(entry, partyName), cell: (entry) => <span className="font-semibold">{transferDestinationName(entry, partyName)}</span> },
     { id: 'amount', label: 'Amount', value: (entry) => entry.amount, cell: (entry) => <span className="font-semibold">{money(entry.amount)}</span>, align: 'right', sortDescFirst: true },
     { id: 'reason', label: 'Reason', value: (entry) => entry.reason, cell: (entry) => notesCell(entry.reason), sortable: false },
     { id: 'createdBy', label: 'Recorded by', value: (entry) => entry.createdBy, cell: (entry) => <span>{entry.createdBy}<span className="block text-[10px] text-muted-foreground">{formatDisplayTime(entry.createdAt)}</span></span> },
@@ -237,11 +242,11 @@ export function TransferLogTable({ entries, partyName }: TransferLogTableProps) 
       initialSortId="date"
       noun="transfer"
       searchPlaceholder="Search names, destination, reason or recorder"
-      searchText={(entry) => [entry.date, formatDisplayDate(entry.date), partyName(entry, 'from'), partyName(entry, 'to'), entry.reason, entry.createdBy].join(' ')}
+      searchText={(entry) => [entry.date, formatDisplayDate(entry.date), partyName(entry, 'from'), transferDestinationName(entry, partyName), entry.reason, entry.createdBy].join(' ')}
       mobileCard={(entry) => (
         <MobileLogCard title={money(entry.amount)} subtitle={formatDisplayDate(entry.date)}>
           <MobileValue label="From" value={partyName(entry, 'from')} />
-          <MobileValue label="To" value={partyName(entry, 'to')} />
+          <MobileValue label="To" value={transferDestinationName(entry, partyName)} />
           <MobileValue label="Reason" value={entry.reason} />
           <MobileValue label="Recorded by" value={entry.createdBy} />
         </MobileLogCard>

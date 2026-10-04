@@ -37,6 +37,8 @@ Every phase requires separate user approval before implementation, local visual 
 
 ### Phase 3A — Foundation and pilot
 
+Status: Completed and accepted locally; checkpoint `16da39d`. See [Phase 3A summary](./PHASE_3A_SHARED_PAGE_HEADER_CHECKPOINT_2026-10-04.md).
+
 - Define the shared primitives and their responsive/dark-mode contracts.
 - Migrate Settings and Party Directory as the pilot pages.
 - Party Directory includes Add Party, View Parties, and a read-only Loans summary grouped by party using existing normalized records only; no loan record, workflow, or write path changes.
@@ -44,10 +46,15 @@ Every phase requires separate user approval before implementation, local visual 
 
 ### Phase 3B — Operational pages
 
+Status: Completed and accepted locally on 2026-10-04. See [Phase 3B summary](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md). No deployment performed.
+
 - Migrate Cashout, Cash Movement, and Payroll page frames and top-level stacks.
 - Preserve all existing entry, approval, salary, and audit workflows.
+- User-approved refinements: remove the redundant expense summary; prefill today's cash-paid expenses through the shared metrics; exclude the sender from recipient choices while retaining sender permissions; record Bank Deposit/CDM metadata on new bank transfers; use two desktop form rows; prevent stale Payroll month data from appearing during subscription changes.
 
 ### Phase 3C — Module-specific workspaces
+
+Status: Next phase; awaiting separate implementation approval.
 
 - Migrate Vendor Workspace, POS (Test), and Action Centre.
 - Preserve vendor ledger semantics, POS test-only Firestore isolation, cash drawer presentation source, and Action Centre approval boundaries.
@@ -70,12 +77,12 @@ Every phase requires separate user approval before implementation, local visual 
 - Optional controls fit beside the title at wide widths and wrap/stack without overlap at narrow widths.
 - Top-level page card stacks use the same 10px spacing; intentional two-column content retains equal or explicitly page-appropriate columns.
 - No new browser-level scrollbar or nested unintended scroll area is introduced.
-- Light and dark themes remain legible; no workflow, role access, data source, calculation, or write path changes.
+- Light and dark themes remain legible. Preserve existing workflows and role access; the separately approved Phase 3B expense-prefill and deposit-metadata refinements are recorded in its checkpoint summary.
 - Loan data, calculations, workflows, permissions, and financial side effects are strictly protected; loan-area visual changes require the approved Phase 3D scope.
 
 ## Boundaries and source references
 
 - Existing approved visual language: the app's `DESIGN.md` plus the Dashboard header in `DashboardPage.tsx`.
-- No new feature/settings options, metrics, or business rules are part of this plan.
+- New feature/settings options, metrics, or business rules require explicit scope approval. Phase 3B includes the user's approved expense-prefill and Bank Deposit/CDM refinements above.
 - POS remains isolated to `posSandboxes/test` and does not gain access to production finance records.
 - Historical design notes described all loan UI as out of scope. The user clarified on 2026-10-04 that loan appearance may change, while loan data must never be touched. This plan supersedes that UI-only restriction; all other loan protections remain in force.

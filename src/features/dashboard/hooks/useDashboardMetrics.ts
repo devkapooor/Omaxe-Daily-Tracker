@@ -66,6 +66,7 @@ export function useDashboardMetrics({
       .filter((item) => item.source !== 'manual-plan'),
     totalVendorOutstanding: workspaceMetrics.liabilities.totalVendorOutstanding,
     todayCashout: workspaceMetrics.registerToday.cashout,
+    todayCashExpenses: workspaceMetrics.registerToday.cashExpenses,
     todayPaymentNet: workspaceMetrics.registerToday.paymentNet,
     todayPaymentPaid: workspaceMetrics.registerToday.paymentPaid,
     todayPaymentReceived: workspaceMetrics.registerToday.paymentReceived,

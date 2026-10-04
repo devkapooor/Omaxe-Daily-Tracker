@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
+import { PageHeader } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 
 type CashMovementFormProps = {
@@ -47,18 +49,22 @@ export function CashMovementForm({
   const userOptions = useMemo(
     () =>
       activeWorkspaceUsers(users)
-        .filter((user) => currentUserRole !== 'billing' || user.id === currentUserId)
         .map((user) => ({
           id: user.id,
           name: user.name,
           amount: userBalances.find((entry) => entry.userId === user.id)?.amount ?? 0,
         }))
         .sort((left, right) => left.name.localeCompare(right.name)),
-    [currentUserId, currentUserRole, userBalances, users],
+    [userBalances, users],
+  )
+  const senderOptions = useMemo(
+    () => userOptions.filter((user) => currentUserRole !== 'billing' || user.id === currentUserId),
+    [currentUserId, currentUserRole, userOptions],
   )
 
   const [transferFromUserId, setTransferFromUserId] = useState(currentUserId)
   const [transferTo, setTransferTo] = useState<string>('bank')
+  const [bankDepositMethod, setBankDepositMethod] = useState<'' | 'bank' | 'cdm'>('')
   const [amount, setAmount] = useState('0')
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
@@ -71,13 +77,17 @@ export function CashMovementForm({
   async function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    const fromUser = userOptions.find((user) => user.id === transferFromUserId)
+    const fromUser = senderOptions.find((user) => user.id === transferFromUserId)
     if (!fromUser) {
       setError('Select the sender.')
       return
     }
     if (!transferTo) {
       setError('Select the destination.')
+      return
+    }
+    if (transferTo === 'bank' && !bankDepositMethod) {
+      setError('Select whether the cash was deposited at the bank or through a CDM machine.')
       return
     }
     if (transferTo !== 'bank' && transferTo === transferFromUserId) {
@@ -107,6 +117,7 @@ export function CashMovementForm({
         fromUserId: fromUser.id,
         toType: transferTo === 'bank' ? 'bank' : 'person',
         ...(toUser ? { toUserId: toUser.id } : {}),
+        ...(transferTo === 'bank' && bankDepositMethod ? { bankDepositMethod } : {}),
         amount: transferAmount,
         reason: reason.trim(),
         createdBy: currentUserName,
@@ -114,6 +125,7 @@ export function CashMovementForm({
       })
       setTransferFromUserId(currentUserId)
       setTransferTo('bank')
+      setBankDepositMethod('')
       setAmount('0')
       setReason('')
       setError('')
@@ -123,21 +135,20 @@ export function CashMovementForm({
   }
 
   return (
-    <Card className="flex min-h-full flex-col xl:h-full xl:min-h-0">
-      <CardHeader>
-        <SectionHeading eyebrow="Cash Control" title="Move Counter Cash To Bank" />
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3">
-        <div className="grid grid-cols-2 gap-1.5 xl:grid-cols-3">
+    <PageLayout className="h-full" header={<PageHeader title="Cash Movement" />}>
+      <Card className="flex min-h-0 flex-1 flex-col">
+        <CardHeader>
+          <SectionHeading eyebrow="Cash Control" title="Move Counter Cash To Bank" />
+        </CardHeader>
+        <CardContent className="flex flex-1 flex-col gap-3">
+        <div className="flex flex-nowrap gap-card-gap overflow-x-auto pb-1">
           {userOptions.map((user) => (
-            <div key={user.id} className="rounded-[18px] border border-border/70 bg-secondary/55 p-2 sm:p-2.5">
-              <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.2em]">
-                Pending Cash · {user.name}
-              </span>
-              <strong className="mt-0.5 block text-lg font-black tracking-tight text-foreground sm:mt-1 sm:text-xl">
-                {money(user.amount)}
-              </strong>
-            </div>
+            <Card key={user.id} className="min-w-[9rem] flex-1">
+              <CardContent className="p-2.5">
+                <span className="block truncate text-xs font-semibold text-muted-foreground">{user.name}</span>
+                <strong className="mt-1 block text-lg font-bold tracking-tight text-foreground">{money(user.amount)}</strong>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
@@ -198,12 +209,17 @@ export function CashMovementForm({
             <NativeSelect
               value={transferFromUserId}
               onChange={(event) => {
-                setTransferFromUserId(event.target.value)
+                const nextUserId = event.target.value
+                setTransferFromUserId(nextUserId)
+                if (transferTo === nextUserId) {
+                  setTransferTo('bank')
+                  setBankDepositMethod('')
+                }
                 setError('')
               }}
             >
               <option value="">Select user</option>
-              {userOptions.map((user) => (
+              {senderOptions.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name}
                 </option>
@@ -212,20 +228,37 @@ export function CashMovementForm({
           </FieldLabel>
 
           <FieldLabel label="To">
-            <NativeSelect
-              value={transferTo}
-              onChange={(event) => {
-                setTransferTo(event.target.value)
-                setError('')
-              }}
-            >
-              {userOptions.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-              <option value="bank">Bank</option>
-            </NativeSelect>
+            <div className={transferTo === 'bank' ? 'grid grid-cols-2 gap-2' : undefined}>
+              <NativeSelect
+                value={transferTo}
+                onChange={(event) => {
+                  setTransferTo(event.target.value)
+                  setBankDepositMethod('')
+                  setError('')
+                }}
+              >
+                {userOptions.filter((user) => user.id !== transferFromUserId).map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+                <option value="bank">Bank</option>
+              </NativeSelect>
+              {transferTo === 'bank' ? (
+                <NativeSelect
+                  required
+                  value={bankDepositMethod}
+                  onChange={(event) => {
+                    setBankDepositMethod(event.target.value as '' | 'bank' | 'cdm')
+                    setError('')
+                  }}
+                >
+                  <option value="">Deposit method</option>
+                  <option value="bank">Bank Deposit</option>
+                  <option value="cdm">CDM Machine</option>
+                </NativeSelect>
+              ) : null}
+            </div>
           </FieldLabel>
 
           <FieldLabel label="Movement Amount">
@@ -241,7 +274,7 @@ export function CashMovementForm({
             />
           </FieldLabel>
 
-          <FieldLabel className="md:col-span-2" label="Cash Movement Notes">
+          <FieldLabel label="Cash Movement Notes">
             <Input
               type="text"
               value={reason}
@@ -256,7 +289,8 @@ export function CashMovementForm({
           {error ? <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p> : null}
           <Button className="md:col-span-2">Save Cash Movement</Button>
         </form>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </PageLayout>
   )
 }

@@ -112,6 +112,7 @@ export type WorkspaceMetrics = {
   }
   registerToday: {
     cashout: number
+    cashExpenses: number
     paymentPaid: number
     paymentReceived: number
     paymentNet: number

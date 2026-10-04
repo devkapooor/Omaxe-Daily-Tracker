@@ -19,7 +19,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
 - [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
 - [x] Complete the Settings redesign (Phase 2C); the user approved the local result. See [Phase 2C checkpoint](./UI_REDESIGN_PHASE_2C_SETTINGS_2026-10-04.md). Existing workflows and loan-data safeguards were preserved.
-- [ ] Next planned UI upgrade: shared page-header/card-stack consolidation. Follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md); Phase 3A implementation requires separate approval.
+- [ ] Shared page-header/card-stack consolidation: Phase 3A and Phase 3B completed and accepted locally. See [Phase 3B checkpoint](./PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md). Next: Phase 3C (Vendor Workspace, POS Test, Action Centre), pending separate approval; follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.
