@@ -4,7 +4,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current product and priorities
 
-- Single-store React/TypeScript PWA using Firebase Authentication and Firestore on Spark; installed launches still require internet for business data.
+- Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
 - Owner-created staff accounts; owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses and owner loan operations.
 - Maintain financial write reliability, loan allocation correctness, user-ID cash ownership, planner consistency, and dependable Firebase sync.
@@ -15,13 +15,14 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
-- [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. The owner must still deliberately initialize the production POS drawer before billing resumes. Phase 3C stays queued.
+- [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. The owner must still deliberately initialize the production POS drawer before billing resumes.
+- [x] Implement and release trusted server time plus the restricted Cashout window and configurable blocking notices. Existing financial history was not migrated. See the [server-time and Cashout release checkpoint](./SERVER_TIME_CASHOUT_RELEASE_2026-10-04.md).
 
 - [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP passed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). The resulting source structure shipped with the combined 2026-10-04 release; cleanup did not migrate or rewrite production records.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
 - [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
 - [x] Complete the Settings redesign (Phase 2C); the user approved the local result. See [Phase 2C checkpoint](./UI_REDESIGN_PHASE_2C_SETTINGS_2026-10-04.md). Existing workflows and loan-data safeguards were preserved.
-- [ ] Shared page-header/card-stack consolidation: Phase 3A and Phase 3B completed, accepted, and deployed on 2026-10-04. Phase 3C (Vendor Workspace, POS Test, Action Centre) is implemented locally and awaiting review of the redesigned daily POS Test dashboard. Resume from the [Phase 3C checkpoint](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md); follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
+- [x] Shared page-header/card-stack consolidation: Phases 3A, 3B, and 3C are completed, reviewed, and deployed on 2026-10-04. The user said the POS Test dashboard redesign is okay for now and later confirmed the latest release looked fine. Phase 3D is next but requires separate approval; Phase 3E cross-page acceptance remains after 3D. See the [Phase 3C closeout](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md) and [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.

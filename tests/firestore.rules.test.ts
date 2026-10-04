@@ -182,14 +182,25 @@ describe('Firestore role enforcement', () => {
 
   it('enforces cashout ownership while allowing the linked sales synchronization', async () => {
     const billing = userDb('billing-user')
+    const owner = userDb('owner-user')
     const cashout = {
       date: '2026-10-01', recordedBy: 'billing-user', recordedByUserId: 'billing-user',
       cashSales: 500, upiSales: 300, creditSales: 100, returns: 0, cashAudit: 500,
       actualCashParticulars: '500 x 1 = 500', pendingCashParticulars: '', remainingBalance: 500,
       createdAt: timestamp,
     }
-    await assertSucceeds(setDoc(doc(billing, 'dailyCashouts', 'cashout-1'), cashout))
+    await assertSucceeds(setDoc(doc(owner, 'dailyCashouts', 'cashout-1'), cashout))
     await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-2'), { ...cashout, recordedByUserId: 'manager-user' }))
+    // Rules evaluate against emulator request.time; staff entry is allowed only in the configured IST window.
+    const ist = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
+    const hour = Number(ist.find((part) => part.type === 'hour')?.value)
+    const minute = Number(ist.find((part) => part.type === 'minute')?.value)
+    const minuteOfDay = hour * 60 + minute
+    if (minuteOfDay >= 1435 || minuteOfDay <= 20) {
+      await assertSucceeds(setDoc(doc(billing, 'dailyCashouts', 'cashout-3'), cashout))
+    } else {
+      await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-3'), cashout))
+    }
 
     const sales = {
       storeId: 'single-store', date: '2026-10-01', totalSales: 900, cashSales: 500,

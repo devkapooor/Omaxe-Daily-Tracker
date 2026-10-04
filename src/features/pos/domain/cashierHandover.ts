@@ -1,4 +1,5 @@
 import type { PosBill, PosBillState, PosRefundEvent } from './types'
+import { serverNowIso } from '@/shared/lib/serverClock'
 
 export const HANDOVER_START = '2026-10-03T18:30:00.000Z'
 export const denominations = [500, 200, 100, 50, 20, 10, 5, 2, 1] as const
@@ -33,7 +34,7 @@ export function requiresLoginHandover(cashier: CashierState | null, historical: 
     (cashier.needsLogoutCheck && sessionAuthTime !== authTime)
 }
 
-export function handoverDate(timestamp = new Date().toISOString()) {
+export function handoverDate(timestamp = serverNowIso()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp))
 }
 

@@ -19,6 +19,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
+import { serverNowIso } from '@/shared/lib/serverClock'
 import type { AppUser } from '@/domain/financeTypes'
 import { cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepository'
 import { HANDOVER_START, applyPayments, handoverDate, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
@@ -56,7 +57,7 @@ import { calculatePosDashboard } from '../domain/posDashboard'
 const root = () => doc(db, 'posSandboxes', POS_SANDBOX_ID)
 const posCollection = (name: string) => collection(root(), name)
 const posDoc = (name: string, id: string) => doc(root(), name, id)
-const nowIso = () => new Date().toISOString()
+const nowIso = serverNowIso
 const actorFields = (actor: AppUser) => ({ actorUid: actor.id, actorName: actor.name, actorRole: actor.role })
 
 export function subscribePosProducts(
@@ -170,11 +171,11 @@ const cashoutMixRequests = new Map<string, Promise<PosCashoutPaymentMix>>()
 /** Fetch only the selected business day's bills/refunds and states for those bills. */
 export function getPosCashoutPaymentMix(date: string): Promise<PosCashoutPaymentMix> {
   const cached = cashoutMixCache.get(date)
-  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value)
+  if (cached && cached.expiresAt > performance.now()) return Promise.resolve(cached.value)
   const pending = cashoutMixRequests.get(date)
   if (pending) return pending
   const request = loadPosCashoutPaymentMix(date).then((value) => {
-    cashoutMixCache.set(date, { value, expiresAt: Date.now() + 30_000 })
+    cashoutMixCache.set(date, { value, expiresAt: performance.now() + 30_000 })
     return value
   }).finally(() => cashoutMixRequests.delete(date))
   cashoutMixRequests.set(date, request)

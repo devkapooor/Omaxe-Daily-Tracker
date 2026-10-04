@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore'
 import type { AppUser } from '../src/domain/financeTypes'
 
 const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTime: 123 }))
-vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, auth: { currentUser: { getIdTokenResult: async () => ({ claims: { auth_time: state.authTime } }) } } }))
+vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, functions: {}, auth: { currentUser: { getIdTokenResult: async () => ({ claims: { auth_time: state.authTime } }) } } }))
 
 import {
   approvePosRequest, deleteHeldCart, finalizePosBill, importPosProducts,
@@ -14,6 +14,7 @@ import {
 import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
 import { cashierRef, handoverRef, initializeHandover, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
 import { handoverDate } from '../src/features/pos/domain/cashierHandover'
+import { setServerClockSample } from '../src/shared/lib/serverClock'
 
 let environment: RulesTestEnvironment
 const owner = { id: 'pos-owner', name: 'POS Owner', role: 'owner' } as AppUser
@@ -28,6 +29,8 @@ beforeAll(async () => {
 }, 30_000)
 
 beforeEach(async () => {
+  const monotonicNow = performance.now()
+  setServerClockSample(Date.now(), monotonicNow, monotonicNow)
   state.authTime = 123
   await environment.clearFirestore()
   await environment.withSecurityRulesDisabled(async (context) => {

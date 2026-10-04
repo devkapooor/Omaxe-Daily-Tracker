@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { resolveActivePage } from './uiHelpers'
+import { defaultSignInPage, resolveActivePage } from './uiHelpers'
 import { buildMenu } from '@/features/navigation/config/menuConfig'
 
 describe('owner-only route resolution', () => {
+  it('opens POS by default for staff and managers on sign-in while preserving the owner preference', () => {
+    expect(defaultSignInPage('manager', 'vendor-preview')).toBe('pos-test')
+    expect(defaultSignInPage('billing', 'payroll')).toBe('pos-test')
+    expect(defaultSignInPage('owner', 'actions')).toBe('actions')
+  })
+
   it('allows the owner to open the Action Centre', () => {
     expect(resolveActivePage('owner', 'actions')).toBe('actions')
     expect(resolveActivePage('owner', 'vendor-preview')).toBe('vendor-preview')

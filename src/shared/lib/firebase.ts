@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp, type FirebaseOptions } from 'firebase/app'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
 const env = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env
@@ -28,9 +29,11 @@ if (missingKeys.length > 0) {
 export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
 export const db = getFirestore(firebaseApp)
+export const functions = getFunctions(firebaseApp, 'asia-south1')
 if (env.VITE_USE_FIREBASE_EMULATORS === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001)
 }
 export const isLocalAuthBypassEnabled =
   env.VITE_LOCAL_AUTH_BYPASS === 'true' &&

@@ -54,12 +54,14 @@ Status: Completed, accepted, and deployed on 2026-10-04. See [Phase 3B summary](
 
 ### Phase 3C — Module-specific workspaces
 
-Status: In progress; local implementation is awaiting user review. See [Phase 3C resume checkpoint](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md).
+Status: Completed, user-reviewed, and deployed on 2026-10-04. See [Phase 3C closeout checkpoint](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md).
 
 - Migrate Vendor Workspace, POS (Test), and Action Centre.
 - Preserve vendor ledger semantics, POS test-only Firestore isolation, cash drawer presentation source, and Action Centre approval boundaries.
 
 ### Phase 3D — Loan-visible page presentation
+
+Status: Next; not started. Requires separate user approval before implementation.
 
 - Migrate Dashboard, Register, and Logs to the shared visual frame in a separately reviewed phase.
 - Visual presentation changes are allowed under this explicitly approved phase, but must not change loan data/records, schema, calculations, workflows, permissions, or financial side effects. Inspect the diff specifically for JSX/classes only in loan-related areas; stop if any behavior/data boundary is implicated.

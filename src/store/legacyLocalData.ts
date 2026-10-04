@@ -79,7 +79,7 @@ function migrateUsers() {
         name: normalizeName(candidate.name),
         role,
         email: typeof candidate.email === 'string' ? candidate.email : deriveEmail(candidate.name),
-        createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
+        createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : '1970-01-01T00:00:00.000Z',
         disabled: Boolean(candidate.disabled),
       },
     ]

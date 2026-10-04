@@ -30,6 +30,7 @@ import { setupAppStoreSubscriptions, setupCashoutCorrectionSubscription } from '
 import { seedData } from './seedData'
 import { readLegacyImportPayload } from './legacyLocalData'
 import { deriveWorkspaceMetrics } from './deriveWorkspaceMetrics'
+import { synchronizeServerClock } from '@/shared/lib/serverClock'
 
 export function useAppStore() {
   const [networkTick, setNetworkTick] = useState(0)
@@ -130,6 +131,7 @@ export function useAppStore() {
     async function verifyAccessBeforeSubscriptions() {
       setCanStartSubscriptions(false)
       try {
+        await synchronizeServerClock()
         const profileSnapshot = await getDoc(doc(db, 'users', currentAuthUser.uid))
         if (!profileSnapshot.exists()) {
           if (!cancelled) setVerifiedRole('owner')
@@ -442,6 +444,7 @@ export function useAppStore() {
     saveLoanEntry: actions.saveLoanEntry,
     saveMonthlyReportMargin: actions.saveMonthlyReportMargin,
     saveOperationalSettings: actions.saveOperationalSettings,
+    saveScheduledNotifications: actions.saveScheduledNotifications,
     savePayment: actions.savePayment,
     savePurchase: actions.savePurchase,
     saveSales: actions.saveSales,

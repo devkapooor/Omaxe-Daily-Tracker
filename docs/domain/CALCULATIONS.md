@@ -209,6 +209,8 @@ Approval also rebuilds the linked `DailySales` document from every daily cashout
 
 ## Daily Cashout Audit Logic
 
+For new daily cashouts, `cashAudit` is the recorded cash sales amount; denomination counts are reconciled against that cash-only amount. Existing cashouts retain their saved audit values.
+
 ```text
 remainingBalance = drawerTotal
 auditDifference = cashAudit - drawerTotal

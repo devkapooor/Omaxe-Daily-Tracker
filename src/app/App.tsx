@@ -5,6 +5,7 @@ import { isLocalAuthBypassEnabled } from '@/shared/lib/firebase'
 import {
   type AppToast,
   type DashboardMonthOffset,
+  defaultSignInPage,
   resolveActivePage,
 } from '@/app/uiHelpers'
 import { useDashboardMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -16,6 +17,7 @@ import { AppBackground } from '@/shared/ui/background-components'
 import { AuroraBackground } from '@/shared/ui/aurora-background'
 import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
 import { CashierHandoverBoundary } from '@/features/pos/components/CashierHandoverBoundary'
+import { synchronizeServerClock } from '@/shared/lib/serverClock'
 
 function isPage(value: string | null): value is Page {
   return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'payroll' || value === 'logs' || value === 'settings'
@@ -66,6 +68,7 @@ export default function App() {
     withdrawCashoutCorrectionRequest,
     saveLoanEntry,
     saveOperationalSettings,
+    saveScheduledNotifications,
     savePayment,
   } = useAppStore()
 
@@ -78,6 +81,12 @@ export default function App() {
   const [toast, setToast] = useState<AppToast | null>(null)
   const [isPageLoaderVisible, setIsPageLoaderVisible] = useState(false)
   const [isPageTransitionPending, startPageTransition] = useTransition()
+  const [pageIdentity, setPageIdentity] = useState<{ id: string; role: string } | null>(null)
+  if (!currentUser && pageIdentity) setPageIdentity(null)
+  if (currentUser && (pageIdentity?.id !== currentUser.id || pageIdentity.role !== currentUser.role)) {
+    setPageIdentity({ id: currentUser.id, role: currentUser.role })
+    if (currentUser.role !== 'owner') setActivePage(defaultSignInPage(currentUser.role, activePage))
+  }
 
   const {
     monthlyPerformance,
@@ -114,6 +123,21 @@ export default function App() {
       window.removeEventListener('offline', handleNetworkChange)
     }
   }, [])
+
+  useEffect(() => {
+    if (!currentUser) return
+    const syncClock = () => {
+      if (document.visibilityState === 'visible') void synchronizeServerClock().catch(() => undefined)
+    }
+    const timer = window.setInterval(syncClock, 5 * 60 * 1000)
+    document.addEventListener('visibilitychange', syncClock)
+    window.addEventListener('focus', syncClock)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', syncClock)
+      window.removeEventListener('focus', syncClock)
+    }
+  }, [currentUser])
 
   useEffect(() => {
     if (!toast) return
@@ -241,6 +265,7 @@ export default function App() {
         withdrawCashoutCorrectionRequest={withdrawCashoutCorrectionRequest}
         saveLoanEntry={saveLoanEntry}
         saveOperationalSettings={saveOperationalSettings}
+        saveScheduledNotifications={saveScheduledNotifications}
         savePayment={savePayment}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}

@@ -1,6 +1,8 @@
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { nowIso, type OperationalExpenseBreakdown, type StoreCollectionState } from '@/store/storeShared'
+import type { ScheduledNotification } from '@/domain/appTypes'
+import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
 
 type SettingsActionArgs = {
   getState: () => StoreCollectionState
@@ -31,6 +33,13 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     )
   }
 
+  async function saveScheduledNotifications(value: ScheduledNotification[], actor: string) {
+    const notices = parseScheduledNotifications(value)
+    if (notices.length !== value.length) throw new Error('Each notification needs a title, message, valid trigger time, and at least one staff role.')
+    await setDoc(doc(db, 'appMetadata', 'appSettings'), { scheduledNotifications: notices }, { merge: true })
+    await pushSettingsAudit(`Scheduled blocking notifications updated (${notices.length} configured)`, actor)
+  }
+
   async function saveMonthlyReportMargin(month: string, marginPercentage: number, actor: string) {
     if (!/^\d{4}-\d{2}$/.test(month)) {
       throw new Error('Month must be in YYYY-MM format.')
@@ -59,5 +68,6 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
   return {
     saveMonthlyReportMargin,
     saveOperationalSettings,
+    saveScheduledNotifications,
   }
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
-import { formatDisplayDate, legacyCashHolderLabel, shiftDate, userNameById } from '@/app/uiHelpers'
+import { formatDisplayDate, legacyCashHolderLabel, shiftDate, today, userNameById } from '@/app/uiHelpers'
 import { db } from '@/shared/lib/firebase'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutLogTab } from '@/features/logs/components/DailyCashoutLogTab'
@@ -63,7 +63,8 @@ function isDateWithinRange(value: string, start: string, end: string) {
   return date >= start && date <= end
 }
 
-function indiaDateKey(value = new Date()) {
+function indiaDateKey(value?: Date) {
+  if (!value) return today()
   const parts = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: '2-digit',

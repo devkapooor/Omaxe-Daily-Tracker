@@ -16,8 +16,11 @@ import { PageHeader } from '@/shared/ui/page-header'
 import { PageLayout } from '@/shared/ui/page-layout'
 import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
+import type { ScheduledNotification } from '@/domain/appTypes'
 
 type ActionCenterPageProps = {
+  scheduledNotifications: ScheduledNotification[]
+  onSaveScheduledNotifications: (notices: ScheduledNotification[]) => Promise<void>
   testPosPanel?: ReactNode
   error: string | null
   isLoading: boolean
@@ -183,10 +186,17 @@ function VendorReturnDecision({
   )
 }
 
-export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn, testPosPanel }: ActionCenterPageProps) {
+export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn, testPosPanel, scheduledNotifications, onSaveScheduledNotifications }: ActionCenterPageProps) {
   const confirmation = useConfirmationDialog()
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<ApprovalActionItem | null>(null)
+  const [previousNotifications, setPreviousNotifications] = useState(scheduledNotifications)
+  const [notices, setNotices] = useState(scheduledNotifications)
+  const [savingNotices, setSavingNotices] = useState(false)
+  if (previousNotifications !== scheduledNotifications) {
+    setPreviousNotifications(scheduledNotifications)
+    setNotices(scheduledNotifications)
+  }
 
   async function run(item: ApprovalActionItem, action: () => Promise<void>) {
     setBusyItemId(item.id)
@@ -249,6 +259,24 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <PageCardStack className="w-full pb-4">
           <p className="sr-only">Owner workspace. Financial records change only after explicit approval.</p>
+
+        <Card>
+          <CardHeader className="border-b border-border px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">While browser is open</p>
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">Scheduled blocking notifications</h2>
+            <p className="text-xs text-muted-foreground">Staff see each enabled notice at its IST trigger time and must acknowledge it before using the app.</p>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3">
+            {notices.map((notice, index) => <div key={notice.id} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-12 sm:items-end">
+              <FieldLabel className="sm:col-span-3" label="Title"><Input value={notice.title} maxLength={100} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} /></FieldLabel>
+              <FieldLabel className="sm:col-span-4" label="Message"><Input value={notice.message} maxLength={1000} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, message: event.target.value } : item))} /></FieldLabel>
+              <FieldLabel className="sm:col-span-2" label="Trigger time (IST)"><Input type="time" value={notice.triggerTime} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, triggerTime: event.target.value } : item))} /></FieldLabel>
+              <fieldset className="sm:col-span-2"><legend className="mb-1 text-xs font-medium">Show to</legend><div className="flex gap-2 text-xs">{(['billing', 'manager'] as const).map((role) => <label key={role} className="flex items-center gap-1"><input type="checkbox" checked={notice.targetRoles.includes(role)} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, targetRoles: event.target.checked ? [...item.targetRoles, role] : item.targetRoles.filter((value) => value !== role) } : item))} />{role}</label>)}</div></fieldset>
+              <div className="flex items-center gap-2 sm:col-span-1"><label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={notice.enabled} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, enabled: event.target.checked } : item))} />On</label><Button type="button" size="sm" variant="ghost" onClick={() => setNotices((items) => items.filter((_, i) => i !== index))}>Remove</Button></div>
+            </div>)}
+            <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={notices.length >= 25} onClick={() => setNotices((items) => [...items, { id: crypto.randomUUID(), title: '', message: '', triggerTime: '23:50', targetRoles: ['billing', 'manager'], enabled: true }])}>Add notification</Button><Button type="button" disabled={savingNotices || notices.some((notice) => !notice.title.trim() || !notice.message.trim() || !notice.targetRoles.length)} onClick={() => { setSavingNotices(true); void onSaveScheduledNotifications(notices).finally(() => setSavingNotices(false)) }}>{savingNotices ? 'Saving…' : 'Save notifications'}</Button></div>
+          </CardContent>
+        </Card>
 
         {isLoading && !error ? (
           <Card>

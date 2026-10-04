@@ -2,7 +2,7 @@
 
 Date: 2026-10-04
 Status: Implemented, verified, and deployed to Firebase Hosting and Firestore on 2026-10-04. Production drawer initialization remains a deliberate owner action.
-Release order: Complete handover before the combined release with approved UI updates. Phase 3C remains queued.
+Release order: Complete handover before the combined release with approved UI updates. Phase 3C has since been completed and deployed; see the [roadmap](./ROADMAP.md) and [Phase 3C closeout](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md).
 
 ## Confirmed policy
 

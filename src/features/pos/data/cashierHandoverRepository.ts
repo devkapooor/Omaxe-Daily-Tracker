@@ -1,6 +1,7 @@
 import { collection, doc, getDocFromServer, getDocsFromServer, onSnapshot, orderBy, query, runTransaction, setDoc, updateDoc, where, limit } from 'firebase/firestore'
 import type { AppUser } from '@/domain/financeTypes'
 import { auth, db } from '@/shared/lib/firebase'
+import { serverNowIso } from '@/shared/lib/serverClock'
 import { HANDOVER_START, countCash, expectedHandover, handoverDate, seedHandoverTotals, type CashierReconciliation, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
 import type { PosBill, PosBillState, PosRefundEvent } from '../domain/types'
 
@@ -46,7 +47,7 @@ export async function initializeHandover(actor: AppUser) {
   for (const [uid, bill] of lastByUser) {
     const ref = cashierRef(uid)
     const existing = await getDocFromServer(ref)
-    if (!existing.exists()) await setDoc(ref, { uid, authTime: 0, needsLogoutCheck: true, lastBillId: bill.id, lastReconciliationId: '', updatedAt: new Date().toISOString() } satisfies CashierState)
+    if (!existing.exists()) await setDoc(ref, { uid, authTime: 0, needsLogoutCheck: true, lastBillId: bill.id, lastReconciliationId: '', updatedAt: serverNowIso() } satisfies CashierState)
   }
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref)
@@ -70,7 +71,7 @@ export async function submitHandover(actor: AppUser, kind: 'login' | 'logout', c
     const expected = expectedHandover(ledger, date)
     const delta = { cash: actual.cash - expected.cash, upi: upi - expected.upi, card: card - expected.card }
     const hasDiscrepancy = Object.values(delta).some((value) => value !== 0)
-    const createdAt = new Date().toISOString()
+  const createdAt = serverNowIso()
     const record: CashierReconciliation = { id, uid: actor.id, name: actor.name, authTime, kind, date, denominations: counts, coinPaise, actual, expected, delta, hasDiscrepancy, createdAt, note: note.trim(), reviewStatus: hasDiscrepancy ? 'pending' : 'matched' }
     transaction.set(doc(records(), id), record)
     const previous = cashierSnapshot.data() as CashierState | undefined
@@ -90,5 +91,5 @@ export function subscribeReconciliations(callback: (records: CashierReconciliati
   return () => { stopRecent(); stopPending() }
 }
 export async function acknowledgeReconciliation(id: string, uid: string) {
-  await updateDoc(doc(records(), id), { reviewStatus: 'reviewed', reviewedByUid: uid, reviewedAt: new Date().toISOString() })
+  await updateDoc(doc(records(), id), { reviewStatus: 'reviewed', reviewedByUid: uid, reviewedAt: serverNowIso() })
 }

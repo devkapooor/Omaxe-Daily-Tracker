@@ -34,6 +34,7 @@ import type {
 } from '../domain/appTypes'
 import type { AppUser } from '../domain/financeTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
+import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
 
 type SetupSubscriptionsArgs = Pick<
   AppStoreSetters,
@@ -200,6 +201,7 @@ export function setupAppStoreSubscriptions({
         marginPercentage: unknown
         monthlyOperationalExpense: unknown
         operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
+        scheduledNotifications: unknown
       }> | undefined
       const currentBankBalance =
         typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
@@ -226,7 +228,7 @@ export function setupAppStoreSubscriptions({
             ? rawBreakdown.miscellaneous
             : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
       }
-      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown })
+      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications) })
       markLoaded('appSettings')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', 'workspaceMetrics'), (snapshot) => {

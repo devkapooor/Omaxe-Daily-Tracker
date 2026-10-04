@@ -11,6 +11,7 @@ type AppTopBarProps = {
   currentUser: AppUser
   activePage: Page
   pendingApprovalCount: number
+  cashoutAllowed: boolean
   onPageChange: (page: Page) => void
   onLogout: () => void
 }
@@ -111,12 +112,12 @@ function NavigationLinks({
   )
 }
 
-export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPageChange, onLogout }: AppTopBarProps) {
+export function AppTopBar({ currentUser, activePage, pendingApprovalCount, cashoutAllowed, onPageChange, onLogout }: AppTopBarProps) {
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(getActiveTheme)
   const menuItems = useMemo(() => buildMenu(currentUser), [currentUser])
-  const navigationItems = useMemo(() => menuItems.filter((item) => item.action !== 'logout'), [menuItems])
+  const navigationItems = useMemo(() => menuItems.filter((item) => item.action !== 'logout' && (cashoutAllowed || currentUser.role === 'owner' || item.page !== 'cashout')), [menuItems, cashoutAllowed, currentUser.role])
   const logoutItem = useMemo(() => menuItems.find((item) => item.action === 'logout'), [menuItems])
   const initials = userInitials(currentUser.name)
 

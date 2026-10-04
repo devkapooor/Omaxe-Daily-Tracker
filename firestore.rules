@@ -28,6 +28,12 @@ service cloud.firestore {
       return isStaff() && userDoc().data.role == 'billing';
     }
 
+    function isCashoutWindowOpen() {
+      let istTime = request.time + duration.value(19800, 's');
+      let minuteOfDay = istTime.hours() * 60 + istTime.minutes();
+      return minuteOfDay >= 1435 || minuteOfDay <= 20;
+    }
+
     function hasPurchasingCapability(capability) {
       return isOwner() || (
         isStaff() &&
@@ -897,6 +903,7 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create: if isOwner() || (
         isStaff() &&
+        isCashoutWindowOpen() &&
         request.resource.data.recordedByUserId == request.auth.uid
       );
       allow update, delete: if isOwner();
@@ -909,6 +916,7 @@ service cloud.firestore {
       );
       allow create: if isOwner() || (
         isStaff() &&
+        isCashoutWindowOpen() &&
         request.resource.data.requestedByUserId == request.auth.uid &&
         request.resource.data.status == 'pending' &&
         request.resource.data.requestType == 'staff-request' &&
@@ -916,6 +924,7 @@ service cloud.firestore {
       );
       allow update: if isOwner() || (
         isStaff() &&
+        isCashoutWindowOpen() &&
         resource.data.requestedByUserId == request.auth.uid &&
         resource.data.status == 'pending' &&
         request.resource.data.status == 'withdrawn' &&

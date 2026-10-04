@@ -1,5 +1,6 @@
 import type { Cashout, PurchaseDraft } from '../domain/financeTypes'
 import type { LegacyCashHolder, Page, UserAccount } from '../domain/appTypes'
+import { serverNowDate } from '@/shared/lib/serverClock'
 
 export type AppToast = {
   id: string
@@ -56,7 +57,12 @@ export function legacyCashHolderLabel(holder?: LegacyCashHolder | 'unassigned') 
 }
 
 export function today() {
-  return formatDateKeyFromDate(new Date())
+  try {
+    return formatDateKeyFromDate(serverNowDate())
+  } catch {
+    // Workspace screens remain blocked until trusted server time is synchronized.
+    return '1970-01-01'
+  }
 }
 
 export function shiftDate(date: string, days: number) {
@@ -72,7 +78,7 @@ export function shiftDate(date: string, days: number) {
 
 export function daysInMonth(date: string) {
   const [year, month] = date.split('-').map(Number)
-  return new Date(year, month, 0).getDate()
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
 }
 
 export function daysBetweenInclusive(from: string, to: string) {
@@ -180,4 +186,8 @@ export function resolveActivePage(role: string, activePage: Page) {
   if (role === 'owner') return activePage
   if (activePage === 'dashboard' || activePage === 'actions' || activePage === 'logs') return 'expense'
   return activePage
+}
+
+export function defaultSignInPage(role: string, preferredPage: Page) {
+  return role === 'owner' ? resolveActivePage(role, preferredPage) : 'pos-test'
 }

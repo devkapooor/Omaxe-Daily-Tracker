@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Eye, RotateCcw, ShieldCheck } from 'lucide-react'
 import { today } from '@/app/uiHelpers'
+import { serverNowIso } from '@/shared/lib/serverClock'
 import {
   buildPurchasePostingV2,
   openInvoiceBalancesV2,
@@ -38,7 +39,7 @@ function initialPurchase() {
   return buildPurchasePostingV2({
     id: 'preview-purchase-1', vendorId: previewVendors[0].id, invoiceNumber: 'DEMO-1001',
     invoiceDate: today(), invoiceTotalPaise: 48_500_00, category: 'Accessories', notes: 'Preview invoice',
-    actorUserId: 'preview-owner', timestamp: new Date().toISOString(),
+    actorUserId: 'preview-owner', timestamp: serverNowIso(),
   }).purchase
 }
 
@@ -59,7 +60,7 @@ export function VendorLedgerPreviewPage() {
   async function savePurchase(draft: PurchaseV2Draft) {
     const purchaseId = `preview-purchase-${crypto.randomUUID()}`
     const posting = buildPurchasePostingV2({
-      id: purchaseId, ...draft, actorUserId: 'preview-owner', timestamp: new Date().toISOString(),
+      id: purchaseId, ...draft, actorUserId: 'preview-owner', timestamp: serverNowIso(),
     })
     setPurchases((current) => [...current, posting.purchase])
     setActivity(`Preview invoice ${posting.purchase.invoiceNumber} added locally. Nothing was saved.`)
@@ -81,7 +82,7 @@ export function VendorLedgerPreviewPage() {
         amountPaise: draft.amountPaise,
         state: 'posted',
         revision: 1,
-        createdAt: new Date().toISOString(),
+        createdAt: serverNowIso(),
         createdByUserId: 'preview-owner',
       }])
     }

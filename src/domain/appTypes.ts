@@ -36,6 +36,15 @@ export type VendorLedgerV2Config = {
 
 export type Page = 'dashboard' | 'actions' | 'pos-test' | 'vendor-preview' | 'directory' | 'expense' | 'cashout' | 'movement' | 'payroll' | 'logs' | 'settings'
 
+export type ScheduledNotification = {
+  id: string
+  title: string
+  message: string
+  triggerTime: string
+  targetRoles: Array<'manager' | 'billing'>
+  enabled: boolean
+}
+
 export type LoanStatus = 'Open' | 'Settled'
 
 export type LoanEntry = {

@@ -62,7 +62,6 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
   const [creditSale, setCreditSale] = useState('0')
   const [cashExpense, setCashExpense] = useState(() => String(todayCashExpenses))
   const [cashExpenseEdited, setCashExpenseEdited] = useState(false)
-  const [systemAudit, setSystemAudit] = useState('0')
   const [drawerState, setDrawerState] = useState<DrawerFormState>(emptyDrawerFormState)
   const [pendingDraft, setPendingDraft] = useState<DailyDetailsDraft | null>(null)
   const [isDrawerModalOpen, setIsDrawerModalOpen] = useState(false)
@@ -96,7 +95,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
   const creditSaleValue = numberValue(creditSale)
   const cashExpenseInputValue = !cashExpenseEdited && entryDate === today() ? String(todayCashExpenses) : cashExpense
   const cashExpenseValue = numberValue(cashExpenseInputValue)
-  const systemAuditValue = numberValue(systemAudit)
+  const systemAuditValue = cashSaleValue
   const machineCardTotal = upiSaleValue + cardSaleValue
   const expectedCash = cashSaleValue - cashExpenseValue
   const drawerDenominations = {
@@ -118,7 +117,6 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
     setCreditSale('0')
     setCashExpense(String(todayCashExpenses))
     setCashExpenseEdited(false)
-    setSystemAudit('0')
     setDrawerState(emptyDrawerFormState)
     setPendingDraft(null)
     setIsDrawerModalOpen(false)
@@ -226,8 +224,8 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
               <Input type="number" value={expectedCash} readOnly />
             </FieldLabel>
 
-            <FieldLabel label="System Audit">
-              <Input type="number" min="0" step="1" value={systemAudit} onChange={(event) => setSystemAudit(event.target.value)} />
+            <FieldLabel label="System Audit (Cash Sales Recorded)">
+              <Input type="number" value={cashSaleValue} readOnly />
             </FieldLabel>
 
             <FieldLabel label="By">

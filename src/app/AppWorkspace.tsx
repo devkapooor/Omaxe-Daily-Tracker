@@ -1,5 +1,6 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
 import type { Page, UserAccount } from '@/domain/appTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
@@ -33,11 +34,15 @@ import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/acti
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
-import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry } from '@/domain/appTypes'
+import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, ScheduledNotification, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { ToastHost } from '@/shared/ui/toast-host'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
+import { serverNowIso } from '@/shared/lib/serverClock'
+import { serverNowMs } from '@/shared/lib/serverClock'
+import { isCashoutWindowOpen } from '@/features/cashout/domain/cashoutWindow'
+import { AppBlockingNotice } from '@/app/AppBlockingNotice'
 import {
   applySettlementCorrectionV2,
   rejectSettlementCorrectionRequestV2,
@@ -50,6 +55,7 @@ type AppWorkspaceProps = {
     marginPercentage: number
     monthlyOperationalExpense: number
     operationalExpenseBreakdown: OperationalExpenseBreakdown
+    scheduledNotifications: ScheduledNotification[]
   }
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
@@ -106,6 +112,7 @@ type AppWorkspaceProps = {
   withdrawCashoutCorrectionRequest: (requestId: string, actor: AppUser) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
+  saveScheduledNotifications: (notices: ScheduledNotification[], actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
@@ -160,6 +167,7 @@ export function AppWorkspace({
   withdrawCashoutCorrectionRequest,
   saveLoanEntry,
   saveOperationalSettings,
+  saveScheduledNotifications,
   savePayment,
   setDashboardMonthOffset,
   settingsAuditLog,
@@ -172,6 +180,11 @@ export function AppWorkspace({
   totalVendorOutstanding,
   users,
 }: AppWorkspaceProps) {
+  const [, setClockPulse] = useState(0)
+  useEffect(() => { const timer = window.setInterval(() => setClockPulse((v) => v + 1), 15_000); return () => window.clearInterval(timer) }, [])
+  let trustedNow: number | null = null
+  try { trustedNow = serverNowMs() } catch { /* Closed until trusted time is synchronized. */ }
+  const cashoutAllowed = currentUser.role === 'owner' || (trustedNow !== null && isCashoutWindowOpen(trustedNow))
   const confirmation = useConfirmationDialog()
   const vendorLedger = useVendorLedgerV2(currentUser)
   const vendorNames = Object.fromEntries(vendorLedger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
@@ -187,6 +200,7 @@ export function AppWorkspace({
         currentUser={currentUser}
         activePage={activePage}
         pendingApprovalCount={approvalQueue.pendingCount}
+        cashoutAllowed={cashoutAllowed}
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
@@ -231,6 +245,11 @@ export function AppWorkspace({
 
         {activePage === 'actions' && currentUser.role === 'owner' ? (
           <ActionCenterPage
+            scheduledNotifications={appSettings.scheduledNotifications}
+            onSaveScheduledNotifications={async (notices) => {
+              await saveScheduledNotifications(notices, currentUser.name)
+              showToast('Scheduled notifications updated.')
+            }}
             error={cashoutCorrectionsError}
             isLoading={!cashoutCorrectionsReady}
             queue={approvalQueue}
@@ -240,7 +259,7 @@ export function AppWorkspace({
                   await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
                   showToast(`Cashout correction approved: ${item.recordedBy}`)
                 } else if (item.kind === 'vendor-settlement-correction') {
-                  await applySettlementCorrectionV2(item.sourceRequest.id, { id: currentUser.id, name: currentUser.name }, new Date().toISOString())
+                  await applySettlementCorrectionV2(item.sourceRequest.id, { id: currentUser.id, name: currentUser.name }, serverNowIso())
                   showToast(`Vendor payment correction approved: ${item.vendorName}`)
                 }
               } catch (error) {
@@ -253,7 +272,7 @@ export function AppWorkspace({
                   await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
                   showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated request closed: ${item.recordedBy}` : `Cashout correction rejected: ${item.recordedBy}`)
                 } else if (item.kind === 'vendor-settlement-correction') {
-                  await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, new Date().toISOString())
+                  await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, serverNowIso())
                   showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
                 }
               } catch (error) {
@@ -265,7 +284,7 @@ export function AppWorkspace({
                 await resolveVendorReturnV2(item.sourceReturn.id, {
                   ...decision,
                   actor: { id: currentUser.id, name: currentUser.name },
-                  timestamp: new Date().toISOString(),
+                  timestamp: serverNowIso(),
                 })
                 showToast(`Vendor return marked ${decision.outcome}: ${item.vendorName}`)
               } catch (error) {
@@ -320,7 +339,7 @@ export function AppWorkspace({
             todayPaymentNet={todayPaymentNet}
           />
         ) : null}
-        {activePage === 'cashout' ? (
+        {activePage === 'cashout' && cashoutAllowed ? (
           <CashoutPage
             correctionRequests={cashoutCorrectionRequests}
             currentUser={currentUser}
@@ -332,6 +351,7 @@ export function AppWorkspace({
             showToast={showToast}
           />
         ) : null}
+        {activePage === 'cashout' && !cashoutAllowed ? <div className="grid min-h-0 flex-1 place-items-center"><StatusPanel variant="warning" className="max-w-xl p-6 text-center"><strong className="block text-lg">Cashout is currently locked</strong><span className="mt-2 block text-sm">Staff and managers can access Cashout from 11:55 PM to 12:20 AM IST. Please wait for the window to open.</span></StatusPanel></div> : null}
         {activePage === 'movement' ? (
           <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm
@@ -455,6 +475,7 @@ export function AppWorkspace({
         ) : null}
         {confirmation.dialog}
       </div>
+      {currentUser.role === 'owner' ? null : <AppBlockingNotice user={currentUser} notices={appSettings.scheduledNotifications} />}
     </main>
   )
 }

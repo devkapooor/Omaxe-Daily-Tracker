@@ -1,6 +1,6 @@
 import type { FinanceData } from '../domain/financeTypes'
 
-const now = new Date().toISOString()
+const now = '1970-01-01T00:00:00.000Z'
 export const seedData: FinanceData = {
   stores: [
     {

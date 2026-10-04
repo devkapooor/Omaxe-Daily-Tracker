@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ClipboardCheck, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { today } from '@/app/uiHelpers'
+import { serverNowIso } from '@/shared/lib/serverClock'
 import type { AppUser } from '@/domain/financeTypes'
 import {
   confirmsVendorLedgerActivation,
@@ -89,7 +90,7 @@ function VendorLedgerCutoverPlanner({ currentUser }: { currentUser: AppUser }) {
         activationDate: review.activationDate,
         vendors: review.vendors,
         actor: { id: currentUser.id, name: currentUser.name },
-        timestamp: new Date().toISOString(),
+        timestamp: serverNowIso(),
       })
       setActivationMessage('V2 vendor ledger activated. Loading the operational workspace...')
     } catch (cause) {

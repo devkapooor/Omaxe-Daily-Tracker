@@ -1,11 +1,11 @@
-# Phase 3C resume checkpoint — 2026-10-04
+# Phase 3C closeout checkpoint — 2026-10-04
 
-Status: In progress; local implementation is ready for the next user review.
+Status: Completed, user-reviewed, and deployed on 2026-10-04. The user said the POS Test dashboard redesign is okay for now.
 Branch baseline: `main` at `4b93085` before the Phase 3C changes.
 
 ## Resume here
 
-Resume the shared page-header/card-stack redesign at Phase 3C. The Vendor Workspace, POS (Test), and Action Centre layout migration is implemented locally. The user then asked to redesign the POS Test dashboard for staff use and clarified that T means today, T-1 yesterday, and T-2 two days ago. That daily dashboard implementation is now in place. The next step is to open the local server, review the latest POS Test dashboard, and make any requested refinements. Do not start Phase 3D until Phase 3C is reviewed and closed out.
+Phase 3C is closed. The user reviewed the redesigned POS Test dashboard and said it is okay for now. The shared page-header/card-stack work for Vendor Workspace, POS (Test), and Action Centre is deployed. Phase 3D remains separate and requires user approval before implementation.
 
 ## Current Phase 3C work
 
@@ -34,7 +34,7 @@ Resume the shared page-header/card-stack redesign at Phase 3C. The Vendor Worksp
 
 ## Safety and worktree notes
 
-- No production deployment or migration was performed.
+- Phase 3C is deployed; no production data migration was performed.
 - POS Test uses live Firestore data in the isolated `posSandboxes/test` path; UI actions may write to that sandbox.
 - At checkpoint creation, the eight source files above are modified and the branch is otherwise at `4b93085`. Pre-existing untracked `.playwright-cli/`, `DESIGN.md`, `docs/design-references/`, `firebase.rules-test.local.json`, and `output/` are unrelated and must remain untouched.
-- This checkpoint is intentionally not marked accepted or deployed. Phase 3C needs user review of the redesigned dashboard.
+- Phase 3C is accepted for now and deployed. Cross-page light/dark, narrow-width, focus, and scroll acceptance remains in Phase 3E.

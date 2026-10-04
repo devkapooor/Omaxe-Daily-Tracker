@@ -19,6 +19,9 @@ import type {
   VendorRecord,
 } from '../domain/appTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
+import { serverNowIso } from '@/shared/lib/serverClock'
+import type { ScheduledNotification } from '../domain/appTypes'
+import { DEFAULT_SCHEDULED_NOTIFICATIONS } from '@/features/action-center/domain/scheduledNotifications'
 
 export const singleStoreId = 'single-store'
 export const defaultMonthlyOperationalExpense = 500000
@@ -41,6 +44,7 @@ export type AppSettings = {
   marginPercentage: number
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
+  scheduledNotifications: ScheduledNotification[]
 }
 
 export type CreateUserInput = {
@@ -116,6 +120,7 @@ export const defaultAppSettings: AppSettings = {
     caFee: 0,
     miscellaneous: 0,
   },
+  scheduledNotifications: DEFAULT_SCHEDULED_NOTIFICATIONS,
 }
 
 export const emptyWorkspaceMetrics: WorkspaceMetrics = {
@@ -309,7 +314,7 @@ export function parseVendorCatalog(data: DocumentData | undefined) {
 }
 
 export function nowIso() {
-  return new Date().toISOString()
+  return serverNowIso()
 }
 
 export function salesDocId(storeId: string, date: string) {
