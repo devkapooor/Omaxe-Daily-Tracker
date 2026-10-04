@@ -11,6 +11,7 @@ import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 
 type LogsPageProps = {
@@ -47,6 +48,7 @@ function LogCard({ eyebrow, title, children }: LogCardProps) {
 }
 
 type LogRangePreset = '7' | '15' | '30' | '90' | 'custom'
+const logTabTriggerClassName = 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm'
 
 function compareDateDesc(left: string, right: string) {
   return right.localeCompare(left)
@@ -106,6 +108,8 @@ export function LogsPage({
   const rangeStart = rangePreset === 'custom' ? customStart : shiftDate(rangeEnd, -(Number(rangePreset) - 1))
   const validRangeStart = rangeStart <= rangeEnd ? rangeStart : rangeEnd
   const validRangeEnd = rangeStart <= rangeEnd ? rangeEnd : rangeStart
+  const isCustomRangeIncomplete = rangePreset === 'custom' && (!customStart || !customEnd)
+  const canApplyRangeToNonLoanTab = activeTab === 'loans' || !isCustomRangeIncomplete
 
   function resetResults() {
     setVisibleCount(50)
@@ -113,6 +117,7 @@ export function LogsPage({
 
   useEffect(() => {
     if (activeTab !== 'settingsAudit') return
+    if (isCustomRangeIncomplete) return
 
     const auditQuery = query(
       collection(db, 'settingsAudit'),
@@ -126,7 +131,7 @@ export function LogsPage({
       (snapshot) => setBoundedAuditLog(snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<SettingsAuditEntry, 'id'>) }))),
       () => setBoundedAuditLog(settingsAuditLog.filter((entry) => isTimestampWithinIndiaRange(entry.createdAt, validRangeStart, validRangeEnd)).slice(0, visibleCount)),
     )
-  }, [activeTab, settingsAuditLog, validRangeEnd, validRangeStart, visibleCount])
+  }, [activeTab, isCustomRangeIncomplete, settingsAuditLog, validRangeEnd, validRangeStart, visibleCount])
 
   const transferPartyName = useCallback((entry: CashTransfer, side: 'from' | 'to') => {
     if (side === 'from') {
@@ -142,28 +147,28 @@ export function LogsPage({
   const filteredSales = useMemo(
     () =>
       sales
-        .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+        .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
         .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt)),
-    [sales, validRangeEnd, validRangeStart],
+    [canApplyRangeToNonLoanTab, sales, validRangeEnd, validRangeStart],
   )
 
   const filteredExpenses = useMemo(() => {
     return expenses
-      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+      .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [expenses, validRangeEnd, validRangeStart])
+  }, [canApplyRangeToNonLoanTab, expenses, validRangeEnd, validRangeStart])
 
   const filteredPurchases = useMemo(() => {
     return purchases
-      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+      .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [purchases, validRangeEnd, validRangeStart])
+  }, [canApplyRangeToNonLoanTab, purchases, validRangeEnd, validRangeStart])
 
   const filteredPayments = useMemo(() => {
     return payments
-      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+      .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [payments, validRangeEnd, validRangeStart])
+  }, [canApplyRangeToNonLoanTab, payments, validRangeEnd, validRangeStart])
 
   const filteredLoans = useMemo(() => {
     return loans
@@ -174,24 +179,25 @@ export function LogsPage({
 
   const filteredTransfers = useMemo(() => {
     return cashTransfers
-      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+      .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [cashTransfers, validRangeEnd, validRangeStart])
+  }, [canApplyRangeToNonLoanTab, cashTransfers, validRangeEnd, validRangeStart])
 
   const filteredDailyCashouts = useMemo(
-    () => dailyCashouts.filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd)),
-    [dailyCashouts, validRangeEnd, validRangeStart],
+    () => dailyCashouts.filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd)),
+    [canApplyRangeToNonLoanTab, dailyCashouts, validRangeEnd, validRangeStart],
   )
 
   const rangedCorrectionRequests = useMemo(
-    () => cashoutCorrectionRequests.filter((entry) => entry.status !== 'pending' && isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
-    [cashoutCorrectionRequests, validRangeEnd, validRangeStart],
+    () => cashoutCorrectionRequests.filter((entry) => canApplyRangeToNonLoanTab && entry.status !== 'pending' && isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
+    [canApplyRangeToNonLoanTab, cashoutCorrectionRequests, validRangeEnd, validRangeStart],
   )
 
   const filteredAudit = useMemo(() => {
-    return boundedAuditLog
+    if (isCustomRangeIncomplete && activeTab === 'settingsAudit') return []
+    return boundedAuditLog.slice()
       .sort((left, right) => compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [boundedAuditLog])
+  }, [activeTab, boundedAuditLog, isCustomRangeIncomplete])
 
   const activeResultCount = {
     sales: filteredSales.length,
@@ -206,41 +212,52 @@ export function LogsPage({
 
   return (
     <section className="grid gap-2.5 xl:min-h-0 xl:overflow-hidden">
-      <div className="grid gap-3 rounded-[18px] border border-border/70 bg-secondary/35 p-3 sm:grid-cols-[minmax(150px,220px)_1fr_auto] sm:items-end">
-        <FieldLabel label="Log range">
-          <NativeSelect value={rangePreset} onChange={(event) => {
-            setRangePreset(event.target.value as LogRangePreset)
-            resetResults()
-          }}>
-            <option value="7">Last 7 days</option>
-            <option value="15">Last 15 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="custom">Custom range</option>
-          </NativeSelect>
-        </FieldLabel>
-        {rangePreset === 'custom' ? (
-          <div className="grid gap-2 min-[460px]:grid-cols-2">
-            <FieldLabel label="From"><Input type="date" value={customStart} onChange={(event) => { setCustomStart(event.target.value); resetResults() }} /></FieldLabel>
-            <FieldLabel label="To"><Input type="date" value={customEnd} onChange={(event) => { setCustomEnd(event.target.value); resetResults() }} /></FieldLabel>
-          </div>
-        ) : <div className="hidden sm:block" />}
-        <div className="rounded-xl border border-border/60 bg-background/45 px-3 py-2 text-xs font-semibold text-muted-foreground sm:text-right">
-          <span className="block text-foreground">{activeResultCount} result{activeResultCount === 1 ? '' : 's'}</span>
-          {formatDisplayDate(validRangeStart)} to {formatDisplayDate(validRangeEnd)}
-        </div>
-      </div>
       <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); resetResults() }} className="grid gap-2 xl:min-h-0 xl:flex-1 xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
-        <TabsList className="min-h-9 grid-flow-row grid-cols-2 sm:grid-cols-4 xl:grid-flow-col xl:grid-cols-8">
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="loans">Loans</TabsTrigger>
-          <TabsTrigger value="dailyCashouts">Daily Cashouts</TabsTrigger>
-          <TabsTrigger value="cashTransfers">Cash Transfers</TabsTrigger>
-          <TabsTrigger value="settingsAudit">Settings Audit</TabsTrigger>
-        </TabsList>
+        <Card>
+          <CardContent className="grid gap-2.5 p-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Logs</h1>
+            <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(180px,220px)_auto] sm:items-center lg:flex lg:flex-wrap lg:justify-end">
+              <NativeSelect aria-label="Date range" value={rangePreset} onChange={(event) => {
+                setRangePreset(event.target.value as LogRangePreset)
+                resetResults()
+              }}>
+                <option value="7">Last 7 days</option>
+                <option value="15">Last 15 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="custom">Custom range</option>
+              </NativeSelect>
+              {rangePreset === 'custom' ? (
+                <div className="grid gap-2 min-[460px]:grid-cols-2 lg:min-w-[350px]">
+                  <FieldLabel label="From"><Input type="date" value={customStart} onChange={(event) => { setCustomStart(event.target.value); resetResults() }} /></FieldLabel>
+                  <FieldLabel label="To"><Input type="date" value={customEnd} onChange={(event) => { setCustomEnd(event.target.value); resetResults() }} /></FieldLabel>
+                </div>
+              ) : null}
+              <div className="flex min-h-9 items-center gap-2 border-l border-border pl-3 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{activeResultCount} result{activeResultCount === 1 ? '' : 's'}</span>
+                <span aria-hidden="true" className="text-border">|</span>
+                <span>{activeTab !== 'loans' && isCustomRangeIncomplete ? 'Select both dates' : `${formatDisplayDate(validRangeStart)} to ${formatDisplayDate(validRangeEnd)}`}</span>
+              </div>
+            </div>
+          </CardContent>
+          <div className="mx-2.5 border-t border-border pt-2.5 pb-2.5">
+            <TabsList aria-label="Log category" className="min-h-9 grid-flow-row grid-cols-2 rounded-md border-0 bg-muted/50 p-1 shadow-none sm:grid-cols-4 xl:grid-flow-col xl:grid-cols-8">
+              <TabsTrigger className={logTabTriggerClassName} value="sales">Sales</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="expenses">Expenses</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="purchases">Purchases</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="payments">Payments</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="loans">Loans</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="dailyCashouts">Daily Cashouts</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="cashTransfers">Cash Transfers</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="settingsAudit">Settings Audit</TabsTrigger>
+            </TabsList>
+          </div>
+          {activeTab !== 'loans' && isCustomRangeIncomplete ? (
+            <div className="px-2.5 pb-2.5">
+              <StatusPanel variant="warning">Choose both start and end dates to filter this log.</StatusPanel>
+            </div>
+          ) : null}
+        </Card>
 
         <TabsContent value="sales" className="min-h-0">
           <LogCard eyebrow="Logs" title="Sales">

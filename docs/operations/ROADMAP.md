@@ -17,7 +17,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 - [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP pass. Rules tests remain blocked by missing Java; no rules were changed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). Hosting deployment remains pending separate confirmation.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
-- [ ] Continue the approved UI redesign with Logs and Settings after a separate phase approval; the Action Centre local layout has been accepted and checkpointed. Preserve existing workflows and the loan safeguard.
+- [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
+- [ ] Continue the UI redesign with Settings only after a separate phase approval. Preserve existing workflows and the loan safeguard.
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.
@@ -29,7 +30,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Deferred maintenance and boundaries
 
 - Evaluate bundle splitting, uiHelpers decomposition, reusable validation, and narrow-desktop/tablet coverage only when justified by a feature or defect.
-- After the currently approved UI redesign phases are completed and checkpointed, plan a shared page-layout/card-stack upgrade: inventory repeated page structures, define reusable page/card composition primitives, and migrate eligible non-loan pages incrementally to reduce duplicated UI code and standardize spacing. Keep this queued (not active) until the current plan is complete; each implementation phase requires user approval and its own checkpoint. Preserve each page's existing workflows and visual acceptance criteria. Loan-specific UI and code remain excluded; stop and ask before any proposed shared primitive would alter them.
+- After the currently approved UI redesign phases are completed and checkpointed, plan a shared page-layout/card-stack upgrade: inventory repeated page structures, define reusable page-header and card-composition primitives, and migrate eligible non-loan pages incrementally to reduce duplicated UI code and standardize spacing. Use the Dashboard's current top-bar height and alignment as the shared baseline; page-specific controls/content can be supplied or omitted through the common pattern. Keep this queued (not active) until the current plan is complete; each implementation phase requires user approval and its own checkpoint. Preserve each page's existing workflows and visual acceptance criteria. Loan-specific UI and code remain excluded; stop and ask before any proposed shared primitive would alter them.
 - A cash-identity diagnostics/review screen may be considered if needed; never use it to authorize automatic live data repairs.
 - Maintainability work keeps expenses and loans untouched and does not broaden financial scope.
 - Multi-store, inventory, payroll, GST/tax workflows, offline financial writes, and backend job orchestration are outside the current approved scope.
