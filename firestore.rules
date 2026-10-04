@@ -1108,6 +1108,164 @@ service cloud.firestore {
     // POS (Test) is deliberately isolated below this single sandbox document.
     // No rule in this block grants access to a production collection.
     match /posSandboxes/{sandboxId} {
+      function handoverPath() {
+        return /databases/$(database)/documents/posSandboxes/$(sandboxId)/handover/main;
+      }
+      function handoverEnabled() { return exists(handoverPath()); }
+      function paymentAt(payments, index, method) {
+        return payments.size() > index && payments[index].method == method ? payments[index].amountPaise : 0;
+      }
+      function paymentTotal(payments, method) {
+        return paymentAt(payments, 0, method) + paymentAt(payments, 1, method) + paymentAt(payments, 2, method) + paymentAt(payments, 3, method);
+      }
+      function validPaymentAt(payments, index) {
+        return payments.size() <= index || (payments[index].method in ['cash', 'upi', 'card'] && payments[index].amountPaise is int && payments[index].amountPaise >= 0);
+      }
+      function dayTotals(data, date) { return data.dailyTotals.get(date, {'upi': 0, 'card': 0}); }
+      function validHandoverDate(date) {
+        return date is string && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+          timestamp.date(int(date.split('-')[0]), int(date.split('-')[1]), int(date.split('-')[2])) ==
+          (request.time + duration.value(19800, 's')).date();
+      }
+      function validHandoverBill(bill, billId) {
+        let after = getAfter(handoverPath()).data;
+        let state = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid)).data;
+        return after.initialized == true && validHandoverDate(bill.handoverDate) && bill.cashierAuthTime == request.auth.token.auth_time &&
+          bill.payments.size() > 0 && bill.payments.size() <= 4 && validPaymentAt(bill.payments, 0) && validPaymentAt(bill.payments, 1) &&
+          validPaymentAt(bill.payments, 2) && validPaymentAt(bill.payments, 3) &&
+          paymentTotal(bill.payments, 'cash') + paymentTotal(bill.payments, 'upi') + paymentTotal(bill.payments, 'card') == bill.totalPaise &&
+          after.lastOperation == 'bill' && after.lastOperationId == billId &&
+          state.authTime == request.auth.token.auth_time && state.needsLogoutCheck == true && state.lastBillId == billId;
+      }
+      function validBillLedger(before, after) {
+        let bill = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(after.lastOperationId)).data;
+        let previous = dayTotals(before, bill.handoverDate);
+        let next = dayTotals(after, bill.handoverDate);
+        return !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(after.lastOperationId)) &&
+          bill.createdByUid == request.auth.uid && bill.payments.size() <= 4 &&
+          after.cashNetPaise == before.cashNetPaise + paymentTotal(bill.payments, 'cash') &&
+          next.upi == previous.upi + paymentTotal(bill.payments, 'upi') &&
+          next.card == previous.card + paymentTotal(bill.payments, 'card') &&
+          after.dailyTotals.diff(before.dailyTotals).affectedKeys().hasOnly([bill.handoverDate]) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'cashNetPaise', 'dailyTotals', 'lastOperation', 'lastOperationId', 'updatedByUid']);
+      }
+      function validRefundLedger(before, after) {
+        let path = /databases/$(database)/documents/posSandboxes/$(sandboxId)/approvals/$(after.lastOperationId);
+        let approval = getAfter(path).data;
+        let bill = get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(approval.billId)).data;
+        let statePath = /databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(approval.billId);
+        let payments = approval.type == 'void' ? (bill.createdAt >= '2026-10-03T18:30:00.000Z' ? bill.payments : []) : [{'method': approval.refundMethod, 'amountPaise': approval.refundAmountPaise}];
+        let previous = dayTotals(before, approval.handoverDate);
+        let next = dayTotals(after, approval.handoverDate);
+        return get(path).data.status == 'pending' && approval.status == 'approved' && approval.reviewedByUid == request.auth.uid &&
+          validHandoverDate(approval.handoverDate) && approval.type in ['void', 'return'] &&
+          get(statePath).data.revision == approval.sourceBillRevision && getAfter(statePath).data.revision == approval.sourceBillRevision + 1 &&
+          getAfter(statePath).data.state == (approval.type == 'void' ? 'voided' : 'partially-returned') &&
+          after.cashNetPaise == before.cashNetPaise - paymentTotal(payments, 'cash') &&
+          next.upi == previous.upi - paymentTotal(payments, 'upi') && next.card == previous.card - paymentTotal(payments, 'card') &&
+          after.dailyTotals.diff(before.dailyTotals).affectedKeys().hasOnly([approval.handoverDate]) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'cashNetPaise', 'dailyTotals', 'lastOperation', 'lastOperationId', 'updatedByUid']);
+      }
+      function noteCount(notes, key) { return notes.get(key, 0); }
+      function validCount(value) { return value is int && value >= 0 && value <= 1000000; }
+      function validDenominations(notes, coins, cash) {
+        return notes is map && notes.keys().hasOnly(['500', '200', '100', '50', '20', '10', '5', '2', '1']) &&
+          validCount(noteCount(notes, '500')) && validCount(noteCount(notes, '200')) && validCount(noteCount(notes, '100')) &&
+          validCount(noteCount(notes, '50')) && validCount(noteCount(notes, '20')) && validCount(noteCount(notes, '10')) &&
+          validCount(noteCount(notes, '5')) && validCount(noteCount(notes, '2')) && validCount(noteCount(notes, '1')) &&
+          coins is int && coins >= 0 && cash == coins + 100 * (
+            500 * noteCount(notes, '500') + 200 * noteCount(notes, '200') + 100 * noteCount(notes, '100') +
+            50 * noteCount(notes, '50') + 20 * noteCount(notes, '20') + 10 * noteCount(notes, '10') +
+            5 * noteCount(notes, '5') + 2 * noteCount(notes, '2') + noteCount(notes, '1'));
+      }
+      function expectedCash(before) {
+        return before.get('checkpoint', {}).get('cashActualPaise', 0) + before.cashNetPaise - before.get('checkpoint', {}).get('cashNetPaise', 0);
+      }
+      function expectedTerminal(before, date, method) {
+        let checkpoint = before.get('checkpoint', {});
+        let totals = dayTotals(before, date);
+        return checkpoint.get('date', '') == date ?
+          (method == 'upi' ? checkpoint.upiActualPaise + totals.upi - checkpoint.upiNetPaise : checkpoint.cardActualPaise + totals.card - checkpoint.cardNetPaise) : totals[method];
+      }
+      function validReconciliation(record, id) {
+        let before = get(handoverPath()).data;
+        let after = getAfter(handoverPath()).data;
+        let state = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid)).data;
+        return before.initialized == true && record.uid == request.auth.uid && record.authTime == request.auth.token.auth_time &&
+          record.keys().hasOnly(['id', 'uid', 'name', 'authTime', 'kind', 'date', 'denominations', 'coinPaise', 'actual', 'expected', 'delta', 'hasDiscrepancy', 'createdAt', 'note', 'reviewStatus']) &&
+          record.get('id', id) == id && record.get('note', '') is string && record.get('note', '').size() <= 1000 &&
+          record.kind in ['login', 'logout'] && validHandoverDate(record.date) && record.createdAt is string && record.name is string &&
+          validDenominations(record.denominations, record.coinPaise, record.actual.cash) &&
+          record.actual.upi is int && record.actual.upi >= 0 && record.actual.card is int && record.actual.card >= 0 &&
+          record.expected.cash == expectedCash(before) && record.expected.upi == expectedTerminal(before, record.date, 'upi') &&
+          record.expected.card == expectedTerminal(before, record.date, 'card') &&
+          record.delta.cash == record.actual.cash - record.expected.cash &&
+          record.delta.upi == record.actual.upi - record.expected.upi && record.delta.card == record.actual.card - record.expected.card &&
+          record.hasDiscrepancy == (record.delta.cash != 0 || record.delta.upi != 0 || record.delta.card != 0) &&
+          record.reviewStatus == (record.hasDiscrepancy ? 'pending' : 'matched') &&
+          after.lastOperation == 'reconciliation' && after.lastOperationId == id &&
+          state.authTime == request.auth.token.auth_time && state.lastReconciliationId == id && state.needsLogoutCheck == false;
+      }
+      function validCheckpoint(before, after) {
+        let record = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(after.lastOperationId)).data;
+        let checkpoint = after.checkpoint;
+        let totals = dayTotals(before, record.date);
+        return !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(after.lastOperationId)) &&
+          record.uid == request.auth.uid &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
+          checkpoint.keys().hasOnly(['cashActualPaise', 'cashNetPaise', 'date', 'upiActualPaise', 'cardActualPaise', 'upiNetPaise', 'cardNetPaise', 'reconciliationId']) &&
+          checkpoint.cashActualPaise == record.actual.cash && checkpoint.cashNetPaise == before.cashNetPaise &&
+          checkpoint.date == record.date && checkpoint.upiActualPaise == record.actual.upi && checkpoint.cardActualPaise == record.actual.card &&
+          checkpoint.upiNetPaise == totals.upi && checkpoint.cardNetPaise == totals.card && checkpoint.reconciliationId == after.lastOperationId;
+      }
+      function validCashierState(uid) {
+        let data = request.resource.data;
+        let handover = getAfter(handoverPath()).data;
+        return uid == request.auth.uid && data.uid == uid && data.authTime == request.auth.token.auth_time && data.updatedAt is string &&
+          data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt', 'closed']) &&
+          ((handover.lastOperation == 'bill' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(handover.lastOperationId)) && data.needsLogoutCheck == true && data.lastBillId == handover.lastOperationId &&
+            data.get('closed', false) == false &&
+            (!exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)) || (resource.data.authTime == data.authTime && resource.data.get('closed', false) == false)) &&
+            data.lastReconciliationId == (exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)) ? resource.data.lastReconciliationId : '')) ||
+           (handover.lastOperation == 'reconciliation' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)) &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.uid == uid &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.authTime == data.authTime &&
+            data.needsLogoutCheck == false && data.lastReconciliationId == handover.lastOperationId &&
+            data.get('closed', false) == (getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.kind == 'logout')));
+      }
+      match /handover/{handoverId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && handoverId == 'main' && isOwner() &&
+          request.resource.data.initialized == false && request.resource.data.revision == 0 &&
+          request.resource.data.cashNetPaise is int && request.resource.data.dailyTotals is map &&
+          request.resource.data.lastOperation == 'initialize' && request.resource.data.updatedByUid == request.auth.uid &&
+          !('checkpoint' in request.resource.data);
+        allow update: if sandboxId == 'test' && handoverId == 'main' && isStaff() &&
+          request.resource.data.initialized == true && request.resource.data.revision == resource.data.revision + 1 &&
+          request.resource.data.updatedByUid == request.auth.uid &&
+          ((isOwner() && resource.data.initialized == false && request.resource.data.lastOperation == 'initialize' && !('checkpoint' in request.resource.data)) ||
+           (resource.data.initialized == true && request.resource.data.lastOperation == 'bill' && validBillLedger(resource.data, request.resource.data)) ||
+           (request.resource.data.lastOperation == 'reconciliation' && validCheckpoint(resource.data, request.resource.data)) ||
+           (isOwner() && resource.data.initialized == true && request.resource.data.lastOperation == 'refund' && validRefundLedger(resource.data, request.resource.data)));
+        allow delete: if false;
+      }
+      match /cashierStates/{uid} {
+        allow read: if sandboxId == 'test' && (isOwner() || (isStaff() && uid == request.auth.uid));
+        allow create: if sandboxId == 'test' && isStaff() && (validCashierState(uid) ||
+          (isOwner() && get(handoverPath()).data.initialized == false && request.resource.data.uid == uid &&
+           request.resource.data.authTime == 0 && request.resource.data.needsLogoutCheck == true && request.resource.data.lastReconciliationId == '' &&
+           get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(request.resource.data.lastBillId)).data.createdByUid == uid));
+        allow update: if sandboxId == 'test' && isStaff() && validCashierState(uid);
+        allow delete: if false;
+      }
+      match /reconciliations/{id} {
+        allow read: if sandboxId == 'test' && (isOwner() || (isStaff() && resource.data.uid == request.auth.uid));
+        allow create: if sandboxId == 'test' && isStaff() && validReconciliation(request.resource.data, id);
+        allow update: if sandboxId == 'test' && isOwner() && resource.data.reviewStatus == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewedByUid', 'reviewedAt']) &&
+          request.resource.data.reviewStatus == 'reviewed' && request.resource.data.reviewedByUid == request.auth.uid && request.resource.data.reviewedAt is string;
+        allow delete: if false;
+      }
       allow read: if sandboxId == 'test' && isStaff();
       allow create, update, delete: if sandboxId == 'test' && isOwner();
 
@@ -1179,18 +1337,23 @@ service cloud.firestore {
           request.resource.data.totalPaise is int && request.resource.data.totalPaise >= 0 &&
           request.resource.data.lines is list && request.resource.data.lines.size() > 0 && request.resource.data.lines.size() <= 200 &&
           request.resource.data.payments is list &&
+          (!handoverEnabled() || validHandoverBill(request.resource.data, billId)) &&
           getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/sequences/$(request.resource.data.financialYear)).data.lastNumber == request.resource.data.sequenceNumber &&
           getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.billId == billId &&
           getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.revision == 1;
         allow update: if false;
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
       }
 
       match /billStates/{billId} {
         allow read: if sandboxId == 'test' && isStaff();
         allow create: if sandboxId == 'test' && isStaff() && request.resource.data.billId == billId && request.resource.data.state == 'active' && request.resource.data.revision == 1 && request.resource.data.updatedByUid == request.auth.uid;
-        allow update: if sandboxId == 'test' && isOwner() && request.resource.data.billId == resource.data.billId && request.resource.data.revision == resource.data.revision + 1;
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow update: if sandboxId == 'test' && isOwner() && request.resource.data.billId == resource.data.billId && request.resource.data.revision == resource.data.revision + 1 &&
+          (!handoverEnabled() || (get(handoverPath()).data.initialized == true &&
+            getAfter(handoverPath()).data.revision == get(handoverPath()).data.revision + 1 &&
+            getAfter(handoverPath()).data.lastOperation == 'refund' && getAfter(handoverPath()).data.updatedByUid == request.auth.uid &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/approvals/$(getAfter(handoverPath()).data.lastOperationId)).data.billId == billId));
+        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
       }
 
       match /heldCarts/{cartId} {
@@ -1208,9 +1371,12 @@ service cloud.firestore {
           request.resource.data.type in ['void', 'return'] &&
           request.resource.data.reason is string && request.resource.data.reason.size() > 0;
         allow update: if sandboxId == 'test' && isOwner() && resource.data.status == 'pending' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedByUid', 'reviewedByName', 'reviewReason']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handoverDate', 'reviewedAt', 'reviewedByUid', 'reviewedByName', 'reviewReason']) &&
           request.resource.data.status in ['approved', 'rejected', 'stale'] &&
-          request.resource.data.reviewedByUid == request.auth.uid;
+          request.resource.data.reviewedByUid == request.auth.uid &&
+          (request.resource.data.status != 'approved' || !handoverEnabled() ||
+            (getAfter(handoverPath()).data.lastOperation == 'refund' && getAfter(handoverPath()).data.lastOperationId == approvalId &&
+             getAfter(handoverPath()).data.revision == get(handoverPath()).data.revision + 1));
         allow delete: if sandboxId == 'test' && isOwner();
       }
 
@@ -1218,7 +1384,7 @@ service cloud.firestore {
         allow read: if sandboxId == 'test' && isStaff();
         allow create: if sandboxId == 'test' && isStaff() && request.resource.data.actorUid == request.auth.uid && request.resource.data.type is string;
         allow update: if false;
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
       }
 
       match /sequences/{financialYear} {

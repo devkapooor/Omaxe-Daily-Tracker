@@ -27,6 +27,7 @@ import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/component
 import { PayrollPage } from '@/features/payroll/components/PayrollPage'
 import { PosPage } from '@/features/pos/components/PosPage'
 import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
+import { CashierDiscrepanciesPanel } from '@/features/pos/components/CashierDiscrepanciesPanel'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -271,7 +272,7 @@ export function AppWorkspace({
                 showToast(error instanceof Error ? error.message : 'Unable to resolve this vendor return.')
               }
             }}
-            testPosPanel={<PosActionCentrePanel currentUser={currentUser} showToast={showToast} />}
+            testPosPanel={<div className="space-y-2.5"><CashierDiscrepanciesPanel currentUser={currentUser} showToast={showToast} /><PosActionCentrePanel currentUser={currentUser} showToast={showToast} /></div>}
           />
         ) : null}
 

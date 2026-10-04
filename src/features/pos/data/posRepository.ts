@@ -21,6 +21,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import type { AppUser } from '@/domain/financeTypes'
+import { cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepository'
+import { HANDOVER_START, applyPayments, handoverDate, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
 import {
   financialYearForDate,
   formatTestReceiptNumber,
@@ -178,6 +180,7 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
   const totalPaise = subtotalPaise - input.discount.amountPaise
   validateSettlement(totalPaise, input.payments)
   const billId = crypto.randomUUID()
+  const authTime = await cashierAuthTime()
   const financialYear = financialYearForDate(input.businessDate)
   const configRef = posDoc('configuration', 'checkout')
   const sequenceRef = posDoc('sequences', financialYear)
@@ -187,11 +190,17 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     line.kind === 'product' && typeof line.productId === 'string' && typeof line.expectedProductRevision === 'number')
 
   return runTransaction(db, async (transaction) => {
-    const [configSnapshot, sequenceSnapshot, ...productSnapshots] = await Promise.all([
+    const [configSnapshot, sequenceSnapshot, ledgerSnapshot, cashierSnapshot, ...productSnapshots] = await Promise.all([
       transaction.get(configRef),
       transaction.get(sequenceRef),
+      transaction.get(handoverRef()),
+      transaction.get(cashierRef(actor.id)),
       ...productLines.map((line) => transaction.get(posDoc('products', line.productId))),
     ])
+    const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
+    if (!ledger?.initialized) throw new Error('The owner must initialize the shared drawer before billing. Use Set up drawer in POS.')
+    const cashier = cashierSnapshot.data() as CashierState | undefined
+    if (cashier && (cashier.authTime !== authTime || cashier.closed)) throw new Error('Complete your mandatory login cash count before billing.')
     const configData = configSnapshot.data() as Partial<PosCheckoutConfig> | undefined
     const discountLimit = typeof configData?.billingMaxDiscountPercentage === 'number' ? configData.billingMaxDiscountPercentage : null
     validateDiscount(actor, subtotalPaise, input.discount, discountLimit)
@@ -202,12 +211,15 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     })
     const sequenceNumber = Number(sequenceSnapshot.data()?.lastNumber ?? 0) + 1
     const timestamp = nowIso()
+    const countDate = handoverDate(timestamp)
     const receiptNumber = formatTestReceiptNumber(financialYear, sequenceNumber)
     const cashPaid = input.payments.filter((payment) => payment.method === 'cash').reduce((sum, payment) => sum + payment.amountPaise, 0)
     const cashTenderedPaise = input.cashTenderedPaise ?? cashPaid
     if (cashTenderedPaise < cashPaid) throw new Error('Cash tendered cannot be less than the cash allocation.')
     const bill: PosBill = {
       id: billId,
+      handoverDate: countDate,
+      cashierAuthTime: authTime,
       receiptNumber,
       financialYear,
       sequenceNumber,
@@ -229,6 +241,9 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     }
     transaction.set(sequenceRef, { financialYear, lastNumber: sequenceNumber, updatedAt: timestamp, updatedByUid: actor.id })
     transaction.set(billRef, bill)
+    applyPayments(ledger, input.payments, countDate, 1)
+    transaction.set(handoverRef(), { ...ledger, revision: ledger.revision + 1, lastOperation: 'bill', lastOperationId: billId, updatedByUid: actor.id })
+    transaction.set(cashierRef(actor.id), { uid: actor.id, authTime, needsLogoutCheck: true, lastBillId: billId, lastReconciliationId: cashier?.lastReconciliationId ?? '', updatedAt: timestamp } satisfies CashierState)
     transaction.set(billStateRef, { billId, state: 'active', revision: 1, returnedQuantities: {}, updatedAt: timestamp, updatedByUid: actor.id })
     productSnapshots.forEach((snapshot, index) => {
       const line = productLines[index]
@@ -347,7 +362,8 @@ export async function approvePosRequest(requestId: string, actor: AppUser): Prom
     if (request.status !== 'pending') throw new Error('Request is no longer pending.')
     const billRef = posDoc('bills', request.billId)
     const stateRef = posDoc('billStates', request.billId)
-    const [billSnapshot, stateSnapshot] = await Promise.all([transaction.get(billRef), transaction.get(stateRef)])
+    const [billSnapshot, stateSnapshot, ledgerSnapshot] = await Promise.all([transaction.get(billRef), transaction.get(stateRef), transaction.get(handoverRef())])
+    if (ledgerSnapshot.exists() && !ledgerSnapshot.data().initialized) throw new Error('Drawer setup is running. Retry this approval once setup finishes.')
     if (!billSnapshot.exists() || !stateSnapshot.exists()) throw new Error('Source bill no longer exists.')
     const bill = billSnapshot.data() as PosBill
     const state = stateSnapshot.data() as { state: string; revision: number; returnedQuantities?: Record<string, number> }
@@ -363,6 +379,12 @@ export async function approvePosRequest(requestId: string, actor: AppUser): Prom
     const affectedLines = requestedLines.filter((line) => line.kind === 'product' && line.productId)
     const productSnapshots = await Promise.all(affectedLines.map((line) => transaction.get(posDoc('products', line.productId!))))
     const timestamp = nowIso()
+    if (ledgerSnapshot.data()?.initialized) {
+      const ledger = ledgerSnapshot.data() as HandoverLedger
+      const payments = request.type === 'void' ? (bill.createdAt >= HANDOVER_START ? bill.payments : []) : [{ method: request.refundMethod ?? '', amountPaise: request.refundAmountPaise ?? 0 }]
+      applyPayments(ledger, payments, handoverDate(timestamp), -1)
+      transaction.set(handoverRef(), { ...ledger, revision: ledger.revision + 1, lastOperation: 'refund', lastOperationId: request.id, updatedByUid: actor.id })
+    }
     const returned = { ...(state.returnedQuantities ?? {}) }
     requestedLines.forEach((line) => {
       const quantity = Number(requestedByLine[line.id])
@@ -388,7 +410,7 @@ export async function approvePosRequest(requestId: string, actor: AppUser): Prom
       }
     })
     transaction.update(stateRef, { state: request.type === 'void' ? 'voided' : 'partially-returned', revision: state.revision + 1, returnedQuantities: returned, updatedAt: timestamp, updatedByUid: actor.id })
-    transaction.update(requestRef, { status: 'approved', reviewedAt: timestamp, reviewedByUid: actor.id, reviewedByName: actor.name, reviewReason: 'Approved in POS (Test) Action Centre.' })
+    transaction.update(requestRef, { status: 'approved', handoverDate: handoverDate(timestamp), reviewedAt: timestamp, reviewedByUid: actor.id, reviewedByName: actor.name, reviewReason: 'Approved in POS (Test) Action Centre.' })
     transaction.set(posDoc('events', crypto.randomUUID()), { type: request.type === 'void' ? 'bill-voided' : 'bill-return-approved', billId: request.billId, approvalId: request.id, refundDate: request.refundDate ?? null, refundAmountPaise: request.refundAmountPaise ?? 0, refundMethod: request.refundMethod ?? null, returnCondition: request.returnCondition ?? null, createdAt: timestamp, ...actorFields(actor) })
     return 'approved' as const
   })
@@ -472,6 +494,7 @@ export async function importPosProducts(args: {
 const RESET_COLLECTIONS = ['products', 'productCosts', 'stockMovements', 'bills', 'billStates', 'heldCarts', 'approvals', 'events', 'sequences', 'importRuns', 'configuration'] as const
 
 export async function resetPosSandbox(actor: AppUser, onProgress?: (collectionName: string, deleted: number) => void) {
+  if ((await getDoc(handoverRef())).exists()) throw new Error('Reset is disabled because the shared drawer contains live handover history.')
   const resetRef = posDoc('resetRuns', 'active')
   const existing = await getDoc(resetRef)
   let collectionIndex = Number(existing.data()?.collectionIndex ?? 0)

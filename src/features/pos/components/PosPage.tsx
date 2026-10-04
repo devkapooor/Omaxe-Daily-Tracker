@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { today } from '@/app/uiHelpers'
@@ -28,8 +28,8 @@ import { printTestReceipt } from './receipt'
 import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
 import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
-import { calculatePosDashboard } from '../domain/posDashboard'
-import { usePosDashboard } from '../hooks/usePosDashboard'
+import { expectedHandover, handoverDate } from '../domain/cashierHandover'
+import { useCashierHandover } from '../hooks/useCashierHandover'
 
 type Tab = 'checkout' | 'dashboard' | 'bills' | 'admin'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
@@ -38,6 +38,7 @@ const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
 const money = (paise: number) => `₹${paiseToRupees(paise).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export function PosPage({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
+  const handover = useCashierHandover()
   const [tab, setTab] = useState<Tab>('checkout')
   const sandbox = usePosSandbox({})
   const [cart, setCart] = useState<PosCartLine[]>([])
@@ -54,12 +55,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const [unknownPrice, setUnknownPrice] = useState('')
   const [busy, setBusy] = useState(false)
   const scannerRef = useRef<HTMLInputElement>(null)
-  const drawerThroughDate = today()
-  const drawerData = usePosDashboard('0001-01-01', drawerThroughDate)
-  const cashDrawerPaise = useMemo(
-    () => calculatePosDashboard(drawerData.bills, drawerData.states, drawerData.refunds, '0001-01-01', drawerThroughDate).methods.find((method) => method.value === 'cash')?.netPaise ?? 0,
-    [drawerData.bills, drawerData.states, drawerData.refunds, drawerThroughDate],
-  )
+  const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
   const subtotal = posSubtotal(cart)
   const cartQuantity = cart.reduce((quantity, line) => quantity + line.quantity, 0)
   let discount: PosDiscount = { mode: 'none', amountPaise: 0 }
@@ -114,12 +110,13 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
 
   return <section className="min-h-0 flex-1 overflow-y-auto pr-1">
     <div className="grid gap-2.5">
+      {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
         <div className="flex flex-wrap items-center gap-1.5">{(['checkout', 'dashboard', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'ghost'} aria-pressed={tab === value} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'dashboard' ? <ChartPie /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
-        <div className="flex items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="POS-Test finalized cash payments less approved test cash refunds, starting at ₹0. Production cash is not included.">
+        <div className="flex items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS-Test cash payments less approved cash refunds since that count.">
           <span className="text-xs text-muted-foreground">Cash Drawer</span>
-          <strong className="font-mono text-sm font-semibold tabular-nums text-success">{drawerData.error ? 'Unavailable' : drawerData.loading ? 'Loading…' : money(cashDrawerPaise)}</strong>
+          <strong className="font-mono text-sm font-semibold tabular-nums text-success">{cashDrawerPaise === null ? 'Set up drawer' : money(cashDrawerPaise)}</strong>
           <span className="rounded-sm border border-info/30 bg-info/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-info">Test</span>
         </div>
       </div>

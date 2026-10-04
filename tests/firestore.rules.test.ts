@@ -304,6 +304,116 @@ describe('POS test sandbox isolation', () => {
   })
 })
 
+describe('POS shared cashier handover integrity', () => {
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const authTime = 1791072000
+  const ledger = { initialized: true, revision: 1, cashNetPaise: 10000, dailyTotals: { [date]: { upi: 20000, card: 30000 } }, lastOperation: 'initialize', lastOperationId: 'initial', updatedByUid: 'owner-user' }
+  const cashierDb = (uid = 'billing-user', time = authTime) => testEnvironment.authenticatedContext(uid, { auth_time: time }).firestore()
+  const ref = (db: ReturnType<typeof cashierDb>, name: string, id: string) => doc(db, 'posSandboxes', 'test', name, id)
+  async function seedLedger(state?: Record<string, unknown>) {
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(ref(context.firestore(), 'handover', 'main'), ledger)
+      if (state) await setDoc(ref(context.firestore(), 'cashierStates', 'billing-user'), state)
+    })
+  }
+  function reconciliationBatch(overrides: Record<string, unknown> = {}, checkpointOverrides: Record<string, unknown> = {}, uid = 'billing-user') {
+    const db = cashierDb(uid)
+    const id = 'recon-1'
+    const actual = { cash: 10000, upi: 20000, card: 30000 }
+    const batch = writeBatch(db)
+    batch.set(ref(db, 'reconciliations', id), { uid, name: uid, authTime, kind: 'login', date, denominations: { '100': 1 }, coinPaise: 0, actual, expected: actual, delta: { cash: 0, upi: 0, card: 0 }, hasDiscrepancy: false, createdAt: timestamp, reviewStatus: 'matched', ...overrides })
+    batch.update(ref(db, 'handover', 'main'), { revision: 2, lastOperation: 'reconciliation', lastOperationId: id, updatedByUid: uid, checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: id, ...checkpointOverrides } })
+    batch.set(ref(db, 'cashierStates', uid), { uid, authTime, needsLogoutCheck: false, lastBillId: '', lastReconciliationId: id, updatedAt: timestamp })
+    return batch
+  }
+  function billingBatch(time = authTime, includeLedger = true, cash = 11000, revision = 2, lastReconciliationId = '') {
+    const db = cashierDb('billing-user', time)
+    const batch = writeBatch(db)
+    batch.set(ref(db, 'sequences', '2026-27'), { financialYear: '2026-27', lastNumber: 1, updatedByUid: 'billing-user' })
+    batch.set(ref(db, 'billStates', 'new-bill'), { billId: 'new-bill', state: 'active', revision: 1, updatedByUid: 'billing-user' })
+    batch.set(ref(db, 'bills', 'new-bill'), { id: 'new-bill', financialYear: '2026-27', sequenceNumber: 1, testOnly: true, status: 'finalized', createdByUid: 'billing-user', subtotalPaise: 1000, totalPaise: 1000, lines: [{ id: 'l1' }], payments: [{ method: 'cash', amountPaise: 1000 }], handoverDate: date, cashierAuthTime: time })
+    batch.set(ref(db, 'cashierStates', 'billing-user'), { uid: 'billing-user', authTime: time, needsLogoutCheck: true, lastBillId: 'new-bill', lastReconciliationId, updatedAt: timestamp })
+    if (includeLedger) batch.update(ref(db, 'handover', 'main'), { revision, cashNetPaise: cash, lastOperation: 'bill', lastOperationId: 'new-bill', updatedByUid: 'billing-user' })
+    return batch
+  }
+  it('allows linked billing and denies missing ledger update or forged amounts', async () => {
+    await seedLedger()
+    await assertFails(billingBatch(authTime, false).commit())
+    await assertFails(billingBatch(authTime, true, 999999).commit())
+    await assertSucceeds(billingBatch().commit())
+  })
+  it('denies old-token billing after logout and unrelated owner refund edits', async () => {
+    await seedLedger({ uid: 'billing-user', authTime, needsLogoutCheck: false, closed: true, lastBillId: 'historical', lastReconciliationId: '', updatedAt: timestamp })
+    await assertFails(billingBatch().commit())
+    await assertFails(updateDoc(ref(userDb('owner-user'), 'handover', 'main'), { revision: 2, cashNetPaise: 0, lastOperation: 'refund', lastOperationId: 'invented-refund', updatedByUid: 'owner-user' }))
+  })
+  it('requires historical/previous-login cashiers to reconcile before fresh-login billing', async () => {
+    await seedLedger({ uid: 'billing-user', authTime: 0, needsLogoutCheck: true, lastBillId: 'historical', lastReconciliationId: '', updatedAt: timestamp })
+    await assertFails(billingBatch().commit())
+    await assertSucceeds(reconciliationBatch().commit())
+    await assertFails(billingBatch(authTime + 1, true, 11000, 3, 'recon-1').commit())
+    await assertSucceeds(billingBatch(authTime, true, 11000, 3, 'recon-1').commit())
+  })
+  it('saves truthful reconciliation atomically and prevents replay or rewriting financial evidence', async () => {
+    await seedLedger()
+    await assertSucceeds(reconciliationBatch().commit())
+    const db = cashierDb()
+    await assertFails(updateDoc(ref(db, 'cashierStates', 'billing-user'), { authTime: authTime + 1 }))
+    await assertFails(updateDoc(ref(userDb('owner-user'), 'reconciliations', 'recon-1'), { actual: { cash: 0, upi: 0, card: 0 } }))
+    await assertFails(deleteDoc(ref(userDb('owner-user'), 'reconciliations', 'recon-1')))
+    await assertFails(getDoc(ref(cashierDb('manager-user'), 'reconciliations', 'recon-1')))
+    await assertSucceeds(getDoc(ref(userDb('owner-user'), 'reconciliations', 'recon-1')))
+  })
+  it('denies forged expected/delta/counts/checkpoint and another cashier attribution', async () => {
+    await seedLedger()
+    await assertFails(reconciliationBatch({ expected: { cash: 0, upi: 0, card: 0 } }).commit())
+    await assertFails(reconciliationBatch({ delta: { cash: 1, upi: 0, card: 0 } }).commit())
+    await assertFails(reconciliationBatch({ denominations: { '100': -1 } }).commit())
+    await assertFails(reconciliationBatch({}, { cashActualPaise: 0 }).commit())
+    await assertFails(reconciliationBatch({ uid: 'manager-user' }).commit())
+    await assertFails(reconciliationBatch({ date: '2000-01-01' }).commit())
+    await assertFails(reconciliationBatch({ reviewedByUid: 'owner-user' }).commit())
+  })
+  it('stores discrepancy then permits owner acknowledgment without changing amounts', async () => {
+    await seedLedger()
+    await assertSucceeds(reconciliationBatch({ actual: { cash: 9000, upi: 20000, card: 30000 }, denominations: { '50': 1, '20': 2 }, delta: { cash: -1000, upi: 0, card: 0 }, hasDiscrepancy: true, reviewStatus: 'pending' }, { cashActualPaise: 9000 }).commit())
+    await assertFails(updateDoc(ref(cashierDb(), 'reconciliations', 'recon-1'), { reviewStatus: 'reviewed', reviewedByUid: 'billing-user', reviewedAt: timestamp }))
+    await assertSucceeds(updateDoc(ref(userDb('owner-user'), 'reconciliations', 'recon-1'), { reviewStatus: 'reviewed', reviewedByUid: 'owner-user', reviewedAt: timestamp }))
+  })
+  it('uses last physical count and daily machine readings plus ledger deltas, not raw session totals', async () => {
+    await seedLedger()
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 9000, cashNetPaise: 8000, date, upiActualPaise: 19000, cardActualPaise: 28000, upiNetPaise: 18000, cardNetPaise: 27000, reconciliationId: 'prior' } })
+    })
+    await assertFails(reconciliationBatch().commit())
+    const amounts = { cash: 11000, upi: 21000, card: 31000 }
+    await assertSucceeds(reconciliationBatch({ actual: amounts, expected: amounts, denominations: { '100': 1, '10': 1 } }, { cashActualPaise: 11000, upiActualPaise: 21000, cardActualPaise: 31000 }).commit())
+  })
+  it('allows owner-only initialization while freezing legacy billing and protects history from reset', async () => {
+    const owner = userDb('owner-user')
+    const initializing = { ...ledger, initialized: false, revision: 0, cashNetPaise: 0, dailyTotals: {} }
+    await assertFails(setDoc(ref(cashierDb(), 'handover', 'main'), initializing))
+    await assertSucceeds(setDoc(ref(owner, 'handover', 'main'), initializing))
+    await assertFails(billingBatch().commit())
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(ref(context.firestore(), 'bills', 'history'), { totalPaise: 100, createdByUid: 'billing-user' })
+      await setDoc(ref(context.firestore(), 'billStates', 'history'), { billId: 'history', revision: 1, state: 'active' })
+    })
+    await assertSucceeds(setDoc(ref(owner, 'cashierStates', 'billing-user'), { uid: 'billing-user', authTime: 0, needsLogoutCheck: true, lastBillId: 'history', lastReconciliationId: '', updatedAt: timestamp }))
+    await assertFails(setDoc(ref(owner, 'cashierStates', 'manager-user'), { uid: 'manager-user', authTime: 0, needsLogoutCheck: true, lastBillId: 'history', lastReconciliationId: '', updatedAt: timestamp }))
+    await assertFails(updateDoc(ref(owner, 'billStates', 'history'), { revision: 2, state: 'voided' }))
+    await assertSucceeds(setDoc(ref(owner, 'handover', 'main'), ledger))
+    await assertFails(updateDoc(ref(owner, 'billStates', 'history'), { revision: 2, state: 'voided' }))
+    await assertFails(deleteDoc(ref(owner, 'handover', 'main')))
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(ref(context.firestore(), 'bills', 'history'), { totalPaise: 100 })
+      await setDoc(ref(context.firestore(), 'events', 'history'), { type: 'bill-finalized' })
+    })
+    await assertFails(deleteDoc(ref(owner, 'bills', 'history')))
+    await assertFails(deleteDoc(ref(owner, 'events', 'history')))
+  })
+})
+
 describe('V2 vendor ledger capability enforcement', () => {
   it('activates an empty clean start without changing protected legacy records', async () => {
     const ownerDb = userDb('owner-user')

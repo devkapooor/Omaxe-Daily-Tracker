@@ -69,6 +69,8 @@ export type PosDiscount = {
 
 export type PosBill = {
   id: string
+  handoverDate?: string
+  cashierAuthTime?: number
   receiptNumber: string
   financialYear: string
   sequenceNumber: number

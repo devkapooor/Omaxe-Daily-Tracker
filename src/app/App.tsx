@@ -15,6 +15,7 @@ import { OfflineScreen } from '@/features/auth/components/OfflineScreen'
 import { AppBackground } from '@/shared/ui/background-components'
 import { AuroraBackground } from '@/shared/ui/aurora-background'
 import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
+import { CashierHandoverBoundary } from '@/features/pos/components/CashierHandoverBoundary'
 
 function isPage(value: string | null): value is Page {
   return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'payroll' || value === 'logs' || value === 'settings'
@@ -199,6 +200,7 @@ export default function App() {
 
   return (
     <AppBackground>
+      <CashierHandoverBoundary key={currentUser.id} currentUser={currentUser} onSignOut={signOutCurrentUser}>{(onLogout) =>
       <AppWorkspace
         activePage={resolvedActivePage}
         appSettings={appSettings}
@@ -225,7 +227,7 @@ export default function App() {
         marginPercentage={marginPercentage}
         monthlyPerformance={monthlyPerformance}
         normalizedLoans={normalizedLoans}
-        onLogout={() => void signOutCurrentUser()}
+        onLogout={onLogout}
         onPageChange={handlePageChange}
         pendingCashNow={pendingCashNow}
         legacyChequeItems={legacyChequeItems}
@@ -252,6 +254,7 @@ export default function App() {
         users={users}
         savedPartyNames={nameDirectory.people}
       />
+      }</CashierHandoverBoundary>
     </AppBackground>
   )
 }
