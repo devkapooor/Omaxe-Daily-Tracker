@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Banknote, CreditCard, QrCode } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
@@ -32,8 +33,11 @@ export function CheckoutPaymentPanel({ totalPaise, mode, split, cashReceived, di
     <fieldset disabled={disabled} className="grid gap-2">
       <legend className="mb-2 text-sm font-bold">Payment method</legend>
       <div className="grid grid-cols-3 gap-2">
-        {checkoutPaymentMethods.map((method) => <Button key={method.value} type="button" aria-pressed={mode === method.value} variant={mode === method.value ? 'default' : 'outline'} onClick={() => onMethod(method.value)}>{method.label}</Button>)}
-        <Button className="col-span-2" type="button" aria-pressed={mode === 'split'} variant={mode === 'split' ? 'default' : 'outline'} onClick={() => setSplitOpen(true)}>Split payments</Button>
+        {checkoutPaymentMethods.map((method) => {
+          const PaymentIcon = method.value === 'cash' ? Banknote : method.value === 'upi' ? QrCode : CreditCard
+          return <Button key={method.value} type="button" aria-pressed={mode === method.value} variant={mode === method.value ? 'default' : 'outline'} onClick={() => onMethod(method.value)}><PaymentIcon className="size-4" />{method.label}</Button>
+        })}
+        <Button className="col-span-3" type="button" aria-pressed={mode === 'split'} variant={mode === 'split' ? 'default' : 'outline'} onClick={() => setSplitOpen(true)}>Split payments</Button>
       </div>
     </fieldset>
     {mode === 'split' ? <div className="rounded-xl border p-3 text-sm">

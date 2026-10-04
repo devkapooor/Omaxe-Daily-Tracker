@@ -7,8 +7,12 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
+import { PageCardStack } from '@/shared/ui/page-card-stack'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
+import { Tabs } from '@/shared/ui/tabs'
 import { usePosSandbox } from '../hooks/usePosSandbox'
 import { calculateDiscount, paiseToRupees, posSubtotal, rupeesToPaise } from '../domain/posDomain'
 import { parseApprovedPosCsv, sha256Hex } from '../domain/csvImport'
@@ -64,6 +68,10 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     if (discountReason.trim()) discount.overrideReason = discountReason.trim()
   } catch { /* form validation is shown on submit */ }
   const total = subtotal - discount.amountPaise
+  const effectiveDiscountPercentage = subtotal > 0 ? discount.amountPaise * 100 / subtotal : 0
+  const requiresDiscountOverrideReason = currentUser.role !== 'billing'
+    && sandbox.config.billingMaxDiscountPercentage !== null
+    && effectiveDiscountPercentage > sandbox.config.billingMaxDiscountPercentage
   let paymentError = ''
   try { buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined) }
   catch (error) { paymentError = error instanceof Error ? error.message : 'Payment is invalid.' }
@@ -108,42 +116,58 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     finally { setBusy(false) }
   }
 
-  return <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-    <div className="grid gap-2.5">
+  return <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
+    <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
+      <PageHeader title="POS (Test)" tools={(
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
+          <div className="min-w-0 overflow-x-auto">
+            <PageHeaderTabsList aria-label="POS Test sections" className={`${currentUser.role === 'owner' ? 'grid-cols-4' : 'grid-cols-3'} grid min-w-max`}>
+              <PageHeaderTab value="checkout"><ShoppingCart />Checkout</PageHeaderTab>
+              <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
+              <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
+              {currentUser.role === 'owner' ? <PageHeaderTab value="admin"><Settings2 />Admin</PageHeaderTab> : null}
+            </PageHeaderTabsList>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS-Test cash payments less approved cash refunds since that count.">
+            <span className="text-xs text-muted-foreground">Cash Drawer</span>
+            <strong className="font-mono text-sm font-semibold tabular-nums text-success">{cashDrawerPaise === null ? 'Set up drawer' : money(cashDrawerPaise)}</strong>
+            <span className="rounded-sm border border-info/30 bg-info/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-info">Test</span>
+          </div>
+        </div>
+      )} />
+    )}>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <PageCardStack className="h-full pb-4">
       {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">{(['checkout', 'dashboard', 'bills', ...(currentUser.role === 'owner' ? ['admin'] : [])] as Tab[]).map((value) => <Button key={value} size="sm" variant={tab === value ? 'default' : 'ghost'} aria-pressed={tab === value} onClick={() => setTab(value)}>{value === 'checkout' ? <ShoppingCart /> : value === 'dashboard' ? <ChartPie /> : value === 'bills' ? <FileClock /> : <Settings2 />}{value[0].toUpperCase() + value.slice(1)}</Button>)}</div>
-        <div className="flex items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS-Test cash payments less approved cash refunds since that count.">
-          <span className="text-xs text-muted-foreground">Cash Drawer</span>
-          <strong className="font-mono text-sm font-semibold tabular-nums text-success">{cashDrawerPaise === null ? 'Set up drawer' : money(cashDrawerPaise)}</strong>
-          <span className="rounded-sm border border-info/30 bg-info/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-info">Test</span>
-        </div>
-      </div>
 
-      {tab === 'checkout' ? <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,.8fr)]">
-          <Card className="lg:col-span-2"><CardContent className="grid gap-3 pt-4">
+      {tab === 'checkout' ? <div className="grid min-h-full items-start gap-card-gap lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)]">
+        <div className="grid min-w-0 gap-card-gap">
+          <Card><CardContent className="grid gap-3 pt-4">
             <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}><Input ref={scannerRef} autoFocus inputMode="numeric" aria-label="Barcode scanner input" placeholder="Scan barcode, then Enter" className="text-lg font-bold" /><Button><Barcode />Scan</Button></form>
             {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); setCart((current) => [...current, { id: crypto.randomUUID(), kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }]); setUnknownBarcode('') }}><Plus />Add unresolved item</Button></div> : null}
           </CardContent></Card>
           <Card aria-label="Cart items"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Checkout" title="Test Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-3">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className="rounded-xl border p-3"><div className="flex justify-between gap-2"><div><strong>{line.description}</strong><small className="block text-muted-foreground">{line.barcode} {line.kind === 'temporary' ? '· UNRESOLVED' : ''}</small></div><Button aria-label={`Remove ${line.description}`} size="icon" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 /></Button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-1"><Button aria-label={`Decrease quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><span className="min-w-8 text-center font-bold">{line.quantity}</span><Button aria-label={`Increase quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></div><strong>{money(line.quantity * line.unitPricePaise)}</strong></div>{line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="mt-2 text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}</div>)}
           </CardContent></Card>
-        <Card aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Checkout" title="Payment & Total" /></CardHeader><CardContent className="grid gap-3">
-          <div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Customer Name (Optional)"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></FieldLabel><FieldLabel label="Mobile (Optional)"><Input value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></FieldLabel></div>
-          <div className="grid gap-2 sm:grid-cols-3"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel><FieldLabel label="Override Reason"><Input value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Required above limit" /></FieldLabel></div>
+        </div>
+        <Card className="flex self-start flex-col lg:sticky lg:top-0 lg:h-full" aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Checkout" title="Payment & Total" /></CardHeader><CardContent className="flex flex-1 flex-col gap-3">
+          <div className="grid gap-2 sm:grid-cols-2"><Input aria-label="Customer Name (Optional)" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /><Input aria-label="Mobile (Optional)" inputMode="tel" placeholder="Mobile (optional)" value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></div>
+          <div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel>{requiresDiscountOverrideReason ? <FieldLabel className="sm:col-span-2" label="Override Reason"><Input required value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Why is this discount above the limit?" /></FieldLabel> : null}</div>
           <div className="rounded-xl bg-secondary/50 p-3 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Discount</span><strong>− {money(discount.amountPaise)}</strong></div><div className="mt-2 flex justify-between text-lg"><span>Total</span><strong>{money(total)}</strong></div></div>
           <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
-          <div className="grid gap-2 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held in POS sandbox.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize TEST Bill'}</Button></div>
           {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
+          <div className="mt-auto grid gap-2 border-t border-border pt-4 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${new Date().toLocaleTimeString('en-IN')}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held in POS sandbox.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize TEST Bill'}</Button></div>
         </CardContent></Card>
       </div> : null}
 
-      {tab === 'dashboard' ? <PosDashboard /> : null}
+      {tab === 'dashboard' ? <PosDashboard products={sandbox.products} /> : null}
       {tab === 'bills' ? <BillsPanel bills={sandbox.bills} products={sandbox.products} currentUser={currentUser} showToast={showToast} /> : null}
       {tab === 'admin' && currentUser.role === 'owner' ? <AdminPanel currentUser={currentUser} discountLimit={sandbox.config.billingMaxDiscountPercentage} showToast={showToast} /> : null}
-    </div>
-  </section>
+        </PageCardStack>
+      </div>
+    </PageLayout>
+  </Tabs>
 }
 
 function BillsPanel({ bills, products, currentUser, showToast }: { bills: PosBill[]; products: PosProduct[]; currentUser: AppUser; showToast: (message: string) => void }) {

@@ -1,5 +1,5 @@
 ﻿import { useMemo, useState } from 'react'
-import { ShieldCheck, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { normalizeName, today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
@@ -20,9 +20,12 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
+import { PageCardStack } from '@/shared/ui/page-card-stack'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { SelectField } from '@/shared/ui/select-field'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { Textarea } from '@/shared/ui/textarea'
 import {
   applyOwnerSettlementCorrectionV2,
@@ -61,10 +64,10 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
   )
   const vendorNameById = Object.fromEntries(ledger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
 
-  if (ledger.loading && !ledger.config) return <p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p>
+  if (ledger.loading && !ledger.config) return <PageLayout header={<PageHeader title="Vendor Workspace" />}><p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p></PageLayout>
   if (ledger.config?.enabled !== true) {
     if (currentUser.role === 'owner') return <VendorLedgerPreActivationPage currentUser={currentUser} />
-    return <Card><CardContent className="py-5 text-sm text-muted-foreground">The owner must activate the V2 vendor ledger before staff can enter vendor records.</CardContent></Card>
+    return <PageLayout header={<PageHeader title="Vendor Workspace" />}><Card><CardContent className="py-5 text-sm text-muted-foreground">The owner must activate the V2 vendor ledger before staff can enter vendor records.</CardContent></Card></PageLayout>
   }
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -100,27 +103,27 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
   }
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-      <div className="grid gap-2.5 pb-4">
-        <Card className="border-cyan-400/25 bg-[linear-gradient(135deg,rgba(37,99,235,0.18),rgba(34,211,238,0.07))]">
-          <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-lg font-black">Vendor Ledger V2</h1>
-            <Badge variant="success"><ShieldCheck className="mr-1 size-3" /> Active from {ledger.config.activationDate}</Badge>
-          </CardContent>
-        </Card>
+    <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+      <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
+        <PageHeader title="Vendor Workspace" tools={(
+          <div className="min-w-0 overflow-x-auto">
+            <PageHeaderTabsList aria-label="Vendor workspace sections" className={`${currentUser.role === 'owner' ? 'grid-cols-8' : 'grid-cols-7'} grid min-w-max`}>
+              <PageHeaderTab value="directory">Vendors</PageHeaderTab>
+              <PageHeaderTab value="purchases">Purchases</PageHeaderTab>
+              <PageHeaderTab value="payments">Payments</PageHeaderTab>
+              <PageHeaderTab value="invoices">Invoices</PageHeaderTab>
+              <PageHeaderTab value="returns">Returns</PageHeaderTab>
+              <PageHeaderTab value="corrections">Corrections</PageHeaderTab>
+              {currentUser.role === 'owner' ? <PageHeaderTab value="cheques">Cheques</PageHeaderTab> : null}
+              <PageHeaderTab value="balances">Balances</PageHeaderTab>
+            </PageHeaderTabsList>
+          </div>
+        )} />
+      )}>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <PageCardStack className="pb-4">
         {ledger.error || message ? <p className="rounded-xl border border-border bg-secondary/50 px-3 py-2 text-sm">{ledger.error ?? message}</p> : null}
 
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className={`${currentUser.role === 'owner' ? 'grid-cols-8' : 'grid-cols-7'} overflow-x-auto`}>
-            <TabsTrigger value="directory">Vendors</TabsTrigger>
-            <TabsTrigger value="purchases">Purchases</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="invoices">Invoices</TabsTrigger>
-            <TabsTrigger value="returns">Returns</TabsTrigger>
-            <TabsTrigger value="corrections">Corrections</TabsTrigger>
-            {currentUser.role === 'owner' ? <TabsTrigger value="cheques">Cheques</TabsTrigger> : null}
-            <TabsTrigger value="balances">Balances</TabsTrigger>
-          </TabsList>
           <TabsContent value="directory" className="grid gap-2.5 pt-2">
             <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} />
           </TabsContent>
@@ -133,8 +136,9 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           <TabsContent value="balances" className="grid gap-2 pt-2">
             {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><strong>INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong></CardContent></Card>)}
           </TabsContent>
-        </Tabs>
-      </div>
+          </PageCardStack>
+        </div>
+      </PageLayout>
       {vendorFormOpen ? (
         <VendorCreateModal
           busy={busy}
@@ -144,7 +148,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           vendors={ledger.vendors}
         />
       ) : null}
-    </section>
+    </Tabs>
   )
 }
 

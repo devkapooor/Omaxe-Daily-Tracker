@@ -54,7 +54,7 @@ Status: Completed, accepted, and deployed on 2026-10-04. See [Phase 3B summary](
 
 ### Phase 3C — Module-specific workspaces
 
-Status: Next phase; awaiting separate implementation approval.
+Status: In progress; local implementation is awaiting user review. See [Phase 3C resume checkpoint](./PHASE_3C_RESUME_CHECKPOINT_2026-10-04.md).
 
 - Migrate Vendor Workspace, POS (Test), and Action Centre.
 - Preserve vendor ledger semantics, POS test-only Firestore isolation, cash drawer presentation source, and Action Centre approval boundaries.

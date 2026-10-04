@@ -1,45 +1,158 @@
-import { useState } from 'react'
-import { today } from '@/app/uiHelpers'
-import { Button } from '@/shared/ui/button'
+import { useState, type ComponentType } from 'react'
+import { AlertTriangle, Banknote, Boxes, CreditCard, IndianRupee, PackageX, QrCode, ReceiptText, ShoppingBasket } from 'lucide-react'
+import { formatDisplayDateTime, today } from '@/app/uiHelpers'
+import type { PosPaymentMethod, PosProduct } from '../domain/types'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
-import { FieldLabel } from '@/shared/ui/field-label'
-import { Input } from '@/shared/ui/input'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
+import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { calculatePosDashboard } from '../domain/posDashboard'
 import { usePosDashboard } from '../hooks/usePosDashboard'
 
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function PosDashboard() {
-  const [from, setFrom] = useState(today())
-  const [to, setTo] = useState(today())
-  const data = usePosDashboard(from, to)
-  const metrics = calculatePosDashboard(data.bills, data.states, data.refunds, from, to)
+const paymentIcons: Record<PosPaymentMethod, ComponentType<{ className?: string }>> = {
+  cash: Banknote,
+  upi: QrCode,
+  card: CreditCard,
+  'bank-transfer': IndianRupee,
+}
+
+type DayOffset = 0 | 1 | 2
+
+function dayRange(offset: DayOffset) {
+  const [currentYear, currentMonth, currentDay] = today().split('-').map(Number)
+  const selected = new Date(currentYear, currentMonth - 1, currentDay - offset)
+  const year = selected.getFullYear()
+  const month = selected.getMonth() + 1
+  const day = selected.getDate()
+  const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return {
+    from: date,
+    to: date,
+    label: selected.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }),
+  }
+}
+
+export function PosDashboard({ products }: { products: PosProduct[] }) {
+  const [dayOffset, setDayOffset] = useState<DayOffset>(0)
+  const range = dayRange(dayOffset)
+  const data = usePosDashboard(range.from, range.to)
+  const metrics = calculatePosDashboard(data.bills, data.states, data.refunds, range.from, range.to, products)
   const cards = [
-    { label: 'Total sales', value: money(metrics.salesPaise), note: 'After discounts; voided bills excluded' },
-    { label: 'Refunds', value: money(metrics.refundsPaise), note: 'Approved refunds paid in this period' },
-    { label: 'Net collections', value: money(metrics.netPaise), note: 'Sales less refunds' },
-    { label: 'Bills', value: String(metrics.billCount), note: `${metrics.splitBillCount} paid using split payments` },
+    { label: 'Net Sales', value: money(metrics.netPaise), note: `${money(metrics.salesPaise)} before refunds`, icon: IndianRupee },
+    { label: 'Bills', value: String(metrics.billCount), note: `${metrics.splitBillCount} split payments`, icon: ReceiptText },
+    { label: 'Items Sold', value: metrics.unitsSold.toLocaleString('en-IN'), note: 'Quantity across completed bills', icon: ShoppingBasket },
+    { label: 'Average Bill', value: money(metrics.averageBillPaise), note: 'Average after discounts', icon: Boxes },
   ]
-  return <section aria-label="POS sales dashboard" className="grid gap-3">
-    <Card><CardHeader><SectionHeading eyebrow="POS (Test)" title="POS Sales Dashboard" description="Sales and payment collections for this POS only." /></CardHeader><CardContent className="flex flex-wrap items-end gap-3">
-      <FieldLabel label="Start date"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></FieldLabel>
-      <FieldLabel label="End date"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></FieldLabel>
-      <Button variant="outline" onClick={() => { const date = today(); setFrom(date); setTo(date) }}>Today</Button>
-      <Button variant="outline" onClick={() => { const date = today(); setFrom(`${date.slice(0, 7)}-01`); setTo(date) }}>This month</Button>
-    </CardContent></Card>
-    {data.error ? <StatusPanel variant="destructive">{data.error}</StatusPanel> : data.loading ? <StatusPanel>Loading POS sales…</StatusPanel> : <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <Card key={card.label} aria-label={card.label}><CardContent className="grid gap-1 pt-4"><span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{card.label}</span><strong className="text-2xl font-black tabular-nums">{card.value}</strong><span className="text-xs text-muted-foreground">{card.note}</span></CardContent></Card>)}</div>
-      <Card><CardHeader><SectionHeading eyebrow="Payment methods" title="Sales split" description="Split bills are divided between their payment methods. Cash change is excluded." /></CardHeader><CardContent>
-        <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-sm"><thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="pb-3">Method</th><th className="pb-3 text-right">Collected</th><th className="pb-3 text-right">Refunds</th><th className="pb-3 text-right">Net</th></tr></thead><tbody>
-          {metrics.methods.map((method) => <tr key={method.value} className="border-b last:border-0"><th className="py-4 text-left font-bold"><div>{method.label}</div><div className="mt-1 text-xs font-normal text-muted-foreground">{metrics.salesPaise ? (method.collectedPaise * 100 / metrics.salesPaise).toFixed(1) : '0.0'}% of sales</div></th><td className="py-4 text-right tabular-nums">{money(method.collectedPaise)}</td><td className="py-4 text-right tabular-nums">{money(method.refundedPaise)}</td><td className="py-4 text-right font-bold tabular-nums">{money(method.netPaise)}</td></tr>)}
-          {metrics.unassignedRefundsPaise > 0 ? <tr className="border-b"><th className="py-3 text-left">Unassigned refunds</th><td className="text-right">{money(0)}</td><td className="text-right">{money(metrics.unassignedRefundsPaise)}</td><td className="text-right">{money(-metrics.unassignedRefundsPaise)}</td></tr> : null}
-        </tbody><tfoot><tr className="border-t"><th className="pt-3 text-left">Total</th><td className="pt-3 text-right font-bold">{money(metrics.salesPaise)}</td><td className="pt-3 text-right font-bold">{money(metrics.refundsPaise)}</td><td className="pt-3 text-right font-bold">{money(metrics.netPaise)}</td></tr></tfoot></table></div>
-        {metrics.billCount === 0 && metrics.refundsPaise === 0 ? <p className="mt-4 rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">No sales in this date range.</p> : null}
-      </CardContent></Card>
-      <Card><CardContent className="flex flex-wrap gap-x-6 gap-y-2 pt-4 text-sm"><span>Discounts: <strong>{money(metrics.discountPaise)}</strong></span><span>Voided bills: <strong>{metrics.voidedCount}</strong></span><span>Voided value: <strong>{money(metrics.voidedPaise)}</strong></span></CardContent></Card>
-      <p className="text-xs text-muted-foreground">Sales use the bill date. Refunds use the refund date and method, including refunds for earlier bills. This dashboard does not update your main finance dashboard.</p>
+
+  return <section aria-label="POS sales dashboard" className="grid gap-card-gap pb-4">
+    <Card>
+      <CardContent className="flex min-h-20 flex-col justify-center gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">POS Performance</span><h2 className="text-xl font-semibold tracking-tight">{range.label}</h2></div>
+        <Tabs value={String(dayOffset)} onValueChange={(value) => setDayOffset(Number(value) as DayOffset)}>
+          <TabsList aria-label="POS business day" className="min-h-8 grid-cols-3">
+            <TabsTrigger value="0">T</TabsTrigger>
+            <TabsTrigger value="1">T-1</TabsTrigger>
+            <TabsTrigger value="2">T-2</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </CardContent>
+    </Card>
+
+    {data.error ? <StatusPanel variant="destructive">{data.error}</StatusPanel> : data.loading ? <StatusPanel>Loading POS activity…</StatusPanel> : <>
+      <div className="grid gap-card-gap sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon
+          return <Card key={card.label} aria-label={card.label}><CardContent className="flex items-start justify-between gap-3 py-4">
+            <div className="grid gap-1"><span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{card.label}</span><strong className="text-2xl font-black tabular-nums">{card.value}</strong><span className="text-xs text-muted-foreground">{card.note}</span></div>
+            <span className="rounded-lg bg-primary/10 p-2 text-primary"><Icon className="size-5" /></span>
+          </CardContent></Card>
+        })}
+      </div>
+
+      <div className="grid gap-card-gap xl:grid-cols-2">
+        <Card>
+          <CardHeader><SectionHeading eyebrow="Collections" title="Payment Mix" description="Net collections by payment method." /></CardHeader>
+          <CardContent className="grid gap-3">
+            {metrics.methods.map((method) => {
+              const Icon = paymentIcons[method.value]
+              const share = metrics.salesPaise > 0 ? method.collectedPaise * 100 / metrics.salesPaise : 0
+              return <div key={method.value} className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-muted-foreground" />{method.label}</span>
+                  <span className="text-right"><strong className="tabular-nums">{money(method.netPaise)}</strong><span className="ml-2 text-xs text-muted-foreground">{share.toFixed(1)}%</span></span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, share))}%` }} /></div>
+                {method.refundedPaise > 0 ? <span className="text-xs text-muted-foreground">Refunded {money(method.refundedPaise)}</span> : null}
+              </div>
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><SectionHeading eyebrow="Exceptions" title="Needs Attention" description="Activity that may require review." /></CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2">
+            <ExceptionMetric label="Approved refunds" value={money(metrics.refundsPaise)} note={`${metrics.refundCount} refund records`} alert={metrics.refundsPaise > 0} />
+            <ExceptionMetric label="Discounts" value={money(metrics.discountPaise)} note={`${metrics.discountedBillCount} discounted bills`} alert={metrics.discountPaise > 0} />
+            <ExceptionMetric label="Voided bills" value={String(metrics.voidedCount)} note={money(metrics.voidedPaise)} alert={metrics.voidedCount > 0} />
+            <ExceptionMetric label="Unresolved items" value={String(metrics.unresolvedItemCount)} note="Temporary item quantity" alert={metrics.unresolvedItemCount > 0} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-card-gap xl:grid-cols-2">
+        <Card>
+          <CardHeader><SectionHeading eyebrow="Product performance" title="Top Selling Products" description={`Ranked by sales value for ${range.label}.`} /></CardHeader>
+          <CardContent>
+            {metrics.topProducts.length === 0 ? <EmptyState text="No catalog product sales on this day." /> : <div className="divide-y divide-border">
+              {metrics.topProducts.map((product, index) => <div key={product.id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="flex size-7 items-center justify-center rounded-full bg-secondary text-xs font-black">{index + 1}</span>
+                <div className="min-w-0"><strong className="block truncate text-sm">{product.name}</strong><span className="text-xs text-muted-foreground">{product.quantity.toLocaleString('en-IN')} units</span></div>
+                <strong className="text-sm tabular-nums">{money(product.revenuePaise)}</strong>
+              </div>)}
+            </div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><SectionHeading eyebrow="Inventory" title="Stock Attention" description="Active products at zero or negative stock." /></CardHeader>
+          <CardContent className="grid gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              <ExceptionMetric label="Negative stock" value={String(metrics.negativeStockCount)} note="Below zero" alert={metrics.negativeStockCount > 0} />
+              <ExceptionMetric label="Out of stock" value={String(metrics.zeroStockCount)} note="Exactly zero" alert={metrics.zeroStockCount > 0} />
+            </div>
+            {metrics.stockAttention.length === 0 ? <EmptyState text="No active products at zero or negative stock." /> : <div className="divide-y divide-border rounded-lg border border-border px-3">
+              {metrics.stockAttention.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 py-2.5 text-sm"><span className="min-w-0 truncate font-medium">{product.name}</span><strong className={product.currentQuantity < 0 ? 'text-destructive' : 'text-warning'}>{product.currentQuantity.toLocaleString('en-IN')}</strong></div>)}
+            </div>}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader><SectionHeading eyebrow="Latest activity" title="Recent Bills" description={`Most recent completed bills in ${range.label}.`} /></CardHeader>
+        <CardContent>
+          {metrics.recentBills.length === 0 ? <EmptyState text="No completed bills on this day." /> : <div className="divide-y divide-border">
+            {metrics.recentBills.map((bill) => <div key={bill.id} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4">
+              <div><strong className="text-sm">{bill.receiptNumber}</strong><span className="ml-2 text-xs text-muted-foreground">{bill.createdByName}</span></div>
+              <span className="text-xs text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</span>
+              <strong className="text-sm tabular-nums">{money(bill.totalPaise)}</strong>
+            </div>)}
+          </div>}
+        </CardContent>
+      </Card>
     </>}
   </section>
+}
+
+function ExceptionMetric({ label, value, note, alert }: { label: string; value: string; note: string; alert: boolean }) {
+  return <div className="rounded-lg border border-border bg-secondary/25 p-3">
+    <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</span>{alert ? <AlertTriangle className="size-4 text-warning" /> : null}</div>
+    <strong className="mt-1 block text-xl tabular-nums">{value}</strong>
+    <span className="text-xs text-muted-foreground">{note}</span>
+  </div>
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground"><PackageX className="size-4" />{text}</div>
 }

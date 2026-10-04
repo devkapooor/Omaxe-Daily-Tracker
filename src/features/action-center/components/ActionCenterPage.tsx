@@ -11,6 +11,9 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
+import { PageCardStack } from '@/shared/ui/page-card-stack'
+import { PageHeader } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
@@ -235,20 +238,16 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
   }
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-      <div className="grid w-full gap-2.5">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 px-3 py-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Owner Workspace</p>
-              <h1 className="text-sm font-semibold tracking-tight text-foreground">Action Centre</h1>
-              <p className="text-[11px] leading-4 text-muted-foreground">Financial records change only after explicit approval.</p>
-            </div>
-            <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'} className="shrink-0 px-3 py-1 text-xs">
-              {queue.pendingCount} pending
-            </Badge>
-          </CardHeader>
-        </Card>
+    <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
+      <PageHeader title="Action Centre" tools={(
+        <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'} className="shrink-0 px-3 py-1 text-xs">
+          {queue.pendingCount} pending
+        </Badge>
+      )} />
+    )}>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <PageCardStack className="w-full pb-4">
+          <p className="sr-only">Owner workspace. Financial records change only after explicit approval.</p>
 
         {isLoading && !error ? (
           <Card>
@@ -363,10 +362,11 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
         </Card> : null}
 
         {testPosPanel}
+        </PageCardStack>
       </div>
 
       <DailyCashoutDetailsModal entry={selectedItem?.kind === 'cashout-correction' ? selectedItem.sourceCashout ?? null : null} onClose={() => setSelectedItem(null)} />
       {confirmation.dialog}
-    </section>
+    </PageLayout>
   )
 }

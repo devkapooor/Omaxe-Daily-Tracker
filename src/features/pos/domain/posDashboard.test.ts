@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PosBill, PosBillState, PosRefundEvent } from './types'
+import type { PosBill, PosBillState, PosProduct, PosRefundEvent } from './types'
 import { calculatePosDashboard } from './posDashboard'
 
 const date = '2026-10-03'
@@ -43,5 +43,21 @@ describe('POS dashboard totals', () => {
     expect(calculatePosDashboard([], [], [], date, date)).toMatchObject({ salesPaise: 0, refundsPaise: 0, netPaise: 0, billCount: 0 })
     const result = calculatePosDashboard([], [], [{ id: 'legacy', type: 'bill-return-approved', refundDate: date, refundAmountPaise: 500 }], date, date)
     expect(result).toMatchObject({ unassignedRefundsPaise: 500, refundsPaise: 500, netPaise: -500 })
+  })
+  it('derives operational product, basket, stock, and recent-bill metrics', () => {
+    const sale = bill('sale', [{ method: 'upi', amountPaise: 15000 }])
+    sale.lines = [
+      { id: 'line-1', kind: 'product', productId: 'product-1', barcode: '100', description: 'Product One', quantity: 2, unitPricePaise: 6000 },
+      { id: 'line-2', kind: 'temporary', barcode: 'temp', description: 'Temporary', quantity: 1, unitPricePaise: 3000 },
+    ]
+    const product = (id: string, name: string, currentQuantity: number): PosProduct => ({
+      id, name, currentQuantity, barcode: id, searchName: name.toLowerCase(), category: '', brand: '', vendor: '', sellingPricePaise: 6000,
+      revision: 1, active: true, createdAt: '', createdByUid: '', createdByName: '', updatedAt: '', updatedByUid: '', updatedByName: '',
+    })
+    const result = calculatePosDashboard([sale], [], [], date, date, [product('product-1', 'Product One', -2), product('product-2', 'Product Two', 0)])
+    expect(result).toMatchObject({ unitsSold: 3, averageBillPaise: 15000, unresolvedItemCount: 1, negativeStockCount: 1, zeroStockCount: 1 })
+    expect(result.topProducts[0]).toMatchObject({ id: 'product-1', quantity: 2, revenuePaise: 12000 })
+    expect(result.stockAttention.map((item) => item.id)).toEqual(['product-1', 'product-2'])
+    expect(result.recentBills[0].id).toBe('sale')
   })
 })

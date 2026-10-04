@@ -15,8 +15,10 @@ import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { Textarea } from '@/shared/ui/textarea'
 import { activateVendorLedgerV2 } from '@/store/vendorLedgerV2Repository'
 
@@ -24,16 +26,21 @@ type EditableVendor = CutoverVendorDraft & { openingRupees: string }
 
 export function VendorLedgerPreActivationPage({ currentUser }: { currentUser: AppUser }) {
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-      <Tabs defaultValue="cutover">
-        <TabsList className="mb-2 grid-cols-2">
-          <TabsTrigger value="cutover">Cutover Planning</TabsTrigger>
-          <TabsTrigger value="preview">Workflow Preview</TabsTrigger>
-        </TabsList>
-        <TabsContent value="cutover"><VendorLedgerCutoverPlanner currentUser={currentUser} /></TabsContent>
-        <TabsContent value="preview"><VendorLedgerPreviewPage /></TabsContent>
-      </Tabs>
-    </section>
+    <Tabs defaultValue="cutover" className="flex min-h-0 flex-1 flex-col">
+      <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
+        <PageHeader title="Vendor Workspace" tools={(
+          <PageHeaderTabsList aria-label="Vendor workspace setup sections" className="grid grid-cols-2">
+            <PageHeaderTab value="cutover">Cutover Planning</PageHeaderTab>
+            <PageHeaderTab value="preview">Workflow Preview</PageHeaderTab>
+          </PageHeaderTabsList>
+        )} />
+      )}>
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <TabsContent value="cutover" className="m-0"><VendorLedgerCutoverPlanner currentUser={currentUser} /></TabsContent>
+          <TabsContent value="preview" className="m-0"><VendorLedgerPreviewPage /></TabsContent>
+        </div>
+      </PageLayout>
+    </Tabs>
   )
 }
 
