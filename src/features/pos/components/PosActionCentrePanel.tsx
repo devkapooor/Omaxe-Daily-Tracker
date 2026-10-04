@@ -4,9 +4,8 @@ import type { AppUser } from '@/domain/financeTypes'
 import { formatDisplayDateTime } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader } from '@/shared/ui/card'
+import { Card, CardContent } from '@/shared/ui/card'
 import { Input } from '@/shared/ui/input'
-import { SectionHeading } from '@/shared/ui/section-heading'
 import { approvePosRequest, rejectPosApproval, subscribePosApprovals } from '../data/posRepository'
 import type { PosApprovalRequest } from '../domain/types'
 
@@ -27,11 +26,50 @@ export function PosActionCentrePanel({ currentUser, showToast }: { currentUser: 
   }
 
   return <Card className="border-amber-300/70">
-    <CardHeader className="flex-row items-start justify-between"><SectionHeading eyebrow="Isolated sandbox approvals" title="POS (Test) Requests" description="Approvals below change only posSandboxes/test records." /><Badge variant={pending.length ? 'warning' : 'success'}>{pending.length} pending</Badge></CardHeader>
-    <CardContent className="grid gap-2.5">
-      {error ? <p className="text-sm text-destructive"><AlertTriangle className="mr-1 inline size-4" />{error}</p> : null}
-      {pending.length === 0 ? <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground"><TestTube2 className="mr-1 inline size-4" />No POS test requests are waiting.</p> : pending.map((request) => <article key={request.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:bg-amber-950/10"><div className="flex flex-wrap items-start justify-between gap-2"><div><Badge variant="warning">TEST {request.type.toUpperCase()}</Badge><h3 className="mt-1 font-black">{request.receiptNumber}</h3><p className="text-xs text-muted-foreground">Requested by {request.requestedByName} · {formatDisplayDateTime(request.requestedAt)}</p><p className="mt-1 text-xs"><strong>Reason:</strong> {request.reason}</p>{request.type === 'return' ? <p className="text-xs">Condition: {request.returnCondition} · Refund: ₹{((request.refundAmountPaise ?? 0) / 100).toLocaleString('en-IN')} via {request.refundMethod}</p> : null}</div><div className="flex min-w-64 flex-1 gap-2 sm:max-w-xl"><Input value={reason[request.id] ?? ''} onChange={(event) => setReason((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Mandatory rejection reason" /><Button size="sm" variant="outline" disabled={busyId !== null || !(reason[request.id] ?? '').trim()} onClick={() => void run(request.id, () => rejectPosApproval(request.id, reason[request.id], currentUser), `TEST request rejected: ${request.receiptNumber}`)}><XCircle />Reject</Button><Button size="sm" disabled={busyId !== null} onClick={() => void run(request.id, () => approvePosRequest(request.id, currentUser), `TEST request approved: ${request.receiptNumber}`)}><CheckCircle2 />Approve</Button></div></div></article>)}
-      {recent.length > 0 ? <div><strong className="text-xs uppercase tracking-wide text-muted-foreground">Recent POS test decisions</strong><div className="mt-2 grid gap-2 sm:grid-cols-2">{recent.map((request) => <div key={request.id} className="rounded-xl border p-2 text-xs"><Badge variant={request.status === 'approved' ? 'success' : 'secondary'}>{request.status}</Badge> <strong>{request.receiptNumber}</strong><p className="text-muted-foreground">{request.type} · {request.reviewedByName} · {request.reviewReason}</p></div>)}</div></div> : null}
+    <CardContent className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid size-7 shrink-0 place-items-center rounded bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"><TestTube2 className="size-4" /></span>
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold text-foreground">POS (Test) Sandbox Requests</h3>
+          <p className="text-[10px] text-muted-foreground">Isolated test environment · Approvals affect only posSandboxes/test</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge variant={pending.length ? 'warning' : 'secondary'} className="px-2 py-0.5 text-[10px]">{pending.length} pending</Badge>
+        {pending.length === 0 ? <span className="text-[10px] text-muted-foreground">No requests waiting</span> : null}
+      </div>
     </CardContent>
+
+    {error ? <CardContent className="border-t border-border pt-2 text-xs text-destructive"><AlertTriangle className="mr-1 inline size-3.5" />{error}</CardContent> : null}
+    {pending.map((request) => <CardContent key={request.id} className="border-t border-border pt-2.5">
+      <article className="grid gap-2 rounded-md border border-amber-200 bg-amber-50/50 p-2.5 dark:bg-amber-950/10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Badge variant="warning" className="px-1.5 py-0 text-[10px]">TEST {request.type.toUpperCase()}</Badge>
+            <strong className="text-xs">{request.receiptNumber}</strong>
+            <span className="text-[10px] text-muted-foreground">{request.requestedByName} · {formatDisplayDateTime(request.requestedAt)}</span>
+          </div>
+          <p className="mt-1 text-[11px]"><strong>Reason:</strong> {request.reason}</p>
+          {request.type === 'return' ? <p className="text-[10px] text-muted-foreground">Condition: {request.returnCondition} · Refund: ₹{((request.refundAmountPaise ?? 0) / 100).toLocaleString('en-IN')} via {request.refundMethod}</p> : null}
+        </div>
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          <Input className="h-8 min-w-36 flex-1 text-xs" value={reason[request.id] ?? ''} onChange={(event) => setReason((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Mandatory rejection reason" aria-label={`Rejection reason for ${request.receiptNumber}`} />
+          <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs" disabled={busyId !== null || !(reason[request.id] ?? '').trim()} onClick={() => void run(request.id, () => rejectPosApproval(request.id, reason[request.id], currentUser), `TEST request rejected: ${request.receiptNumber}`)}><XCircle className="size-3.5" />Reject</Button>
+          <Button size="sm" className="h-8 px-2.5 text-xs" disabled={busyId !== null} onClick={() => void run(request.id, () => approvePosRequest(request.id, currentUser), `TEST request approved: ${request.receiptNumber}`)}><CheckCircle2 className="size-3.5" />Approve</Button>
+        </div>
+      </article>
+    </CardContent>)}
+
+    {recent.length > 0 ? <CardContent className="border-t border-border pt-2 text-xs">
+      <details>
+        <summary className="w-fit cursor-pointer select-none font-semibold text-muted-foreground hover:text-foreground">Recent POS test decisions ({recent.length})</summary>
+        <div className="mt-2 divide-y divide-border">
+          {recent.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5">
+            <span><Badge variant={request.status === 'approved' ? 'success' : 'secondary'}>{request.status}</Badge> <strong>{request.receiptNumber}</strong> <span className="text-muted-foreground">{request.type}</span></span>
+            <span className="text-muted-foreground">{request.reviewedByName} · {request.reviewReason}</span>
+          </div>)}
+        </div>
+      </details>
+    </CardContent> : null}
   </Card>
 }

@@ -5,7 +5,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication and Firestore on Spark; installed launches still require internet for business data.
-- Owner-created staff accounts; owner Dashboard, Action Centre and Logs; manager/owner Payment Planner; role-appropriate Settings.
+- Owner-created staff accounts; owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses and owner loan operations.
 - Maintain financial write reliability, loan allocation correctness, user-ID cash ownership, planner consistency, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.
@@ -17,6 +17,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 - [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP pass. Rules tests remain blocked by missing Java; no rules were changed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). Hosting deployment remains pending separate confirmation.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
+- [ ] Continue the approved UI redesign with Logs and Settings after a separate phase approval; the Action Centre local layout has been accepted and checkpointed. Preserve existing workflows and the loan safeguard.
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.
@@ -28,6 +29,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Deferred maintenance and boundaries
 
 - Evaluate bundle splitting, uiHelpers decomposition, reusable validation, and narrow-desktop/tablet coverage only when justified by a feature or defect.
+- After the currently approved UI redesign phases are completed and checkpointed, plan a shared page-layout/card-stack upgrade: inventory repeated page structures, define reusable page/card composition primitives, and migrate eligible non-loan pages incrementally to reduce duplicated UI code and standardize spacing. Keep this queued (not active) until the current plan is complete; each implementation phase requires user approval and its own checkpoint. Preserve each page's existing workflows and visual acceptance criteria. Loan-specific UI and code remain excluded; stop and ask before any proposed shared primitive would alter them.
 - A cash-identity diagnostics/review screen may be considered if needed; never use it to authorize automatic live data repairs.
 - Maintainability work keeps expenses and loans untouched and does not broaden financial scope.
 - Multi-store, inventory, payroll, GST/tax workflows, offline financial writes, and backend job orchestration are outside the current approved scope.
@@ -60,7 +62,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 | UP-007 | Dashboard break-even progress | High | Dashboard batch A | Use the configured margin and monthly operating expense to show break-even sales, progress, amount remaining, and required daily sales for the selected month. | Deployed 2026-10-01 | No |
 | UP-008 | Dashboard daily sales trend | High | Dashboard batch A | Add a compact daily sales trend for the selected month with a preceding-month overlay, controlled by the existing T, T-1, and T-2 selector. | Deployed 2026-10-01 | No |
 | UP-009 | Dashboard recording health | High | Dashboard batch A | Show recorded-day coverage and latest sales and cashout dates without adding detailed records or Cash Movement calculations to the dashboard. | Deployed 2026-10-01 | No |
-| UP-010 | Purchase, vendor, and cheque ledger redesign | Critical | Lean V2 finance release | Deliver a visible owner preview, operational ledger, and controlled clean start; preserve separately approved post-launch requirements. | Operational workspace, settlement approvals, returns, cheque display and planner integration implemented through 5777168; legacy import and broader corrections remain | No |
+| UP-010 | Purchase, vendor, and cheque ledger redesign | Critical | Lean V2 finance release | Deliver a visible owner preview, operational ledger, and controlled clean start; preserve separately approved post-launch requirements. | Operational workspace, settlement approvals, returns, cheque display and legacy planner-metric integration implemented through 5777168; legacy import and broader corrections remain | No |
 
 ## Implementation Readiness
 

@@ -8,11 +8,9 @@ import { OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/appr
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
-import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
-import { SelectField } from '@/shared/ui/select-field'
 import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 
@@ -51,8 +49,8 @@ function ChangeGrid({ item }: { item: Extract<ApprovalActionItem, { kind: 'casho
   return (
     <div className="grid gap-2 lg:grid-cols-2">
       {(['before', 'proposed'] as const).map((side) => (
-        <div key={side} className="rounded-xl border border-border/70 bg-background/45 p-2.5">
-          <span className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+        <div key={side} className="rounded-md border border-border bg-background p-2.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
             {side === 'before' ? 'Saved Values' : 'Proposed Values'}
           </span>
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
@@ -65,9 +63,27 @@ function ChangeGrid({ item }: { item: Extract<ApprovalActionItem, { kind: 'casho
               <span>Drawer Total</span><strong className="text-foreground">{money(side === 'before' ? item.beforeDrawer : item.proposedDrawer)}</strong>
             </p>
           </div>
-          <p className="mt-2 text-[9px] leading-relaxed text-muted-foreground">{denominationSummary(item, side)}</p>
+          <p className="mt-2 border-t border-border pt-1.5 text-[10px] leading-relaxed text-muted-foreground">Drawer denominations · {denominationSummary(item, side)}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+function CashoutChangeSummary({ item }: { item: Extract<ApprovalActionItem, { kind: 'cashout-correction' }> }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/50 px-2.5 py-2 text-xs">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Drawer total</span>
+      <span><span className="text-muted-foreground">Saved</span> <strong className="tabular-nums">{money(item.beforeDrawer)}</strong></span>
+      <span aria-hidden="true" className="text-muted-foreground">→</span>
+      <span><span className="text-muted-foreground">Proposed</span> <strong className="tabular-nums">{money(item.proposedDrawer)}</strong></span>
+      <Badge variant={item.cashMovementImpact < 0 ? 'warning' : 'secondary'} className="tabular-nums">
+        {item.cashMovementImpact > 0 ? '+' : ''}{money(item.cashMovementImpact)}
+      </Badge>
+      <details className="basis-full text-[11px] text-muted-foreground">
+        <summary className="w-fit cursor-pointer select-none hover:text-foreground">Full cashout comparison</summary>
+        <div className="mt-2"><ChangeGrid item={item} /></div>
+      </details>
     </div>
   )
 }
@@ -79,19 +95,22 @@ function RecentDecision({ item }: { item: ApprovalActionItem }) {
       ? `Vendor payment correction | ${item.vendorName}`
       : `Vendor return | ${item.vendorName}`
   return (
-    <div className="rounded-xl border border-border/70 bg-background/40 p-2.5 text-xs">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-bold text-foreground">{title}</p>
-          <p className="mt-1 text-muted-foreground">Requested by {item.requester}</p>
-        </div>
+    <div className="grid gap-1.5 border-b border-border py-2 text-xs last:border-b-0 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${item.status === 'approved' ? 'bg-emerald-500' : item.status === 'rejected' ? 'bg-rose-500' : 'bg-muted-foreground'}`} />
+        <p className="font-semibold text-foreground">{title}</p>
+        <span className="text-muted-foreground">{formatDisplayDate(item.reviewedAt ?? item.submittedAt)}</span>
         <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
       </div>
-      <p className="mt-2 text-muted-foreground">{item.reason}</p>
-      <p className="mt-1 text-muted-foreground">
-        Reviewed by {item.reviewedBy ?? '-'}{item.reviewedAt ? ` at ${formatDisplayDateTime(item.reviewedAt)}` : ''}
-      </p>
-      {item.reviewReason ? <p className="mt-1 text-muted-foreground">Decision: {item.reviewReason}</p> : null}
+      <p className="truncate text-muted-foreground" title={item.reviewReason ?? item.reason}>{item.reviewReason || item.reason}</p>
+      <details className="text-muted-foreground sm:text-right">
+        <summary className="w-fit cursor-pointer select-none hover:text-foreground sm:ml-auto">Audit details</summary>
+        <div className="mt-1 space-y-0.5 sm:max-w-sm sm:text-left">
+          <p>Requested by {item.requester}: {item.reason}</p>
+          <p>Reviewed by {item.reviewedBy ?? '-'}{item.reviewedAt ? ` at ${formatDisplayDateTime(item.reviewedAt)}` : ''}</p>
+          {item.reviewReason ? <p>Decision: {item.reviewReason}</p> : null}
+        </div>
+      </details>
     </div>
   )
 }
@@ -110,28 +129,39 @@ function VendorReturnDecision({
   const [replacementReceivedAt, setReplacementReceivedAt] = useState(item.sourceReturn.date)
   const [reason, setReason] = useState('')
   return (
-    <div className="mt-3 grid gap-2 rounded-xl border border-border/70 bg-background/45 p-3 sm:grid-cols-2 lg:grid-cols-4">
-      <FieldLabel label="Decision">
-        <SelectField
-          options={[
-            { label: 'Vendor credit', value: 'vendor-credit' },
-            { label: 'Replacement received', value: 'replacement' },
-            { label: 'Reject return', value: 'rejected' },
-          ]}
-          value={outcome}
-          onValueChange={(value) => setOutcome(value as typeof outcome)}
-        />
-      </FieldLabel>
+    <div className="mt-3 grid gap-2 rounded-md border border-border bg-background p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <fieldset className="sm:col-span-2 lg:col-span-4">
+        <legend className="mb-1.5 text-xs font-semibold text-foreground">Return outcome</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {[
+            ['vendor-credit', 'Vendor credit'],
+            ['replacement', 'Replacement received'],
+            ['rejected', 'Reject return'],
+          ].map(([value, label]) => (
+            <label key={value} className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground">
+              <input
+                type="radio"
+                name={`return-outcome-${item.id}`}
+                value={value}
+                checked={outcome === value}
+                onChange={() => setOutcome(value as typeof outcome)}
+                className="h-4 w-4 accent-primary"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       {outcome === 'vendor-credit' ? <FieldLabel label="Credit Amount">
         <Input type="number" min="0.01" max={item.sourceReturn.valuePaise / 100} step="0.01" value={creditedRupees} onChange={(event) => setCreditedRupees(event.target.value)} />
       </FieldLabel> : null}
       {outcome === 'replacement' ? <FieldLabel label="Replacement Received">
         <Input type="date" value={replacementReceivedAt} onChange={(event) => setReplacementReceivedAt(event.target.value)} />
       </FieldLabel> : null}
-      <FieldLabel className="sm:col-span-2 lg:col-span-2" label="Mandatory Decision Reason">
+      <FieldLabel className="sm:col-span-2 lg:col-span-3" label="Mandatory Decision Reason">
         <Textarea rows={2} value={reason} onChange={(event) => setReason(event.target.value)} />
       </FieldLabel>
-      <div className="flex items-end justify-end sm:col-span-2 lg:col-span-4">
+      <div className="flex items-end justify-end sm:col-span-2 lg:col-span-1">
         <Button
           disabled={busy || !reason.trim() || (outcome === 'vendor-credit' && Number(creditedRupees) <= 0)}
           variant={outcome === 'rejected' ? 'destructive' : 'default'}
@@ -206,15 +236,15 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
   return (
     <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-      <div className="grid gap-2.5">
+      <div className="grid w-full gap-2.5">
         <Card>
-          <CardHeader className="flex-row items-start justify-between gap-3">
-            <SectionHeading
-              eyebrow="Owner Workspace"
-              title="Action Centre"
-              description="Financial records change only after approval."
-            />
-            <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'}>
+          <CardHeader className="flex-row items-center justify-between gap-3 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Owner Workspace</p>
+              <h1 className="text-sm font-semibold tracking-tight text-foreground">Action Centre</h1>
+              <p className="text-[11px] leading-4 text-muted-foreground">Financial records change only after explicit approval.</p>
+            </div>
+            <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'} className="shrink-0 px-3 py-1 text-xs">
               {queue.pendingCount} pending
             </Badge>
           </CardHeader>
@@ -236,98 +266,105 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
         ) : null}
 
         {!isLoading && !error ? <Card>
-          <CardHeader>
-            <SectionHeading eyebrow="Needs Review" title="Pending Approvals" />
+          <CardHeader className="flex-row items-end justify-between gap-3 border-b border-border px-3 py-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Needs Review</p>
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">Pending Approvals</h2>
+            </div>
+            <span className="hidden text-[10px] text-muted-foreground sm:inline">Sorted oldest first</span>
           </CardHeader>
-          <CardContent className="space-y-2.5">
+          <CardContent className="space-y-2 px-3 pb-3 pt-2">
             {queue.pending.length === 0 ? (
-              <div className="grid place-items-center rounded-2xl border border-dashed border-border/80 bg-background/25 px-4 py-5 text-center">
-                <Inbox className="h-7 w-7 text-emerald-600" />
-                <p className="mt-2 text-sm font-bold text-foreground">No approvals are waiting</p>
+              <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-2.5 text-xs text-muted-foreground">
+                <Inbox className="h-4 w-4 text-emerald-600" />
+                <p className="font-medium text-foreground">No approvals are waiting</p>
               </div>
             ) : null}
 
             {queue.pending.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-border/75 bg-secondary/20 p-3">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <article key={item.id} className="rounded-md border border-border bg-card px-3 py-2.5">
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(190px,0.9fr)_auto] md:items-center">
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="warning">{item.kind === 'cashout-correction' ? 'Cashout correction' : item.kind === 'vendor-settlement-correction' ? 'Vendor payment correction' : 'Vendor return'}</Badge>
-                      {item.isStale ? <Badge variant="destructive">Outdated</Badge> : <Badge variant="outline">Ready to review</Badge>}
+                      <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{item.kind === 'cashout-correction' ? 'Cashout correction' : item.kind === 'vendor-settlement-correction' ? 'Vendor payment' : 'Vendor return'}</Badge>
+                      {item.isStale ? <Badge variant="destructive">Outdated</Badge> : null}
+                      <span className="text-[11px] font-medium text-foreground">{item.kind === 'cashout-correction' ? item.requester : item.vendorName}</span>
+                      <span className="text-[11px] text-muted-foreground">{formatDisplayDate(item.kind === 'cashout-correction' ? item.cashoutDate : item.kind === 'vendor-settlement-correction' ? item.proposed.date : item.sourceReturn.date)}</span>
                     </div>
-                    <h3 className="text-base font-black text-foreground">
-                      {item.kind === 'cashout-correction'
-                        ? `${formatDisplayDate(item.cashoutDate)} | ${item.recordedBy}`
-                        : item.kind === 'vendor-settlement-correction'
-                          ? `${item.vendorName} | ${formatDisplayDate(item.proposed.date)}`
-                          : `${item.vendorName} | ${formatDisplayDate(item.sourceReturn.date)}`}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">Requested by {item.requester} at {formatDisplayDateTime(item.submittedAt)}</p>
-                    <p className="text-xs font-semibold text-foreground">Reason: {item.reason}</p>
+                    <p className="text-[10px] text-muted-foreground">{item.kind === 'cashout-correction' ? `Recorded by ${item.recordedBy} · ` : 'Requested by '}{item.requester} · {formatDisplayDateTime(item.submittedAt)}</p>
+                    <p className="text-[10px] leading-4 text-foreground"><span className="font-semibold">Reason:</span> {item.reason}</p>
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-left xl:text-right">
-                    <span className="block text-[9px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">{item.kind === 'cashout-correction' ? 'Cash Movement Impact' : item.kind === 'vendor-settlement-correction' ? 'Outstanding Impact' : 'Requested Return Value'}</span>
-                    <strong className="mt-1 block text-base font-black text-cyan-700">
-                      {money(item.kind === 'cashout-correction' ? item.cashMovementImpact : item.kind === 'vendor-settlement-correction' ? item.outstandingImpactPaise / 100 : item.sourceReturn.valuePaise / 100)}
-                    </strong>
+                  <div className="min-w-0">
+                    {item.kind === 'cashout-correction' ? <CashoutChangeSummary item={item} /> : null}
+                    {item.kind === 'vendor-settlement-correction' ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-muted/50 px-2.5 py-2 text-xs">
+                      <span><span className="text-muted-foreground">Recorded</span> <strong className="tabular-nums">{money(item.before.amountPaise / 100)}</strong></span>
+                      <span aria-hidden="true" className="text-muted-foreground">→</span>
+                      <span><span className="text-muted-foreground">Proposed</span> <strong className="tabular-nums">{money(item.proposed.amountPaise / 100)}</strong></span>
+                      <Badge variant="secondary" className="tabular-nums">Impact {money(item.outstandingImpactPaise / 100)}</Badge>
+                      <span className="basis-full text-[10px] text-muted-foreground">{formatDisplayDate(item.before.date)} · {item.before.mode} → {formatDisplayDate(item.proposed.date)} · {item.proposed.mode}</span>
+                    </div> : null}
+                    {item.kind === 'vendor-return' ? <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-2 text-xs">
+                      <strong>{item.sourceReturn.description}</strong>
+                      <span className="text-muted-foreground">{item.sourceReturn.quantity} {item.sourceReturn.unit}</span>
+                      <Badge variant="secondary" className="tabular-nums">{money(item.sourceReturn.valuePaise / 100)}</Badge>
+                    </div> : null}
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1.5 md:flex-row md:items-center">
+                    {item.kind === 'cashout-correction' && item.sourceCashout ? <Button type="button" size="sm" variant="outline" className="h-8 px-2.5 text-xs" onClick={() => setSelectedItem(item)}>View details</Button> : null}
+                    {item.kind === 'vendor-return' ? null : item.isStale ? (
+                      <Button type="button" size="sm" variant="destructive" disabled={busyItemId !== null} onClick={() => void closeOutdated(item)}>
+                        <XCircle className="h-3.5 w-3.5" /> Close outdated
+                      </Button>
+                    ) : (
+                      <>
+                        <Button type="button" size="sm" variant="outline" className="h-8 px-2.5 text-xs" disabled={busyItemId !== null} onClick={() => void reject(item)}>
+                          <XCircle className="h-3.5 w-3.5" /> Reject
+                        </Button>
+                        <Button type="button" size="sm" className="h-8 px-2.5 text-xs" disabled={busyItemId !== null} onClick={() => void approve(item)}>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> {busyItemId === item.id ? 'Processing...' : 'Approve'}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {item.isStale ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                  <div className="mt-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
                     <p><strong>Approval blocked.</strong> {item.staleReason}</p>
                   </div>
                 ) : null}
 
-                {item.kind === 'cashout-correction' ? <div className="mt-3"><ChangeGrid item={item} /></div> : null}
-                {item.kind === 'vendor-settlement-correction' ? <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border/70 bg-background/45 p-3 text-xs"><strong>Saved payment</strong><p className="mt-1 text-muted-foreground">{formatDisplayDate(item.before.date)} | {item.before.mode} | {money(item.before.amountPaise / 100)}</p></div>
-                  <div className="rounded-xl border border-border/70 bg-background/45 p-3 text-xs"><strong>Proposed payment</strong><p className="mt-1 text-muted-foreground">{formatDisplayDate(item.proposed.date)} | {item.proposed.mode} | {money(item.proposed.amountPaise / 100)}</p></div>
-                </div> : null}
-                {item.kind === 'vendor-return' ? <div className="mt-3 text-xs text-muted-foreground">{item.sourceReturn.description} | {item.sourceReturn.quantity} {item.sourceReturn.unit}</div> : null}
-
-                {item.kind === 'vendor-return' ? <VendorReturnDecision busy={busyItemId !== null} item={item} onResolve={(decision) => run(item, () => onResolveReturn(item, decision))} /> : <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  {item.kind === 'cashout-correction' && item.sourceCashout ? <Button type="button" size="sm" variant="outline" onClick={() => setSelectedItem(item)}>View Cashout</Button> : null}
-                  {item.isStale ? (
-                    <Button type="button" size="sm" variant="destructive" disabled={busyItemId !== null} onClick={() => void closeOutdated(item)}>
-                      <XCircle className="h-3.5 w-3.5" /> Close as Outdated
-                    </Button>
-                  ) : (
-                    <>
-                      <Button type="button" size="sm" variant="outline" disabled={busyItemId !== null} onClick={() => void reject(item)}>
-                        <XCircle className="h-3.5 w-3.5" /> Reject
-                      </Button>
-                      <Button type="button" size="sm" disabled={busyItemId !== null} onClick={() => void approve(item)}>
-                        <CheckCircle2 className="h-3.5 w-3.5" /> {busyItemId === item.id ? 'Processing...' : 'Approve'}
-                      </Button>
-                    </>
-                  )}
-                </div>}
+                {item.kind === 'vendor-return' ? <VendorReturnDecision busy={busyItemId !== null} item={item} onResolve={(decision) => run(item, () => onResolveReturn(item, decision))} /> : null}
               </article>
             ))}
           </CardContent>
         </Card> : null}
 
         {!isLoading && !error ? <Card>
-          <CardHeader>
-            <SectionHeading eyebrow="Audit Snapshot" title="Recent Decisions" description="Latest 20 · Full history in Logs" />
+          <CardHeader className="flex-row items-end justify-between gap-3 px-3 py-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Audit Snapshot</p>
+              <h2 className="text-sm font-semibold tracking-tight text-foreground">Recent Decisions</h2>
+            </div>
+            <span className="text-[10px] text-muted-foreground">Latest 20 · Full history in Logs</span>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {queue.recent.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-xl border border-dashed border-border/80 p-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
                 <Clock3 className="h-4 w-4" /> No completed approval decisions yet.
               </div>
             ) : (
-              <div className="grid gap-2 lg:grid-cols-2">
+              <div className="divide-y divide-border">
                 {queue.recent.map((item) => <RecentDecision key={item.id} item={item} />)}
               </div>
             )}
           </CardContent>
         </Card> : null}
+
+        {testPosPanel}
       </div>
 
-      {testPosPanel}
       <DailyCashoutDetailsModal entry={selectedItem?.kind === 'cashout-correction' ? selectedItem.sourceCashout ?? null : null} onClose={() => setSelectedItem(null)} />
       {confirmation.dialog}
     </section>

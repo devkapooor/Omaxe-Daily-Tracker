@@ -21,8 +21,8 @@ type CashoutPageProps = {
 export function CashoutPage(props: CashoutPageProps) {
   const { correctionRequests, currentUser, dailyCashouts, latestClosedDay, latestClosedDayExpenses, onSave, onSubmitCorrection, onWithdrawCorrection, showToast } = props
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <section className="mb-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
+      <section>
         <GlowCard className="w-full px-3.5 py-2.5 shadow-[0_10px_22px_rgba(24,32,27,0.06)]">
           <span className="block text-[11px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground">
             {latestClosedDay ? `Latest Closed Day Expenses - ${formatDisplayDate(latestClosedDay)}` : 'Today Expenses'}
@@ -30,7 +30,7 @@ export function CashoutPage(props: CashoutPageProps) {
           <strong className="mt-1.5 block text-lg font-black tracking-tight text-foreground">{money(latestClosedDayExpenses)}</strong>
         </GlowCard>
       </section>
-      <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
+      <section className="min-h-0 flex-1 overflow-hidden">
         <Tabs defaultValue="new" className="flex h-full min-h-0 flex-col">
           <TabsList className="mb-1 min-h-9 grid-cols-2"><TabsTrigger value="new">New Cashout</TabsTrigger><TabsTrigger value="corrections">Corrections</TabsTrigger></TabsList>
           <TabsContent value="new" className="min-h-0 flex-1">

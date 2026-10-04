@@ -47,7 +47,6 @@ src/
     directory/
     logs/
     navigation/
-    planner/
     register/
     settings/
     vendor-workspace/
@@ -112,7 +111,6 @@ src/
 - `features/vendor-workspace`: production vendor workspace, guarded subscription, activation planner and local preview
 - `features/cashout`: daily cashout workflow and drawer audit
 - `features/cash-movement`: user-to-user and user-to-bank movement logging
-- `features/planner`: cheque-based and manual payment planning against bank balance
 - `features/logs`: owner-only audit and record history
 - `features/settings`: user management, password updates, projection settings
 - `features/auth`: login, loading, and offline-only auth/system screens
@@ -219,7 +217,7 @@ App opened without internet
 
 - The app is intentionally single-store and does not implement multi-store routing.
 - Monthly Dashboard performance uses the shared pure deriveMonthlyPerformance helper over subscribed source records; settings, liabilities and cash summaries still use workspaceMetrics. Retained monthly-report/table fields are compatibility data, not active dashboard panels.
-- Payment Planner has been removed. Historical `plannedPayments`, `currentBankBalance`, and `workspaceMetrics.planner` data remain read-only compatibility data for audit safety and legacy-cheque visibility; no active screen writes them.
+- The Payment Planner route and its screen actions have been removed. Historical `plannedPayments`, `currentBankBalance`, and `workspaceMetrics.planner` data remain in the shared model for compatibility and audit; no active screen writes them.
 - `Cash Movement` remains separate from `Cashout` and separate from the removed shift-handover experiment.
 - Active cash ownership now uses Firebase user IDs end to end for cashouts, transfers, balance cards, and transfer logs.
 - Legacy slot fields such as `recordedByHolder`, `from`, and `toPerson` are compatibility-only fields for older documents and are not written by new runtime flows.

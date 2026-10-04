@@ -24,7 +24,7 @@ Only a deliberate action by an authorized user through an approved live financia
 - Party Directory for people; Register for expenses and owner loan entry/repayment
 - Cash movement tracking between real staff user accounts and bank
 - Daily cashout flow with drawer audit details
-- Payment planner with cheque-based deduction schedule and manual planned payouts
+- Shared financial summaries retain read-only legacy cheque metrics for compatibility
 - Owner-only logs workspace for sales, expenses, purchases, payments, loans, daily cashouts, transfers, and settings audit
 - Owner-managed users, password updates, and projection settings
 - Installable mobile Chrome PWA with standalone app-shell launch
@@ -52,7 +52,6 @@ Owner sees:
 - `Register`
 - `Cashout`
 - `Cash Movement`
-- `Payment Planner`
 - `Logs`
 - `Settings`
 
@@ -63,7 +62,6 @@ Manager sees:
 - `Register`
 - `Cashout`
 - `Cash Movement`
-- `Payment Planner`
 - `Settings`
 
 Billing sees:

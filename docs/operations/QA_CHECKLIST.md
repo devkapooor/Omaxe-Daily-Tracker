@@ -44,14 +44,14 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - Test pending returns, accepted full/partial vendor credit, replacement received, rejection reason, and unsupported cash-refund rejection. No return changes Cash Movement, bank or loan records.
 - Validate new cheque leaves 1120-1199, number normalization/uniqueness, lifecycle permissions, stale revisions, pending visibility and exactly-once debit posting.
 - Domain reservation-release tests must cover cancel/bounce retries and unrelated allocations. Do not claim the live cheque UI implements invoice reservation or legacy workbook import unless separately verified.
-- Confirm existing legacy cheque rows remain read-only, V2/legacy number deduplication in the planner, and no duplicated financial posting.
+- Confirm existing legacy cheque data remains read-only in compatibility records and no duplicated financial posting.
 - Test all-vendor activation, zero-vendor activation and rollback only in the emulator. Disabled initialized ledgers must not be reinitialized.
 - Preserve the [approved vendor rules and remaining gaps](../domain/VENDOR_LEDGER.md).
 
 ## Register, cashout and cash movement
 
 - Register contains Expenses and owner-only Loan Taken/Loan Repayment. Vendor purchases/payments belong in Vendor Workspace.
-- Check expense validation, cheque details, logs and planner ingestion. Cancelling a cheque-details modal must not save.
+- Check expense validation, cheque details and logs. Cancelling a cheque-details modal must not save.
 - With emulator fixtures only, confirm existing loan creation/repayment, oldest-open-loan allocation, overpayment rejection and protected permissions; cleanup must not change their calculations.
 - Daily cashout confirmation cancellation does not save. Validate denomination totals, expected cash, matched/cash-less/cash-more status, particulars and linked daily sales.
 - Staff may request eligible own-record corrections within seven IST calendar days. Owner edits remain audited; source date and identity stay fixed.
@@ -59,14 +59,12 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - Cash Movement person-to-person/person-to-bank entries update the correct user IDs and bank total. Legacy unmatched identities stay in review rather than being silently reassigned.
 - Verify cashout drawer correction deltas in holder balances, including legitimate negative results; no hidden balancing entry may be introduced.
 
-## Action Centre, planner, logs and settings
+## Action Centre, logs and settings
 
 - Only owner can review all requests and approve/reject; staff read only permitted own correction requests.
 - Pending actions sort oldest first; latest 20 completed decisions sort newest first; badge updates on every decision/withdrawal.
 - Before/proposed values and cash-impact warnings are complete; stale requests cannot be approved. Close as Outdated records its fixed reason without financial changes.
 - Returns and V2 settlement corrections retain source-specific actions and permissions. Direct owner edit and reviewed cashout history remain in Logs, without pending approval buttons.
-- Planner merges issued/presented V2 instruments with legacy expense/vendor-payment cheques and manual plans; verify dates, number deduplication, ordering, running balance and available/deficit status.
-- Bank balance drives planner availability; counter cash is reference-only. Manual plans can be deleted by allowed roles; planner actions do not change cashout/movement balances.
 - Logs default to seven IST calendar days and provide 15/30/90/custom ranges, date/name search, sorting, column visibility and pagination.
 - Cover all Logs tabs: sales, expenses, purchases, payments, loans, daily cashouts, transfers and settings audit. Range filtering must not truncate shared financial calculations.
 - Verify owner projection settings and settings audit, and role-appropriate password changes. Sales logs remain read-only.

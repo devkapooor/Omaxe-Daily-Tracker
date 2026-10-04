@@ -179,7 +179,7 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
 
   if (currentUser.role !== 'owner') {
     return (
-      <section className="space-y-4">
+      <section className="space-y-2.5">
         <SectionHeading eyebrow="Payroll" title="My Salary Slips" description="Finalized salary slips and their revision history." />
         {payroll.error ? <StatusPanel variant="destructive">{payroll.error}</StatusPanel> : null}
         {payroll.loading ? <StatusPanel>Loading salary slips...</StatusPanel> : null}
@@ -191,7 +191,7 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-2.5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <SectionHeading eyebrow="Payroll" title="Monthly Payroll" description="Prepare, finalize, revise, and record salary payments without affecting other finance modules." />
         <FieldLabel label="Payroll Month"><Input className="w-44" min="2026-09" type="month" value={payrollMonth} onChange={(event) => { setPayrollMonth(event.target.value); setEntryEmployeeId(''); setSelectedSlip(null) }} /></FieldLabel>
@@ -199,7 +199,7 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
       {error || payroll.error ? <StatusPanel variant="destructive">{error || payroll.error}</StatusPanel> : null}
       {payroll.loading ? <StatusPanel>Loading payroll...</StatusPanel> : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2.5 sm:grid-cols-3">
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Net Payroll</p><p className="mt-1 text-lg font-black">{money(summary.net)}</p></CardContent></Card>
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Paid</p><p className="mt-1 text-lg font-black text-success">{money(summary.paid)}</p></CardContent></Card>
         <Card><CardContent className="pt-3"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Outstanding</p><p className="mt-1 text-lg font-black text-warning">{money(summary.outstanding)}</p></CardContent></Card>
@@ -207,10 +207,10 @@ export function PayrollPage({ currentUser, users, showToast }: PayrollPageProps)
 
       <Tabs defaultValue="monthly">
         <TabsList className="grid-cols-3"><TabsTrigger value="monthly">Monthly Payroll</TabsTrigger><TabsTrigger value="staff">Staff Setup</TabsTrigger><TabsTrigger value="employer">Employer</TabsTrigger></TabsList>
-        <TabsContent value="monthly" className="space-y-4">
+        <TabsContent value="monthly" className="space-y-2.5">
           <Card><CardHeader><SectionHeading eyebrow="Month Settings" title="Paid Weekly Offs" description="This count locks after the first slip is finalized." /></CardHeader><CardContent><form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(() => savePayrollMonth({ payrollMonth, paidWeeklyOffDays: Number(form.get('paidWeeklyOffDays')), actor }), 'Payroll month configured.') }}><FieldLabel label="Days"><Input className="w-32" defaultValue={String(weeklyOffDays)} disabled={(payroll.month?.finalizedSlipCount ?? 0) > 0} max="31" min="0" name="paidWeeklyOffDays" type="number" /></FieldLabel><Button disabled={busy || (payroll.month?.finalizedSlipCount ?? 0) > 0}>Save</Button>{(payroll.month?.finalizedSlipCount ?? 0) > 0 ? <Badge variant="secondary">Locked</Badge> : null}</form></CardContent></Card>
 
-          <div className="grid gap-3">{candidates.map((user) => {
+          <div className="grid gap-2.5">{candidates.map((user) => {
             const term = selectPayrollTerm(payroll.terms, user.id, payrollMonth)
             const draft = payroll.drafts.find((item) => item.employeeUserId === user.id)
             const slip = payroll.slips.find((item) => item.employeeUserId === user.id)

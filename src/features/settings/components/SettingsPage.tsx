@@ -172,11 +172,11 @@ export function SettingsPage({
   }
 
   return (
-    <section className="grid min-h-0 gap-4 overflow-hidden">
+    <section className="grid min-h-0 gap-2.5 overflow-hidden">
       {error ? (
         <StatusPanel variant="destructive" className="rounded-[18px] px-4 py-3">{error}</StatusPanel>
       ) : null}
-      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 gap-4 overflow-hidden">
+      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 gap-2.5 overflow-hidden">
         <TabsList className={canManageUsers ? 'grid-cols-4' : 'grid-cols-2'}>
           {canManageUsers ? <TabsTrigger value="create">Create User</TabsTrigger> : null}
           {canManageUsers ? <TabsTrigger value="operations">Operations</TabsTrigger> : null}
