@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs'
+import { Tabs, TabsContent } from '@/shared/ui/tabs'
 
 type SettingsPageProps = {
   currentUser: AppUser
@@ -30,8 +32,6 @@ type SettingsPageProps = {
   onChangeOwnPassword: (password: string) => Promise<void>
   onSaveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number) => Promise<void>
 }
-
-const settingsTabTriggerClassName = 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm'
 
 export function SettingsPage({
   currentUser,
@@ -174,24 +174,25 @@ export function SettingsPage({
   }
 
   return (
-    <section className="grid min-h-0 gap-2.5 overflow-hidden">
-      <Tabs defaultValue={canManageUsers ? 'staff' : 'password'} className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
-        <Card className="shrink-0">
-          <CardContent className="flex min-h-[72px] flex-col justify-center gap-2.5 p-2.5 xl:flex-row xl:items-center xl:justify-between xl:px-4 xl:py-3">
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
-              <p className="text-xs text-muted-foreground">Manage staff accounts, business projections, and account security.</p>
-            </div>
-            <TabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-3 xl:grid-cols-3' : 'grid-cols-2 xl:grid-cols-2'} w-full bg-muted/50 p-1 xl:w-auto`}>
-              <TabsTrigger className={settingsTabTriggerClassName} value="staff">Staff</TabsTrigger>
-              {canManageUsers ? <TabsTrigger className={settingsTabTriggerClassName} value="operations">Operations</TabsTrigger> : null}
-              <TabsTrigger className={settingsTabTriggerClassName} value="password">Update Password</TabsTrigger>
-            </TabsList>
-          </CardContent>
-          {error ? <div className="px-2.5 pb-2.5 sm:px-4"><StatusPanel variant="destructive">{error}</StatusPanel></div> : null}
-        </Card>
+    <Tabs defaultValue={canManageUsers ? 'staff' : 'password'} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PageLayout
+        className="min-h-0 flex-1 overflow-hidden"
+        header={(
+          <PageHeader
+            title="Settings"
+            tools={(
+              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-3 xl:grid-cols-3' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
+                <PageHeaderTab value="staff">Staff</PageHeaderTab>
+                {canManageUsers ? <PageHeaderTab value="operations">Operations</PageHeaderTab> : null}
+                <PageHeaderTab value="password">Update Password</PageHeaderTab>
+              </PageHeaderTabsList>
+            )}
+          />
+        )}
+      >
+        {error ? <StatusPanel variant="destructive">{error}</StatusPanel> : null}
 
-        <TabsContent value="staff" className="min-h-0">
+        <TabsContent value="staff" className="min-h-0 flex-1">
           <div className={canManageUsers ? 'grid min-h-0 gap-2.5 xl:h-full xl:grid-cols-2' : 'grid min-h-0 gap-2.5 xl:h-full'}>
             {canManageUsers ? (
               <Card className="h-fit">
@@ -278,7 +279,7 @@ export function SettingsPage({
         </TabsContent>
 
         {canManageUsers ? (
-          <TabsContent value="operations" className="min-h-0">
+          <TabsContent value="operations" className="min-h-0 flex-1">
             <Card className="h-full">
               <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
                 <SectionHeading eyebrow="Operations" title="Projection Settings" />
@@ -337,7 +338,7 @@ export function SettingsPage({
           </TabsContent>
         ) : null}
 
-        <TabsContent value="password" className="grid min-h-0 max-w-2xl gap-4 overflow-y-auto">
+        <TabsContent value="password" className="grid min-h-0 max-w-2xl flex-1 gap-4 overflow-y-auto">
           <Card className="h-fit">
             <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
               <SectionHeading eyebrow="Security" title="Update My Password" />
@@ -352,8 +353,8 @@ export function SettingsPage({
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
-    </section>
+      </PageLayout>
+    </Tabs>
   )
 }
 

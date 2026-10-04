@@ -201,7 +201,7 @@ export function AppWorkspace({
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-16 sm:px-4 xl:px-6 xl:py-5">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-page-inset pb-page-inset pt-16 xl:pt-page-inset">
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
@@ -300,11 +300,12 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'directory' ? (
-          <section className="mt-1.5 min-h-0 flex-1 overflow-y-auto pr-1">
+          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <DirectoryPage
               isBusy={isBusy}
               partyOptions={directoryOptions.party}
               savedPartyNames={savedPartyNames}
+              loans={normalizedLoans}
               onAddParty={async (name) => {
                 await ensureNameInDirectory('people', name)
                 showToast(`Party saved: ${name}`)
@@ -437,7 +438,7 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'settings' && canOpenSettings(currentUser.role) ? (
-          <section className="mt-2.5 min-h-0 flex-1 overflow-hidden">
+          <section className="min-h-0 flex-1 overflow-hidden">
             <SettingsPage
               currentUser={currentUser}
               users={users}

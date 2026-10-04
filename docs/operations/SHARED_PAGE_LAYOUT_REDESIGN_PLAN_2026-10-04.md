@@ -23,9 +23,11 @@ The target is the page-level header, outer page frame/scroll boundary, and spaci
 
 ## Proposed shared primitives
 
-- `PageHeader`: fixed Dashboard-baseline minimum height and alignment; required page title; optional short description, eyebrow, and right-side controls. Do not reserve empty space for omitted content.
+- `PageHeader`: shared 80px minimum desktop height, title-only left side, and optional right-side controls in one inset panel. On narrow screens controls stack and the header may grow rather than clip.
+- `PageHeaderTabsList` / `PageHeaderTab`: shared 32px tab controls with one primary-blue selected state; pages provide labels and values, not local visual overrides.
 - `PageLayout`: consistent page frame and a single intentional content scroll boundary. A page can omit `PageHeader` by not supplying one.
 - `PageCardStack`: consistent 10px spacing between top-level sections/cards, with responsive layout slots where a page already has side-by-side work areas.
+- Shared spacing tokens define 10px page-header padding, 20px outer page inset, and 10px between cards. Preserve mobile navigation clearance while keeping the content inset standard.
 
 These are composition primitives, not a universal mega-component. Do not move business logic, permissions, form state, queries, calculations, or writes into them.
 
@@ -37,6 +39,7 @@ Every phase requires separate user approval before implementation, local visual 
 
 - Define the shared primitives and their responsive/dark-mode contracts.
 - Migrate Settings and Party Directory as the pilot pages.
+- Party Directory includes Add Party, View Parties, and a read-only Loans summary grouped by party using existing normalized records only; no loan record, workflow, or write path changes.
 - Verify Settings role visibility and existing staff/account actions; verify Party Directory form and selection behavior remain unchanged.
 
 ### Phase 3B — Operational pages
@@ -62,7 +65,8 @@ Every phase requires separate user approval before implementation, local visual 
 
 ## Acceptance criteria
 
-- Page headers that are present share the Dashboard baseline height, title alignment, semantic tokens, and consistent horizontal gutters.
+- Page headers that are present use the shared 80px desktop baseline, title-only left side, consistent right-side control panel, blue selected navigation state, semantic tokens, and aligned page gutters.
+- Page content keeps a 20px outer inset, and top-level cards have a consistent 10px gap; shared spacing tokens are the source of truth.
 - Optional controls fit beside the title at wide widths and wrap/stack without overlap at narrow widths.
 - Top-level page card stacks use the same 10px spacing; intentional two-column content retains equal or explicitly page-appropriate columns.
 - No new browser-level scrollbar or nested unintended scroll area is introduced.

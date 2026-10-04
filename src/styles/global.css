@@ -50,6 +50,9 @@
 }
 
 @theme {
+  --spacing-page-header: 10px;
+  --spacing-page-inset: 20px;
+  --spacing-card-gap: 10px;
   --font-sans: "Hanken Grotesk", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Hanken Grotesk", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
