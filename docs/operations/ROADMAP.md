@@ -19,6 +19,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
 - [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
 - [x] Complete the Settings redesign (Phase 2C); the user approved the local result. See [Phase 2C checkpoint](./UI_REDESIGN_PHASE_2C_SETTINGS_2026-10-04.md). Existing workflows and loan-data safeguards were preserved.
+- [ ] Next planned UI upgrade: shared page-header/card-stack consolidation. Follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md); Phase 3A implementation requires separate approval.
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.
@@ -30,7 +31,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Deferred maintenance and boundaries
 
 - Evaluate bundle splitting, uiHelpers decomposition, reusable validation, and narrow-desktop/tablet coverage only when justified by a feature or defect.
-- After the currently approved UI redesign phases are completed and checkpointed, plan a shared page-layout/card-stack upgrade: inventory repeated page structures, define reusable page-header and card-composition primitives, and migrate eligible non-loan pages incrementally to reduce duplicated UI code and standardize spacing. Use the Dashboard's current top-bar height and alignment as the shared baseline; page-specific controls/content can be supplied or omitted through the common pattern. Keep this queued (not active) until the current plan is complete; each implementation phase requires user approval and its own checkpoint. Preserve each page's existing workflows and visual acceptance criteria. Loan-specific UI and code remain excluded; stop and ask before any proposed shared primitive would alter them.
+- Keep later shared-layout implementation phases queued until each one is separately approved; follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
 - A cash-identity diagnostics/review screen may be considered if needed; never use it to authorize automatic live data repairs.
 - Maintainability work keeps expenses and loans untouched and does not broaden financial scope.
 - Multi-store, inventory, payroll, GST/tax workflows, offline financial writes, and backend job orchestration are outside the current approved scope.
@@ -39,7 +40,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Delivery Rules
 
 - At the end of every approved implementation phase, create a dedicated Git checkpoint commit and a dated summary of scope, verification, review status, and known gaps. Do not deploy unless separately requested and confirmed.
-- Loan safeguard: loans are strictly out of scope. Do not modify loan data or records, schema, calculations, workflows, permissions, or loan-specific UI. If a requested change or shared refactor would touch loan-specific code or behavior, stop and ask the user before proceeding. Automated checks must not mutate production loan data.
+- Loan safeguard: never modify loan data or records, schema, calculations, workflows, permissions, or financial side effects. The user explicitly allows loan-area visual changes only within an approved UI phase; review those diffs specifically and stop if any data or behavior could change. Automated checks must not mutate production loan data.
 - Never modify, delete, migrate, backfill, or replace existing production financial records during development, testing, deployment, or upgrade work.
 - Existing loan records, balances, calculations, and workflows are protected and must not be changed by planned upgrades.
 - Treat production verification as read-only. Run every mutation test in the Firebase Emulator Suite or against clearly isolated non-production data.
