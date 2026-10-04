@@ -18,7 +18,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP pass. Rules tests remain blocked by missing Java; no rules were changed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). Hosting deployment remains pending separate confirmation.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
 - [x] Complete the Logs UI and filter-logic review; local visual approval and checkpoint recorded in [Phase 2B summary](./UI_REDESIGN_PHASE_2B_LOGS_2026-10-04.md). Loan data, calculations, and workflows were not changed.
-- [ ] Continue the UI redesign with Settings only after a separate phase approval. Preserve existing workflows and the loan safeguard.
+- [x] Complete the Settings redesign (Phase 2C); the user approved the local result. See [Phase 2C checkpoint](./UI_REDESIGN_PHASE_2C_SETTINGS_2026-10-04.md). Existing workflows and loan-data safeguards were preserved.
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.

@@ -31,6 +31,8 @@ type SettingsPageProps = {
   onSaveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number) => Promise<void>
 }
 
+const settingsTabTriggerClassName = 'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm'
+
 export function SettingsPage({
   currentUser,
   users,
@@ -173,25 +175,31 @@ export function SettingsPage({
 
   return (
     <section className="grid min-h-0 gap-2.5 overflow-hidden">
-      {error ? (
-        <StatusPanel variant="destructive" className="rounded-[18px] px-4 py-3">{error}</StatusPanel>
-      ) : null}
-      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 gap-2.5 overflow-hidden">
-        <TabsList className={canManageUsers ? 'grid-cols-4' : 'grid-cols-2'}>
-          {canManageUsers ? <TabsTrigger value="create">Create User</TabsTrigger> : null}
-          {canManageUsers ? <TabsTrigger value="operations">Operations</TabsTrigger> : null}
-          <TabsTrigger value="directory">Account Directory</TabsTrigger>
-          <TabsTrigger value="password">Update Password</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue={canManageUsers ? 'create' : 'password'} className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2.5 overflow-hidden">
+        <Card className="shrink-0">
+          <CardContent className="flex min-h-[72px] flex-col justify-center gap-2.5 p-2.5 xl:flex-row xl:items-center xl:justify-between xl:px-4 xl:py-3">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
+              <p className="text-xs text-muted-foreground">Manage staff accounts, business projections, and account security.</p>
+            </div>
+            <TabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-3 xl:grid-cols-3' : 'grid-cols-2 xl:grid-cols-2'} w-full bg-muted/50 p-1 xl:w-auto`}>
+              <TabsTrigger className={settingsTabTriggerClassName} value="staff">Staff</TabsTrigger>
+              {canManageUsers ? <TabsTrigger className={settingsTabTriggerClassName} value="operations">Operations</TabsTrigger> : null}
+              <TabsTrigger className={settingsTabTriggerClassName} value="password">Update Password</TabsTrigger>
+            </TabsList>
+          </CardContent>
+          {error ? <div className="px-2.5 pb-2.5 sm:px-4"><StatusPanel variant="destructive">{error}</StatusPanel></div> : null}
+        </Card>
 
-        {canManageUsers ? (
-          <TabsContent value="create" className="min-h-0">
-            <Card className="max-w-3xl">
-              <CardHeader className="pb-3">
+        <TabsContent value="staff" className="min-h-0">
+          <div className={canManageUsers ? 'grid min-h-0 gap-2.5 xl:h-full xl:grid-cols-2' : 'grid min-h-0 gap-2.5 xl:h-full'}>
+            {canManageUsers ? (
+              <Card className="h-fit">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
                 <SectionHeading eyebrow="Users" title="Create Staff Account" />
               </CardHeader>
-              <CardContent>
-                <form className="grid gap-4 sm:grid-cols-2" onSubmit={createUser}>
+              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <form className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" onSubmit={createUser}>
                   <FieldLabel label="Staff Name">
                     <Input name="name" placeholder="Enter full name" required onChange={() => setError('')} />
                   </FieldLabel>
@@ -207,26 +215,76 @@ export function SettingsPage({
                   <FieldLabel label="Mobile Number">
                     <Input name="mobileNumber" placeholder="10-digit mobile number" required type="tel" onChange={() => setError('')} />
                   </FieldLabel>
-                  <FieldLabel className="sm:col-span-2" label="Password">
+                  <FieldLabel className="sm:col-span-2 xl:col-span-1" label="Password">
                     <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
                   </FieldLabel>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 xl:col-span-3">
                     <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
                   </div>
+                  <p className="text-xs leading-5 text-muted-foreground sm:col-span-2 xl:col-span-3">
+                    Active Billing and Manager accounts appear automatically in Payroll. Enrollment and salary terms are managed there.
+                  </p>
                 </form>
               </CardContent>
+              </Card>
+            ) : null}
+
+            <Card className="flex h-full min-h-0 flex-col">
+              <CardHeader className="gap-3 border-b border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                <SectionHeading eyebrow="Users" title="Account Directory" />
+                <FieldLabel className="w-full sm:max-w-sm" label="Search accounts">
+                  <Input
+                    value={userSearch}
+                    placeholder="Name, role, email, or mobile"
+                    onChange={(event) => {
+                      setUserSearch(event.target.value)
+                      setError('')
+                    }}
+                  />
+                </FieldLabel>
+              </CardHeader>
+              <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 sm:px-4 sm:pb-4">
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  {filteredUsers.map((user) => (
+                    <article
+                      className="flex flex-col gap-2 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                      key={user.id}
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <strong className="text-sm font-semibold text-foreground">{user.name}</strong>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{user.role}</Badge>
+                          <span className="break-all text-xs text-muted-foreground">{user.email}</span>
+                          {user.mobileNumber ? <span className="text-xs text-muted-foreground">{user.mobileNumber}</span> : null}
+                        </div>
+                      </div>
+                      {canManageUsers && user.id !== currentUser.id ? (
+                        <div className="flex flex-col items-start gap-1 sm:items-end">
+                          <Button size="sm" variant="destructive" type="button" onClick={() => void deleteUser(user.id)}>
+                            Delete
+                          </Button>
+                          <span className="max-w-md text-[10px] leading-4 text-muted-foreground">Deletion is blocked while financial, payroll, or audit history is linked to this account.</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-medium text-muted-foreground">{user.id === currentUser.id ? 'Current account' : 'Protected'}</span>
+                      )}
+                    </article>
+                  ))}
+                  {filteredUsers.length === 0 ? <p className="text-sm font-medium text-muted-foreground">No users match this search.</p> : null}
+                </div>
+              </CardContent>
             </Card>
-          </TabsContent>
-        ) : null}
+          </div>
+        </TabsContent>
 
         {canManageUsers ? (
           <TabsContent value="operations" className="min-h-0">
-            <Card className="max-w-3xl">
-              <CardHeader className="pb-3">
+            <Card className="h-full">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
                 <SectionHeading eyebrow="Operations" title="Projection Settings" />
               </CardHeader>
-              <CardContent>
-                <form className="grid gap-4 sm:grid-cols-2" onSubmit={updateOperationalSettings}>
+              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <form className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4" onSubmit={updateOperationalSettings}>
                   <FieldLabel label="Rent">
                     <Input
                       defaultValue={String(operationalExpenseBreakdown.rent)}
@@ -266,11 +324,11 @@ export function SettingsPage({
                       onChange={() => setError('')}
                     />
                   </FieldLabel>
-                  <div className="rounded-[18px] border border-border/70 bg-secondary/55 p-4 sm:col-span-2">
-                    <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-muted-foreground">Computed Monthly Total</p>
-                    <p className="mt-1 text-lg font-black text-foreground">{displayedOperationalExpenseTotal.toLocaleString('en-IN')}</p>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/50 px-3 py-2.5 sm:col-span-2 xl:col-span-3">
+                    <span className="text-xs font-semibold text-muted-foreground">Computed Monthly Total</span>
+                    <strong className="text-base font-semibold tabular-nums text-foreground">{displayedOperationalExpenseTotal.toLocaleString('en-IN')}</strong>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="flex items-center sm:col-span-2 xl:col-span-1">
                     <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Projection Settings'}</Button>
                   </div>
                 </form>
@@ -279,60 +337,12 @@ export function SettingsPage({
           </TabsContent>
         ) : null}
 
-        <TabsContent value="directory" className="min-h-0">
-          <Card className="flex h-full min-h-0 flex-col">
-            <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <SectionHeading eyebrow="Users" title="Account Directory" />
-              <FieldLabel className="w-full sm:max-w-sm" label="Search User">
-                <Input
-                  value={userSearch}
-                  placeholder="Name, role, email, or mobile"
-                  onChange={(event) => {
-                    setUserSearch(event.target.value)
-                    setError('')
-                  }}
-                />
-              </FieldLabel>
-            </CardHeader>
-            <CardContent className="min-h-0 flex-1 overflow-hidden">
-              <div className="grid min-h-0 gap-3 overflow-y-auto pr-1">
-                {filteredUsers.map((user) => (
-                  <article
-                    className="flex flex-col gap-4 rounded-[20px] border border-border/70 bg-secondary/55 p-4 lg:flex-row lg:items-center lg:justify-between"
-                    key={user.id}
-                  >
-                    <div className="space-y-1">
-                      <strong className="text-base font-bold text-foreground">{user.name}</strong>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{user.role}</Badge>
-                        <span className="text-sm text-muted-foreground">{user.email}</span>
-                        {user.mobileNumber ? <span className="text-sm text-muted-foreground">{user.mobileNumber}</span> : null}
-                      </div>
-                    </div>
-                    {canManageUsers && user.id !== currentUser.id ? (
-                      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                        <span className="text-sm font-medium text-muted-foreground">Delete removes app access only when no historical money or audit records are tied to this account.</span>
-                        <Button variant="destructive" type="button" onClick={() => void deleteUser(user.id)}>
-                          Delete
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-sm font-medium text-muted-foreground">{user.id === currentUser.id ? 'Current account' : 'Protected'}</span>
-                    )}
-                  </article>
-                ))}
-                {filteredUsers.length === 0 ? <p className="text-sm font-medium text-muted-foreground">No users match this search.</p> : null}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="password" className="grid min-h-0 max-w-2xl gap-4 overflow-y-auto">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="h-fit">
+            <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
               <SectionHeading eyebrow="Security" title="Update My Password" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
               <form className="grid gap-4" onSubmit={changeOwnUserPassword}>
                 <FieldLabel label="New Password">
                   <Input name="password" placeholder="At least 6 characters" required type="password" onChange={() => setError('')} />
