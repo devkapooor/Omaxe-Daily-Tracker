@@ -39,3 +39,10 @@ Previous checkpoint: `16da39d` (Phase 3A)
 ## Finding this checkpoint later
 
 Use `git log --oneline -- docs/operations/PHASE_3B_OPERATIONAL_PAGES_CHECKPOINT_2026-10-04.md` to locate its commit. The previous checkpoint is `16da39d`. Review either revision in a separate checkout before selecting a rollback; reverting code does not undo any user-entered financial records.
+
+## Production readiness follow-up — 2026-10-04
+
+- Release inspection found that the owner's selected-month display guard also hid employee salary slips. The guard now applies to owner month filtering; staff retain their subscribed salary-slip history.
+- The new UI still requires Bank Deposit/CDM selection. Firestore validates the method when present and accepts older clients that omit it, allowing already-open production sessions to continue bank transfers during rollout. Sender permissions remain unchanged.
+- Verification after these corrections: focused ESLint, 299 app tests, 30 live rules-suite tests on an isolated emulator, and TypeScript compilation passed.
+- Deployment has not occurred. The user requested production deployment plus an important new feature; the feature and whether it ships before or after this deployment are awaiting clarification.

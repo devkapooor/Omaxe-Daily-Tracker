@@ -134,7 +134,10 @@ describe('Firestore role enforcement', () => {
       id: 'transfer-4', date: '2026-10-01', toType: 'bank', amount: 100,
       reason: 'Deposit', createdBy: 'billing-user', createdAt: timestamp, fromUserId: 'billing-user',
     }
-    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-4'), bankTransferWithoutMethod))
+    await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-4'), bankTransferWithoutMethod))
+    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-invalid-method'), {
+      ...baseTransfer, id: 'transfer-invalid-method', fromUserId: 'billing-user', bankDepositMethod: 'unknown',
+    }))
     await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-5'), {
       id: 'transfer-5', date: '2026-10-01', fromUserId: 'billing-user', toType: 'person', toUserId: 'manager-user',
       amount: 100, reason: 'Cash handover', createdBy: 'billing-user', createdAt: timestamp,

@@ -90,7 +90,7 @@ export function usePayroll(currentUser: AppUser, payrollMonth: string) {
     }
   }, [currentUser.id, currentUser.role, payrollMonth])
 
-  const monthDataIsCurrent = data.monthDataMonth === payrollMonth
+  const monthDataIsCurrent = currentUser.role !== 'owner' || data.monthDataMonth === payrollMonth
   return {
     ...data,
     month: monthDataIsCurrent ? data.month : null,

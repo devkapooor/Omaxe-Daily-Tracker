@@ -596,7 +596,7 @@ service cloud.firestore {
         data.createdBy is string &&
         data.createdAt is string &&
         (
-          (data.toType == 'bank' && data.bankDepositMethod in ['bank', 'cdm']) ||
+          (data.toType == 'bank' && (!('bankDepositMethod' in data) || data.bankDepositMethod in ['bank', 'cdm'])) ||
           (data.toType == 'person' && data.toUserId is string && data.toUserId != data.fromUserId && !('bankDepositMethod' in data))
         );
     }
