@@ -346,6 +346,13 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
                       : 'Cash matches the system audit.'}
                 </div>
 
+                <div className="grid gap-2 rounded-[18px] border border-primary/25 bg-primary/5 p-4 text-sm md:col-span-2 xl:col-span-3 sm:grid-cols-3">
+                  <span><span className="block text-xs text-muted-foreground">Cash counted</span><strong>₹{drawerTotal.toLocaleString('en-IN')}</strong></span>
+                  <span><span className="block text-xs text-muted-foreground">Cash being removed</span><strong>₹{drawerTotal.toLocaleString('en-IN')}</strong></span>
+                  <span><span className="block text-xs text-muted-foreground">Drawer after Cashout</span><strong>₹0.00</strong></span>
+                  <p className="text-xs text-muted-foreground sm:col-span-3">Completing Cashout removes all counted cash from the shared POS drawer. New cash bills will accumulate from zero.</p>
+                </div>
+
                 <div className="flex flex-col gap-3 md:col-span-2 xl:col-span-3 sm:flex-row">
                   <Button
                     type="button"
@@ -358,7 +365,7 @@ export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpe
                     Cancel
                   </Button>
                   <Button disabled={isSaving} type="submit">
-                    {isSaving ? 'Saving...' : 'Save Cashout'}
+                    {isSaving ? 'Saving...' : 'Save Cashout and Close Drawer'}
                   </Button>
                 </div>
               </form>

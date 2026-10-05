@@ -1,4 +1,4 @@
-import { deleteDoc, deleteField, doc, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
+import { deleteDoc, deleteField, doc, runTransaction, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
 import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
@@ -15,6 +15,10 @@ import {
   sortByCreatedAtDesc,
 } from '@/store/storeShared'
 import { createCashoutCorrectionActions } from '@/store/actions/createCashoutCorrectionActions'
+import { handoverRef } from '@/features/pos/data/cashierHandoverRepository'
+import type { HandoverLedger } from '@/features/pos/domain/cashierHandover'
+import { buildDailyCashoutClosure } from '@/features/pos/domain/drawerClosure'
+import { rupeesToPaise } from '@/features/pos/domain/posDomain'
 
 type FinanceActionArgs = {
   getState: () => StoreCollectionState
@@ -343,8 +347,11 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
-    const { financeData } = getState()
     const parsedDrawerTotal = draft.drawerTotal ?? draft.remainingBalance
+    const recordedByUserId = draft.recordedByUserId?.trim()
+    if (!recordedByUserId) throw new Error('The signed-in user is required to close the shared cash drawer.')
+    const countedPaise = rupeesToPaise(parsedDrawerTotal)
+    if (!Number.isSafeInteger(countedPaise) || countedPaise < 0) throw new Error('The drawer total must be a non-negative money amount.')
     const auditDifference = draft.cashAudit - parsedDrawerTotal
     const auditStatus = auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
     const auditMessage =
@@ -353,39 +360,82 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
         : auditDifference < 0
           ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
           : 'Cash matches the system audit.'
+    const id = `daily-cashout-${crypto.randomUUID()}`
+    const timestamp = nowIso()
     const entry: DailyCashoutEntry = {
       ...draft,
       drawerTotal: parsedDrawerTotal,
+      drawerClosureId: id,
+      cashRemovedPaise: countedPaise,
+      closingDrawerPaise: 0,
       auditDifference,
       auditStatus,
       auditMessage,
       remainingBalance: parsedDrawerTotal,
-      id: `daily-cashout-${crypto.randomUUID()}`,
-      createdAt: nowIso(),
+      id,
+      createdAt: timestamp,
       revision: 1,
     }
-    await setDoc(doc(db, 'dailyCashouts', entry.id), entry)
+    const salesId = salesDocId(singleStoreId, draft.date)
+    const cashoutRef = doc(db, 'dailyCashouts', id)
+    const salesRef = doc(db, 'sales', salesId)
+    const closureRef = doc(db, 'posSandboxes', 'test', 'drawerClosures', id)
 
-    const existingSales = financeData.sales.find((sale) => sale.storeId === singleStoreId && sale.date === draft.date)
-    const mergedCashSales = (existingSales?.cashSales ?? 0) + draft.cashSales
-    const mergedUpiSales = (existingSales?.upiSales ?? 0) + draft.upiSales
-    const mergedCardSales = (existingSales?.cardSales ?? 0) + (draft.cardSales ?? 0)
-    const mergedBankTransferSales = existingSales?.bankTransferSales ?? 0
-    const mergedCreditSales = (existingSales?.creditSales ?? 0) + draft.creditSales
-    const mergedReturns = (existingSales?.returnsDiscounts ?? 0) + draft.returns
-    const mergedTotalSales = mergedCashSales + mergedUpiSales + mergedCardSales + mergedBankTransferSales + mergedCreditSales
+    await runTransaction(db, async (transaction) => {
+      const [ledgerSnapshot, cashoutSnapshot, salesSnapshot, closureSnapshot] = await Promise.all([
+        transaction.get(handoverRef()),
+        transaction.get(cashoutRef),
+        transaction.get(salesRef),
+        transaction.get(closureRef),
+      ])
+      if (cashoutSnapshot.exists() || closureSnapshot.exists()) throw new Error('This cashout has already closed the drawer.')
+      const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
+      if (!ledger?.initialized) throw new Error('The shared POS drawer must be initialized before completing Cashout.')
+      if (!ledger.checkpoint) throw new Error('Complete a cashier handover count before closing the shared POS drawer.')
 
-    await saveSales({
-      storeId: singleStoreId,
-      date: draft.date,
-      totalSales: mergedTotalSales,
-      cashSales: mergedCashSales,
-      upiSales: mergedUpiSales,
-      cardSales: mergedCardSales,
-      bankTransferSales: mergedBankTransferSales,
-      creditSales: mergedCreditSales,
-      returnsDiscounts: mergedReturns,
-      notes: `Auto-synced from cashout register. ${draft.actualCashParticulars}`.trim(),
+      const closure = buildDailyCashoutClosure({
+        cashoutId: id,
+        businessDate: draft.date,
+        countedPaise,
+        ledger,
+        recordedByUid: recordedByUserId,
+        recordedByName: draft.recordedBy,
+        createdAt: timestamp,
+      })
+      const existingSales = salesSnapshot.data() as DailySales | undefined
+      const mergedCashSales = (existingSales?.cashSales ?? 0) + draft.cashSales
+      const mergedUpiSales = (existingSales?.upiSales ?? 0) + draft.upiSales
+      const mergedCardSales = (existingSales?.cardSales ?? 0) + (draft.cardSales ?? 0)
+      const mergedBankTransferSales = existingSales?.bankTransferSales ?? 0
+      const mergedCreditSales = (existingSales?.creditSales ?? 0) + draft.creditSales
+      const mergedReturns = (existingSales?.returnsDiscounts ?? 0) + draft.returns
+      const sales: DailySales = {
+        id: salesId,
+        storeId: singleStoreId,
+        date: draft.date,
+        totalSales: mergedCashSales + mergedUpiSales + mergedCardSales + mergedBankTransferSales + mergedCreditSales,
+        cashSales: mergedCashSales,
+        upiSales: mergedUpiSales,
+        cardSales: mergedCardSales,
+        bankTransferSales: mergedBankTransferSales,
+        creditSales: mergedCreditSales,
+        returnsDiscounts: mergedReturns,
+        notes: `Auto-synced from cashout register. ${draft.actualCashParticulars}`.trim(),
+        createdAt: existingSales?.createdAt ?? timestamp,
+        updatedAt: timestamp,
+      }
+
+      transaction.set(cashoutRef, entry)
+      transaction.set(salesRef, sales)
+      transaction.set(closureRef, closure)
+      transaction.set(handoverRef(), {
+        ...ledger,
+        revision: ledger.revision + 1,
+        lastOperation: 'cashout-close',
+        lastOperationId: id,
+        updatedByUid: recordedByUserId,
+        checkpoint: { ...ledger.checkpoint, cashActualPaise: 0, cashNetPaise: ledger.cashNetPaise },
+      })
     })
   }
 
@@ -440,6 +490,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const { dailyCashouts } = getState()
     const targetEntry = dailyCashouts.find((entry) => entry.id === entryId)
     if (!targetEntry) throw new Error('This daily cashout record could not be found.')
+    if (targetEntry.drawerClosureId) throw new Error('A drawer-closing cashout cannot be deleted. Use the audited correction workflow.')
 
     await deleteDoc(doc(db, 'dailyCashouts', entryId))
     await syncSalesForDate(

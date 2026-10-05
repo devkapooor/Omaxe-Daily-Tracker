@@ -47,6 +47,5 @@ export function calculatePosDashboard(bills: PosBill[], states: PosBillState[], 
     negativeStockCount: negativeStock.length,
     zeroStockCount: zeroStock.length,
     stockAttention: [...negativeStock, ...zeroStock].slice(0, 5),
-    recentBills: [...active].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
   }
 }

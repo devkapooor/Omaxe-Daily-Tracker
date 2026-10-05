@@ -189,7 +189,7 @@ describe('Firestore role enforcement', () => {
       actualCashParticulars: '500 x 1 = 500', pendingCashParticulars: '', remainingBalance: 500,
       createdAt: timestamp,
     }
-    await assertSucceeds(setDoc(doc(owner, 'dailyCashouts', 'cashout-1'), cashout))
+    await assertFails(setDoc(doc(owner, 'dailyCashouts', 'cashout-1'), cashout))
     await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-2'), { ...cashout, recordedByUserId: 'manager-user' }))
     // Rules evaluate against emulator request.time; staff entry is allowed only in the configured IST window.
     const ist = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
@@ -347,6 +347,31 @@ describe('POS shared cashier handover integrity', () => {
     if (includeLedger) batch.update(ref(db, 'handover', 'main'), { revision, cashNetPaise: cash, lastOperation: 'bill', lastOperationId: 'new-bill', updatedByUid: 'billing-user' })
     return batch
   }
+  function drawerClosureBatch(overrides: Record<string, unknown> = {}) {
+    const db = userDb('owner-user')
+    const id = 'daily-cashout-close-1'
+    const checkpoint = { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' }
+    const closure = {
+      id, cashoutId: id, businessDate: date, kind: 'daily-cashout', expectedBeforePaise: 10000,
+      countedPaise: 10000, differencePaise: 0, removedPaise: 10000, closingBalancePaise: 0,
+      subsequentNetCashPaise: 0, resultingBalancePaise: 0, ledgerRevisionBefore: 1,
+      recordedByUid: 'owner-user', recordedByName: 'Owner', createdAt: timestamp, ...overrides,
+    }
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'dailyCashouts', id), {
+      id, date, recordedBy: 'Owner', recordedByUserId: 'owner-user', cashSales: 100, upiSales: 0, cardSales: 0,
+      creditSales: 0, returns: 0, cashExpense: 0, cashAudit: 100, drawerTotal: 100, remainingBalance: 100,
+      drawerDenominations: { denom500: 0, denom200: 0, denom100: 1, denom50: 0, denom20: 0, denom10: 0, change: 0 },
+      actualCashParticulars: '100 x 1', pendingCashParticulars: '', drawerClosureId: id,
+      cashRemovedPaise: 10000, closingDrawerPaise: 0, createdAt: timestamp, revision: 1,
+    })
+    batch.set(ref(db, 'drawerClosures', id), closure)
+    batch.update(ref(db, 'handover', 'main'), {
+      revision: 2, lastOperation: 'cashout-close', lastOperationId: id, updatedByUid: 'owner-user',
+      checkpoint: { ...checkpoint, cashActualPaise: 0 },
+    })
+    return batch
+  }
   it('allows linked billing and denies missing ledger update or forged amounts', async () => {
     await seedLedger()
     await assertFails(billingBatch(authTime, false).commit())
@@ -399,6 +424,24 @@ describe('POS shared cashier handover integrity', () => {
     await assertFails(reconciliationBatch().commit())
     const amounts = { cash: 11000, upi: 21000, card: 31000 }
     await assertSucceeds(reconciliationBatch({ actual: amounts, expected: amounts, denominations: { '100': 1, '10': 1 } }, { cashActualPaise: 11000, upiActualPaise: 21000, cardActualPaise: 31000 }).commit())
+  })
+  it('closes the physical drawer atomically and keeps the closure immutable', async () => {
+    await seedLedger()
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' } })
+    })
+    await assertSucceeds(drawerClosureBatch().commit())
+    const db = userDb('owner-user')
+    expect((await getDoc(ref(db, 'handover', 'main'))).data()?.checkpoint.cashActualPaise).toBe(0)
+    await assertFails(updateDoc(ref(db, 'drawerClosures', 'daily-cashout-close-1'), { removedPaise: 1 }))
+    await assertFails(deleteDoc(ref(db, 'drawerClosures', 'daily-cashout-close-1')))
+  })
+  it('rejects a forged cashout removal amount', async () => {
+    await seedLedger()
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' } })
+    })
+    await assertFails(drawerClosureBatch({ removedPaise: 9000 }).commit())
   })
   it('allows owner-only initialization while freezing legacy billing and protects history from reset', async () => {
     const owner = userDb('owner-user')

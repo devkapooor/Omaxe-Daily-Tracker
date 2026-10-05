@@ -34,6 +34,50 @@ service cloud.firestore {
       return minuteOfDay >= 1435 || minuteOfDay <= 20;
     }
 
+    function posHandoverPath() {
+      return /databases/$(database)/documents/posSandboxes/test/handover/main;
+    }
+
+    function posDrawerClosurePath(cashoutId) {
+      return /databases/$(database)/documents/posSandboxes/test/drawerClosures/$(cashoutId);
+    }
+
+    function validCashoutClosureDate(date) {
+      let istTime = request.time + duration.value(19800, 's');
+      let minuteOfDay = istTime.hours() * 60 + istTime.minutes();
+      return date is string && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        (timestamp.date(int(date.split('-')[0]), int(date.split('-')[1]), int(date.split('-')[2])) == istTime.date() ||
+          (minuteOfDay <= 20 && timestamp.date(int(date.split('-')[0]), int(date.split('-')[1]), int(date.split('-')[2])) == (istTime - duration.value(86400, 's')).date()));
+    }
+
+    function validLinkedDailyCashout(data, documentId) {
+      let closure = getAfter(posDrawerClosurePath(documentId)).data;
+      let handover = getAfter(posHandoverPath()).data;
+      return data.id == documentId && data.drawerClosureId == documentId &&
+        data.recordedByUserId == request.auth.uid && validCashoutClosureDate(data.date) &&
+        data.drawerTotal is number && data.drawerTotal >= 0 &&
+        data.cashRemovedPaise is int && data.cashRemovedPaise == data.drawerTotal * 100 &&
+        data.closingDrawerPaise == 0 && closure.cashoutId == documentId &&
+        closure.recordedByUid == request.auth.uid && closure.countedPaise == data.cashRemovedPaise &&
+        closure.removedPaise == data.cashRemovedPaise && closure.closingBalancePaise == 0 &&
+        handover.lastOperation == 'cashout-close' && handover.lastOperationId == documentId;
+    }
+
+    function preservesDrawerClosureLink() {
+      return request.resource.data.drawerClosureId == resource.data.drawerClosureId &&
+        request.resource.data.cashRemovedPaise == resource.data.cashRemovedPaise &&
+        request.resource.data.closingDrawerPaise == resource.data.closingDrawerPaise;
+    }
+
+    function validHistoricalDrawerClosureLink(data, documentId) {
+      let closure = getAfter(posDrawerClosurePath(documentId)).data;
+      let handover = getAfter(posHandoverPath()).data;
+      return isOwner() && data.drawerClosureId == documentId && data.cashRemovedPaise == data.drawerTotal * 100 &&
+        data.closingDrawerPaise == 0 && closure.kind == 'historical-repair' && closure.cashoutId == documentId &&
+        closure.recordedByUid == request.auth.uid && closure.countedPaise == data.cashRemovedPaise &&
+        handover.lastOperation == 'cashout-close' && handover.lastOperationId == documentId;
+    }
+
     function hasPurchasingCapability(capability) {
       return isOwner() || (
         isStaff() &&
@@ -901,12 +945,12 @@ service cloud.firestore {
 
     match /dailyCashouts/{documentId} {
       allow read: if isStaff();
-      allow create: if isOwner() || (
-        isStaff() &&
-        isCashoutWindowOpen() &&
-        request.resource.data.recordedByUserId == request.auth.uid
-      );
-      allow update, delete: if isOwner();
+      allow create: if isStaff() && (isOwner() || isCashoutWindowOpen()) && validLinkedDailyCashout(request.resource.data, documentId);
+      allow update: if isOwner() &&
+        ((resource.data.keys().hasAny(['drawerClosureId']) && preservesDrawerClosureLink()) ||
+          (!resource.data.keys().hasAny(['drawerClosureId']) &&
+            (!request.resource.data.keys().hasAny(['drawerClosureId']) || validHistoricalDrawerClosureLink(request.resource.data, documentId))));
+      allow delete: if isOwner() && !resource.data.keys().hasAny(['drawerClosureId']);
     }
 
     match /cashoutCorrectionRequests/{documentId} {
@@ -1227,6 +1271,31 @@ service cloud.firestore {
           checkpoint.date == record.date && checkpoint.upiActualPaise == record.actual.upi && checkpoint.cardActualPaise == record.actual.card &&
           checkpoint.upiNetPaise == totals.upi && checkpoint.cardNetPaise == totals.card && checkpoint.reconciliationId == after.lastOperationId;
       }
+      function validDrawerClosureLedger(before, after) {
+        let path = /databases/$(database)/documents/posSandboxes/$(sandboxId)/drawerClosures/$(after.lastOperationId);
+        let closure = getAfter(path).data;
+        let cashout = getAfter(/databases/$(database)/documents/dailyCashouts/$(after.lastOperationId)).data;
+        let historical = closure.kind == 'historical-repair';
+        return !exists(path) && closure.id == after.lastOperationId && closure.cashoutId == after.lastOperationId &&
+          closure.keys().hasOnly(['id', 'cashoutId', 'businessDate', 'kind', 'expectedBeforePaise', 'countedPaise', 'differencePaise', 'removedPaise', 'closingBalancePaise', 'subsequentNetCashPaise', 'resultingBalancePaise', 'ledgerRevisionBefore', 'recordedByUid', 'recordedByName', 'createdAt']) &&
+          closure.kind in ['daily-cashout', 'historical-repair'] && closure.recordedByUid == request.auth.uid &&
+          closure.businessDate == cashout.date && closure.countedPaise == cashout.drawerTotal * 100 &&
+          closure.removedPaise == closure.countedPaise && closure.closingBalancePaise == 0 &&
+          closure.differencePaise == closure.countedPaise - closure.expectedBeforePaise &&
+          closure.ledgerRevisionBefore == before.revision && closure.createdAt is string && closure.recordedByName is string &&
+          cashout.drawerClosureId == closure.id && cashout.cashRemovedPaise == closure.removedPaise && cashout.closingDrawerPaise == 0 &&
+          closure.subsequentNetCashPaise is int &&
+          closure.resultingBalancePaise == closure.subsequentNetCashPaise &&
+          ((!historical && closure.expectedBeforePaise == expectedCash(before) && closure.subsequentNetCashPaise == 0) || (historical && isOwner())) &&
+          before.keys().hasAny(['checkpoint']) &&
+          after.cashNetPaise == before.cashNetPaise && after.dailyTotals == before.dailyTotals &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
+          after.checkpoint.keys().hasOnly(['cashActualPaise', 'cashNetPaise', 'date', 'upiActualPaise', 'cardActualPaise', 'upiNetPaise', 'cardNetPaise', 'reconciliationId']) &&
+          after.checkpoint.cashActualPaise == closure.resultingBalancePaise && after.checkpoint.cashNetPaise == before.cashNetPaise &&
+          after.checkpoint.date == before.checkpoint.date && after.checkpoint.upiActualPaise == before.checkpoint.upiActualPaise &&
+          after.checkpoint.cardActualPaise == before.checkpoint.cardActualPaise && after.checkpoint.upiNetPaise == before.checkpoint.upiNetPaise &&
+          after.checkpoint.cardNetPaise == before.checkpoint.cardNetPaise && after.checkpoint.reconciliationId == before.checkpoint.reconciliationId;
+      }
       function validCashierState(uid) {
         let data = request.resource.data;
         let handover = getAfter(handoverPath()).data;
@@ -1255,6 +1324,7 @@ service cloud.firestore {
           ((isOwner() && resource.data.initialized == false && request.resource.data.lastOperation == 'initialize' && !('checkpoint' in request.resource.data)) ||
            (resource.data.initialized == true && request.resource.data.lastOperation == 'bill' && validBillLedger(resource.data, request.resource.data)) ||
            (request.resource.data.lastOperation == 'reconciliation' && validCheckpoint(resource.data, request.resource.data)) ||
+           (resource.data.initialized == true && request.resource.data.lastOperation == 'cashout-close' && validDrawerClosureLedger(resource.data, request.resource.data)) ||
            (isOwner() && resource.data.initialized == true && request.resource.data.lastOperation == 'refund' && validRefundLedger(resource.data, request.resource.data)));
         allow delete: if false;
       }
@@ -1274,6 +1344,15 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewStatus', 'reviewedByUid', 'reviewedAt']) &&
           request.resource.data.reviewStatus == 'reviewed' && request.resource.data.reviewedByUid == request.auth.uid && request.resource.data.reviewedAt is string;
         allow delete: if false;
+      }
+      match /drawerClosures/{id} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == id && request.resource.data.cashoutId == id &&
+          request.resource.data.recordedByUid == request.auth.uid &&
+          getAfter(handoverPath()).data.lastOperation == 'cashout-close' &&
+          getAfter(handoverPath()).data.lastOperationId == id;
+        allow update, delete: if false;
       }
       allow read: if sandboxId == 'test' && isStaff();
       allow create, update, delete: if sandboxId == 'test' && isOwner();

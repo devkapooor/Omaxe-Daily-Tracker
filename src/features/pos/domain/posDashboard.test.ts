@@ -44,7 +44,7 @@ describe('POS dashboard totals', () => {
     const result = calculatePosDashboard([], [], [{ id: 'legacy', type: 'bill-return-approved', refundDate: date, refundAmountPaise: 500 }], date, date)
     expect(result).toMatchObject({ unassignedRefundsPaise: 500, refundsPaise: 500, netPaise: -500 })
   })
-  it('derives operational product, basket, stock, and recent-bill metrics', () => {
+  it('derives operational product, basket, and stock metrics', () => {
     const sale = bill('sale', [{ method: 'upi', amountPaise: 15000 }])
     sale.lines = [
       { id: 'line-1', kind: 'product', productId: 'product-1', barcode: '100', description: 'Product One', quantity: 2, unitPricePaise: 6000 },
@@ -58,6 +58,5 @@ describe('POS dashboard totals', () => {
     expect(result).toMatchObject({ unitsSold: 3, averageBillPaise: 15000, unresolvedItemCount: 1, negativeStockCount: 1, zeroStockCount: 1 })
     expect(result.topProducts[0]).toMatchObject({ id: 'product-1', quantity: 2, revenuePaise: 12000 })
     expect(result.stockAttention.map((item) => item.id)).toEqual(['product-1', 'product-2'])
-    expect(result.recentBills[0].id).toBe('sale')
   })
 })

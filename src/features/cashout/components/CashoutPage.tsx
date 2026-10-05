@@ -33,7 +33,7 @@ export function CashoutPage(props: CashoutPageProps) {
         <TabsContent value="new" className="m-0 min-h-0 flex-1">
           <DailyCashoutForm currentUserId={currentUser.id} currentUserName={currentUser.name} todayCashExpenses={todayCashExpenses} onSave={async (draft) => {
             await onSave(draft)
-            showToast(draft.auditStatus === 'matched' ? `Cashout + Sales saved. Drawer total: ${money(draft.drawerTotal ?? draft.remainingBalance)}` : `${draft.auditMessage} Drawer total saved: ${money(draft.drawerTotal ?? draft.remainingBalance)}`)
+            showToast(draft.auditStatus === 'matched' ? `Cashout + Sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.` : `${draft.auditMessage} ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.`)
           }} />
         </TabsContent>
         <TabsContent value="corrections" className="m-0 min-h-0 flex-1">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
 import type { UserAccount } from '@/domain/appTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
@@ -13,6 +13,7 @@ import { PageLayout } from '@/shared/ui/page-layout'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent } from '@/shared/ui/tabs'
+import { subscribePosConfig, updateDiscountLimit } from '@/features/pos/data/posRepository'
 
 type SettingsPageProps = {
   currentUser: AppUser
@@ -47,7 +48,17 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
+  const [posDiscountLimit, setPosDiscountLimit] = useState('')
+  const [posSettingsMessage, setPosSettingsMessage] = useState('')
+  const [savingPosSettings, setSavingPosSettings] = useState(false)
   const canManageUsers = currentUser.role === 'owner'
+
+  useEffect(() => {
+    if (!canManageUsers) return
+    return subscribePosConfig((config) => {
+      setPosDiscountLimit(config.billingMaxDiscountPercentage === null ? '' : String(config.billingMaxDiscountPercentage))
+    }, (cause) => setError(cause.message))
+  }, [canManageUsers])
 
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase()
@@ -173,6 +184,26 @@ export function SettingsPage({
     }
   }
 
+  async function savePosSettings(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const value = posDiscountLimit.trim() === '' ? null : Number(posDiscountLimit)
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) {
+      setError('Billing discount limit must be between 0 and 100%.')
+      return
+    }
+    try {
+      setError('')
+      setPosSettingsMessage('')
+      setSavingPosSettings(true)
+      await updateDiscountLimit(value, currentUser)
+      setPosSettingsMessage('POS discount control saved.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save POS settings.')
+    } finally {
+      setSavingPosSettings(false)
+    }
+  }
+
   return (
     <Tabs defaultValue={canManageUsers ? 'staff' : 'password'} className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageLayout
@@ -181,9 +212,10 @@ export function SettingsPage({
           <PageHeader
             title="Settings"
             tools={(
-              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-3 xl:grid-cols-3' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
+              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-4 xl:grid-cols-4' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
                 <PageHeaderTab value="staff">Staff</PageHeaderTab>
                 {canManageUsers ? <PageHeaderTab value="operations">Operations</PageHeaderTab> : null}
+                {canManageUsers ? <PageHeaderTab value="pos">POS</PageHeaderTab> : null}
                 <PageHeaderTab value="password">Update Password</PageHeaderTab>
               </PageHeaderTabsList>
             )}
@@ -332,6 +364,25 @@ export function SettingsPage({
                   <div className="flex items-center sm:col-span-2 xl:col-span-1">
                     <Button disabled={isBusy}>{isBusy ? 'Saving...' : 'Save Projection Settings'}</Button>
                   </div>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        {canManageUsers ? (
+          <TabsContent value="pos" className="min-h-0 flex-1 overflow-y-auto">
+            <Card className="max-w-2xl">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
+                <SectionHeading eyebrow="Owner only" title="POS Discount Control" description="Set the maximum discount Billing staff can apply. Managers and the owner can exceed it only with an override reason." />
+              </CardHeader>
+              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+                <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={savePosSettings}>
+                  <FieldLabel label="Billing maximum percentage (blank disables)">
+                    <Input type="number" min="0" max="100" step="0.01" value={posDiscountLimit} onChange={(event) => { setPosDiscountLimit(event.target.value); setError(''); setPosSettingsMessage('') }} />
+                  </FieldLabel>
+                  <Button disabled={savingPosSettings}>{savingPosSettings ? 'Saving...' : 'Save POS Settings'}</Button>
+                  {posSettingsMessage ? <p className="text-xs font-medium text-success sm:col-span-2">{posSettingsMessage}</p> : null}
                 </form>
               </CardContent>
             </Card>

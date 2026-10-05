@@ -78,6 +78,10 @@ export type DailyCashoutEntry = {
   cashExpense?: number
   drawerDenominations?: DrawerDenominations
   drawerTotal?: number
+  /** Immutable POS drawer closure created with this cashout. */
+  drawerClosureId?: string
+  cashRemovedPaise?: number
+  closingDrawerPaise?: number
   auditDifference?: number
   auditStatus?: 'matched' | 'cash-less' | 'cash-more'
   auditMessage?: string

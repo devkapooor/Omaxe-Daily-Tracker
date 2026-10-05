@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -138,10 +139,9 @@ export function subscribeHeldCarts(callback: (carts: PosHeldCart[]) => void, onE
   }, onError)
 }
 
-export function subscribeRecentBills(callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
-  return onSnapshot(query(posCollection('bills'), orderBy('createdAt', 'desc'), limit(50)), (snapshot) => {
-    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill))
-  }, onError)
+export async function loadRecentPosBills(count = 10) {
+  const snapshot = await getDocsFromServer(query(posCollection('bills'), orderBy('createdAt', 'desc'), limit(count)))
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill)
 }
 
 export function subscribePosDashboardBills(from: string, to: string, callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
@@ -398,6 +398,7 @@ export async function savePosCost(productId: string, costPaise: number | null, a
 }
 
 export async function updateDiscountLimit(value: number | null, actor: AppUser) {
+  if (actor.role !== 'owner') throw new Error('Only the owner can update POS discount control.')
   if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) throw new Error('Discount limit must be between 0 and 100%.')
   const timestamp = nowIso()
   const eventId = crypto.randomUUID()

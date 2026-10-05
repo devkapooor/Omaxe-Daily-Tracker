@@ -1,6 +1,6 @@
 import { useState, type ComponentType } from 'react'
 import { AlertTriangle, Banknote, Boxes, CreditCard, IndianRupee, PackageX, QrCode, ReceiptText, ShoppingBasket } from 'lucide-react'
-import { formatDisplayDateTime, today } from '@/app/uiHelpers'
+import { today } from '@/app/uiHelpers'
 import type { PosPaymentMethod, PosProduct } from '../domain/types'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
@@ -46,10 +46,10 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
     { label: 'Average Bill', value: money(metrics.averageBillPaise), note: 'Average after discounts', icon: Boxes },
   ]
 
-  return <section aria-label="POS sales dashboard" className="grid gap-card-gap pb-4">
+  return <section aria-label="POS sales dashboard" className="grid gap-3 pb-4">
     <Card>
-      <CardContent className="flex min-h-20 flex-col justify-center gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">POS Performance</span><h2 className="text-xl font-semibold tracking-tight">{range.label}</h2></div>
+      <CardContent className="flex flex-col justify-center gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">POS Performance</span><h2 className="text-lg font-semibold tracking-tight">{range.label}</h2></div>
         <Tabs value={String(dayOffset)} onValueChange={(value) => setDayOffset(Number(value) as DayOffset)}>
           <TabsList aria-label="POS business day" className="min-h-8 grid-cols-3">
             <TabsTrigger value="0">T</TabsTrigger>
@@ -61,20 +61,20 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
     </Card>
 
     {data.error ? <StatusPanel variant="destructive">{data.error}</StatusPanel> : data.loading ? <StatusPanel>Loading POS activity…</StatusPanel> : <>
-      <div className="grid gap-card-gap sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon
-          return <Card key={card.label} aria-label={card.label}><CardContent className="flex items-start justify-between gap-3 py-4">
-            <div className="grid gap-1"><span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{card.label}</span><strong className="text-2xl font-black tabular-nums">{card.value}</strong><span className="text-xs text-muted-foreground">{card.note}</span></div>
-            <span className="rounded-lg bg-primary/10 p-2 text-primary"><Icon className="size-5" /></span>
+          return <Card key={card.label} aria-label={card.label}><CardContent className="flex items-start justify-between gap-2 py-3">
+            <div className="grid gap-0.5"><span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{card.label}</span><strong className="text-xl font-black tabular-nums">{card.value}</strong><span className="text-[11px] text-muted-foreground">{card.note}</span></div>
+            <span className="rounded-lg bg-primary/10 p-1.5 text-primary"><Icon className="size-4" /></span>
           </CardContent></Card>
         })}
       </div>
 
-      <div className="grid gap-card-gap xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         <Card>
-          <CardHeader><SectionHeading eyebrow="Collections" title="Payment Mix" description="Net sales received by Cash, UPI, and Card. Legacy transfer records appear only if present." /></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardHeader className="pb-2"><SectionHeading eyebrow="Collections" title="Payment Mix" description="Net sales received by Cash, UPI, and Card. Legacy transfer records appear only if present." /></CardHeader>
+          <CardContent className="grid gap-2.5">
             {metrics.methods.filter((method) => method.value !== 'bank-transfer' || method.collectedPaise !== 0 || method.refundedPaise !== 0).map((method) => {
               const Icon = paymentIcons[method.value]
               const share = metrics.salesPaise > 0 ? method.collectedPaise * 100 / metrics.salesPaise : 0
@@ -91,7 +91,7 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
         </Card>
 
         <Card>
-          <CardHeader><SectionHeading eyebrow="Exceptions" title="Needs Attention" description="Activity that may require review." /></CardHeader>
+          <CardHeader className="pb-2"><SectionHeading eyebrow="Exceptions" title="Needs Attention" description="Activity that may require review." /></CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
             <ExceptionMetric label="Approved refunds" value={money(metrics.refundsPaise)} note={`${metrics.refundCount} refund records`} alert={metrics.refundsPaise > 0} />
             <ExceptionMetric label="Discounts" value={money(metrics.discountPaise)} note={`${metrics.discountedBillCount} discounted bills`} alert={metrics.discountPaise > 0} />
@@ -101,12 +101,12 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
         </Card>
       </div>
 
-      <div className="grid gap-card-gap xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         <Card>
-          <CardHeader><SectionHeading eyebrow="Product performance" title="Top Selling Products" description={`Ranked by sales value for ${range.label}.`} /></CardHeader>
+          <CardHeader className="pb-2"><SectionHeading eyebrow="Product performance" title="Top Selling Products" description={`Ranked by sales value for ${range.label}.`} /></CardHeader>
           <CardContent>
             {metrics.topProducts.length === 0 ? <EmptyState text="No catalog product sales on this day." /> : <div className="divide-y divide-border">
-              {metrics.topProducts.map((product, index) => <div key={product.id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 py-3 first:pt-0 last:pb-0">
+              {metrics.topProducts.map((product, index) => <div key={product.id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 py-2 first:pt-0 last:pb-0">
                 <span className="flex size-7 items-center justify-center rounded-full bg-secondary text-xs font-black">{index + 1}</span>
                 <div className="min-w-0"><strong className="block truncate text-sm">{product.name}</strong><span className="text-xs text-muted-foreground">{product.quantity.toLocaleString('en-IN')} units</span></div>
                 <strong className="text-sm tabular-nums">{money(product.revenuePaise)}</strong>
@@ -116,8 +116,8 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
         </Card>
 
         <Card>
-          <CardHeader><SectionHeading eyebrow="Inventory" title="Stock Attention" description="Active products at zero or negative stock." /></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardHeader className="pb-2"><SectionHeading eyebrow="Inventory" title="Stock Attention" description="Active products at zero or negative stock." /></CardHeader>
+          <CardContent className="grid gap-2.5">
             <div className="grid grid-cols-2 gap-2">
               <ExceptionMetric label="Negative stock" value={String(metrics.negativeStockCount)} note="Below zero" alert={metrics.negativeStockCount > 0} />
               <ExceptionMetric label="Out of stock" value={String(metrics.zeroStockCount)} note="Exactly zero" alert={metrics.zeroStockCount > 0} />
@@ -129,26 +129,14 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><SectionHeading eyebrow="Latest activity" title="Recent Bills" description={`Most recent completed bills in ${range.label}.`} /></CardHeader>
-        <CardContent>
-          {metrics.recentBills.length === 0 ? <EmptyState text="No completed bills on this day." /> : <div className="divide-y divide-border">
-            {metrics.recentBills.map((bill) => <div key={bill.id} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-4">
-              <div><strong className="text-sm">{bill.receiptNumber}</strong><span className="ml-2 text-xs text-muted-foreground">{bill.createdByName}</span></div>
-              <span className="text-xs text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</span>
-              <strong className="text-sm tabular-nums">{money(bill.totalPaise)}</strong>
-            </div>)}
-          </div>}
-        </CardContent>
-      </Card>
     </>}
   </section>
 }
 
 function ExceptionMetric({ label, value, note, alert }: { label: string; value: string; note: string; alert: boolean }) {
-  return <div className="rounded-lg border border-border bg-secondary/25 p-3">
+  return <div className="rounded-lg border border-border bg-secondary/25 p-2.5">
     <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</span>{alert ? <AlertTriangle className="size-4 text-warning" /> : null}</div>
-    <strong className="mt-1 block text-xl tabular-nums">{value}</strong>
+    <strong className="mt-0.5 block text-lg tabular-nums">{value}</strong>
     <span className="text-xs text-muted-foreground">{note}</span>
   </div>
 }

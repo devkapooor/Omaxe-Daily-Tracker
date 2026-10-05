@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, RotateCcw, Settings2, ShoppingCart, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
-import { today } from '@/app/uiHelpers'
+import { formatDisplayDateTime, today } from '@/app/uiHelpers'
+import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/components/ResponsiveLogTable'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -20,11 +21,10 @@ import {
   deleteHeldCart,
   finalizePosBill,
   findPosProductByBarcode,
+  loadRecentPosBills,
   searchPosProductsByName,
-  mapTemporaryItem,
   requestBillAction,
   saveHeldCart,
-  updateDiscountLimit,
 } from '../data/posRepository'
 import { printPosReceipt } from './receipt'
 import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
@@ -34,7 +34,7 @@ import { serverNowDate } from '@/shared/lib/serverClock'
 import { expectedHandover, handoverDate } from '../domain/cashierHandover'
 import { useCashierHandover } from '../hooks/useCashierHandover'
 
-type Tab = 'checkout' | 'dashboard' | 'bills' | 'admin'
+type Tab = 'checkout' | 'dashboard' | 'bills'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
 ]
@@ -145,11 +145,10 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="POS sections" className={`${currentUser.role === 'owner' ? 'grid-cols-4' : 'grid-cols-3'} grid min-w-max`}>
-              <PageHeaderTab value="checkout"><ShoppingCart />Checkout</PageHeaderTab>
+            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-3">
+              <PageHeaderTab value="checkout"><ShoppingCart />Billing</PageHeaderTab>
               <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
-              {currentUser.role === 'owner' ? <PageHeaderTab value="admin"><Settings2 />Admin</PageHeaderTab> : null}
             </PageHeaderTabsList>
           </div>
           <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
@@ -179,11 +178,11 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
             </div>
             {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); setCart((current) => [...current, { id: crypto.randomUUID(), kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }]); setUnknownBarcode('') }}><Plus />Add unresolved item</Button></div> : null}
           </CardContent></Card>
-          <Card aria-label="Cart items"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Checkout" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-3">
+          <Card aria-label="Cart items"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-3">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className="rounded-xl border p-3"><div className="flex justify-between gap-2"><div><strong>{line.description}</strong><small className="block text-muted-foreground">{line.barcode} {line.kind === 'temporary' ? '· UNRESOLVED' : ''}</small></div><Button aria-label={`Remove ${line.description}`} size="icon" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 /></Button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-1"><Button aria-label={`Decrease quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><span className="min-w-8 text-center font-bold">{line.quantity}</span><Button aria-label={`Increase quantity of ${line.description}`} size="sm" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></div><strong>{money(line.quantity * line.unitPricePaise)}</strong></div>{line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="mt-2 text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}</div>)}
           </CardContent></Card>
         </div>
-        <Card className="flex self-start flex-col lg:sticky lg:top-0 lg:h-full" aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Checkout" title="Payment & Total" /></CardHeader><CardContent className="flex flex-1 flex-col gap-3">
+        <Card className="flex self-start flex-col lg:sticky lg:top-0 lg:h-full" aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Billing" title="Payment & Total" /></CardHeader><CardContent className="flex flex-1 flex-col gap-3">
           <div className="grid gap-2 sm:grid-cols-2"><Input aria-label="Customer Name (Optional)" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /><Input aria-label="Mobile (Optional)" inputMode="tel" placeholder="Mobile (optional)" value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></div>
           <div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel>{requiresDiscountOverrideReason ? <FieldLabel className="sm:col-span-2" label="Override Reason"><Input required value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Why is this discount above the limit?" /></FieldLabel> : null}</div>
           <div className="rounded-xl bg-secondary/50 p-3 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Discount</span><strong>− {money(discount.amountPaise)}</strong></div><div className="mt-2 flex justify-between text-lg"><span>Total</span><strong>{money(total)}</strong></div></div>
@@ -194,26 +193,77 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       </div> : null}
 
       {tab === 'dashboard' ? <PosDashboard products={sandbox.products} /> : null}
-      {tab === 'bills' ? <BillsPanel bills={sandbox.bills} products={sandbox.products} currentUser={currentUser} showToast={showToast} /> : null}
-      {tab === 'admin' && currentUser.role === 'owner' ? <AdminPanel currentUser={currentUser} discountLimit={sandbox.config.billingMaxDiscountPercentage} showToast={showToast} /> : null}
+      {tab === 'bills' ? <BillsPanel currentUser={currentUser} showToast={showToast} /> : null}
         </PageCardStack>
       </div>
     </PageLayout>
   </Tabs>
 }
 
-function BillsPanel({ bills, products, currentUser, showToast }: { bills: PosBill[]; products: PosProduct[]; currentUser: AppUser; showToast: (message: string) => void }) {
-  const [mapping, setMapping] = useState<Record<string, string>>({})
-  const [voidReasons, setVoidReasons] = useState<Record<string, string>>({})
+function billPaymentMode(bill: PosBill) {
+  const labels: Record<PosPaymentMethod, string> = { cash: 'Cash', upi: 'UPI', card: 'Card', 'bank-transfer': 'Bank transfer' }
+  const methods = [...new Set(bill.payments.filter((payment) => payment.amountPaise !== 0).map((payment) => labels[payment.method]))]
+  if (methods.length === 0) return 'Not recorded'
+  return methods.length === 1 ? methods[0] : `Split · ${methods.join(' + ')}`
+}
+
+function BillActions({ bill, onReturn }: { bill: PosBill; onReturn: (bill: PosBill) => void }) {
+  return <div className="flex flex-wrap justify-end gap-1.5">
+    <Button size="sm" variant="outline" onClick={() => onReturn(bill)}>Request return</Button>
+    <Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'thermal')}><Printer />Reprint</Button>
+  </div>
+}
+
+function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
+  const [bills, setBills] = useState<PosBill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [returnBill, setReturnBill] = useState<PosBill | null>(null)
+  useEffect(() => {
+    let active = true
+    void loadRecentPosBills(10).then((records) => {
+      if (active) setBills(records)
+    }).catch((error: unknown) => {
+      if (active) setLoadError(error instanceof Error ? error.message : 'Unable to load recent bills.')
+    }).finally(() => {
+      if (active) setLoading(false)
+    })
+    return () => { active = false }
+  }, [])
+
+  const columns = useMemo<LogTableColumn<PosBill>[]>(() => [
+    {
+      id: 'bill', label: 'Bill', value: (bill) => bill.createdAt,
+      cell: (bill) => <span><strong className="block">{bill.receiptNumber}</strong><span className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</span></span>,
+      hideable: false, sortDescFirst: true,
+    },
+    { id: 'total', label: 'Total amount', value: (bill) => bill.totalPaise, cell: (bill) => <strong className="tabular-nums">{money(bill.totalPaise)}</strong>, align: 'right', sortDescFirst: true },
+    { id: 'operator', label: 'Punched by', value: (bill) => bill.createdByName, cell: (bill) => <span className="font-medium">{bill.createdByName}</span> },
+    { id: 'payment', label: 'Payment mode', value: billPaymentMode, cell: (bill) => billPaymentMode(bill) },
+    { id: 'actions', label: 'Actions', value: () => '', cell: (bill) => <BillActions bill={bill} onReturn={setReturnBill} />, align: 'right', hideable: false, sortable: false },
+  ], [])
+
   return <>
-    <div className="grid gap-2.5">{bills.length === 0 ? <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">No bills yet.</CardContent></Card> : bills.map((bill) => <Card key={bill.id}>
-      <CardHeader className="flex-row items-start justify-between gap-3"><SectionHeading eyebrow={bill.businessDate} title={bill.receiptNumber} description={bill.createdByName + ' · ' + bill.lines.length + ' lines · ' + money(bill.totalPaise)} /><div className="flex shrink-0 flex-wrap justify-end gap-1"><Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'thermal')}><Printer />80mm</Button><Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'a4')}><Printer />A4</Button><Button size="sm" variant="outline" onClick={() => setReturnBill(bill)}>Return</Button></div></CardHeader>
-      <CardContent className="grid gap-3">
-        <details className="rounded-lg border px-3 py-2"><summary className="cursor-pointer text-sm font-medium">View bill items</summary><div className="mt-2 grid gap-2">{bill.lines.map((line) => <div key={line.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/30 p-2 text-xs"><span><strong>{line.description}</strong> · {line.quantity} × {money(line.unitPricePaise)}</span>{line.kind === 'temporary' ? <div className="flex min-w-60 flex-1 gap-2"><NativeSelect aria-label={'Map ' + line.description} value={mapping[line.id] ?? ''} onChange={(event) => setMapping((current) => ({ ...current, [line.id]: event.target.value }))}><option value="">Map unresolved item...</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} · stock {product.currentQuantity}</option>)}</NativeSelect><Button size="sm" onClick={() => { const product = products.find((candidate) => candidate.id === mapping[line.id]); if (!product) return; void mapTemporaryItem(bill.id, line.id, product.id, product.revision, currentUser).then(() => showToast('Temporary item mapped with original sale date.')).catch((error: Error) => showToast(error.message)) }}>Map</Button></div> : null}</div>)}</div></details>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-3"><Input className="min-w-52 flex-1" aria-label={'Void reason for ' + bill.receiptNumber} value={voidReasons[bill.id] ?? ''} onChange={(event) => setVoidReasons((current) => ({ ...current, [bill.id]: event.target.value }))} placeholder="Mandatory request reason" /><Button size="sm" variant="destructive" onClick={() => void requestBillAction({ type: 'void', billId: bill.id, reason: voidReasons[bill.id] ?? '' }, currentUser).then(() => { setVoidReasons((current) => ({ ...current, [bill.id]: '' })); showToast('Void request sent to Action Centre.') }).catch((error: Error) => showToast(error.message))}><RotateCcw />Request void</Button></div>
+    <Card className="min-h-0">
+      <CardHeader className="pb-2"><SectionHeading eyebrow="Bills" title="Latest 10 Bills" description="Only the latest 10 completed bills are loaded when this tab is opened." /></CardHeader>
+      <CardContent>
+        {loadError ? <StatusPanel variant="destructive">{loadError}</StatusPanel> : loading ? <StatusPanel>Loading latest bills…</StatusPanel> : <ResponsiveLogTable
+          columns={columns}
+          data={bills}
+          emptyTitle="No bills yet"
+          getRowId={(bill) => bill.id}
+          initialSortId="bill"
+          noun="bill"
+          searchPlaceholder="Search bill, operator or payment mode"
+          searchText={(bill) => [bill.receiptNumber, bill.businessDate, formatDisplayDateTime(bill.createdAt), bill.createdByName, billPaymentMode(bill)].join(' ')}
+          mobileCard={(bill) => <article className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm">
+            <div className="flex items-start justify-between gap-3"><div><strong className="text-sm">{bill.receiptNumber}</strong><p className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</p></div><strong className="tabular-nums">{money(bill.totalPaise)}</strong></div>
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/60 pt-3 text-xs"><span><span className="block text-[10px] uppercase text-muted-foreground">Punched by</span>{bill.createdByName}</span><span><span className="block text-[10px] uppercase text-muted-foreground">Payment</span>{billPaymentMode(bill)}</span></div>
+            <div className="mt-3 border-t border-border/60 pt-3"><BillActions bill={bill} onReturn={setReturnBill} /></div>
+          </article>}
+        />}
       </CardContent>
-    </Card>)}</div>
+    </Card>
     {returnBill ? <ReturnDialog key={returnBill.id} bill={returnBill} currentUser={currentUser} showToast={showToast} onClose={() => setReturnBill(null)} /> : null}
   </>
 }
@@ -248,9 +298,4 @@ function ReturnDialog({ bill, currentUser, showToast, onClose }: { bill: PosBill
       </CardContent>
     </Card>
   </div>
-}
-
-function AdminPanel({ currentUser, discountLimit, showToast }: { currentUser: AppUser; discountLimit: number | null; showToast: (message: string) => void }) {
-  const [limitValue, setLimitValue] = useState(discountLimit === null ? '' : String(discountLimit))
-  return <div className="grid gap-2.5 lg:grid-cols-2"><Card><CardHeader><SectionHeading eyebrow="Owner only" title="Discount Control" /></CardHeader><CardContent className="grid gap-2"><FieldLabel label="Billing maximum percentage (blank disables)"><Input type="number" min="0" max="100" step="0.01" value={limitValue} onChange={(event) => setLimitValue(event.target.value)} /></FieldLabel><Button onClick={() => void updateDiscountLimit(limitValue === '' ? null : Number(limitValue), currentUser).then(() => showToast('POS discount limit updated.')).catch((error: Error) => showToast(error.message))}>Save limit</Button></CardContent></Card></div>
 }

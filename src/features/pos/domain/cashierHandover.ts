@@ -12,7 +12,7 @@ export type HandoverCheckpoint = {
 export type HandoverLedger = {
   initialized: boolean; revision: number; cashNetPaise: number
   dailyTotals: Record<string, { upi: number; card: number }>
-  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation'
+  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close'
   lastOperationId: string; updatedByUid: string; checkpoint?: HandoverCheckpoint
 }
 export type CashierState = {

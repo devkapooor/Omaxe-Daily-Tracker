@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, setDoc, type Firestore } from 'firebase/firestore'
 import type { AppUser } from '../src/domain/financeTypes'
 
 const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTime: 123 }))
@@ -15,6 +15,8 @@ import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
 import { cashierRef, handoverRef, initializeHandover, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
 import { handoverDate } from '../src/features/pos/domain/cashierHandover'
 import { setServerClockSample } from '../src/shared/lib/serverClock'
+import { createFinanceActions } from '../src/store/actions/createFinanceActions'
+import { expectedHandover, type HandoverLedger } from '../src/features/pos/domain/cashierHandover'
 
 let environment: RulesTestEnvironment
 const owner = { id: 'pos-owner', name: 'POS Owner', role: 'owner' } as AppUser
@@ -101,6 +103,34 @@ describe('POS repository workflows against deployed rules', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
     expect((await getDoc(handoverRef())).data()?.revision).toBe(revision + 1)
+  })
+
+  it('saves daily cashout, sales, immutable closure, and zero cash checkpoint atomically', async () => {
+    await finalize()
+    let ledger = (await getDoc(handoverRef())).data()!
+    await submitHandover(billing, 'logout', { '10': 1 }, 0, 1000, 0, ledger.revision, handoverDate(), '')
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    const actions = createFinanceActions({
+      getState: () => ({ financeData: { sales: [] }, dailyCashouts: [] }) as never,
+      setIsBusy: (() => undefined) as never,
+      ensureNameInDirectory: async () => false,
+    })
+    await actions.saveDailyCashoutEntry({
+      date: handoverDate(), recordedBy: owner.name, recordedByUserId: owner.id,
+      cashSales: 10, upiSales: 10, cardSales: 0, creditSales: 0, returns: 0, cashExpense: 0,
+      cashAudit: 10, drawerTotal: 10, remainingBalance: 10,
+      drawerDenominations: { denom500: 0, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 1, change: 0 },
+      actualCashParticulars: '10 x 1 = 10', pendingCashParticulars: '',
+    })
+    const cashouts = await getDocs(collection(state.db, 'dailyCashouts'))
+    expect(cashouts.size).toBe(1)
+    const cashout = cashouts.docs[0].data()
+    expect(cashout).toMatchObject({ cashRemovedPaise: 1000, closingDrawerPaise: 0 })
+    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'drawerClosures', cashout.id))).data()).toMatchObject({
+      countedPaise: 1000, removedPaise: 1000, closingBalancePaise: 0, kind: 'daily-cashout',
+    })
+    ledger = (await getDoc(handoverRef())).data() as HandoverLedger
+    expect(expectedHandover(ledger, handoverDate()).cash).toBe(0)
   })
 
   it('preserves dashboard-only accounts without a cashier participant record', async () => {

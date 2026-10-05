@@ -77,7 +77,14 @@ export async function submitHandover(actor: AppUser, kind: 'login' | 'logout', c
     const previous = cashierSnapshot.data() as CashierState | undefined
     transaction.set(cashierRef(actor.id), { uid: actor.id, authTime, needsLogoutCheck: false, closed: kind === 'logout', lastBillId: previous?.lastBillId ?? '', lastReconciliationId: id, updatedAt: createdAt } satisfies CashierState)
     const day = ledger.dailyTotals[date] ?? { upi: 0, card: 0 }
-    transaction.set(handoverRef(), { ...ledger, revision: ledger.revision + 1, lastOperation: 'reconciliation', lastOperationId: id, updatedByUid: actor.id, checkpoint: { cashActualPaise: actual.cash, cashNetPaise: ledger.cashNetPaise, date, upiActualPaise: upi, cardActualPaise: card, upiNetPaise: day.upi, cardNetPaise: day.card, reconciliationId: id } })
+    transaction.set(handoverRef(), {
+      ...ledger,
+      revision: ledger.revision + 1,
+      lastOperation: 'reconciliation',
+      lastOperationId: id,
+      updatedByUid: actor.id,
+      checkpoint: { cashActualPaise: actual.cash, cashNetPaise: ledger.cashNetPaise, date, upiActualPaise: upi, cardActualPaise: card, upiNetPaise: day.upi, cardNetPaise: day.card, reconciliationId: id },
+    })
     return record
   })
 }
