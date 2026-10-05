@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
-import type { UserAccount } from '@/domain/appTypes'
+import type { DailyCashoutEntry, UserAccount } from '@/domain/appTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -14,9 +14,11 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { subscribePosConfig, updateDiscountLimit } from '@/features/pos/data/posRepository'
+import { applyHistoricalDrawerClosure, previewHistoricalDrawerClosure, type HistoricalDrawerClosurePreview } from '@/features/pos/data/drawerClosureRepository'
 
 type SettingsPageProps = {
   currentUser: AppUser
+  dailyCashouts: DailyCashoutEntry[]
   users: UserAccount[]
   isBusy: boolean
   marginPercentage: number
@@ -36,6 +38,7 @@ type SettingsPageProps = {
 
 export function SettingsPage({
   currentUser,
+  dailyCashouts,
   users,
   isBusy,
   marginPercentage,
@@ -51,7 +54,13 @@ export function SettingsPage({
   const [posDiscountLimit, setPosDiscountLimit] = useState('')
   const [posSettingsMessage, setPosSettingsMessage] = useState('')
   const [savingPosSettings, setSavingPosSettings] = useState(false)
+  const [drawerRepairPreview, setDrawerRepairPreview] = useState<HistoricalDrawerClosurePreview | null>(null)
+  const [drawerRepairBusy, setDrawerRepairBusy] = useState(false)
+  const [drawerRepairMessage, setDrawerRepairMessage] = useState('')
   const canManageUsers = currentUser.role === 'owner'
+  const drawerRepairCandidate = useMemo(() => dailyCashouts
+    .filter((entry) => entry.date === '2026-10-04' && !entry.drawerClosureId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null, [dailyCashouts])
 
   useEffect(() => {
     if (!canManageUsers) return
@@ -201,6 +210,35 @@ export function SettingsPage({
       setError(cause instanceof Error ? cause.message : 'Unable to save POS settings.')
     } finally {
       setSavingPosSettings(false)
+    }
+  }
+
+  async function previewDrawerRepair() {
+    if (!drawerRepairCandidate) return
+    try {
+      setError('')
+      setDrawerRepairMessage('')
+      setDrawerRepairBusy(true)
+      setDrawerRepairPreview(await previewHistoricalDrawerClosure(drawerRepairCandidate.id))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to preview the drawer correction.')
+    } finally {
+      setDrawerRepairBusy(false)
+    }
+  }
+
+  async function applyDrawerRepair() {
+    if (!drawerRepairPreview) return
+    try {
+      setError('')
+      setDrawerRepairBusy(true)
+      await applyHistoricalDrawerClosure(drawerRepairPreview, currentUser)
+      setDrawerRepairPreview(null)
+      setDrawerRepairMessage('Historical drawer correction applied. The POS drawer now carries only cash received after the October 4 close.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to apply the drawer correction.')
+    } finally {
+      setDrawerRepairBusy(false)
     }
   }
 
@@ -372,7 +410,8 @@ export function SettingsPage({
 
         {canManageUsers ? (
           <TabsContent value="pos" className="min-h-0 flex-1 overflow-y-auto">
-            <Card className="max-w-2xl">
+            <div className="grid max-w-5xl gap-3 lg:grid-cols-2">
+            <Card className="h-fit">
               <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
                 <SectionHeading eyebrow="Owner only" title="POS Discount Control" description="Set the maximum discount Billing staff can apply. Managers and the owner can exceed it only with an override reason." />
               </CardHeader>
@@ -386,6 +425,32 @@ export function SettingsPage({
                 </form>
               </CardContent>
             </Card>
+            <Card className="h-fit">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
+                <SectionHeading eyebrow="Owner only · One-time repair" title="October 4 Drawer Close" description="Preview the audited correction before changing the shared drawer. Bills, refunds, stock, and receipt history are not edited." />
+              </CardHeader>
+              <CardContent className="grid gap-3 px-3 pb-3 sm:px-4 sm:pb-4">
+                {drawerRepairMessage ? <StatusPanel>{drawerRepairMessage}</StatusPanel> : null}
+                {!drawerRepairCandidate && !drawerRepairMessage ? <StatusPanel>No pending October 4 drawer correction was found.</StatusPanel> : null}
+                {drawerRepairCandidate && !drawerRepairPreview ? <div className="grid gap-3">
+                  <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm"><span className="text-xs text-muted-foreground">Recorded cashout</span><strong className="block">{drawerRepairCandidate.date} · ₹{(drawerRepairCandidate.drawerTotal ?? drawerRepairCandidate.remainingBalance).toLocaleString('en-IN')}</strong></div>
+                  <Button type="button" variant="outline" disabled={drawerRepairBusy} onClick={() => void previewDrawerRepair()}>{drawerRepairBusy ? 'Checking live drawer…' : 'Preview drawer correction'}</Button>
+                </div> : null}
+                {drawerRepairPreview ? <div className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <RepairValue label="Current drawer" paise={drawerRepairPreview.currentExpectedPaise} />
+                    <RepairValue label="Expected at close" paise={drawerRepairPreview.expectedAtClosurePaise} />
+                    <RepairValue label="Cash counted and removed" paise={drawerRepairPreview.countedPaise} />
+                    <RepairValue label="Count difference" paise={drawerRepairPreview.differencePaise} signed />
+                    <RepairValue label="Cash received after close" paise={drawerRepairPreview.subsequentNetCashPaise} />
+                    <RepairValue label="Corrected drawer" paise={drawerRepairPreview.resultingBalancePaise} emphasized />
+                  </div>
+                  <StatusPanel variant="warning">Applying this creates an immutable drawer-closure record and changes the shared drawer baseline. Review the figures above first.</StatusPanel>
+                  <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={drawerRepairBusy} onClick={() => setDrawerRepairPreview(null)}>Cancel</Button><Button type="button" disabled={drawerRepairBusy} onClick={() => void applyDrawerRepair()}>{drawerRepairBusy ? 'Applying…' : 'Apply audited correction'}</Button></div>
+                </div> : null}
+              </CardContent>
+            </Card>
+            </div>
           </TabsContent>
         ) : null}
 
@@ -407,5 +472,11 @@ export function SettingsPage({
       </PageLayout>
     </Tabs>
   )
+}
+
+function RepairValue({ emphasized = false, label, paise, signed = false }: { emphasized?: boolean; label: string; paise: number; signed?: boolean }) {
+  const amount = paise / 100
+  const value = `${signed && amount > 0 ? '+' : ''}₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return <div className={`rounded-md border p-2.5 ${emphasized ? 'border-primary/40 bg-primary/10' : 'border-border bg-secondary/25'}`}><span className="block text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span><strong className="mt-0.5 block tabular-nums">{value}</strong></div>
 }
 

@@ -449,6 +449,7 @@ export function AppWorkspace({
           <section className="min-h-0 flex-1 overflow-hidden">
             <SettingsPage
               currentUser={currentUser}
+              dailyCashouts={dailyCashouts}
               users={users}
               isBusy={isBusy}
               monthlyOperationalExpense={appSettings.monthlyOperationalExpense}

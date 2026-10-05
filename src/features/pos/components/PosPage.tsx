@@ -22,6 +22,7 @@ import {
   finalizePosBill,
   findPosProductByBarcode,
   loadRecentPosBills,
+  type PosBillPageCursor,
   searchPosProductsByName,
   requestBillAction,
   saveHeldCart,
@@ -207,6 +208,11 @@ function billPaymentMode(bill: PosBill) {
   return methods.length === 1 ? methods[0] : `Split · ${methods.join(' + ')}`
 }
 
+function shortReceiptNumber(receiptNumber: string) {
+  const suffix = receiptNumber.split('-').at(-1)
+  return suffix ? `#${suffix}` : receiptNumber
+}
+
 function BillActions({ bill, onReturn }: { bill: PosBill; onReturn: (bill: PosBill) => void }) {
   return <div className="flex flex-wrap justify-end gap-1.5">
     <Button size="sm" variant="outline" onClick={() => onReturn(bill)}>Request return</Button>
@@ -218,11 +224,18 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
   const [bills, setBills] = useState<PosBill[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [pageIndex, setPageIndex] = useState(0)
+  const [pageStarts, setPageStarts] = useState<Array<PosBillPageCursor | null>>([null])
+  const [nextCursor, setNextCursor] = useState<PosBillPageCursor | null>(null)
+  const [hasOlder, setHasOlder] = useState(false)
   const [returnBill, setReturnBill] = useState<PosBill | null>(null)
   useEffect(() => {
     let active = true
-    void loadRecentPosBills(10).then((records) => {
-      if (active) setBills(records)
+    void loadRecentPosBills(10).then((page) => {
+      if (!active) return
+      setBills(page.bills)
+      setNextCursor(page.nextCursor)
+      setHasOlder(page.bills.length === 10)
     }).catch((error: unknown) => {
       if (active) setLoadError(error instanceof Error ? error.message : 'Unable to load recent bills.')
     }).finally(() => {
@@ -231,10 +244,48 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
     return () => { active = false }
   }, [])
 
+  async function openBillPage(targetIndex: number, cursor: PosBillPageCursor | null) {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const page = await loadRecentPosBills(10, cursor)
+      if (targetIndex > pageIndex && page.bills.length === 0) {
+        setHasOlder(false)
+        showToast('No older bills are available.')
+        return
+      }
+      setBills(page.bills)
+      setPageIndex(targetIndex)
+      setNextCursor(page.nextCursor)
+      setHasOlder(page.bills.length === 10)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to load bills.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function openOlderBills() {
+    if (!nextCursor) return
+    const targetIndex = pageIndex + 1
+    setPageStarts((current) => {
+      const next = current.slice()
+      next[targetIndex] = nextCursor
+      return next
+    })
+    void openBillPage(targetIndex, nextCursor)
+  }
+
+  function openNewerBills() {
+    const targetIndex = pageIndex - 1
+    if (targetIndex < 0) return
+    void openBillPage(targetIndex, pageStarts[targetIndex] ?? null)
+  }
+
   const columns = useMemo<LogTableColumn<PosBill>[]>(() => [
     {
       id: 'bill', label: 'Bill', value: (bill) => bill.createdAt,
-      cell: (bill) => <span><strong className="block">{bill.receiptNumber}</strong><span className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</span></span>,
+      cell: (bill) => <span title={bill.receiptNumber}><strong className="block">{shortReceiptNumber(bill.receiptNumber)}</strong><span className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</span></span>,
       hideable: false, sortDescFirst: true,
     },
     { id: 'total', label: 'Total amount', value: (bill) => bill.totalPaise, cell: (bill) => <strong className="tabular-nums">{money(bill.totalPaise)}</strong>, align: 'right', sortDescFirst: true },
@@ -244,9 +295,12 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
   ], [])
 
   return <>
-    <Card className="min-h-0">
-      <CardHeader className="pb-2"><SectionHeading eyebrow="Bills" title="Latest 10 Bills" description="Only the latest 10 completed bills are loaded when this tab is opened." /></CardHeader>
-      <CardContent>
+    <Card className="min-h-0 overflow-hidden">
+      <CardHeader className="flex-row items-end justify-between gap-3 border-b border-border/60 pb-3">
+        <SectionHeading eyebrow="Bills" title="Bill History" description={`10 bills per page · Page ${pageIndex + 1}`} />
+        <div className="flex shrink-0 gap-2"><Button size="sm" variant="outline" disabled={loading || pageIndex === 0} onClick={openNewerBills}>Newer</Button><Button size="sm" variant="outline" disabled={loading || !hasOlder} onClick={openOlderBills}>Older</Button></div>
+      </CardHeader>
+      <CardContent className="px-2 pb-2 pt-2 sm:px-3">
         {loadError ? <StatusPanel variant="destructive">{loadError}</StatusPanel> : loading ? <StatusPanel>Loading latest bills…</StatusPanel> : <ResponsiveLogTable
           columns={columns}
           data={bills}
@@ -256,8 +310,10 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
           noun="bill"
           searchPlaceholder="Search bill, operator or payment mode"
           searchText={(bill) => [bill.receiptNumber, bill.businessDate, formatDisplayDateTime(bill.createdAt), bill.createdByName, billPaymentMode(bill)].join(' ')}
+          showFooter={false}
+          showToolbar={false}
           mobileCard={(bill) => <article className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm">
-            <div className="flex items-start justify-between gap-3"><div><strong className="text-sm">{bill.receiptNumber}</strong><p className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</p></div><strong className="tabular-nums">{money(bill.totalPaise)}</strong></div>
+            <div className="flex items-start justify-between gap-3"><div title={bill.receiptNumber}><strong className="text-sm">{shortReceiptNumber(bill.receiptNumber)}</strong><p className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</p></div><strong className="tabular-nums">{money(bill.totalPaise)}</strong></div>
             <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/60 pt-3 text-xs"><span><span className="block text-[10px] uppercase text-muted-foreground">Punched by</span>{bill.createdByName}</span><span><span className="block text-[10px] uppercase text-muted-foreground">Payment</span>{billPaymentMode(bill)}</span></div>
             <div className="mt-3 border-t border-border/60 pt-3"><BillActions bill={bill} onReturn={setReturnBill} /></div>
           </article>}

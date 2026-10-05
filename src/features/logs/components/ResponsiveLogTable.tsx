@@ -59,6 +59,8 @@ type ResponsiveLogTableProps<TData extends RowData> = {
   searchText: (entry: TData) => string
   hasMore?: boolean
   onLoadMore?: () => void
+  showFooter?: boolean
+  showToolbar?: boolean
 }
 
 const logTableFeatures = tableFeatures({
@@ -91,6 +93,8 @@ export function ResponsiveLogTable<TData extends RowData>({
   onLoadMore,
   searchPlaceholder,
   searchText,
+  showFooter = true,
+  showToolbar = true,
 }: ResponsiveLogTableProps<TData>) {
   const [searchInput, setSearchInput] = useState('')
   const columnHelper = useMemo(() => createColumnHelper<typeof logTableFeatures, TData>(), [])
@@ -139,7 +143,7 @@ export function ResponsiveLogTable<TData extends RowData>({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {showToolbar ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -173,7 +177,7 @@ export function ResponsiveLogTable<TData extends RowData>({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </div> : null}
 
       {filteredCount === 0 ? (
         <div className="grid min-h-24 place-items-center rounded-2xl border border-dashed border-border/80 bg-secondary/20 px-4 text-center">
@@ -216,7 +220,7 @@ export function ResponsiveLogTable<TData extends RowData>({
         </>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
+      {showFooter ? <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {filteredCount} {noun}{filteredCount === 1 ? '' : 's'} | Page {table.state.pagination.pageIndex + 1} of {pageCount}
         </p>
@@ -232,7 +236,7 @@ export function ResponsiveLogTable<TData extends RowData>({
           <Button type="button" variant="outline" size="sm" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>Previous</Button>
           <Button type="button" variant="outline" size="sm" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>Next</Button>
         </div>
-      </div>
+      </div> : null}
     </div>
   )
 }

@@ -11,12 +11,15 @@ import {
   query,
   runTransaction,
   setDoc,
+  startAfter,
   startAt,
   endAt,
   updateDoc,
   where,
   writeBatch,
   type QueryConstraint,
+  type DocumentData,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
@@ -139,9 +142,17 @@ export function subscribeHeldCarts(callback: (carts: PosHeldCart[]) => void, onE
   }, onError)
 }
 
-export async function loadRecentPosBills(count = 10) {
-  const snapshot = await getDocsFromServer(query(posCollection('bills'), orderBy('createdAt', 'desc'), limit(count)))
-  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill)
+export type PosBillPageCursor = QueryDocumentSnapshot<DocumentData>
+
+export async function loadRecentPosBills(count = 10, after: PosBillPageCursor | null = null) {
+  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')]
+  if (after) constraints.push(startAfter(after))
+  constraints.push(limit(count))
+  const snapshot = await getDocsFromServer(query(posCollection('bills'), ...constraints))
+  return {
+    bills: snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill),
+    nextCursor: snapshot.docs.at(-1) ?? null,
+  }
 }
 
 export function subscribePosDashboardBills(from: string, to: string, callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
