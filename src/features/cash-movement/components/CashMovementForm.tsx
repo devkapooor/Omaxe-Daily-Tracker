@@ -54,7 +54,7 @@ export function CashMovementForm({
           name: user.name,
           amount: userBalances.find((entry) => entry.userId === user.id)?.amount ?? 0,
         }))
-        .sort((left, right) => left.name.localeCompare(right.name)),
+        .sort((left, right) => right.amount - left.amount || left.name.localeCompare(right.name)),
     [userBalances, users],
   )
   const senderOptions = useMemo(
