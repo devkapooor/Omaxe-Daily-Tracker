@@ -29,10 +29,11 @@ export function CashierHandoverBoundary({ currentUser, onSignOut, children }: { 
     try { sessionStorage.setItem(sessionKey, String(time)) } catch { /* Persisted cashier state still enforces fresh authentication. */ }
     setSessionAuthTime(time)
   }
-  const participates = historical === true || cashier !== null
+  const ownerExempt = currentUser.role === 'owner'
+  const participates = !ownerExempt && (historical === true || cashier !== null)
   const ready = loaded.ledger && loaded.cashier && authTime !== null && historical !== null
-  const loginRequired = requiresLoginHandover(cashier, historical === true, authTime, sessionAuthTime)
-  const open = !ready || loginRequired || logout || setup || !!error
+  const loginRequired = !ownerExempt && requiresLoginHandover(cashier, historical === true, authTime, sessionAuthTime)
+  const open = setup || (!ownerExempt && (!ready || loginRequired || logout || !!error))
   useEffect(() => {
     let active = true
     const fail = (next: Error) => { if (active) setError(next.message) }
