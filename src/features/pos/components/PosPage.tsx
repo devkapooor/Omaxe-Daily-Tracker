@@ -160,7 +160,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       )} />
     )}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <PageCardStack className="h-full pb-4">
+        <PageCardStack className={tab === 'bills' ? 'min-h-full pb-4' : 'h-full pb-4'}>
       {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
@@ -278,7 +278,7 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
   ], [])
 
   return <>
-    <Card className="min-h-0 overflow-hidden">
+    <Card className="min-h-0">
       <CardHeader className="flex-row items-end justify-between gap-3 border-b border-border/60 pb-3">
         <SectionHeading eyebrow="Bills" title="Bill History" description={`Latest 7 loaded first · ${bills.length} shown`} />
         {hasOlder ? <Button size="sm" variant="outline" disabled={loading || loadingMore} onClick={() => void loadMoreBills()}>{loadingMore ? 'Loading…' : 'Load more'}</Button> : null}
@@ -291,6 +291,7 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
           getRowId={(bill) => bill.id}
           initialSortId="bill"
           noun="bill"
+          pageSize={1000}
           searchPlaceholder="Search bill, operator or payment mode"
           searchText={(bill) => [bill.receiptNumber, bill.businessDate, formatDisplayDateTime(bill.createdAt), bill.createdByName, billPaymentMode(bill)].join(' ')}
           showFooter={false}

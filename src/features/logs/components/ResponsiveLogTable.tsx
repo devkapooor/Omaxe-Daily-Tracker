@@ -55,6 +55,7 @@ type ResponsiveLogTableProps<TData extends RowData> = {
   initialSortId: string
   mobileCard: (entry: TData) => ReactNode
   noun: string
+  pageSize?: number
   searchPlaceholder: string
   searchText: (entry: TData) => string
   hasMore?: boolean
@@ -91,6 +92,7 @@ export function ResponsiveLogTable<TData extends RowData>({
   mobileCard,
   noun,
   onLoadMore,
+  pageSize = 10,
   searchPlaceholder,
   searchText,
   showFooter = true,
@@ -131,7 +133,7 @@ export function ResponsiveLogTable<TData extends RowData>({
     globalFilterFn: 'includesString',
     initialState: {
       columnVisibility: { _search: false },
-      pagination: { pageIndex: 0, pageSize: 10 },
+      pagination: { pageIndex: 0, pageSize },
       sorting: [{ id: initialSortId, desc: true }],
     },
     enableSortingRemoval: false,
