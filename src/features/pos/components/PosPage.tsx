@@ -213,6 +213,8 @@ function shortReceiptNumber(receiptNumber: string) {
   return suffix ? `#${suffix}` : receiptNumber
 }
 
+const BILL_HISTORY_BATCH_SIZE = 7
+
 function BillActions({ bill, onReturn }: { bill: PosBill; onReturn: (bill: PosBill) => void }) {
   return <div className="flex flex-wrap justify-end gap-1.5">
     <Button size="sm" variant="outline" onClick={() => onReturn(bill)}>Request return</Button>
@@ -223,19 +225,18 @@ function BillActions({ bill, onReturn }: { bill: PosBill; onReturn: (bill: PosBi
 function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
   const [bills, setBills] = useState<PosBill[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState('')
-  const [pageIndex, setPageIndex] = useState(0)
-  const [pageStarts, setPageStarts] = useState<Array<PosBillPageCursor | null>>([null])
   const [nextCursor, setNextCursor] = useState<PosBillPageCursor | null>(null)
   const [hasOlder, setHasOlder] = useState(false)
   const [returnBill, setReturnBill] = useState<PosBill | null>(null)
   useEffect(() => {
     let active = true
-    void loadRecentPosBills(10).then((page) => {
+    void loadRecentPosBills(BILL_HISTORY_BATCH_SIZE).then((page) => {
       if (!active) return
       setBills(page.bills)
       setNextCursor(page.nextCursor)
-      setHasOlder(page.bills.length === 10)
+      setHasOlder(page.bills.length === BILL_HISTORY_BATCH_SIZE)
     }).catch((error: unknown) => {
       if (active) setLoadError(error instanceof Error ? error.message : 'Unable to load recent bills.')
     }).finally(() => {
@@ -244,42 +245,24 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
     return () => { active = false }
   }, [])
 
-  async function openBillPage(targetIndex: number, cursor: PosBillPageCursor | null) {
-    setLoading(true)
-    setLoadError('')
+  async function loadMoreBills() {
+    if (!nextCursor) return
+    setLoadingMore(true)
     try {
-      const page = await loadRecentPosBills(10, cursor)
-      if (targetIndex > pageIndex && page.bills.length === 0) {
+      const page = await loadRecentPosBills(BILL_HISTORY_BATCH_SIZE, nextCursor)
+      if (page.bills.length === 0) {
         setHasOlder(false)
         showToast('No older bills are available.')
         return
       }
-      setBills(page.bills)
-      setPageIndex(targetIndex)
+      setBills((current) => [...current, ...page.bills])
       setNextCursor(page.nextCursor)
-      setHasOlder(page.bills.length === 10)
+      setHasOlder(page.bills.length === BILL_HISTORY_BATCH_SIZE)
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load bills.')
+      showToast(error instanceof Error ? error.message : 'Unable to load older bills.')
     } finally {
-      setLoading(false)
+      setLoadingMore(false)
     }
-  }
-
-  function openOlderBills() {
-    if (!nextCursor) return
-    const targetIndex = pageIndex + 1
-    setPageStarts((current) => {
-      const next = current.slice()
-      next[targetIndex] = nextCursor
-      return next
-    })
-    void openBillPage(targetIndex, nextCursor)
-  }
-
-  function openNewerBills() {
-    const targetIndex = pageIndex - 1
-    if (targetIndex < 0) return
-    void openBillPage(targetIndex, pageStarts[targetIndex] ?? null)
   }
 
   const columns = useMemo<LogTableColumn<PosBill>[]>(() => [
@@ -297,8 +280,8 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
   return <>
     <Card className="min-h-0 overflow-hidden">
       <CardHeader className="flex-row items-end justify-between gap-3 border-b border-border/60 pb-3">
-        <SectionHeading eyebrow="Bills" title="Bill History" description={`10 bills per page · Page ${pageIndex + 1}`} />
-        <div className="flex shrink-0 gap-2"><Button size="sm" variant="outline" disabled={loading || pageIndex === 0} onClick={openNewerBills}>Newer</Button><Button size="sm" variant="outline" disabled={loading || !hasOlder} onClick={openOlderBills}>Older</Button></div>
+        <SectionHeading eyebrow="Bills" title="Bill History" description={`Latest 7 loaded first · ${bills.length} shown`} />
+        {hasOlder ? <Button size="sm" variant="outline" disabled={loading || loadingMore} onClick={() => void loadMoreBills()}>{loadingMore ? 'Loading…' : 'Load more'}</Button> : null}
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-2 sm:px-3">
         {loadError ? <StatusPanel variant="destructive">{loadError}</StatusPanel> : loading ? <StatusPanel>Loading latest bills…</StatusPanel> : <ResponsiveLogTable
