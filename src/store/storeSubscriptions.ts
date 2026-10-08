@@ -35,6 +35,15 @@ import type {
 import type { AppUser } from '../domain/financeTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
 import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
+import type { UpgradeAnnouncement } from '@/domain/appTypes'
+
+function parseUpgradeAnnouncement(value: unknown): UpgradeAnnouncement | null {
+  if (!value || typeof value !== 'object') return null
+  const announcement = value as Partial<UpgradeAnnouncement>
+  if (typeof announcement.id !== 'string' || typeof announcement.title !== 'string' || typeof announcement.message !== 'string' || typeof announcement.publishedAt !== 'string' || typeof announcement.expiresAt !== 'string' || typeof announcement.publishedBy !== 'string') return null
+  if (!Number.isFinite(Date.parse(announcement.publishedAt)) || !Number.isFinite(Date.parse(announcement.expiresAt))) return null
+  return announcement as UpgradeAnnouncement
+}
 
 type SetupSubscriptionsArgs = Pick<
   AppStoreSetters,
@@ -202,6 +211,7 @@ export function setupAppStoreSubscriptions({
         monthlyOperationalExpense: unknown
         operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
         scheduledNotifications: unknown
+        upgradeAnnouncement: unknown
       }> | undefined
       const currentBankBalance =
         typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
@@ -228,7 +238,7 @@ export function setupAppStoreSubscriptions({
             ? rawBreakdown.miscellaneous
             : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
       }
-      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications) })
+      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
       markLoaded('appSettings')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', 'workspaceMetrics'), (snapshot) => {

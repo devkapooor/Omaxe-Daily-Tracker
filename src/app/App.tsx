@@ -72,6 +72,8 @@ export default function App() {
     saveLoanEntry,
     saveOperationalSettings,
     saveScheduledNotifications,
+    publishUpgradeAnnouncement,
+    clearUpgradeAnnouncement,
     savePayment,
   } = useAppStore()
 
@@ -275,6 +277,8 @@ export default function App() {
         saveLoanEntry={saveLoanEntry}
         saveOperationalSettings={saveOperationalSettings}
         saveScheduledNotifications={saveScheduledNotifications}
+        publishUpgradeAnnouncement={publishUpgradeAnnouncement}
+        clearUpgradeAnnouncement={clearUpgradeAnnouncement}
         savePayment={savePayment}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}

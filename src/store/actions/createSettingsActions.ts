@@ -1,7 +1,7 @@
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { nowIso, type OperationalExpenseBreakdown, type StoreCollectionState } from '@/store/storeShared'
-import type { ScheduledNotification } from '@/domain/appTypes'
+import type { ScheduledNotification, UpgradeAnnouncement } from '@/domain/appTypes'
 import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
 
 type SettingsActionArgs = {
@@ -40,6 +40,30 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     await pushSettingsAudit(`Scheduled blocking notifications updated (${notices.length} configured)`, actor)
   }
 
+  async function publishUpgradeAnnouncement(title: string, message: string, durationHours: number, actor: string) {
+    const cleanTitle = title.trim()
+    const cleanMessage = message.trim()
+    if (!cleanTitle || cleanTitle.length > 100) throw new Error('Enter an announcement title of 1–100 characters.')
+    if (!cleanMessage || cleanMessage.length > 500) throw new Error('Enter an announcement message of 1–500 characters.')
+    if (![1, 4, 24].includes(durationHours)) throw new Error('Choose a valid announcement duration.')
+    const publishedAt = nowIso()
+    const announcement: UpgradeAnnouncement = {
+      id: crypto.randomUUID(),
+      title: cleanTitle,
+      message: cleanMessage,
+      publishedAt,
+      expiresAt: new Date(Date.parse(publishedAt) + durationHours * 60 * 60 * 1000).toISOString(),
+      publishedBy: actor,
+    }
+    await setDoc(doc(db, 'appMetadata', 'appSettings'), { upgradeAnnouncement: announcement }, { merge: true })
+    await pushSettingsAudit(`App upgrade announcement published for ${durationHours} hour(s)`, actor)
+  }
+
+  async function clearUpgradeAnnouncement(actor: string) {
+    await setDoc(doc(db, 'appMetadata', 'appSettings'), { upgradeAnnouncement: null }, { merge: true })
+    await pushSettingsAudit('App upgrade announcement cleared', actor)
+  }
+
   async function saveMonthlyReportMargin(month: string, marginPercentage: number, actor: string) {
     if (!/^\d{4}-\d{2}$/.test(month)) {
       throw new Error('Month must be in YYYY-MM format.')
@@ -69,5 +93,7 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     saveMonthlyReportMargin,
     saveOperationalSettings,
     saveScheduledNotifications,
+    publishUpgradeAnnouncement,
+    clearUpgradeAnnouncement,
   }
 }

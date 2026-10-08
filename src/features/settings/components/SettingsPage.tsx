@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
-import type { UserAccount } from '@/domain/appTypes'
+import type { UpgradeAnnouncement, UserAccount } from '@/domain/appTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -32,6 +32,9 @@ type SettingsPageProps = {
   onDeleteUser: (userId: string) => Promise<void>
   onChangeOwnPassword: (password: string) => Promise<void>
   onSaveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number) => Promise<void>
+  upgradeAnnouncement: UpgradeAnnouncement | null
+  onPublishUpgradeAnnouncement: (title: string, message: string, durationHours: number) => Promise<void>
+  onClearUpgradeAnnouncement: () => Promise<void>
 }
 
 export function SettingsPage({
@@ -45,12 +48,17 @@ export function SettingsPage({
   onDeleteUser,
   onChangeOwnPassword,
   onSaveOperationalSettings,
+  upgradeAnnouncement,
+  onPublishUpgradeAnnouncement,
+  onClearUpgradeAnnouncement,
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
   const [posDiscountLimit, setPosDiscountLimit] = useState('')
   const [posSettingsMessage, setPosSettingsMessage] = useState('')
   const [savingPosSettings, setSavingPosSettings] = useState(false)
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false)
+  const [announcementMessage, setAnnouncementMessage] = useState('')
   const canManageUsers = currentUser.role === 'owner'
 
   useEffect(() => {
@@ -211,10 +219,11 @@ export function SettingsPage({
           <PageHeader
             title="Settings"
             tools={(
-              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-4 xl:grid-cols-4' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
+              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-5 xl:grid-cols-5' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
                 <PageHeaderTab value="staff">Staff</PageHeaderTab>
                 {canManageUsers ? <PageHeaderTab value="operations">Operations</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="pos">POS</PageHeaderTab> : null}
+                {canManageUsers ? <PageHeaderTab value="announcements">Announcements</PageHeaderTab> : null}
                 <PageHeaderTab value="password">Update Password</PageHeaderTab>
               </PageHeaderTabsList>
             )}
@@ -383,6 +392,68 @@ export function SettingsPage({
                   <Button disabled={savingPosSettings}>{savingPosSettings ? 'Saving...' : 'Save POS Settings'}</Button>
                   {posSettingsMessage ? <p className="text-xs font-medium text-success sm:col-span-2">{posSettingsMessage}</p> : null}
                 </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        {canManageUsers ? (
+          <TabsContent value="announcements" className="min-h-0 flex-1 overflow-y-auto">
+            <Card className="max-w-3xl">
+              <CardHeader className="px-3 pb-2 pt-3 sm:px-4">
+                <SectionHeading eyebrow="Owner only" title="App Upgrade Announcement" description="Publish a live notice to signed-in sessions using the updated announcement listener. It expires automatically." />
+              </CardHeader>
+              <CardContent className="grid gap-4 px-3 pb-3 sm:px-4 sm:pb-4">
+                <form className="grid gap-3" onSubmit={async (event) => {
+                  event.preventDefault()
+                  const form = new FormData(event.currentTarget)
+                  try {
+                    setError('')
+                    setSavingAnnouncement(true)
+                    await onPublishUpgradeAnnouncement(String(form.get('title') || ''), String(form.get('message') || ''), Number(form.get('duration') || 4))
+                    setAnnouncementMessage('Announcement sent to active sessions.')
+                  } catch (cause) {
+                    setError(cause instanceof Error ? cause.message : 'Unable to publish the announcement.')
+                  } finally {
+                    setSavingAnnouncement(false)
+                  }
+                }}>
+                  <FieldLabel label="Title">
+                    <Input name="title" defaultValue="AlphaHub has been upgraded" maxLength={100} required />
+                  </FieldLabel>
+                  <FieldLabel label="Message">
+                    <textarea className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" name="message" defaultValue="The app has been upgraded. Refresh now to load the latest version, or press Ctrl+Shift+R for a hard refresh." maxLength={500} required />
+                  </FieldLabel>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <FieldLabel label="Announcement duration">
+                      <NativeSelect name="duration" defaultValue="4">
+                        <option value="1">1 hour</option>
+                        <option value="4">4 hours</option>
+                        <option value="24">24 hours</option>
+                      </NativeSelect>
+                    </FieldLabel>
+                    <Button disabled={savingAnnouncement}>{savingAnnouncement ? 'Publishing...' : 'Publish to active sessions'}</Button>
+                  </div>
+                </form>
+                {announcementMessage ? <p className="text-sm font-medium text-success">{announcementMessage}</p> : null}
+                {upgradeAnnouncement ? (
+                  <StatusPanel variant="info" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div><strong className="block">Active: {upgradeAnnouncement.title}</strong><span className="text-xs">Expires {new Date(upgradeAnnouncement.expiresAt).toLocaleString()}</span></div>
+                    <Button variant="outline" disabled={savingAnnouncement} onClick={async () => {
+                      try {
+                        setError('')
+                        setSavingAnnouncement(true)
+                        await onClearUpgradeAnnouncement()
+                        setAnnouncementMessage('Announcement cleared.')
+                      } catch (cause) {
+                        setError(cause instanceof Error ? cause.message : 'Unable to clear the announcement.')
+                      } finally {
+                        setSavingAnnouncement(false)
+                      }
+                    }}>Clear announcement</Button>
+                  </StatusPanel>
+                ) : null}
+                <p className="text-xs leading-5 text-muted-foreground">The notice includes a Refresh now button and the hard-refresh shortcut Ctrl+Shift+R. Sessions already running older code will not see this new all-role notice; the current release uses the existing staff notice for those sessions.</p>
               </CardContent>
             </Card>
           </TabsContent>

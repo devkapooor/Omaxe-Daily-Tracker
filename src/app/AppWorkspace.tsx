@@ -2,7 +2,7 @@ import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useState } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
-import type { Page, UserAccount } from '@/domain/appTypes'
+import type { Page, UserAccount, UpgradeAnnouncement } from '@/domain/appTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
@@ -43,6 +43,7 @@ import { serverNowIso } from '@/shared/lib/serverClock'
 import { serverNowMs } from '@/shared/lib/serverClock'
 import { isCashoutWindowOpen } from '@/features/cashout/domain/cashoutWindow'
 import { AppBlockingNotice } from '@/app/AppBlockingNotice'
+import { UpgradeAnnouncementNotice } from '@/app/UpgradeAnnouncementNotice'
 import {
   applySettlementCorrectionV2,
   rejectSettlementCorrectionRequestV2,
@@ -56,6 +57,7 @@ type AppWorkspaceProps = {
     monthlyOperationalExpense: number
     operationalExpenseBreakdown: OperationalExpenseBreakdown
     scheduledNotifications: ScheduledNotification[]
+    upgradeAnnouncement: UpgradeAnnouncement | null
   }
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
@@ -113,6 +115,8 @@ type AppWorkspaceProps = {
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
   saveScheduledNotifications: (notices: ScheduledNotification[], actor: string) => Promise<void>
+  publishUpgradeAnnouncement: (title: string, message: string, durationHours: number, actor: string) => Promise<void>
+  clearUpgradeAnnouncement: (actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
@@ -168,6 +172,8 @@ export function AppWorkspace({
   saveLoanEntry,
   saveOperationalSettings,
   saveScheduledNotifications,
+  publishUpgradeAnnouncement,
+  clearUpgradeAnnouncement,
   savePayment,
   setDashboardMonthOffset,
   settingsAuditLog,
@@ -453,6 +459,7 @@ export function AppWorkspace({
               isBusy={isBusy}
               monthlyOperationalExpense={appSettings.monthlyOperationalExpense}
               operationalExpenseBreakdown={appSettings.operationalExpenseBreakdown}
+              upgradeAnnouncement={appSettings.upgradeAnnouncement}
               marginPercentage={appSettings.marginPercentage}
               onCreateUser={async (draft) => {
                 await createUserAccount(draft, currentUser.name)
@@ -470,12 +477,21 @@ export function AppWorkspace({
                 await saveOperationalSettings(nextOperationalExpenseBreakdown, nextMarginPercentage, currentUser.name)
                 showToast('Operational settings updated.')
               }}
+              onPublishUpgradeAnnouncement={async (title, message, durationHours) => {
+                await publishUpgradeAnnouncement(title, message, durationHours, currentUser.name)
+                showToast('Upgrade announcement published to active sessions.')
+              }}
+              onClearUpgradeAnnouncement={async () => {
+                await clearUpgradeAnnouncement(currentUser.name)
+                showToast('Upgrade announcement cleared.')
+              }}
             />
           </section>
         ) : null}
         {confirmation.dialog}
       </div>
       {currentUser.role === 'owner' ? null : <AppBlockingNotice user={currentUser} notices={appSettings.scheduledNotifications} />}
+      <UpgradeAnnouncementNotice user={currentUser} announcement={appSettings.upgradeAnnouncement} />
     </main>
   )
 }

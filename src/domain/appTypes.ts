@@ -45,6 +45,15 @@ export type ScheduledNotification = {
   enabled: boolean
 }
 
+export type UpgradeAnnouncement = {
+  id: string
+  title: string
+  message: string
+  publishedAt: string
+  expiresAt: string
+  publishedBy: string
+}
+
 export type LoanStatus = 'Open' | 'Settled'
 
 export type LoanEntry = {

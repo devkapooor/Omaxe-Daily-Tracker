@@ -15,6 +15,7 @@ import type {
   NameDirectory,
   PlannedPayment,
   SettingsAuditEntry,
+  UpgradeAnnouncement,
   UserAccount,
   VendorRecord,
 } from '../domain/appTypes'
@@ -45,6 +46,7 @@ export type AppSettings = {
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
   scheduledNotifications: ScheduledNotification[]
+  upgradeAnnouncement: UpgradeAnnouncement | null
 }
 
 export type CreateUserInput = {
@@ -121,6 +123,7 @@ export const defaultAppSettings: AppSettings = {
     miscellaneous: 0,
   },
   scheduledNotifications: DEFAULT_SCHEDULED_NOTIFICATIONS,
+  upgradeAnnouncement: null,
 }
 
 export const emptyWorkspaceMetrics: WorkspaceMetrics = {
