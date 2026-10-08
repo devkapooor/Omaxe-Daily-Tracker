@@ -9,13 +9,14 @@ vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, function
 
 import {
   approvePosRequest, deleteHeldCart, finalizePosBill, importPosProducts,
-  requestBillAction, saveHeldCart, updateDiscountLimit,
+  requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt,
 } from '../src/features/pos/data/posRepository'
 import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
 import { cashierRef, handoverRef, initializeHandover, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
 import { handoverDate } from '../src/features/pos/domain/cashierHandover'
 import { setServerClockSample } from '../src/shared/lib/serverClock'
 import { createFinanceActions } from '../src/store/actions/createFinanceActions'
+import { createSettlementV2 } from '../src/store/vendorLedgerV2Repository'
 import { expectedHandover, type HandoverLedger } from '../src/features/pos/domain/cashierHandover'
 
 let environment: RulesTestEnvironment
@@ -55,6 +56,127 @@ async function finalize() {
 }
 
 describe('POS repository workflows against deployed rules', () => {
+  it('posts a GRN stock receipt and per-receipt vendor payable atomically', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
+      await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
+        id: 'qa-vendor', canonicalName: 'QA Vendor', aliases: [], contact: '', address: '', suppliedBrands: [], active: true,
+        openingBalancePaise: 0, revision: 1, createdAt: timestamp, createdByUserId: owner.id, updatedAt: timestamp, updatedByUserId: owner.id,
+      })
+      for (let index = 1; index < 6; index++) await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'products', `qa-product-${index}`), {
+        barcode: `00${index + 1}`, name: `QA Product ${index}`, searchName: `qa product ${index}`, category: 'QA', brand: 'QA', vendor: 'QA', sellingPricePaise: 1000,
+        currentQuantity: 5, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
+        updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+      })
+    })
+    const receiptId = await savePosGoodsReceiptDraft({
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-1', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250 })),
+    }, billing)
+    const result = await submitPosGoodsReceipt(receiptId, billing)
+    expect(result.totalPaise).toBe(13500)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(13)
+    expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(13500)
+    expect((await getDoc(doc(state.db!, 'purchasesV2', `grn-${receiptId}`))).data()?.grnId).toBe(receiptId)
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    await reversePosGoodsReceipt(receiptId, 'QA reverse verification', owner)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
+    expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
+    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()?.status).toBe('reversed')
+  })
+
+  it('records physical inventory counts and adjusts stock without creating a payable', async () => {
+    const changed = await reconcilePosStockCount('qa-product', 7, billing)
+    expect(changed).toMatchObject({ difference: -3, systemQuantityBefore: 10, physicalQuantity: 7 })
+    const product = (await getDoc(doc(state.db!, ...productPath))).data()!
+    expect(product.currentQuantity).toBe(7)
+    const audit = (await getDoc(doc(state.db!, 'posSandboxes', 'test', 'stockAudits', changed.auditId))).data()!
+    expect(audit).toMatchObject({ systemQuantityBefore: 10, physicalQuantity: 7, difference: -3, actorUid: billing.id })
+    const matched = await reconcilePosStockCount('qa-product', 7, billing)
+    expect(matched.difference).toBe(0)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.revision).toBe(product.revision)
+  })
+
+  it('reconciles multiple physical counts atomically and links them to one audit batch', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      for (let index = 2; index <= 5; index++) await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'products', `qa-product-${index}`), {
+        barcode: `00${index}`, name: `QA Product ${index}`, searchName: `qa product ${index}`, category: 'QA', brand: 'QA', vendor: 'QA', sellingPricePaise: 1000,
+        currentQuantity: index * 2, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
+        updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+      })
+    })
+    const results = await reconcilePosStockAuditBatch([
+      { productId: 'qa-product', physicalQuantity: 7, expectedRevision: 1 },
+      ...[2, 3, 4, 5].map((index) => ({ productId: `qa-product-${index}`, physicalQuantity: index * 3, expectedRevision: 1 })),
+    ], billing, 'qa-audit-batch')
+    expect(results.map(({ difference }) => difference)).toEqual([-3, 2, 3, 4, 5])
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(7)
+    for (let index = 2; index <= 5; index++) {
+      expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'products', `qa-product-${index}`))).data()?.currentQuantity).toBe(index * 3)
+    }
+    for (const result of results) {
+      expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'stockAudits', result.auditId))).data()).toMatchObject({ batchId: 'qa-audit-batch', actorUid: billing.id })
+    }
+  })
+
+  it('rejects a stale multi-item audit without partially changing any product', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'products', 'qa-product-2'), {
+        barcode: '002', name: 'Second QA Product', searchName: 'second qa product', category: 'QA', brand: 'QA', vendor: 'QA', sellingPricePaise: 1000,
+        currentQuantity: 4, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
+        updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+      })
+    })
+    await expect(reconcilePosStockAuditBatch([
+      { productId: 'qa-product', physicalQuantity: 7, expectedRevision: 1 },
+      { productId: 'qa-product-2', physicalQuantity: 9, expectedRevision: 2 },
+    ], billing)).rejects.toThrow(/stock changed/)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(10)
+    expect((await getDocs(collection(state.db!, 'posSandboxes', 'test', 'stockAudits'))).size).toBe(0)
+  })
+
+  it('creates a missing barcode product only as part of a submitted GRN', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
+      await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
+        id: 'qa-vendor', canonicalName: 'QA Vendor', aliases: [], contact: '', address: '', suppliedBrands: [], active: true,
+        openingBalancePaise: 0, revision: 1, createdAt: timestamp, createdByUserId: owner.id, updatedAt: timestamp, updatedByUserId: owner.id,
+      })
+    })
+    const receiptId = await savePosGoodsReceiptDraft({
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-NEW', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700 }],
+    }, billing)
+    await submitPosGoodsReceipt(receiptId, billing)
+    expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'products', 'qa-new-product'))).data()).toMatchObject({ currentQuantity: 2, category: 'QA', sellingPricePaise: 700 })
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'productCosts', 'qa-new-product'))).data()?.costPaise).toBe(500)
+  })
+
+  it('keeps an invoice-linked payment as unapplied vendor credit when its GRN is reversed', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
+      await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
+        id: 'qa-vendor', canonicalName: 'QA Vendor', aliases: [], contact: '', address: '', suppliedBrands: [], active: true,
+        openingBalancePaise: 0, revision: 1, createdAt: timestamp, createdByUserId: owner.id, updatedAt: timestamp, updatedByUserId: owner.id,
+      })
+    })
+    const receiptId = await savePosGoodsReceiptDraft({
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PAID', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000 }],
+    }, billing)
+    await submitPosGoodsReceipt(receiptId, billing)
+    const purchaseId = `grn-${receiptId}`
+    await createSettlementV2({
+      id: 'qa-settlement', vendorId: 'qa-vendor', date: '2026-10-03', amountPaise: 1000, mode: 'cash', invoiceId: purchaseId,
+      actorUserId: billing.id, timestamp,
+    })
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    await reversePosGoodsReceipt(receiptId, 'QA paid GRN reversal', owner)
+    expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()).toMatchObject({ outstandingPaise: 0, vendorCreditPaise: 1000 })
+    expect((await getDoc(doc(state.db, 'invoiceStatesV2', purchaseId))).data()?.openAmountPaise).toBe(0)
+  })
+
   it('requires a fresh login count after this cashier has billed, then allows checkout', async () => {
     await finalize()
     state.authTime = 456

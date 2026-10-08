@@ -119,6 +119,8 @@ export type VendorAccountStateV2 = {
   id: string
   vendorId: string
   outstandingPaise: AmountPaise
+  /** Payments retained as unapplied vendor advances after a payable is reversed. */
+  vendorCreditPaise?: AmountPaise
   revision: number
   lastLedgerEntryId: string
   updatedAt: string
@@ -253,9 +255,10 @@ export type VendorLedgerEntryV2 = {
   eventType: LedgerEventType
   posting: 'financial' | 'informational'
   signedAmountPaise: AmountPaise
-  sourceType: 'vendor' | 'purchase' | 'return' | 'settlement' | 'cheque' | 'ledger-entry'
+  sourceType: 'vendor' | 'purchase' | 'return' | 'settlement' | 'cheque' | 'ledger-entry' | 'goods-receipt'
   sourceRecordId: string
   sourceRevision: number
+  goodsReceiptId?: string
   reversalOfEntryId?: string
   reason?: string
   occurredOn: string
@@ -416,6 +419,8 @@ export type CreatePurchaseV2Input = {
   notes?: string
   actorUserId: string
   timestamp: string
+  /** Optional per-receipt reservation key; lets separate GRNs share an invoice number. */
+  reservationKey?: string
 }
 
 export function buildPurchasePostingV2(input: CreatePurchaseV2Input) {
@@ -429,7 +434,9 @@ export function buildPurchasePostingV2(input: CreatePurchaseV2Input) {
   if (!businessDatePattern.test(input.invoiceDate)) throw new Error('Invoice date must use YYYY-MM-DD.')
   if (input.receiptDate && !businessDatePattern.test(input.receiptDate)) throw new Error('Receipt date must use YYYY-MM-DD.')
 
-  const reservationId = invoiceReservationId(vendorId, invoiceNumber)
+  const reservationId = input.reservationKey?.trim()
+    ? `receipt:${encodeURIComponent(input.reservationKey.trim())}`
+    : invoiceReservationId(vendorId, invoiceNumber)
   const normalizedInvoiceNumber = normalizeInvoiceNumber(invoiceNumber)
   const ledgerEntryId = deterministicEventId('purchase', id, 1, 'purchase')
   const purchase: PurchaseV2 = {

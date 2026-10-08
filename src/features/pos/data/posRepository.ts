@@ -25,6 +25,8 @@ import {
 import { db } from '@/shared/lib/firebase'
 import { serverNowIso } from '@/shared/lib/serverClock'
 import type { AppUser } from '@/domain/financeTypes'
+import { buildPurchasePostingV2, isV2BusinessDate, type VendorAccountStateV2, type VendorLedgerEntryV2, type InvoiceStateV2, type PurchaseV2 } from '@/domain/vendorLedgerV2'
+import { vendorLedgerV2Refs } from '@/store/vendorLedgerV2Repository'
 import { cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepository'
 import { HANDOVER_START, applyPayments, handoverDate, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
 import {
@@ -54,6 +56,8 @@ import {
   type PosPaymentAllocation,
   type PosPaymentMethod,
   type PosProduct,
+  type PosGoodsReceipt,
+  type PosStockAudit,
   type PosRefundEvent,
 } from '../domain/types'
 import { calculatePosDashboard } from '../domain/posDashboard'
@@ -63,6 +67,319 @@ const posCollection = (name: string) => collection(root(), name)
 const posDoc = (name: string, id: string) => doc(root(), name, id)
 const nowIso = serverNowIso
 const actorFields = (actor: AppUser) => ({ actorUid: actor.id, actorName: actor.name, actorRole: actor.role })
+
+export function subscribePosGoodsReceipts(callback: (receipts: PosGoodsReceipt[]) => void, onError: (error: Error) => void): Unsubscribe {
+  return onSnapshot(query(posCollection('goodsReceipts'), orderBy('updatedAt', 'desc'), limit(100)), (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosGoodsReceipt))
+  }, onError)
+}
+
+export function subscribePosStockAudits(callback: (audits: PosStockAudit[]) => void, onError: (error: Error) => void): Unsubscribe {
+  return onSnapshot(query(posCollection('stockAudits'), orderBy('createdAt', 'desc'), limit(50)), (snapshot) => {
+    callback(snapshot.docs.map((item) => item.data() as PosStockAudit))
+  }, onError)
+}
+
+export type PosStockAuditCountInput = { productId: string; physicalQuantity: number; expectedRevision?: number }
+
+// A small atomic ceiling keeps one multi-product audit within Firestore's
+// security-rules document-access budget. Larger physical counts are submitted
+// by the UI in successive atomic groups of five.
+const maxAtomicStockAuditCount = 5
+
+export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInput[], actor: AppUser, batchId = crypto.randomUUID()) {
+  if (!counts.length || counts.length > maxAtomicStockAuditCount) throw new Error(`Audit ${counts.length ? `groups are limited to ${maxAtomicStockAuditCount} products` : 'at least one product must be scanned'}.`)
+  if (new Set(counts.map((count) => count.productId)).size !== counts.length) throw new Error('Each product can appear only once in an audit batch.')
+  if (counts.some((count) => !Number.isInteger(count.physicalQuantity) || count.physicalQuantity < 0)) throw new Error('Physical quantities must be whole numbers of zero or more.')
+
+  const prepared = counts.map((count) => ({
+    ...count,
+    productRef: posDoc('products', count.productId),
+    auditId: crypto.randomUUID(),
+    movementId: crypto.randomUUID(),
+  }))
+
+  return runTransaction(db, async (transaction) => {
+    const snapshots = await Promise.all(prepared.map((count) => transaction.get(count.productRef)))
+    const timestamp = nowIso()
+    const results = prepared.map((count, index) => {
+      const snapshot = snapshots[index]
+      if (!snapshot.exists()) throw new Error('A scanned product no longer exists. Remove it and re-scan.')
+      const product = snapshot.data() as PosProduct
+      if (count.expectedRevision !== undefined && product.revision !== count.expectedRevision) {
+        throw new Error(`${product.name} stock changed after it was scanned. Remove and re-scan that product before saving.`)
+      }
+      const difference = count.physicalQuantity - product.currentQuantity
+      const nextRevision = difference === 0 ? product.revision : product.revision + 1
+      return { ...count, product, difference, nextRevision, timestamp }
+    })
+
+    for (const result of results) {
+      const { product, productRef, productId, physicalQuantity, auditId, movementId, difference, nextRevision } = result
+      if (difference !== 0) {
+        transaction.update(productRef, {
+          currentQuantity: physicalQuantity, revision: nextRevision, lastMovementId: movementId,
+          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+        })
+        transaction.set(posDoc('stockMovements', movementId), {
+          id: movementId, productId, barcode: product.barcode, type: 'stock-audit', quantityDelta: difference,
+          beforeQuantity: product.currentQuantity, afterQuantity: physicalQuantity,
+          productRevisionBefore: product.revision, productRevisionAfter: nextRevision,
+          businessDate: timestamp.slice(0, 10), stockAuditId: auditId, createdAt: timestamp, ...actorFields(actor),
+        })
+      }
+      transaction.set(posDoc('stockAudits', auditId), {
+        id: auditId, batchId, productId, barcode: product.barcode, productName: product.name,
+        systemQuantityBefore: product.currentQuantity, physicalQuantity, difference,
+        systemQuantityAfter: physicalQuantity, productRevisionBefore: product.revision, productRevisionAfter: nextRevision,
+        ...(difference !== 0 ? { movementId } : {}), createdAt: timestamp, ...actorFields(actor),
+      })
+      transaction.set(posDoc('events', auditId), {
+        type: 'stock-audited', stockAuditId: auditId, stockAuditBatchId: batchId, productId, difference, createdAt: timestamp, ...actorFields(actor),
+      })
+    }
+    return results.map(({ auditId, productId, difference, product, physicalQuantity }) => ({
+      auditId, productId, difference, systemQuantityBefore: product.currentQuantity, physicalQuantity,
+    }))
+  })
+}
+
+export async function reconcilePosStockCount(productId: string, physicalQuantity: number, actor: AppUser) {
+  const [result] = await reconcilePosStockAuditBatch([{ productId, physicalQuantity }], actor)
+  return result
+}
+
+export type GoodsReceiptDraftInput = Pick<PosGoodsReceipt, 'vendorId' | 'vendorName' | 'invoiceNumber' | 'invoiceDate' | 'receiptDate' | 'lines'> & { id?: string }
+
+export async function savePosGoodsReceiptDraft(input: GoodsReceiptDraftInput, actor: AppUser) {
+  if (!input.vendorId.trim() || !input.invoiceNumber.trim()) throw new Error('Choose a vendor and enter the invoice number.')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.invoiceDate) || !/^\d{4}-\d{2}-\d{2}$/.test(input.receiptDate)) throw new Error('Enter valid invoice and receipt dates.')
+  if (!input.lines.length) throw new Error('Scan at least one product before saving the draft.')
+  const id = input.id ?? crypto.randomUUID()
+  const reference = posDoc('goodsReceipts', id)
+  const timestamp = nowIso()
+  await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(reference)
+    if (existing.exists() && (existing.data().status !== 'draft' || (existing.data().createdByUid !== actor.id && actor.role !== 'owner'))) {
+      throw new Error('Only the draft creator or owner can change this draft.')
+    }
+    transaction.set(reference, {
+      id, status: 'draft', vendorId: input.vendorId.trim(), vendorName: input.vendorName.trim(),
+      invoiceNumber: input.invoiceNumber.trim(), invoiceDate: input.invoiceDate, receiptDate: input.receiptDate,
+      lines: input.lines, totalPaise: input.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0),
+      revision: existing.exists() ? Number(existing.data().revision ?? 0) + 1 : 1,
+      createdAt: existing.exists() ? existing.data().createdAt : timestamp,
+      createdByUid: existing.exists() ? existing.data().createdByUid : actor.id,
+      createdByName: existing.exists() ? existing.data().createdByName : actor.name,
+      updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+    })
+  })
+  return id
+}
+
+export async function deletePosGoodsReceiptDraft(id: string, actor: AppUser) {
+  await runTransaction(db, async (transaction) => {
+    const reference = posDoc('goodsReceipts', id)
+    const snapshot = await transaction.get(reference)
+    if (!snapshot.exists() || snapshot.data().status !== 'draft') throw new Error('Only an unsubmitted draft can be deleted here.')
+    if (snapshot.data().createdByUid !== actor.id && actor.role !== 'owner') throw new Error('Only the draft creator or owner can delete this draft.')
+    transaction.delete(reference)
+  })
+}
+
+export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
+  const references = vendorLedgerV2Refs()
+  const draftSnapshot = await getDoc(posDoc('goodsReceipts', id))
+  const draft = draftSnapshot.data() as PosGoodsReceipt | undefined
+  if (!draft || draft.status !== 'draft') throw new Error('GRN draft was not found or was already submitted.')
+  for (const line of draft.lines.filter((item) => item.newProduct)) {
+    const barcodeMatch = await getDocs(query(posCollection('products'), where('barcode', '==', line.barcode), limit(1)))
+    if (!barcodeMatch.empty) throw new Error(`Barcode ${line.barcode} has already been added to the catalog. Re-scan it.`)
+  }
+  return runTransaction(db, async (transaction) => {
+    const receiptRef = posDoc('goodsReceipts', id)
+    const receiptSnapshot = await transaction.get(receiptRef)
+    if (!receiptSnapshot.exists()) throw new Error('GRN draft was not found.')
+    const receipt = receiptSnapshot.data() as PosGoodsReceipt
+    if (receipt.status !== 'draft') throw new Error('This GRN has already been submitted.')
+    if (!receipt.lines.length) throw new Error('The GRN has no product lines.')
+    const totalPaise = receipt.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
+    if (!Number.isSafeInteger(totalPaise) || totalPaise <= 0) throw new Error('GRN total must be greater than zero.')
+    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isInteger(line.unitCostPaise) || line.unitCostPaise <= 0 || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0)))) throw new Error('Each GRN line needs a positive whole quantity and purchase cost. New products also need a category and selling price.')
+    if (new Set(receipt.lines.map((line) => line.productId)).size !== receipt.lines.length) throw new Error('A product can appear only once per GRN. Update its quantity on the existing line.')
+
+    const configRef = doc(db, 'appMetadata', 'vendorLedgerV2Config')
+    const vendorRef = doc(references.vendors, receipt.vendorId)
+    const accountRef = doc(references.vendorAccountStates, receipt.vendorId)
+    const configSnap = await transaction.get(configRef)
+    const config = configSnap.data()
+    if (config?.enabled !== true) throw new Error('The V2 vendor ledger must be activated before GRNs can create payables.')
+    if (!config.activationDate || !isV2BusinessDate(receipt.invoiceDate, config.activationDate)) throw new Error('Invoice date is before the approved vendor-ledger activation date.')
+
+    const vendorSnapshot = await transaction.get(vendorRef)
+    if (!vendorSnapshot.exists() || vendorSnapshot.data().active !== true) throw new Error('Choose an active vendor.')
+    const productRefs = receipt.lines.map((line) => posDoc('products', line.productId))
+    const productSnapshots = await Promise.all(productRefs.map((reference) => transaction.get(reference)))
+    productSnapshots.forEach((snapshot, index) => {
+      const line = receipt.lines[index]
+      if (snapshot.exists() && (snapshot.data().barcode !== line.barcode || snapshot.data().revision < 1)) throw new Error(`Product changed for ${line.productName}. Re-scan it before submitting.`)
+      if (!snapshot.exists() && !line.newProduct) throw new Error(`Product ${line.productName} no longer exists. Re-scan its barcode.`)
+      if (snapshot.exists() && line.newProduct) throw new Error(`Product ${line.productName} already exists. Re-scan its barcode.`)
+      if (!snapshot.exists() && receipt.lines.some((other, otherIndex) => otherIndex !== index && other.barcode === line.barcode)) throw new Error(`Barcode ${line.barcode} appears more than once in this GRN.`)
+    })
+    const accountSnapshot = await transaction.get(accountRef)
+    const currentAccount = accountSnapshot.data() as VendorAccountStateV2 | undefined
+    const purchaseId = `grn-${id}`
+    const posting = buildPurchasePostingV2({
+      id: purchaseId, vendorId: receipt.vendorId, invoiceNumber: receipt.invoiceNumber, invoiceDate: receipt.invoiceDate,
+      receiptDate: receipt.receiptDate, invoiceTotalPaise: totalPaise, actorUserId: actor.id,
+      timestamp: nowIso(), reservationKey: id,
+    })
+    const purchase = { ...posting.purchase, grnId: id, lines: receipt.lines }
+    const purchaseRef = doc(references.purchases, purchaseId)
+    const reservationRef = doc(references.invoiceReservations, posting.reservation.id)
+    const ledgerRef = doc(references.ledgerEntries, posting.ledgerEntry.id)
+    const invoiceStateRef = doc(references.invoiceStates, purchaseId)
+    const [purchaseSnap, reservationSnap, ledgerSnap, invoiceStateSnap] = await Promise.all([
+      transaction.get(purchaseRef), transaction.get(reservationRef), transaction.get(ledgerRef), transaction.get(invoiceStateRef),
+    ])
+    if (purchaseSnap.exists() || reservationSnap.exists() || ledgerSnap.exists() || invoiceStateSnap.exists()) throw new Error('This GRN payable already exists or conflicts with another record.')
+    const timestamp = posting.purchase.createdAt
+    transaction.set(purchaseRef, purchase)
+    transaction.set(reservationRef, posting.reservation)
+    transaction.set(ledgerRef, posting.ledgerEntry)
+    transaction.set(invoiceStateRef, posting.invoiceState)
+    transaction.set(accountRef, currentAccount ? {
+      ...currentAccount, outstandingPaise: currentAccount.outstandingPaise + totalPaise,
+      revision: currentAccount.revision + 1, lastLedgerEntryId: posting.ledgerEntry.id,
+      updatedAt: timestamp, updatedByUserId: actor.id,
+    } satisfies VendorAccountStateV2 : {
+      id: receipt.vendorId, vendorId: receipt.vendorId, outstandingPaise: totalPaise, revision: 1,
+      lastLedgerEntryId: posting.ledgerEntry.id, updatedAt: timestamp, updatedByUserId: actor.id,
+    } satisfies VendorAccountStateV2)
+
+    receipt.lines.forEach((line, index) => {
+      const snapshot = productSnapshots[index]
+      const movementId = crypto.randomUUID()
+      const existing = snapshot.data() as PosProduct | undefined
+      const beforeQuantity = existing?.currentQuantity ?? 0
+      const afterQuantity = beforeQuantity + line.quantity
+      const beforeRevision = existing?.revision ?? 0
+      if (snapshot.exists()) transaction.update(productRefs[index], {
+        currentQuantity: afterQuantity, revision: beforeRevision + 1, lastMovementId: movementId,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      else transaction.set(productRefs[index], {
+        id: line.productId, barcode: line.barcode, name: line.productName, searchName: line.productName.toLocaleLowerCase('en-IN'),
+        searchTokens: posProductSearchTokens(line.productName), category: line.category, brand: '', vendor: receipt.vendorName,
+        sellingPricePaise: line.sellingPricePaise ?? 0, currentQuantity: afterQuantity, revision: 1, active: true,
+        createdAt: timestamp, createdByUid: actor.id, createdByName: actor.name, createdFromGoodsReceiptId: id,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name, lastMovementId: movementId,
+      })
+      transaction.set(posDoc('stockMovements', movementId), {
+        id: movementId, productId: line.productId, barcode: line.barcode, type: 'goods-receipt', quantityDelta: line.quantity,
+        beforeQuantity, afterQuantity, productRevisionBefore: beforeRevision, productRevisionAfter: beforeRevision + 1,
+        businessDate: receipt.receiptDate, goodsReceiptId: id, createdAt: timestamp, ...actorFields(actor),
+      })
+      transaction.set(posDoc('productCosts', line.productId), {
+        productId: line.productId, costPaise: line.unitCostPaise, sourceValue: '', importRunId: `grn:${id}`,
+        lastEventId: movementId, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      }, { merge: true })
+    })
+    transaction.update(receiptRef, {
+      status: 'submitted', totalPaise, payablePurchaseId: purchaseId,
+      revision: receipt.revision + 1,
+      updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+    })
+    transaction.set(posDoc('events', crypto.randomUUID()), {
+      type: 'goods-receipt-submitted', goodsReceiptId: id, purchaseId, vendorId: receipt.vendorId,
+      totalPaise, createdAt: timestamp, ...actorFields(actor),
+    })
+    return { purchaseId, totalPaise }
+  })
+}
+
+export async function reversePosGoodsReceipt(id: string, reason: string, actor: AppUser) {
+  if (actor.role !== 'owner') throw new Error('Only the owner can edit or delete a submitted GRN.')
+  if (!reason.trim()) throw new Error('Enter a reason for reversing this GRN.')
+  const references = vendorLedgerV2Refs()
+  const reversalId = crypto.randomUUID()
+  return runTransaction(db, async (transaction) => {
+    const receiptRef = posDoc('goodsReceipts', id)
+    const receiptSnapshot = await transaction.get(receiptRef)
+    if (!receiptSnapshot.exists()) throw new Error('GRN was not found.')
+    const receipt = receiptSnapshot.data() as PosGoodsReceipt
+    if (receipt.status !== 'submitted' || !receipt.payablePurchaseId) throw new Error('Only a submitted GRN can be reversed.')
+    const purchaseRef = doc(references.purchases, receipt.payablePurchaseId)
+    const invoiceStateRef = doc(references.invoiceStates, receipt.payablePurchaseId)
+    const accountRef = doc(references.vendorAccountStates, receipt.vendorId)
+    const [purchaseSnapshot, invoiceSnapshot, accountSnapshot] = await Promise.all([
+      transaction.get(purchaseRef), transaction.get(invoiceStateRef), transaction.get(accountRef),
+    ])
+    if (!purchaseSnapshot.exists() || !invoiceSnapshot.exists() || !accountSnapshot.exists()) throw new Error('The GRN payable is incomplete; ask the owner to review the vendor ledger.')
+    const purchase = purchaseSnapshot.data() as PurchaseV2
+    const invoice = invoiceSnapshot.data() as InvoiceStateV2
+    const account = accountSnapshot.data() as VendorAccountStateV2
+    if (invoice.reservedAmountPaise !== 0) throw new Error('A payment is being allocated to this invoice. Retry the reversal after that payment finishes.')
+    if (account.outstandingPaise < invoice.openAmountPaise) throw new Error('The vendor outstanding does not cover this invoice open amount; ask the owner to review the ledger.')
+    const productRefs = receipt.lines.map((line) => posDoc('products', line.productId))
+    const costRefs = receipt.lines.map((line) => posDoc('productCosts', line.productId))
+    const [products, costs] = await Promise.all([
+      Promise.all(productRefs.map((reference) => transaction.get(reference))),
+      Promise.all(costRefs.map((reference) => transaction.get(reference))),
+    ])
+    products.forEach((product, index) => { if (!product.exists()) throw new Error(`Product ${receipt.lines[index].productName} no longer exists.`) })
+    const timestamp = nowIso()
+    const reversal: VendorLedgerEntryV2 = {
+      id: reversalId, vendorId: receipt.vendorId, eventType: 'reversal', posting: 'financial',
+      signedAmountPaise: invoice.openAmountPaise === 0 ? 0 : -invoice.openAmountPaise,
+      sourceType: 'goods-receipt', sourceRecordId: receipt.payablePurchaseId,
+      sourceRevision: 1, goodsReceiptId: id, reversalOfEntryId: purchase.ledgerEntryId, reason: reason.trim(),
+      occurredOn: receipt.receiptDate, createdAt: timestamp, createdByUserId: actor.id,
+    }
+    transaction.set(doc(references.ledgerEntries, reversalId), reversal)
+    transaction.update(accountRef, {
+      ...account, outstandingPaise: account.outstandingPaise - invoice.openAmountPaise,
+      vendorCreditPaise: (account.vendorCreditPaise ?? 0) + purchase.invoiceTotalPaise - invoice.openAmountPaise,
+      revision: account.revision + 1, lastLedgerEntryId: reversalId, updatedAt: timestamp, updatedByUserId: actor.id,
+    })
+    transaction.update(invoiceStateRef, {
+      ...invoice, openAmountPaise: 0, revision: invoice.revision + 1, updatedAt: timestamp, updatedByUserId: actor.id,
+      reversalReason: reason.trim(), reversalLedgerEntryId: reversalId,
+    })
+    receipt.lines.forEach((line, index) => {
+      const product = products[index].data() as PosProduct
+      const movementId = crypto.randomUUID()
+      const afterQuantity = product.currentQuantity - line.quantity
+      transaction.update(productRefs[index], {
+        currentQuantity: afterQuantity, revision: product.revision + 1, lastMovementId: movementId,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      transaction.set(posDoc('stockMovements', movementId), {
+        id: movementId, productId: line.productId, barcode: line.barcode, type: 'goods-receipt-reversal', quantityDelta: -line.quantity,
+        beforeQuantity: product.currentQuantity, afterQuantity, productRevisionBefore: product.revision,
+        productRevisionAfter: product.revision + 1, businessDate: receipt.receiptDate, goodsReceiptId: id,
+        reason: reason.trim(), createdAt: timestamp, ...actorFields(actor),
+      })
+      if (costs[index].exists() && costs[index].data().importRunId === `grn:${id}`) {
+        transaction.set(costRefs[index], {
+          ...costs[index].data(), costPaise: null, importRunId: `grn-reversal:${id}`,
+          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+        })
+      }
+    })
+    transaction.update(receiptRef, {
+      status: 'reversed', reversalLedgerEntryId: reversalId, reversalReason: reason.trim(),
+      reversedOpenAmountPaise: invoice.openAmountPaise, vendorCreditPaiseAdded: purchase.invoiceTotalPaise - invoice.openAmountPaise,
+      revision: receipt.revision + 1, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+    })
+    transaction.set(posDoc('events', crypto.randomUUID()), {
+      type: 'goods-receipt-reversed', goodsReceiptId: id, reversalLedgerEntryId: reversalId,
+      reason: reason.trim(), createdAt: timestamp, ...actorFields(actor),
+    })
+    return { reversalId }
+  })
+}
 
 export function subscribePosProducts(
   callback: (products: PosProduct[]) => void,

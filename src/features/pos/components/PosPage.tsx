@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { formatDisplayDateTime, today } from '@/app/uiHelpers'
@@ -32,10 +33,14 @@ import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
 import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
 import { serverNowDate } from '@/shared/lib/serverClock'
+import { db } from '@/shared/lib/firebase'
+import type { VendorV2 } from '@/domain/vendorLedgerV2'
+import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
 import { expectedHandover, handoverDate } from '../domain/cashierHandover'
 import { useCashierHandover } from '../hooks/useCashierHandover'
+import { PosGoodsReceipt } from './PosGoodsReceipt'
 
-type Tab = 'checkout' | 'dashboard' | 'bills'
+type Tab = 'checkout' | 'dashboard' | 'bills' | 'grn'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
 ]
@@ -50,6 +55,8 @@ function productMrp(product: PosProduct) {
 export function PosPage({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
   const handover = useCashierHandover()
   const [tab, setTab] = useState<Tab>('checkout')
+  const [grnVendors, setGrnVendors] = useState<VendorV2[]>([])
+  const [vendorLedgerEnabled, setVendorLedgerEnabled] = useState(false)
   const sandbox = usePosSandbox({})
   const [cart, setCart] = useState<PosCartLine[]>([])
   const [customerName, setCustomerName] = useState('')
@@ -70,6 +77,18 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const [busy, setBusy] = useState(false)
   const scannerRef = useRef<HTMLInputElement>(null)
   const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
+  useEffect(() => {
+    if (tab !== 'grn') return
+    const unsubscribeConfig = onSnapshot(doc(db, 'appMetadata', 'vendorLedgerV2Config'), (snapshot) => {
+      const enabled = snapshot.data()?.enabled === true
+      setVendorLedgerEnabled(enabled)
+      if (!enabled) setGrnVendors([])
+    })
+    const unsubscribeVendors = onSnapshot(collection(db, vendorLedgerV2Collections.vendors), (snapshot) => {
+      setGrnVendors(snapshot.docs.map((item) => item.data() as VendorV2))
+    })
+    return () => { unsubscribeConfig(); unsubscribeVendors() }
+  }, [tab])
   useEffect(() => {
     const term = productSearch.trim()
     let active = true
@@ -146,10 +165,11 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-3">
+            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-4">
               <PageHeaderTab value="checkout"><ShoppingCart />Billing</PageHeaderTab>
               <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
+              <PageHeaderTab value="grn"><Barcode />GRN</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
           <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
@@ -160,7 +180,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       )} />
     )}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <PageCardStack className={tab === 'bills' ? 'min-h-full pb-4' : 'h-full pb-4'}>
+        <PageCardStack className={tab === 'bills' || tab === 'grn' ? 'min-h-full content-start pb-4' : 'h-full pb-4'}>
       {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
@@ -203,6 +223,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
 
       {tab === 'dashboard' ? <PosDashboard products={sandbox.products} /> : null}
       {tab === 'bills' ? <BillsPanel currentUser={currentUser} showToast={showToast} /> : null}
+      {tab === 'grn' ? <PosGoodsReceipt currentUser={currentUser} vendors={grnVendors} enabled={vendorLedgerEnabled} showToast={showToast} /> : null}
         </PageCardStack>
       </div>
     </PageLayout>

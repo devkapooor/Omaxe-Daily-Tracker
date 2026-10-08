@@ -402,13 +402,7 @@ service cloud.firestore {
       return data.eventType != 'reversal' || (
         isOwner() &&
         data.posting == 'financial' &&
-        data.sourceType == 'ledger-entry' &&
-        data.sourceRevision == 1 &&
-        getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.status == 'approved' &&
-        getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.vendorId == data.vendorId &&
-        data.signedAmountPaise ==
-          getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.before.amountPaise -
-          getAfter(/databases/$(database)/documents/vendorLedgerCorrectionRequestsV2/$(data.sourceRecordId)).data.proposed.amountPaise
+        data.sourceRevision == 1
       );
     }
 
@@ -461,14 +455,22 @@ service cloud.firestore {
     }
 
     function validVendorAccountStateUpdate(data, documentId) {
+      let entry = getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data;
+      let newOutstanding = resource.data.outstandingPaise + entry.signedAmountPaise;
+      let previousCredit = resource.data.get('vendorCreditPaise', 0);
+      let receiptPath = /databases/$(database)/documents/posSandboxes/test/goodsReceipts/$(entry.get('goodsReceiptId', ''));
       return data.id == documentId &&
         data.vendorId == resource.data.vendorId &&
         data.revision == resource.data.revision + 1 &&
         data.lastLedgerEntryId is string &&
         data.updatedByUserId == request.auth.uid &&
-        getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.vendorId == documentId &&
-        data.outstandingPaise == resource.data.outstandingPaise +
-          getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.lastLedgerEntryId)).data.signedAmountPaise &&
+        entry.vendorId == documentId &&
+        (!data.keys().hasAny(['vendorCreditPaise']) || (data.vendorCreditPaise is int && data.vendorCreditPaise >= 0)) &&
+        ((entry.eventType == 'reversal' && existsAfter(receiptPath) &&
+          data.outstandingPaise == (newOutstanding > 0 ? newOutstanding : 0) &&
+          data.get('vendorCreditPaise', 0) == previousCredit + getAfter(receiptPath).data.vendorCreditPaiseAdded) ||
+         (entry.eventType == 'reversal' && !existsAfter(receiptPath) && data.outstandingPaise == newOutstanding && data.get('vendorCreditPaise', 0) == previousCredit) ||
+         (entry.eventType != 'reversal' && data.outstandingPaise == newOutstanding && data.get('vendorCreditPaise', 0) == previousCredit)) &&
         data.outstandingPaise >= 0;
     }
 
@@ -487,20 +489,32 @@ service cloud.firestore {
         data.invoiceId == resource.data.invoiceId &&
         data.vendorId == resource.data.vendorId &&
         data.revision == resource.data.revision + 1 &&
-        data.lastAllocationId is string &&
         data.updatedByUserId == request.auth.uid &&
-        getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.invoiceId == documentId &&
         (
+          (isOwner() && getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.get('grnId', '') is string &&
+            getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.get('grnId', '') != '' &&
+            data.openAmountPaise == 0 && data.reservedAmountPaise == resource.data.reservedAmountPaise &&
+            data.get('lastAllocationId', '') == resource.data.get('lastAllocationId', '') &&
+            data.reversalLedgerEntryId is string &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.eventType == 'reversal' &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.sourceType == 'goods-receipt' &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.sourceRecordId == documentId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.goodsReceiptId == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.grnId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.vendorId == resource.data.vendorId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.reversalOfEntryId == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.ledgerEntryId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.signedAmountPaise == -resource.data.openAmountPaise) ||
           (
-            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.state == 'posted' &&
-            data.openAmountPaise == resource.data.openAmountPaise -
-              getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.amountPaise
-          ) ||
-          (
-            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.sourceType == 'settlement-correction' &&
-            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.state == 'reversed' &&
-            data.openAmountPaise == resource.data.openAmountPaise +
-              getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.amountPaise
+            data.lastAllocationId is string &&
+            getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.invoiceId == documentId &&
+            (
+              (getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.state == 'posted' &&
+                data.openAmountPaise == resource.data.openAmountPaise -
+                  getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.amountPaise) ||
+              (getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.sourceType == 'settlement-correction' &&
+                getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.state == 'reversed' &&
+                data.openAmountPaise == resource.data.openAmountPaise +
+                  getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.amountPaise)
+            )
           )
         ) &&
         data.openAmountPaise >= 0 &&
@@ -1058,10 +1072,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /invoiceStatesV2/{documentId} {
-      allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validInvoiceStateCreate(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') && validInvoiceStateUpdate(request.resource.data, documentId);
+      match /invoiceStatesV2/{documentId} {
+        allow read: if isVendorLedgerV2Enabled() && isStaff();
+        allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validInvoiceStateCreate(request.resource.data, documentId);
+        allow update: if isVendorLedgerV2Enabled() &&
+          (hasPurchasingCapability('settlement.create') || isOwner()) && validInvoiceStateUpdate(request.resource.data, documentId);
       allow delete: if false;
     }
 
@@ -1098,13 +1113,14 @@ service cloud.firestore {
         request.resource.data.sourceRevision >= 1 &&
         request.resource.data.createdAt is string &&
         request.resource.data.createdByUserId == request.auth.uid &&
-        canCreateLedgerEntry(request.resource.data) &&
-        validOpeningLedgerEntry(request.resource.data, documentId) &&
-        validPurchaseLedgerEntry(request.resource.data, documentId) &&
-        validSettlementLedgerEntry(request.resource.data, documentId) &&
-        validCorrectionLedgerEntry(request.resource.data, documentId) &&
-        validReturnLedgerEntry(request.resource.data, documentId) &&
-        validChequeLedgerEntry(request.resource.data, documentId);
+        (request.resource.data.eventType == 'reversal' ? isOwner() :
+          (canCreateLedgerEntry(request.resource.data) &&
+            validOpeningLedgerEntry(request.resource.data, documentId) &&
+            validPurchaseLedgerEntry(request.resource.data, documentId) &&
+            validSettlementLedgerEntry(request.resource.data, documentId) &&
+            validCorrectionLedgerEntry(request.resource.data, documentId) &&
+            validReturnLedgerEntry(request.resource.data, documentId) &&
+            validChequeLedgerEntry(request.resource.data, documentId)));
       allow update, delete: if false;
     }
 
@@ -1359,8 +1375,16 @@ service cloud.firestore {
 
       match /products/{productId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isOwner() &&
+        allow create: if sandboxId == 'test' && (isOwner() || (
+          isStaff() && request.resource.data.get('createdFromGoodsReceiptId', '') is string &&
+          request.resource.data.get('createdFromGoodsReceiptId', '') != '' &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.createdFromGoodsReceiptId)).data.status == 'submitted' &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.goodsReceiptId == request.resource.data.createdFromGoodsReceiptId &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId
+        )) &&
           request.resource.data.barcode is string &&
+          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
+          request.resource.data.category is string && request.resource.data.category.size() > 0 &&
           request.resource.data.currentQuantity is int &&
           request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
           request.resource.data.revision == 1 &&
@@ -1396,7 +1420,10 @@ service cloud.firestore {
 
       match /productCosts/{productId} {
         allow read: if sandboxId == 'test' && isManagerOrOwner();
-        allow create, update: if sandboxId == 'test' && isManagerOrOwner() &&
+        allow create, update: if sandboxId == 'test' && (isManagerOrOwner() || (
+          isStaff() && request.resource.data.get('importRunId', '').matches('^grn:.+$') &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.importRunId.split(':')[1])).data.status == 'submitted'
+        )) &&
           request.resource.data.productId == productId &&
           request.resource.data.updatedByUid == request.auth.uid &&
           (request.resource.data.costPaise == null || (request.resource.data.costPaise is int && request.resource.data.costPaise >= 0));
@@ -1415,6 +1442,52 @@ service cloud.firestore {
           request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore + 1;
         allow update: if false;
         allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      match /goodsReceipts/{receiptId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.id == receiptId &&
+          request.resource.data.status == 'draft' && request.resource.data.createdByUid == request.auth.uid &&
+          request.resource.data.revision == 1 && request.resource.data.lines is list && request.resource.data.lines.size() > 0;
+        allow update: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == resource.data.id && request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.createdByUid == resource.data.createdByUid && request.resource.data.revision == resource.data.revision + 1 &&
+          request.resource.data.updatedByUid == request.auth.uid &&
+          ((resource.data.status == 'draft' && request.resource.data.lines is list && request.resource.data.lines.size() > 0 &&
+            (request.resource.data.status == 'draft' || (
+              request.resource.data.status == 'submitted' && request.resource.data.payablePurchaseId is string &&
+              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.grnId == receiptId &&
+              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.vendorId == request.resource.data.vendorId &&
+              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.invoiceTotalPaise == request.resource.data.totalPaise
+            ))) ||
+           (isOwner() && resource.data.status == 'submitted' && request.resource.data.status == 'reversed' &&
+            request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
+            request.resource.data.reversalLedgerEntryId is string &&
+            getAfter(/databases/$(database)/documents/invoiceStatesV2/$(resource.data.payablePurchaseId)).data.openAmountPaise == 0 &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.sourceRecordId == resource.data.payablePurchaseId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.goodsReceiptId == receiptId &&
+            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.reversalOfEntryId == getAfter(/databases/$(database)/documents/purchasesV2/$(resource.data.payablePurchaseId)).data.ledgerEntryId));
+        allow delete: if sandboxId == 'test' && isStaff() && resource.data.status == 'draft' &&
+          (resource.data.createdByUid == request.auth.uid || isOwner());
+      }
+
+      match /stockAudits/{auditId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.id == auditId &&
+          request.resource.data.actorUid == request.auth.uid && request.resource.data.productId is string &&
+          request.resource.data.systemQuantityBefore is int && request.resource.data.physicalQuantity is int &&
+          request.resource.data.physicalQuantity >= 0 &&
+          request.resource.data.difference == request.resource.data.physicalQuantity - request.resource.data.systemQuantityBefore &&
+          request.resource.data.systemQuantityAfter == request.resource.data.physicalQuantity &&
+          request.resource.data.productRevisionAfter >= request.resource.data.productRevisionBefore &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/products/$(request.resource.data.productId)).data.currentQuantity == request.resource.data.physicalQuantity &&
+          ((request.resource.data.difference == 0 &&
+            request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore &&
+            !request.resource.data.keys().hasAny(['movementId'])) ||
+           (request.resource.data.difference != 0 && request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore + 1 &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.stockAuditId == auditId &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.quantityDelta == request.resource.data.difference));
+        allow update, delete: if false;
       }
 
       match /bills/{billId} {

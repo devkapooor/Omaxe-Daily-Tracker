@@ -12,7 +12,6 @@ import {
 } from '@/domain/vendorLedgerV2'
 import { VendorDirectoryV2 } from '@/features/directory/components/VendorDirectoryV2'
 import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
-import { PurchaseFormV2, type PurchaseV2Draft } from '@/features/register/components/PurchaseFormV2'
 import { VendorSettlementFormV2, type VendorSettlementV2Draft } from '@/features/register/components/VendorSettlementFormV2'
 import type { VendorLedgerV2Data } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { VendorLedgerPreActivationPage } from '@/features/vendor-workspace/components/VendorLedgerCutoverPlanner'
@@ -31,7 +30,6 @@ import { Textarea } from '@/shared/ui/textarea'
 import {
   applyOwnerSettlementCorrectionV2,
   createSettlementCorrectionRequestV2,
-  createPurchaseV2,
   createSettlementV2,
   createVendorChequeV2,
   createVendorReturnV2,
@@ -89,14 +87,6 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
     setTab('payments')
   }
 
-  async function savePurchase(draft: PurchaseV2Draft) {
-    const id = crypto.randomUUID()
-    await run(() => createPurchaseV2({
-      id, ...draft, actorUserId: currentUser.id, timestamp: serverNowIso(),
-    }), `Purchase ${draft.invoiceNumber} saved.`)
-    return { purchaseId: id }
-  }
-
   async function saveSettlement(draft: VendorSettlementV2Draft) {
     await run(() => createSettlementV2({
       id: crypto.randomUUID(), ...draft, actorUserId: currentUser.id, timestamp: serverNowIso(),
@@ -108,9 +98,8 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
       <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
         <PageHeader title="Vendor Workspace" tools={(
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="Vendor workspace sections" className={`${currentUser.role === 'owner' ? 'grid-cols-8' : 'grid-cols-7'} grid min-w-max`}>
+            <PageHeaderTabsList aria-label="Vendor workspace sections" className={`${currentUser.role === 'owner' ? 'grid-cols-7' : 'grid-cols-6'} grid min-w-max`}>
               <PageHeaderTab value="directory">Vendors</PageHeaderTab>
-              <PageHeaderTab value="purchases">Purchases</PageHeaderTab>
               <PageHeaderTab value="payments">Payments</PageHeaderTab>
               <PageHeaderTab value="invoices">Invoices</PageHeaderTab>
               <PageHeaderTab value="returns">Returns</PageHeaderTab>
@@ -128,14 +117,13 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           <TabsContent value="directory" className="grid gap-2.5 pt-2">
             <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} />
           </TabsContent>
-          <TabsContent value="purchases" className="pt-2"><PurchaseFormV2 isBusy={busy} vendors={ledger.vendors} onSave={savePurchase} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>
           <TabsContent value="invoices" className="pt-2"><OpenInvoicesV2 balances={balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="returns" className="pt-2"><ReturnsPanel busy={busy} currentUser={currentUser} ledger={ledger} onRun={run} /></TabsContent>
           <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} ledger={ledger} vendors={vendorNameById} onRun={run} /></TabsContent>
           {currentUser.role === 'owner' ? <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} legacyChequeItems={legacyChequeItems} vendors={ledger.vendors} onRun={run} /></TabsContent> : null}
           <TabsContent value="balances" className="grid gap-2 pt-2">
-            {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><strong>INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong></CardContent></Card>)}
+            {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between gap-3 py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><span className="text-right"><strong className="block">Payable INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong>{state.vendorCreditPaise ? <small className="text-muted-foreground">Unapplied vendor credit INR {(state.vendorCreditPaise / 100).toLocaleString('en-IN')}</small> : null}</span></CardContent></Card>)}
           </TabsContent>
           </PageCardStack>
         </div>

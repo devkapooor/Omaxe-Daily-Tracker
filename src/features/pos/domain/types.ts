@@ -44,6 +44,59 @@ export type PosProductCost = {
   updatedByName: string
 }
 
+export type PosGoodsReceiptLine = {
+  productId: string
+  barcode: string
+  productName: string
+  category: string
+  quantity: number
+  unitCostPaise: number
+  lineTotalPaise: number
+  newProduct?: true
+  sellingPricePaise?: number
+  stockAtScan?: number
+}
+
+export type PosGoodsReceipt = {
+  id: string
+  status: 'draft' | 'submitted' | 'reversed'
+  vendorId: string
+  vendorName: string
+  invoiceNumber: string
+  invoiceDate: string
+  receiptDate: string
+  lines: PosGoodsReceiptLine[]
+  totalPaise: number
+  payablePurchaseId?: string
+  reversalLedgerEntryId?: string
+  revision: number
+  createdAt: string
+  createdByUid: string
+  createdByName: string
+  updatedAt: string
+  updatedByUid: string
+  updatedByName: string
+}
+
+export type PosStockAudit = {
+  id: string
+  batchId?: string
+  productId: string
+  barcode: string
+  productName: string
+  systemQuantityBefore: number
+  physicalQuantity: number
+  difference: number
+  systemQuantityAfter: number
+  productRevisionBefore: number
+  productRevisionAfter: number
+  movementId?: string
+  createdAt: string
+  actorUid: string
+  actorName: string
+  actorRole: AppUser['role']
+}
+
 export type PosCartLine = {
   id: string
   kind: 'product' | 'temporary'
