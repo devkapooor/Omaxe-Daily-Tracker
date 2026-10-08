@@ -405,6 +405,7 @@ export function useAppStore() {
 
   return {
     authError,
+    authEmail: authUser?.email ?? null,
     authReady,
     appSettings,
     canImportLegacyData,
@@ -431,6 +432,7 @@ export function useAppStore() {
     monthlyReports,
     profileLoaded: loadedCollections.users,
     renamePartyInDirectory: actions.renamePartyInDirectory,
+    requestPasswordReset: actions.requestPasswordReset,
     nameDirectory,
     deletePaymentEntry: actions.deletePaymentEntry,
     saveCashTransfer: actions.saveCashTransfer,

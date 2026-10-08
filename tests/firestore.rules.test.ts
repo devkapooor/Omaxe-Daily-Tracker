@@ -265,7 +265,7 @@ describe('POS test sandbox isolation', () => {
     updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user',
   }
 
-  it('lets staff read products while protecting costs and owner configuration', async () => {
+  it('lets staff read products and audit valuation costs while protecting owner configuration', async () => {
     const owner = userDb('owner-user')
     await setDoc(doc(owner, 'posSandboxes', 'test', 'products', 'p-1'), product)
     await setDoc(doc(owner, 'posSandboxes', 'test', 'productCosts', 'p-1'), { productId: 'p-1', costPaise: 600, sourceValue: '6', importRunId: 'run', updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user' })
@@ -273,7 +273,7 @@ describe('POS test sandbox isolation', () => {
     await setDoc(doc(owner, 'posSandboxes', 'test', 'configuration', 'checkout'), { billingMaxDiscountPercentage: 5 })
 
     await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'products', 'p-1')))
-    await assertFails(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'productCosts', 'p-1')))
+    await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'productCosts', 'p-1')))
     await assertSucceeds(getDoc(doc(userDb('manager-user'), 'posSandboxes', 'test', 'productCosts', 'p-1')))
     await assertFails(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'configuration', 'admin')))
     await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'configuration', 'checkout')))

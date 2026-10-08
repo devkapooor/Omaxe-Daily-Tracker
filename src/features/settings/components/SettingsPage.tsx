@@ -62,16 +62,15 @@ export function SettingsPage({
 
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase()
-    const visibleUsers = users.filter((user) => user.role !== 'owner' || user.id === currentUser.id)
-    if (!search) return visibleUsers
-    return visibleUsers.filter(
+    if (!search) return users
+    return users.filter(
       (user) =>
         user.name.toLowerCase().includes(search) ||
         user.role.toLowerCase().includes(search) ||
         user.email.toLowerCase().includes(search) ||
         user.mobileNumber?.toLowerCase().includes(search),
     )
-  }, [currentUser.id, userSearch, users])
+  }, [userSearch, users])
 
   async function createUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -291,7 +290,7 @@ export function SettingsPage({
                           {user.mobileNumber ? <span className="text-xs text-muted-foreground">{user.mobileNumber}</span> : null}
                         </div>
                       </div>
-                      {canManageUsers && user.id !== currentUser.id ? (
+                      {canManageUsers && user.id !== currentUser.id && user.role !== 'owner' ? (
                         <div className="flex flex-col items-start gap-1 sm:items-end">
                           <Button size="sm" variant="destructive" type="button" onClick={() => void deleteUser(user.id)}>
                             Delete
@@ -299,7 +298,7 @@ export function SettingsPage({
                           <span className="max-w-md text-[10px] leading-4 text-muted-foreground">Deletion is blocked while financial, payroll, or audit history is linked to this account.</span>
                         </div>
                       ) : (
-                        <span className="text-xs font-medium text-muted-foreground">{user.id === currentUser.id ? 'Current account' : 'Protected'}</span>
+                        <span className="text-xs font-medium text-muted-foreground">{user.id === currentUser.id ? 'Current account' : user.role === 'owner' ? 'Protected owner account' : 'Protected'}</span>
                       )}
                     </article>
                   ))}

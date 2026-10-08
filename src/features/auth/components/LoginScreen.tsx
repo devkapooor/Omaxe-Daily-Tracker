@@ -1,27 +1,42 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion'
-import { ArrowRight, Building2, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, Eye, EyeOff, Lock, Mail, Moon, ShieldCheck, Sun, Trash2, UserRound } from 'lucide-react'
 import { Input } from '@/shared/ui/input'
+import { getActiveTheme, saveTheme, subscribeToTheme, type Theme } from '@/shared/lib/theme'
+import { forgetAccount, getRememberedAccounts, type RememberedAccount } from '@/features/auth/lib/rememberedAccounts'
 
 type LoginScreenProps = {
   authError: string | null
   isBusy: boolean
   onLogin: (email: string, password: string) => Promise<void>
+  onRequestPasswordReset: (email: string) => Promise<void>
 }
 
 type FocusedField = 'email' | 'password' | null
 
-export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
+export function LoginScreen({ authError, isBusy, onLogin, onRequestPasswordReset }: LoginScreenProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [focusedField, setFocusedField] = useState<FocusedField>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [savedAccounts, setSavedAccounts] = useState<RememberedAccount[]>(getRememberedAccounts)
+  const [selectedAccount, setSelectedAccount] = useState<RememberedAccount | null>(null)
+  const [view, setView] = useState<'accounts' | 'email' | 'password'>(() => getRememberedAccounts().length ? 'accounts' : 'email')
+  const [theme, setTheme] = useState<Theme>(getActiveTheme)
+  const passwordInputRef = useRef<HTMLInputElement>(null)
   const prefersReducedMotion = useReducedMotion()
   const pointerX = useMotionValue(0)
   const pointerY = useMotionValue(0)
   const rotateX = useTransform(pointerY, [-260, 260], [4, -4])
   const rotateY = useTransform(pointerX, [-260, 260], [-4, 4])
+
+  useEffect(() => subscribeToTheme(setTheme), [])
+
+  useEffect(() => {
+    if (view === 'password') passwordInputRef.current?.focus({ preventScroll: true })
+  }, [view])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,6 +50,41 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
       await onLogin(email.trim(), password)
     } catch {
       setPassword('')
+    }
+  }
+
+  function chooseAccount(account: RememberedAccount) {
+    setSelectedAccount(account)
+    setEmail(account.email)
+    setPassword('')
+    setError('')
+    setNotice('')
+    setView('password')
+  }
+
+  function removeAccount(account: RememberedAccount) {
+    forgetAccount(account.uid)
+    const nextAccounts = getRememberedAccounts()
+    setSavedAccounts(nextAccounts)
+    setSelectedAccount(null)
+    setView(nextAccounts.length ? 'accounts' : 'email')
+  }
+
+  async function handlePasswordReset() {
+    const address = email.trim()
+    if (!address || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      setNotice('')
+      setError('Enter your email address first.')
+      return
+    }
+
+    setError('')
+    setNotice('')
+    try {
+      await onRequestPasswordReset(address)
+      setNotice('If an account exists for this email, a password reset link has been sent.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to send a reset email. Try again or contact the system owner.')
     }
   }
 
@@ -56,6 +106,16 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
         <Building2 className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
         <span className="text-[11px] font-extrabold uppercase tracking-[0.26em]">AlphaHub</span>
       </div>
+      <button
+        type="button"
+        className="absolute right-4 top-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card/80 text-xs font-semibold text-foreground shadow-sm backdrop-blur hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-6 sm:top-6 sm:w-auto sm:justify-start sm:gap-2 sm:px-3"
+        onClick={() => saveTheme(theme === 'dark' ? 'light' : 'dark')}
+        aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        <span className="sr-only sm:not-sr-only">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+      </button>
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
@@ -110,8 +170,24 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
               <h1 className="mt-1 text-2xl font-bold tracking-[-0.035em] text-foreground">Welcome back</h1>
             </div>
 
+            {view === 'accounts' ? (
+              <div className="relative mt-5 grid gap-2.5">
+                <p className="text-center text-sm font-semibold text-secondary-foreground">Choose your account</p>
+                {savedAccounts.map((account) => (
+                  <div key={account.uid} className="flex items-center gap-2 rounded-xl border border-border bg-background/70 p-2">
+                    <button type="button" onClick={() => chooseAccount(account)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{account.name.trim().slice(0, 1).toUpperCase() || <UserRound className="h-4 w-4" />}</span>
+                      <span className="min-w-0"><span className="block truncate text-sm font-bold text-foreground">{account.name}</span><span className="block truncate text-xs text-muted-foreground">{account.email}</span></span>
+                    </button>
+                    <button type="button" onClick={() => removeAccount(account)} aria-label={`Forget ${account.name}`} title="Forget this account" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                ))}
+                <button type="button" className="mt-1 h-10 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-accent" onClick={() => { setSelectedAccount(null); setEmail(''); setPassword(''); setView('email') }}>Use another account</button>
+                <button type="button" className="text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => { savedAccounts.forEach((account) => forgetAccount(account.uid)); setSavedAccounts([]); setView('email') }}>Clear saved accounts</button>
+              </div>
+            ) : (
             <form className="relative mt-4 grid gap-3.5" onSubmit={handleLogin}>
-              <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
+              {view === 'email' ? <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
                 Email
                 <div className="relative">
                   <Mail className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'email' ? 'text-cyan-600' : 'text-muted-foreground'}`} />
@@ -126,17 +202,19 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                     onChange={(event) => {
                       setEmail(event.target.value)
                       setError('')
+                      setNotice('')
                     }}
                     onFocus={() => setFocusedField('email')}
                   />
                 </div>
-              </label>
+              </label> : <div className="flex items-center justify-between rounded-xl border border-border bg-background/60 px-3 py-2"><div className="min-w-0"><p className="truncate text-sm font-bold text-foreground">{selectedAccount?.name}</p><p className="truncate text-xs text-muted-foreground">{email}</p></div><button type="button" className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-primary" onClick={() => { setView('accounts'); setSelectedAccount(null); setPassword('') }}><ArrowLeft className="h-3.5 w-3.5" />Back</button></div>}
 
               <label className="grid gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-secondary-foreground">
                 Password
                 <div className="relative">
                   <Lock className={`pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 transition-colors ${focusedField === 'password' ? 'text-cyan-600' : 'text-muted-foreground'}`} />
                   <Input
+                    ref={passwordInputRef}
                     aria-label="Password"
                     autoComplete="current-password"
                     placeholder="Enter password"
@@ -161,11 +239,22 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                 </div>
               </label>
 
+              <button
+                type="button"
+                className="justify-self-end text-xs font-semibold text-cyan-700 underline-offset-4 hover:underline disabled:opacity-60 dark:text-info"
+                disabled={isBusy}
+                onClick={() => void handlePasswordReset()}
+              >
+                {isBusy ? 'Please wait…' : 'Forgot password?'}
+              </button>
+
               {(error || authError) ? (
                 <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 dark:border-destructive/30 dark:bg-destructive/10 dark:text-destructive">
                   {error || authError}
                 </motion.p>
               ) : null}
+
+              {notice ? <p role="status" aria-live="polite" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 dark:border-success/30 dark:bg-success/10 dark:text-success">{notice}</p> : null}
 
               <motion.button
                 whileHover={prefersReducedMotion ? undefined : { scale: 1.015 }}
@@ -186,6 +275,7 @@ export function LoginScreen({ authError, isBusy, onLogin }: LoginScreenProps) {
                 </AnimatePresence>
               </motion.button>
             </form>
+            )}
 
           </section>
         </motion.div>

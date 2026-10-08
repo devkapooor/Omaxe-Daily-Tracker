@@ -1,5 +1,5 @@
 import { deleteApp, initializeApp } from 'firebase/app'
-import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth'
+import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth'
 import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { defaultPurchasingCapabilities } from '@/domain/purchasingCapabilities'
 import { auth, db, firebaseConfig } from '@/shared/lib/firebase'
@@ -29,6 +29,24 @@ export function createAuthActions({
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Unable to sign in.')
       throw error
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  async function requestPasswordReset(email: string) {
+    setIsBusy(true)
+    setAuthError(null)
+    try {
+      await sendPasswordResetEmail(auth, email.trim())
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+      if (code === 'auth/user-not-found') return
+      if (code === 'auth/invalid-email') throw new Error('Enter a valid email address.')
+      if (code === 'auth/too-many-requests') throw new Error('Too many requests. Wait a while and try again.')
+      if (code === 'auth/network-request-failed') throw new Error('Could not connect. Check your internet and try again.')
+      if (code === 'auth/operation-not-allowed') throw new Error('Password recovery is not enabled. Contact the system owner.')
+      throw new Error('Unable to send a reset email. Try again or contact the system owner.')
     } finally {
       setIsBusy(false)
     }
@@ -140,6 +158,7 @@ export function createAuthActions({
     changeOwnPassword,
     createUserAccount,
     deleteUserAccount,
+    requestPasswordReset,
     signIn: signInWithApp,
     signOutCurrentUser,
   }

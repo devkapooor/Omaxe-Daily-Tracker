@@ -58,6 +58,7 @@ import {
   type PosProduct,
   type PosGoodsReceipt,
   type PosStockAudit,
+  type PosStockAuditBatch,
   type PosRefundEvent,
 } from '../domain/types'
 import { calculatePosDashboard } from '../domain/posDashboard'
@@ -67,6 +68,17 @@ const posCollection = (name: string) => collection(root(), name)
 const posDoc = (name: string, id: string) => doc(root(), name, id)
 const nowIso = serverNowIso
 const actorFields = (actor: AppUser) => ({ actorUid: actor.id, actorName: actor.name, actorRole: actor.role })
+
+export class PosProductChangedSinceScanError extends Error {
+  constructor(
+    readonly productId: string,
+    readonly previousStock: number | undefined,
+    readonly latestProduct: Pick<PosProduct, 'name' | 'sellingPricePaise' | 'currentQuantity' | 'revision'>,
+  ) {
+    super(`Stock changed for ${latestProduct.name} after it was scanned; product details may have changed too.`)
+    this.name = 'PosProductChangedSinceScanError'
+  }
+}
 
 export function subscribePosGoodsReceipts(callback: (receipts: PosGoodsReceipt[]) => void, onError: (error: Error) => void): Unsubscribe {
   return onSnapshot(query(posCollection('goodsReceipts'), orderBy('updatedAt', 'desc'), limit(100)), (snapshot) => {
@@ -80,14 +92,33 @@ export function subscribePosStockAudits(callback: (audits: PosStockAudit[]) => v
   }, onError)
 }
 
-export type PosStockAuditCountInput = { productId: string; physicalQuantity: number; expectedRevision?: number }
+export function subscribePosStockAuditBatches(callback: (audits: PosStockAuditBatch[]) => void, onError: (error: Error) => void): Unsubscribe {
+  return onSnapshot(query(posCollection('stockAuditBatches'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosStockAuditBatch))
+  }, onError)
+}
+
+export async function loadPosStockAuditItems(batchId: string) {
+  const snapshot = await getDocs(query(posCollection('stockAudits'), where('batchId', '==', batchId)))
+  return snapshot.docs.map((item) => item.data() as PosStockAudit).sort((left, right) => left.productName.localeCompare(right.productName))
+}
+
+export type PosStockAuditCountInput = {
+  productId: string
+  physicalQuantity: number
+  expectedRevision?: number
+  suppliedCostPaise?: number
+}
+
+export type PosStockAuditBatchInput = { id: string; note: string }
 
 // A small atomic ceiling keeps one multi-product audit within Firestore's
 // security-rules document-access budget. Larger physical counts are submitted
 // by the UI in successive atomic groups of five.
 const maxAtomicStockAuditCount = 5
 
-export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInput[], actor: AppUser, batchId = crypto.randomUUID()) {
+export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInput[], actor: AppUser, batchInput: PosStockAuditBatchInput | string = { id: crypto.randomUUID(), note: 'Stock count' }) {
+  const batch = typeof batchInput === 'string' ? { id: batchInput, note: 'Stock count' } : batchInput
   if (!counts.length || counts.length > maxAtomicStockAuditCount) throw new Error(`Audit ${counts.length ? `groups are limited to ${maxAtomicStockAuditCount} products` : 'at least one product must be scanned'}.`)
   if (new Set(counts.map((count) => count.productId)).size !== counts.length) throw new Error('Each product can appear only once in an audit batch.')
   if (counts.some((count) => !Number.isInteger(count.physicalQuantity) || count.physicalQuantity < 0)) throw new Error('Physical quantities must be whole numbers of zero or more.')
@@ -95,12 +126,17 @@ export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInpu
   const prepared = counts.map((count) => ({
     ...count,
     productRef: posDoc('products', count.productId),
+    costRef: posDoc('productCosts', count.productId),
     auditId: crypto.randomUUID(),
     movementId: crypto.randomUUID(),
   }))
 
   return runTransaction(db, async (transaction) => {
-    const snapshots = await Promise.all(prepared.map((count) => transaction.get(count.productRef)))
+    const [snapshots, costSnapshots, batchSnapshot] = await Promise.all([
+      Promise.all(prepared.map((count) => transaction.get(count.productRef))),
+      Promise.all(prepared.map((count) => transaction.get(count.costRef))),
+      transaction.get(posDoc('stockAuditBatches', batch.id)),
+    ])
     const timestamp = nowIso()
     const results = prepared.map((count, index) => {
       const snapshot = snapshots[index]
@@ -111,11 +147,32 @@ export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInpu
       }
       const difference = count.physicalQuantity - product.currentQuantity
       const nextRevision = difference === 0 ? product.revision : product.revision + 1
-      return { ...count, product, difference, nextRevision, timestamp }
+      const costData = costSnapshots[index].data()
+      const recordedCost = typeof costData?.costPaise === 'number' ? costData.costPaise : null
+      const unitCostPaise = recordedCost ?? count.suppliedCostPaise
+      if (!Number.isSafeInteger(unitCostPaise) || (unitCostPaise ?? 0) < 0) throw new Error(`${product.name} has no purchase cost. Enter its cost before saving.`)
+      const costSource: PosStockAudit['costSource'] = recordedCost === null ? 'audit-correction' : String(costData?.importRunId ?? '').startsWith('grn:') ? 'grn' : 'manual'
+      const valueImpactPaise = difference * (unitCostPaise ?? 0)
+      return { ...count, product, difference, nextRevision, timestamp, unitCostPaise: unitCostPaise ?? 0, costSource, valueImpactPaise, needsCostWrite: recordedCost === null }
     })
 
+    const groupIncrease = results.reduce((sum, item) => sum + Math.max(0, item.valueImpactPaise), 0)
+    const groupDecrease = results.reduce((sum, item) => sum + Math.abs(Math.min(0, item.valueImpactPaise)), 0)
+    const previous = batchSnapshot.data() as PosStockAuditBatch | undefined
+    const batchData: PosStockAuditBatch = {
+      id: batch.id, status: 'saving', note: batch.note,
+      itemCount: (previous?.itemCount ?? 0) + results.length,
+      adjustedItemCount: (previous?.adjustedItemCount ?? 0) + results.filter((item) => item.difference !== 0).length,
+      matchedItemCount: (previous?.matchedItemCount ?? 0) + results.filter((item) => item.difference === 0).length,
+      increaseValuePaise: (previous?.increaseValuePaise ?? 0) + groupIncrease,
+      decreaseValuePaise: (previous?.decreaseValuePaise ?? 0) + groupDecrease,
+      netValuePaise: (previous?.netValuePaise ?? 0) + groupIncrease - groupDecrease,
+      createdAt: previous?.createdAt ?? timestamp, ...actorFields(actor),
+    }
+    transaction.set(posDoc('stockAuditBatches', batch.id), batchData)
+
     for (const result of results) {
-      const { product, productRef, productId, physicalQuantity, auditId, movementId, difference, nextRevision } = result
+      const { product, productRef, costRef, productId, physicalQuantity, auditId, movementId, difference, nextRevision, unitCostPaise, costSource, valueImpactPaise, needsCostWrite } = result
       if (difference !== 0) {
         transaction.update(productRef, {
           currentQuantity: physicalQuantity, revision: nextRevision, lastMovementId: movementId,
@@ -128,19 +185,30 @@ export async function reconcilePosStockAuditBatch(counts: PosStockAuditCountInpu
           businessDate: timestamp.slice(0, 10), stockAuditId: auditId, createdAt: timestamp, ...actorFields(actor),
         })
       }
+      if (needsCostWrite) transaction.set(costRef, {
+        productId, costPaise: unitCostPaise, sourceValue: '', importRunId: `audit:${batch.id}`,
+        lastEventId: auditId, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      }, { merge: true })
       transaction.set(posDoc('stockAudits', auditId), {
-        id: auditId, batchId, productId, barcode: product.barcode, productName: product.name,
+        id: auditId, batchId: batch.id, productId, barcode: product.barcode, productName: product.name,
         systemQuantityBefore: product.currentQuantity, physicalQuantity, difference,
         systemQuantityAfter: physicalQuantity, productRevisionBefore: product.revision, productRevisionAfter: nextRevision,
+        unitCostPaise, costSource, valueImpactPaise,
         ...(difference !== 0 ? { movementId } : {}), createdAt: timestamp, ...actorFields(actor),
       })
       transaction.set(posDoc('events', auditId), {
-        type: 'stock-audited', stockAuditId: auditId, stockAuditBatchId: batchId, productId, difference, createdAt: timestamp, ...actorFields(actor),
+        type: 'stock-audited', stockAuditId: auditId, stockAuditBatchId: batch.id, productId, difference, createdAt: timestamp, ...actorFields(actor),
       })
     }
-    return results.map(({ auditId, productId, difference, product, physicalQuantity }) => ({
-      auditId, productId, difference, systemQuantityBefore: product.currentQuantity, physicalQuantity,
+    return results.map(({ auditId, productId, difference, product, physicalQuantity, valueImpactPaise }) => ({
+      auditId, productId, difference, systemQuantityBefore: product.currentQuantity, physicalQuantity, valueImpactPaise,
     }))
+  })
+}
+
+export async function completePosStockAuditBatch(batchId: string, actor: AppUser, interrupted = false) {
+  await updateDoc(posDoc('stockAuditBatches', batchId), {
+    status: 'completed', interrupted, completedAt: nowIso(), completedByUid: actor.id,
   })
 }
 
@@ -149,12 +217,13 @@ export async function reconcilePosStockCount(productId: string, physicalQuantity
   return result
 }
 
-export type GoodsReceiptDraftInput = Pick<PosGoodsReceipt, 'vendorId' | 'vendorName' | 'invoiceNumber' | 'invoiceDate' | 'receiptDate' | 'lines'> & { id?: string }
+export type GoodsReceiptDraftInput = Pick<PosGoodsReceipt, 'vendorId' | 'vendorName' | 'invoiceNumber' | 'invoiceDate' | 'receiptDate' | 'lines'> & { id?: string; invoiceTotalPaise?: number }
 
 export async function savePosGoodsReceiptDraft(input: GoodsReceiptDraftInput, actor: AppUser) {
   if (!input.vendorId.trim() || !input.invoiceNumber.trim()) throw new Error('Choose a vendor and enter the invoice number.')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.invoiceDate) || !/^\d{4}-\d{2}-\d{2}$/.test(input.receiptDate)) throw new Error('Enter valid invoice and receipt dates.')
   if (!input.lines.length) throw new Error('Scan at least one product before saving the draft.')
+  if (!Number.isSafeInteger(input.invoiceTotalPaise) || (input.invoiceTotalPaise ?? 0) <= 0) throw new Error('Enter the full invoice payable before saving the GRN draft.')
   const id = input.id ?? crypto.randomUUID()
   const reference = posDoc('goodsReceipts', id)
   const timestamp = nowIso()
@@ -166,7 +235,8 @@ export async function savePosGoodsReceiptDraft(input: GoodsReceiptDraftInput, ac
     transaction.set(reference, {
       id, status: 'draft', vendorId: input.vendorId.trim(), vendorName: input.vendorName.trim(),
       invoiceNumber: input.invoiceNumber.trim(), invoiceDate: input.invoiceDate, receiptDate: input.receiptDate,
-      lines: input.lines, totalPaise: input.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0),
+      lines: input.lines, totalPaise: input.invoiceTotalPaise || input.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0),
+      ...(input.invoiceTotalPaise ? { invoiceTotalPaise: input.invoiceTotalPaise } : {}),
       revision: existing.exists() ? Number(existing.data().revision ?? 0) + 1 : 1,
       createdAt: existing.exists() ? existing.data().createdAt : timestamp,
       createdByUid: existing.exists() ? existing.data().createdByUid : actor.id,
@@ -203,10 +273,12 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
     const receipt = receiptSnapshot.data() as PosGoodsReceipt
     if (receipt.status !== 'draft') throw new Error('This GRN has already been submitted.')
     if (!receipt.lines.length) throw new Error('The GRN has no product lines.')
-    const totalPaise = receipt.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
-    if (!Number.isSafeInteger(totalPaise) || totalPaise <= 0) throw new Error('GRN total must be greater than zero.')
-    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isInteger(line.unitCostPaise) || line.unitCostPaise <= 0 || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0)))) throw new Error('Each GRN line needs a positive whole quantity and purchase cost. New products also need a category and selling price.')
-    if (new Set(receipt.lines.map((line) => line.productId)).size !== receipt.lines.length) throw new Error('A product can appear only once per GRN. Update its quantity on the existing line.')
+    const receivedLines = receipt.lines.filter((line) => line.quantity > 0)
+    if (!receivedLines.length) throw new Error('Enter a received quantity greater than zero for at least one product.')
+    const totalPaise = receipt.invoiceTotalPaise ?? 0
+    if (!Number.isSafeInteger(totalPaise) || totalPaise <= 0) throw new Error('Enter the full vendor invoice payable before submitting.')
+    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 0 || !Number.isInteger(line.unitCostPaise) || line.unitCostPaise < 0 || (line.quantity > 0 && line.unitCostPaise <= 0) || (line.mrpChanged && line.mrpPaise !== null && line.mrpPaise !== undefined && (!Number.isSafeInteger(line.mrpPaise) || line.mrpPaise < 0)) || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0)))) throw new Error('Received lines need a positive whole quantity and purchase cost. New products also need a category and selling price; MRP must be zero or greater.')
+    if (new Set(receivedLines.map((line) => line.productId)).size !== receivedLines.length) throw new Error('A product can appear only once per GRN. Update its quantity on the existing line.')
 
     const configRef = doc(db, 'appMetadata', 'vendorLedgerV2Config')
     const vendorRef = doc(references.vendors, receipt.vendorId)
@@ -218,10 +290,10 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
 
     const vendorSnapshot = await transaction.get(vendorRef)
     if (!vendorSnapshot.exists() || vendorSnapshot.data().active !== true) throw new Error('Choose an active vendor.')
-    const productRefs = receipt.lines.map((line) => posDoc('products', line.productId))
+    const productRefs = receivedLines.map((line) => posDoc('products', line.productId))
     const productSnapshots = await Promise.all(productRefs.map((reference) => transaction.get(reference)))
     productSnapshots.forEach((snapshot, index) => {
-      const line = receipt.lines[index]
+      const line = receivedLines[index]
       if (snapshot.exists() && (snapshot.data().barcode !== line.barcode || snapshot.data().revision < 1)) throw new Error(`Product changed for ${line.productName}. Re-scan it before submitting.`)
       if (!snapshot.exists() && !line.newProduct) throw new Error(`Product ${line.productName} no longer exists. Re-scan its barcode.`)
       if (snapshot.exists() && line.newProduct) throw new Error(`Product ${line.productName} already exists. Re-scan its barcode.`)
@@ -233,45 +305,89 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
     const posting = buildPurchasePostingV2({
       id: purchaseId, vendorId: receipt.vendorId, invoiceNumber: receipt.invoiceNumber, invoiceDate: receipt.invoiceDate,
       receiptDate: receipt.receiptDate, invoiceTotalPaise: totalPaise, actorUserId: actor.id,
-      timestamp: nowIso(), reservationKey: id,
+      timestamp: nowIso(),
     })
-    const purchase = { ...posting.purchase, grnId: id, lines: receipt.lines }
-    const purchaseRef = doc(references.purchases, purchaseId)
     const reservationRef = doc(references.invoiceReservations, posting.reservation.id)
-    const ledgerRef = doc(references.ledgerEntries, posting.ledgerEntry.id)
-    const invoiceStateRef = doc(references.invoiceStates, purchaseId)
-    const [purchaseSnap, reservationSnap, ledgerSnap, invoiceStateSnap] = await Promise.all([
-      transaction.get(purchaseRef), transaction.get(reservationRef), transaction.get(ledgerRef), transaction.get(invoiceStateRef),
-    ])
-    if (purchaseSnap.exists() || reservationSnap.exists() || ledgerSnap.exists() || invoiceStateSnap.exists()) throw new Error('This GRN payable already exists or conflicts with another record.')
-    const timestamp = posting.purchase.createdAt
-    transaction.set(purchaseRef, purchase)
-    transaction.set(reservationRef, posting.reservation)
-    transaction.set(ledgerRef, posting.ledgerEntry)
-    transaction.set(invoiceStateRef, posting.invoiceState)
-    transaction.set(accountRef, currentAccount ? {
-      ...currentAccount, outstandingPaise: currentAccount.outstandingPaise + totalPaise,
-      revision: currentAccount.revision + 1, lastLedgerEntryId: posting.ledgerEntry.id,
-      updatedAt: timestamp, updatedByUserId: actor.id,
-    } satisfies VendorAccountStateV2 : {
-      id: receipt.vendorId, vendorId: receipt.vendorId, outstandingPaise: totalPaise, revision: 1,
-      lastLedgerEntryId: posting.ledgerEntry.id, updatedAt: timestamp, updatedByUserId: actor.id,
-    } satisfies VendorAccountStateV2)
+    const reservationSnap = await transaction.get(reservationRef)
+    let payableCreated = false
+    let payableOwner = false
+    let timestamp = posting.purchase.createdAt
+    let payablePurchaseId = purchaseId
+    let originatingGoodsReceiptId: string | undefined
+    if (reservationSnap.exists()) {
+      const existingPurchaseId = String(reservationSnap.data().purchaseId ?? '')
+      const existingPurchaseRef = doc(references.purchases, existingPurchaseId)
+      const existingInvoiceRef = doc(references.invoiceStates, existingPurchaseId)
+      const [existingPurchaseSnap, existingInvoiceSnap] = await Promise.all([
+        transaction.get(existingPurchaseRef), transaction.get(existingInvoiceRef),
+      ])
+      const existingPurchase = existingPurchaseSnap.data() ?? {}
+      if (!existingPurchaseSnap.exists() || !existingInvoiceSnap.exists() || !existingPurchase.grnId) {
+        throw new Error('This vendor invoice is already recorded outside GRN. Review the vendor ledger before receiving it again.')
+      }
+      if (existingPurchase.vendorId !== receipt.vendorId || existingPurchase.normalizedInvoiceNumber !== posting.purchase.normalizedInvoiceNumber || existingPurchase.invoiceTotalPaise !== totalPaise) {
+        throw new Error('This invoice number already has a payable with different details. Reuse the same vendor and full invoice total for another partial receipt.')
+      }
+      const originReceiptRef = posDoc('goodsReceipts', String(existingPurchase.grnId))
+      const originReceiptSnap = await transaction.get(originReceiptRef)
+      if (!originReceiptSnap.exists() || originReceiptSnap.data().status !== 'submitted') throw new Error('The original GRN for this invoice is not active; ask the owner to review it before adding another receipt.')
+      originatingGoodsReceiptId = String(existingPurchase.grnId)
+      timestamp = nowIso()
+      const linkedReceiptIds = Array.isArray(originReceiptSnap.data().linkedReceiptIds) ? originReceiptSnap.data().linkedReceiptIds as string[] : []
+      if (!linkedReceiptIds.includes(id)) transaction.update(originReceiptRef, {
+        linkedReceiptIds: [...linkedReceiptIds, id], revision: Number(originReceiptSnap.data().revision ?? 0) + 1,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      payablePurchaseId = existingPurchaseId
+    } else {
+      const purchaseRef = doc(references.purchases, purchaseId)
+      const ledgerRef = doc(references.ledgerEntries, posting.ledgerEntry.id)
+      const invoiceStateRef = doc(references.invoiceStates, purchaseId)
+      const [purchaseSnap, ledgerSnap, invoiceStateSnap] = await Promise.all([
+        transaction.get(purchaseRef), transaction.get(ledgerRef), transaction.get(invoiceStateRef),
+      ])
+      if (purchaseSnap.exists() || ledgerSnap.exists() || invoiceStateSnap.exists()) throw new Error('This GRN payable already exists or conflicts with another record.')
+      const purchase = { ...posting.purchase, grnId: id, lines: receivedLines }
+      timestamp = posting.purchase.createdAt
+      payableCreated = true
+      payableOwner = true
+      transaction.set(purchaseRef, purchase)
+      transaction.set(reservationRef, posting.reservation)
+      transaction.set(ledgerRef, posting.ledgerEntry)
+      transaction.set(invoiceStateRef, posting.invoiceState)
+      transaction.set(accountRef, currentAccount ? {
+        ...currentAccount, outstandingPaise: currentAccount.outstandingPaise + totalPaise,
+        revision: currentAccount.revision + 1, lastLedgerEntryId: posting.ledgerEntry.id,
+        updatedAt: timestamp, updatedByUserId: actor.id,
+      } satisfies VendorAccountStateV2 : {
+        id: receipt.vendorId, vendorId: receipt.vendorId, outstandingPaise: totalPaise, revision: 1,
+        lastLedgerEntryId: posting.ledgerEntry.id, updatedAt: timestamp, updatedByUserId: actor.id,
+      } satisfies VendorAccountStateV2)
+    }
 
-    receipt.lines.forEach((line, index) => {
+    receivedLines.forEach((line, index) => {
       const snapshot = productSnapshots[index]
       const movementId = crypto.randomUUID()
       const existing = snapshot.data() as PosProduct | undefined
       const beforeQuantity = existing?.currentQuantity ?? 0
       const afterQuantity = beforeQuantity + line.quantity
       const beforeRevision = existing?.revision ?? 0
-      if (snapshot.exists()) transaction.update(productRefs[index], {
-        currentQuantity: afterQuantity, revision: beforeRevision + 1, lastMovementId: movementId,
-        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
-      })
+      if (snapshot.exists()) {
+        const updates: Record<string, unknown> = {
+          currentQuantity: afterQuantity, revision: beforeRevision + 1, lastMovementId: movementId,
+          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+        }
+        if (line.mrpChanged) {
+          const sourceValues = Object.fromEntries(Object.entries(existing?.sourceValues ?? {}).filter(([key]) => key.trim().toLocaleLowerCase('en-IN') !== 'printed mrp'))
+          if (line.mrpPaise !== null && line.mrpPaise !== undefined) sourceValues['Printed MRP'] = (line.mrpPaise / 100).toFixed(2)
+          updates.sourceValues = sourceValues
+        }
+        transaction.update(productRefs[index], updates)
+      }
       else transaction.set(productRefs[index], {
         id: line.productId, barcode: line.barcode, name: line.productName, searchName: line.productName.toLocaleLowerCase('en-IN'),
         searchTokens: posProductSearchTokens(line.productName), category: line.category, brand: '', vendor: receipt.vendorName,
+        sourceValues: line.mrpPaise !== null && line.mrpPaise !== undefined ? { 'Printed MRP': (line.mrpPaise / 100).toFixed(2) } : {},
         sellingPricePaise: line.sellingPricePaise ?? 0, currentQuantity: afterQuantity, revision: 1, active: true,
         createdAt: timestamp, createdByUid: actor.id, createdByName: actor.name, createdFromGoodsReceiptId: id,
         updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name, lastMovementId: movementId,
@@ -287,15 +403,16 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       }, { merge: true })
     })
     transaction.update(receiptRef, {
-      status: 'submitted', totalPaise, payablePurchaseId: purchaseId,
+      status: 'submitted', totalPaise, invoiceTotalPaise: totalPaise, lines: receivedLines, payablePurchaseId, payableOwner,
+      ...(originatingGoodsReceiptId ? { originatingGoodsReceiptId } : {}),
       revision: receipt.revision + 1,
       updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
     })
     transaction.set(posDoc('events', crypto.randomUUID()), {
-      type: 'goods-receipt-submitted', goodsReceiptId: id, purchaseId, vendorId: receipt.vendorId,
-      totalPaise, createdAt: timestamp, ...actorFields(actor),
+      type: 'goods-receipt-submitted', goodsReceiptId: id, purchaseId: payablePurchaseId, vendorId: receipt.vendorId,
+      totalPaise, payableCreated, createdAt: timestamp, ...actorFields(actor),
     })
-    return { purchaseId, totalPaise }
+    return { purchaseId: payablePurchaseId, totalPaise, payableCreated }
   })
 }
 
@@ -310,6 +427,52 @@ export async function reversePosGoodsReceipt(id: string, reason: string, actor: 
     if (!receiptSnapshot.exists()) throw new Error('GRN was not found.')
     const receipt = receiptSnapshot.data() as PosGoodsReceipt
     if (receipt.status !== 'submitted' || !receipt.payablePurchaseId) throw new Error('Only a submitted GRN can be reversed.')
+    if (receipt.payableOwner === false) {
+      const originReceiptRef = posDoc('goodsReceipts', String(receipt.originatingGoodsReceiptId ?? ''))
+      const productRefs = receipt.lines.map((line) => posDoc('products', line.productId))
+      const costRefs = receipt.lines.map((line) => posDoc('productCosts', line.productId))
+      const [originSnapshot, products, costs] = await Promise.all([
+        transaction.get(originReceiptRef),
+        Promise.all(productRefs.map((reference) => transaction.get(reference))),
+        Promise.all(costRefs.map((reference) => transaction.get(reference))),
+      ])
+      if (!originSnapshot.exists() || originSnapshot.data().status !== 'submitted') throw new Error('The invoice GRN is no longer active; ask the owner to review this receipt.')
+      products.forEach((product, index) => { if (!product.exists()) throw new Error(`Product ${receipt.lines[index].productName} no longer exists.`) })
+      const timestamp = nowIso()
+      receipt.lines.forEach((line, index) => {
+        const product = products[index].data() as PosProduct
+        const movementId = crypto.randomUUID()
+        const afterQuantity = product.currentQuantity - line.quantity
+        transaction.update(productRefs[index], {
+          currentQuantity: afterQuantity, revision: product.revision + 1, lastMovementId: movementId,
+          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+        })
+        transaction.set(posDoc('stockMovements', movementId), {
+          id: movementId, productId: line.productId, barcode: line.barcode, type: 'goods-receipt-reversal', quantityDelta: -line.quantity,
+          beforeQuantity: product.currentQuantity, afterQuantity, productRevisionBefore: product.revision,
+          productRevisionAfter: product.revision + 1, businessDate: receipt.receiptDate, goodsReceiptId: id,
+          reason: reason.trim(), createdAt: timestamp, ...actorFields(actor),
+        })
+        if (costs[index].exists() && costs[index].data().importRunId === `grn:${id}`) transaction.set(costRefs[index], {
+          ...costs[index].data(), costPaise: null, importRunId: `grn-reversal:${id}`,
+          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+        })
+      })
+      const linkedReceiptIds = (Array.isArray(originSnapshot.data().linkedReceiptIds) ? originSnapshot.data().linkedReceiptIds as string[] : []).filter((linkedId) => linkedId !== id)
+      transaction.update(originReceiptRef, {
+        linkedReceiptIds, revision: Number(originSnapshot.data().revision ?? 0) + 1,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      transaction.update(receiptRef, {
+        status: 'reversed', reversalReason: reason.trim(), revision: receipt.revision + 1,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      transaction.set(posDoc('events', crypto.randomUUID()), {
+        type: 'goods-receipt-reversed', goodsReceiptId: id, reason: reason.trim(), payableChanged: false,
+        createdAt: timestamp, ...actorFields(actor),
+      })
+      return { reversalId: '', payableReversed: false }
+    }
     const purchaseRef = doc(references.purchases, receipt.payablePurchaseId)
     const invoiceStateRef = doc(references.invoiceStates, receipt.payablePurchaseId)
     const accountRef = doc(references.vendorAccountStates, receipt.vendorId)
@@ -320,6 +483,7 @@ export async function reversePosGoodsReceipt(id: string, reason: string, actor: 
     const purchase = purchaseSnapshot.data() as PurchaseV2
     const invoice = invoiceSnapshot.data() as InvoiceStateV2
     const account = accountSnapshot.data() as VendorAccountStateV2
+    if ((receipt.linkedReceiptIds ?? []).length > 0) throw new Error('Reverse the linked partial receipts first; the invoice payable belongs to this original GRN.')
     if (invoice.reservedAmountPaise !== 0) throw new Error('A payment is being allocated to this invoice. Retry the reversal after that payment finishes.')
     if (account.outstandingPaise < invoice.openAmountPaise) throw new Error('The vendor outstanding does not cover this invoice open amount; ask the owner to review the ledger.')
     const productRefs = receipt.lines.map((line) => posDoc('products', line.productId))
@@ -377,7 +541,7 @@ export async function reversePosGoodsReceipt(id: string, reason: string, actor: 
       type: 'goods-receipt-reversed', goodsReceiptId: id, reversalLedgerEntryId: reversalId,
       reason: reason.trim(), createdAt: timestamp, ...actorFields(actor),
     })
-    return { reversalId }
+    return { reversalId, payableReversed: true }
   })
 }
 
@@ -615,7 +779,15 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     productSnapshots.forEach((snapshot, index) => {
       const line = productLines[index]
       if (!snapshot.exists()) throw new Error(`Product no longer exists: ${line.description}.`)
-      if (snapshot.data().revision !== line.expectedProductRevision) throw new Error(`Stock changed for ${line.description}. Refresh the cart and try again.`)
+      if (snapshot.data().revision !== line.expectedProductRevision) {
+        const latest = snapshot.data()
+        throw new PosProductChangedSinceScanError(line.productId, line.stockAtScan, {
+          name: String(latest.name ?? line.description),
+          sellingPricePaise: Number(latest.sellingPricePaise ?? line.unitPricePaise),
+          currentQuantity: Number(latest.currentQuantity ?? 0),
+          revision: Number(latest.revision ?? 0),
+        })
+      }
     })
     const sequenceNumber = Number(sequenceSnapshot.data()?.lastNumber ?? 0) + 1
     const timestamp = nowIso()

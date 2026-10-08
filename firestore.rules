@@ -1181,6 +1181,29 @@ service cloud.firestore {
         return /databases/$(database)/documents/posSandboxes/$(sandboxId)/handover/main;
       }
       function handoverEnabled() { return exists(handoverPath()); }
+
+      function validProductStockMovement(productId) {
+        let movement = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data;
+        return movement.productId == productId &&
+          movement.actorUid == request.auth.uid &&
+          movement.productRevisionBefore == resource.data.revision &&
+          movement.productRevisionAfter == request.resource.data.revision &&
+          movement.beforeQuantity == resource.data.currentQuantity &&
+          movement.afterQuantity == request.resource.data.currentQuantity;
+      }
+
+      function validSubmittedGoodsReceipt(receiptId) {
+        let purchase = getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data;
+        let ownsPayable = purchase.grnId == receiptId && request.resource.data.payableOwner == true;
+        let linksPayable = request.resource.data.payableOwner == false &&
+          request.resource.data.originatingGoodsReceiptId == purchase.grnId &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(purchase.grnId)).data.linkedReceiptIds.hasAny([receiptId]);
+        return request.resource.data.status == 'submitted' &&
+          request.resource.data.payablePurchaseId is string &&
+          purchase.vendorId == request.resource.data.vendorId &&
+          purchase.invoiceTotalPaise == request.resource.data.totalPaise &&
+          (ownsPayable || linksPayable);
+      }
       function paymentAt(payments, index, method) {
         return payments.size() > index && payments[index].method == method ? payments[index].amountPaise : 0;
       }
@@ -1403,26 +1426,26 @@ service cloud.firestore {
               ]) ||
               (
                 request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                  'currentQuantity', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
+                  'currentQuantity', 'sourceValues', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
                 ]) &&
                 request.resource.data.currentQuantity is int &&
                 request.resource.data.updatedByUid == request.auth.uid &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.actorUid == request.auth.uid &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionBefore == resource.data.revision &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productRevisionAfter == request.resource.data.revision &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.beforeQuantity == resource.data.currentQuantity &&
-                getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.afterQuantity == request.resource.data.currentQuantity
+                validProductStockMovement(productId)
               )
             )));
         allow delete: if sandboxId == 'test' && isOwner();
       }
 
       match /productCosts/{productId} {
-        allow read: if sandboxId == 'test' && isManagerOrOwner();
+        allow read: if sandboxId == 'test' && isStaff();
         allow create, update: if sandboxId == 'test' && (isManagerOrOwner() || (
-          isStaff() && request.resource.data.get('importRunId', '').matches('^grn:.+$') &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.importRunId.split(':')[1])).data.status == 'submitted'
+          isStaff() && (
+            (request.resource.data.get('importRunId', '').matches('^grn:.+$') &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.importRunId.split(':')[1])).data.status == 'submitted') ||
+            (request.resource.data.get('importRunId', '').matches('^audit:.+$') &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.importRunId.split(':')[1])).data.status == 'saving' &&
+              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.importRunId.split(':')[1])).data.actorUid == request.auth.uid)
+          )
         )) &&
           request.resource.data.productId == productId &&
           request.resource.data.updatedByUid == request.auth.uid &&
@@ -1454,12 +1477,13 @@ service cloud.firestore {
           request.resource.data.createdByUid == resource.data.createdByUid && request.resource.data.revision == resource.data.revision + 1 &&
           request.resource.data.updatedByUid == request.auth.uid &&
           ((resource.data.status == 'draft' && request.resource.data.lines is list && request.resource.data.lines.size() > 0 &&
-            (request.resource.data.status == 'draft' || (
-              request.resource.data.status == 'submitted' && request.resource.data.payablePurchaseId is string &&
-              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.grnId == receiptId &&
-              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.vendorId == request.resource.data.vendorId &&
-              getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data.invoiceTotalPaise == request.resource.data.totalPaise
-            ))) ||
+            (request.resource.data.status == 'draft' || validSubmittedGoodsReceipt(receiptId))) ||
+           (resource.data.status == 'submitted' && request.resource.data.status == 'submitted' &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedReceiptIds', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName']) &&
+             request.resource.data.linkedReceiptIds is list) ||
+           (isOwner() && resource.data.status == 'submitted' && resource.data.payableOwner == false &&
+             request.resource.data.status == 'reversed' && request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reversalReason', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'])) ||
            (isOwner() && resource.data.status == 'submitted' && request.resource.data.status == 'reversed' &&
             request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
             request.resource.data.reversalLedgerEntryId is string &&
@@ -1479,6 +1503,11 @@ service cloud.firestore {
           request.resource.data.physicalQuantity >= 0 &&
           request.resource.data.difference == request.resource.data.physicalQuantity - request.resource.data.systemQuantityBefore &&
           request.resource.data.systemQuantityAfter == request.resource.data.physicalQuantity &&
+          request.resource.data.batchId is string &&
+          request.resource.data.unitCostPaise is int && request.resource.data.unitCostPaise >= 0 &&
+          request.resource.data.valueImpactPaise == request.resource.data.difference * request.resource.data.unitCostPaise &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.batchId)).data.status == 'saving' &&
+          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.batchId)).data.actorUid == request.auth.uid &&
           request.resource.data.productRevisionAfter >= request.resource.data.productRevisionBefore &&
           getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/products/$(request.resource.data.productId)).data.currentQuantity == request.resource.data.physicalQuantity &&
           ((request.resource.data.difference == 0 &&
@@ -1488,6 +1517,39 @@ service cloud.firestore {
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.stockAuditId == auditId &&
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.quantityDelta == request.resource.data.difference));
         allow update, delete: if false;
+      }
+
+      match /stockAuditBatches/{batchId} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow create: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == batchId && request.resource.data.status == 'saving' &&
+          request.resource.data.note is string && request.resource.data.note.size() > 0 &&
+          request.resource.data.actorUid == request.auth.uid &&
+          request.resource.data.itemCount is int && request.resource.data.itemCount > 0 &&
+          request.resource.data.adjustedItemCount is int && request.resource.data.adjustedItemCount >= 0 &&
+          request.resource.data.matchedItemCount is int && request.resource.data.matchedItemCount >= 0 &&
+          request.resource.data.itemCount == request.resource.data.adjustedItemCount + request.resource.data.matchedItemCount &&
+          request.resource.data.increaseValuePaise is int && request.resource.data.increaseValuePaise >= 0 &&
+          request.resource.data.decreaseValuePaise is int && request.resource.data.decreaseValuePaise >= 0 &&
+          request.resource.data.netValuePaise == request.resource.data.increaseValuePaise - request.resource.data.decreaseValuePaise;
+        allow update: if sandboxId == 'test' && isStaff() &&
+          request.resource.data.id == resource.data.id && request.resource.data.note == resource.data.note &&
+          request.resource.data.createdAt == resource.data.createdAt && request.resource.data.actorUid == resource.data.actorUid &&
+          request.resource.data.actorName == resource.data.actorName && request.resource.data.actorRole == resource.data.actorRole &&
+          resource.data.actorUid == request.auth.uid && resource.data.status == 'saving' &&
+          ((request.resource.data.status == 'saving' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['itemCount', 'adjustedItemCount', 'matchedItemCount', 'increaseValuePaise', 'decreaseValuePaise', 'netValuePaise']) &&
+            request.resource.data.itemCount > resource.data.itemCount &&
+            request.resource.data.adjustedItemCount >= resource.data.adjustedItemCount &&
+            request.resource.data.matchedItemCount >= resource.data.matchedItemCount &&
+            request.resource.data.itemCount == request.resource.data.adjustedItemCount + request.resource.data.matchedItemCount &&
+            request.resource.data.increaseValuePaise >= resource.data.increaseValuePaise &&
+            request.resource.data.decreaseValuePaise >= resource.data.decreaseValuePaise &&
+            request.resource.data.netValuePaise == request.resource.data.increaseValuePaise - request.resource.data.decreaseValuePaise) ||
+           (request.resource.data.status == 'completed' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'interrupted', 'completedAt', 'completedByUid']) &&
+            request.resource.data.completedByUid == request.auth.uid && request.resource.data.completedAt is string));
+        allow delete: if false;
       }
 
       match /bills/{billId} {

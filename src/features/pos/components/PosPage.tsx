@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
-import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Barcode, ChartPie, FileClock, ClipboardCheck, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { formatDisplayDateTime, today } from '@/app/uiHelpers'
 import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/components/ResponsiveLogTable'
@@ -23,6 +23,7 @@ import {
   finalizePosBill,
   findPosProductByBarcode,
   loadRecentPosBills,
+  PosProductChangedSinceScanError,
   type PosBillPageCursor,
   searchPosProductsByName,
   requestBillAction,
@@ -38,9 +39,9 @@ import type { VendorV2 } from '@/domain/vendorLedgerV2'
 import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
 import { expectedHandover, handoverDate } from '../domain/cashierHandover'
 import { useCashierHandover } from '../hooks/useCashierHandover'
-import { PosGoodsReceipt } from './PosGoodsReceipt'
+import { PosGoodsReceipt, PosStockAuditPage } from './PosGoodsReceipt'
 
-type Tab = 'checkout' | 'dashboard' | 'bills' | 'grn'
+type Tab = 'checkout' | 'dashboard' | 'bills' | 'grn' | 'audit'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
 ]
@@ -75,7 +76,13 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const [searchingProducts, setSearchingProducts] = useState(false)
   const [productSearchError, setProductSearchError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showCustomerDiscount, setShowCustomerDiscount] = useState(false)
+  const [highlightedCartKey, setHighlightedCartKey] = useState<string | null>(null)
+  const [cartUpdateSequence, setCartUpdateSequence] = useState(0)
+  const [checkoutWarning, setCheckoutWarning] = useState('')
   const scannerRef = useRef<HTMLInputElement>(null)
+  const cartScrollRef = useRef<HTMLDivElement>(null)
+  const highlightTimerRef = useRef<number | null>(null)
   const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
   useEffect(() => {
     if (tab !== 'grn') return
@@ -116,16 +123,33 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const requiresDiscountOverrideReason = currentUser.role !== 'billing'
     && sandbox.config.billingMaxDiscountPercentage !== null
     && effectiveDiscountPercentage > sandbox.config.billingMaxDiscountPercentage
+  useEffect(() => {
+    if (requiresDiscountOverrideReason) setShowCustomerDiscount(true)
+  }, [requiresDiscountOverrideReason])
+  useEffect(() => {
+    if (cartUpdateSequence > 0) cartScrollRef.current?.scrollTo({ top: 0 })
+  }, [cartUpdateSequence])
   let paymentError = ''
   try { buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined) }
   catch (error) { paymentError = error instanceof Error ? error.message : 'Payment is invalid.' }
 
   function addProduct(product: PosProduct) {
+    setCheckoutWarning('')
+    setCartUpdateSequence((sequence) => sequence + 1)
+    setHighlightedCartKey(product.id)
+    if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+    highlightTimerRef.current = window.setTimeout(() => setHighlightedCartKey(null), 1100)
     setCart((current) => {
       const existing = current.find((line) => line.kind === 'product' && line.productId === product.id)
-      if (existing) return current.map((line) => line.id === existing.id ? { ...line, quantity: line.quantity + 1, expectedProductRevision: product.revision, stockAtScan: product.currentQuantity } : line)
-      return [...current, { id: crypto.randomUUID(), kind: 'product', productId: product.id, barcode: product.barcode, description: product.name, quantity: 1, unitPricePaise: product.sellingPricePaise, expectedProductRevision: product.revision, stockAtScan: product.currentQuantity }]
+      const updatedLine: PosCartLine = existing
+        ? { ...existing, quantity: existing.quantity + 1, expectedProductRevision: product.revision, stockAtScan: product.currentQuantity }
+        : { id: crypto.randomUUID(), kind: 'product', productId: product.id, barcode: product.barcode, description: product.name, quantity: 1, unitPricePaise: product.sellingPricePaise, expectedProductRevision: product.revision, stockAtScan: product.currentQuantity }
+      return [updatedLine, ...current.filter((line) => line.id !== existing?.id)]
     })
+  }
+
+  function focusScanner() {
+    window.requestAnimationFrame(() => scannerRef.current?.focus({ preventScroll: true }))
   }
 
   async function scanBarcode(value: string) {
@@ -136,11 +160,12 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       if (product?.active) addProduct(product)
       else { setUnknownBarcode(barcode); setUnknownDescription(''); setUnknownPrice(''); showToast('Unknown barcode. Add it as a temporary item.') }
     } catch (error) { showToast(error instanceof Error ? error.message : 'Barcode lookup failed.') }
-    finally { if (scannerRef.current) scannerRef.current.value = ''; scannerRef.current?.focus() }
+    finally { if (scannerRef.current) scannerRef.current.value = ''; scannerRef.current?.focus({ preventScroll: true }) }
   }
 
   function resetCart() {
     setCart([]); setCustomerName(''); setCustomerMobile(''); setDiscountMode('none'); setDiscountValue('0'); setDiscountReason(''); setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null)
+    setCheckoutWarning('')
   }
 
   function clearCart() {
@@ -154,10 +179,22 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
       const bill = await finalizePosBill({ businessDate: today(), lines: cart, discount, payments: settlement.payments, customerName, customerMobile, ...(settlement.cashTenderedPaise !== undefined ? { cashTenderedPaise: settlement.cashTenderedPaise } : {}) }, currentUser)
       clearCart()
+      setCheckoutWarning('')
+      setShowCustomerDiscount(false)
       showToast(`Bill finalized: ${bill.receiptNumber}`)
       printPosReceipt(bill, 'thermal')
-    } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to finalize bill.') }
-    finally { setBusy(false) }
+    } catch (error) {
+      if (error instanceof PosProductChangedSinceScanError) {
+        setCart((current) => current.map((line) => line.kind === 'product' && line.productId === error.productId
+          ? { ...line, description: error.latestProduct.name, unitPricePaise: error.latestProduct.sellingPricePaise, stockAtScan: error.latestProduct.currentQuantity, expectedProductRevision: error.latestProduct.revision }
+          : line))
+        const oldStock = error.previousStock === undefined ? 'unknown' : String(error.previousStock)
+        setCheckoutWarning(`Product updated since scan (stock ${oldStock} → ${error.latestProduct.currentQuantity}). Cart details were refreshed and quantity was kept. Review the price and total, then finalize again; no bill was created.`)
+      } else {
+        showToast(error instanceof Error ? error.message : 'Unable to finalize bill.')
+      }
+    }
+    finally { setBusy(false); focusScanner() }
   }
 
   return <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
@@ -165,11 +202,12 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-4">
+            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-5">
               <PageHeaderTab value="checkout"><ShoppingCart />Billing</PageHeaderTab>
               <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
               <PageHeaderTab value="grn"><Barcode />GRN</PageHeaderTab>
+              <PageHeaderTab value="audit"><ClipboardCheck />Audit</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
           <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
@@ -180,7 +218,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       )} />
     )}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <PageCardStack className={tab === 'bills' || tab === 'grn' ? 'min-h-full content-start pb-4' : 'h-full pb-4'}>
+        <PageCardStack className={tab === 'bills' || tab === 'grn' || tab === 'audit' ? 'min-h-full content-start pb-4' : 'h-full pb-4'}>
       {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
@@ -193,37 +231,38 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
               {productSearch.trim().length >= 2 ? <div className="grid max-h-36 gap-1 overflow-y-auto" aria-live="polite">
                 {productSearchError ? <p role="alert" className="text-sm text-destructive">{productSearchError}</p> : searchingProducts ? <p className="text-sm text-muted-foreground">Searching products…</p> : searchResults.length === 0 ? <p className="text-sm text-muted-foreground">No products match those name words.</p> : searchResults.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm">
                   <span className="min-w-0"><strong className="block truncate">{product.name}</strong><span className="text-xs text-muted-foreground">{product.barcode} · Stock {product.currentQuantity}</span></span>
-                  <span className="flex shrink-0 items-center gap-2">{productMrp(product) ? <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">{productMrp(product)}</span> : null}<Button size="sm" type="button" disabled={!product.active} onClick={() => { addProduct(product); setProductSearch(''); setSearchResults([]); setSearchingProducts(false) }}>{product.active ? 'Add' : 'Inactive'}</Button></span>
+                  <span className="flex shrink-0 items-center gap-2">{productMrp(product) ? <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">{productMrp(product)}</span> : null}<Button size="sm" type="button" disabled={!product.active} onClick={() => { addProduct(product); setProductSearch(''); setSearchResults([]); setSearchingProducts(false); focusScanner() }}>{product.active ? 'Add' : 'Inactive'}</Button></span>
                 </div>)}
               </div> : null}
             </div>
-            {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); setCart((current) => [...current, { id: crypto.randomUUID(), kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }]); setUnknownBarcode('') }}><Plus />Add unresolved item</Button></div> : null}
+            {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); const lineId = crypto.randomUUID(); setCart((current) => [{ id: lineId, kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }, ...current]); setCartUpdateSequence((sequence) => sequence + 1); setHighlightedCartKey(lineId); if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current); highlightTimerRef.current = window.setTimeout(() => setHighlightedCartKey(null), 1100); setUnknownBarcode(''); focusScanner() }}><Plus />Add unresolved item</Button></div> : null}
           </CardContent></Card>
-          <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent className="grid gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border px-2 py-1.5 text-sm">
-            <span className="min-w-0 truncate" title={`${line.description} · ${line.barcode}`}><strong>{line.description}</strong><small className="ml-2 text-muted-foreground">{line.barcode}{line.kind === 'temporary' ? ' · UNRESOLVED' : ''}</small></span>
+          <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent ref={cartScrollRef} className="grid gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition-colors duration-500 ${highlightedCartKey === (line.kind === 'product' ? line.productId : line.id) ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : ''}`}>
+            <span className="min-w-0 truncate" title={`${line.description} · ${line.barcode}`}><strong>{line.description}</strong><small className="ml-2 text-muted-foreground">{line.barcode}{line.kind === 'temporary' ? ' · UNRESOLVED' : ''}</small>{line.kind === 'product' ? <small className="ml-2 whitespace-nowrap text-muted-foreground">Stock at scan: {line.stockAtScan ?? 'unknown'}</small> : null}</span>
             <span className="flex items-center gap-1"><Button aria-label={`Decrease quantity of ${line.description}`} size="icon" className="size-7" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))}>−</Button><strong className="min-w-5 text-center tabular-nums">{line.quantity}</strong><Button aria-label={`Increase quantity of ${line.description}`} size="icon" className="size-7" variant="outline" onClick={() => setCart((current) => current.map((item) => item.id === line.id ? { ...item, quantity: item.quantity + 1 } : item))}>+</Button></span>
             <strong className="min-w-16 text-right tabular-nums">{money(line.quantity * line.unitPricePaise)}</strong>
             <Button aria-label={`Remove ${line.description}`} size="icon" className="size-7" variant="ghost" onClick={() => setCart((current) => current.filter((item) => item.id !== line.id))}><Trash2 className="size-4" /></Button>
-            {line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="col-span-full text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Stock will be negative. Billing remains allowed.</p> : null}
+            {line.kind === 'product' && (line.stockAtScan ?? 0) - line.quantity < 0 ? <p className="col-span-full text-xs font-bold text-amber-600"><AlertTriangle className="mr-1 inline size-3" />Only {line.stockAtScan ?? 0} in stock when scanned; this bill leaves stock negative. Billing remains allowed.</p> : null}
           </div>)}
           </CardContent></Card>
         </div>
         <Card className="flex flex-col lg:h-full lg:min-h-0" aria-label="Payment and totals"><CardHeader><SectionHeading eyebrow="Billing" title="Payment & Total" /></CardHeader><CardContent className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:content-start lg:overflow-y-auto lg:pr-1">
-          <div className="grid gap-2 sm:grid-cols-2"><Input aria-label="Customer Name (Optional)" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /><Input aria-label="Mobile (Optional)" inputMode="tel" placeholder="Mobile (optional)" value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></div>
-          <div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel>{requiresDiscountOverrideReason ? <FieldLabel className="sm:col-span-2" label="Override Reason"><Input required value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Why is this discount above the limit?" /></FieldLabel> : null}</div>
+          <Button type="button" size="sm" variant="outline" aria-expanded={showCustomerDiscount} onClick={() => setShowCustomerDiscount((open) => requiresDiscountOverrideReason ? true : !open)} className="justify-between"><span>{requiresDiscountOverrideReason ? 'Discount override details required' : showCustomerDiscount ? 'Hide customer & discount' : 'Add customer or discount'}</span><span className="truncate text-xs font-normal text-muted-foreground">{customerName || customerMobile ? 'Customer added' : ''}{discount.amountPaise > 0 ? `${customerName || customerMobile ? ' · ' : ''}Discount ${money(discount.amountPaise)}` : ''}</span></Button>
+          {showCustomerDiscount ? <div className="grid gap-2 rounded-lg border border-border p-2"><div className="grid gap-2 sm:grid-cols-2"><Input aria-label="Customer Name (Optional)" placeholder="Customer name (optional)" value={customerName} onChange={(event) => setCustomerName(event.target.value)} /><Input aria-label="Mobile (Optional)" inputMode="tel" placeholder="Mobile (optional)" value={customerMobile} onChange={(event) => setCustomerMobile(event.target.value)} /></div><div className="grid gap-2 sm:grid-cols-2"><FieldLabel label="Discount Type"><NativeSelect value={discountMode} onChange={(event) => setDiscountMode(event.target.value as PosDiscount['mode'])}><option value="none">None</option><option value="percentage">Percentage</option><option value="amount">Rupee amount</option></NativeSelect></FieldLabel><FieldLabel label="Discount Value"><Input type="number" min="0" step="0.01" disabled={discountMode === 'none'} value={discountValue} onChange={(event) => setDiscountValue(event.target.value)} /></FieldLabel>{requiresDiscountOverrideReason ? <FieldLabel className="sm:col-span-2" label="Override Reason"><Input required value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Why is this discount above the limit?" /></FieldLabel> : null}</div></div> : null}
           <div className="rounded-xl bg-secondary/50 p-3 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Discount</span><strong>− {money(discount.amountPaise)}</strong></div><div className="mt-2 flex justify-between text-lg"><span>Total</span><strong>{money(total)}</strong></div></div>
           <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
-          {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
+          {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); setShowCustomerDiscount(Boolean(held.customerName || held.customerMobile || held.discount.mode !== 'none')); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
           </div>
-          <div className="grid shrink-0 gap-2 border-t border-border pt-3 sm:grid-cols-2"><Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div>
+          <div className="grid shrink-0 gap-2 border-t border-border pt-3"><div className="grid gap-2 sm:grid-cols-2">{checkoutWarning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:col-span-2"><AlertTriangle className="mr-1 inline size-3.5" />{checkoutWarning}</p> : null}<Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div></div>
         </CardContent></Card>
       </div> : null}
 
       {tab === 'dashboard' ? <PosDashboard products={sandbox.products} /> : null}
       {tab === 'bills' ? <BillsPanel currentUser={currentUser} showToast={showToast} /> : null}
       {tab === 'grn' ? <PosGoodsReceipt currentUser={currentUser} vendors={grnVendors} enabled={vendorLedgerEnabled} showToast={showToast} /> : null}
+      {tab === 'audit' ? <PosStockAuditPage currentUser={currentUser} showToast={showToast} /> : null}
         </PageCardStack>
       </div>
     </PageLayout>

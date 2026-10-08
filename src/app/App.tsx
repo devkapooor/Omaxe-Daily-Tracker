@@ -18,6 +18,7 @@ import { AuroraBackground } from '@/shared/ui/aurora-background'
 import { ACTIVE_PAGE_STORAGE_KEY, TOAST_DURATION_MS } from '@/config/appConfig'
 import { CashierHandoverBoundary } from '@/features/pos/components/CashierHandoverBoundary'
 import { synchronizeServerClock } from '@/shared/lib/serverClock'
+import { rememberAccount } from '@/features/auth/lib/rememberedAccounts'
 
 function isPage(value: string | null): value is Page {
   return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'payroll' || value === 'logs' || value === 'settings'
@@ -26,6 +27,7 @@ function isPage(value: string | null): value is Page {
 export default function App() {
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const {
+    authEmail,
     authError,
     authReady,
     appSettings,
@@ -52,6 +54,7 @@ export default function App() {
     nameDirectory,
     profileLoaded,
     renamePartyInDirectory,
+    requestPasswordReset,
     settingsAuditLog,
     signIn,
     signOutCurrentUser,
@@ -140,6 +143,11 @@ export default function App() {
   }, [currentUser])
 
   useEffect(() => {
+    if (!currentUser || !authEmail || !profileLoaded) return
+    rememberAccount({ uid: currentUser.id, name: currentUser.name, email: authEmail })
+  }, [authEmail, currentUser, profileLoaded])
+
+  useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS)
     return () => clearTimeout(timer)
@@ -202,6 +210,7 @@ export default function App() {
             await signIn(email, password)
             setToast(null)
           }}
+          onRequestPasswordReset={requestPasswordReset}
         />
       </AuroraBackground>
     )

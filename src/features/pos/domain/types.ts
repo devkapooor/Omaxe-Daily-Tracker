@@ -51,10 +51,15 @@ export type PosGoodsReceiptLine = {
   category: string
   quantity: number
   unitCostPaise: number
+  /** Raw editable cost text, kept while the user is typing a decimal amount. */
+  unitCostInput?: string
   lineTotalPaise: number
   newProduct?: true
   sellingPricePaise?: number
   stockAtScan?: number
+  mrpPaise?: number | null
+  mrpInput?: string
+  mrpChanged?: boolean
 }
 
 export type PosGoodsReceipt = {
@@ -67,7 +72,12 @@ export type PosGoodsReceipt = {
   receiptDate: string
   lines: PosGoodsReceiptLine[]
   totalPaise: number
+  /** Full vendor invoice payable; differs from value of stock physically received. */
+  invoiceTotalPaise?: number
   payablePurchaseId?: string
+  payableOwner?: boolean
+  originatingGoodsReceiptId?: string
+  linkedReceiptIds?: string[]
   reversalLedgerEntryId?: string
   revision: number
   createdAt: string
@@ -92,6 +102,27 @@ export type PosStockAudit = {
   productRevisionAfter: number
   movementId?: string
   createdAt: string
+  actorUid: string
+  actorName: string
+  actorRole: AppUser['role']
+  unitCostPaise?: number
+  costSource?: 'grn' | 'manual' | 'audit-correction'
+  valueImpactPaise?: number
+}
+
+export type PosStockAuditBatch = {
+  id: string
+  status: 'saving' | 'completed'
+  note: string
+  itemCount: number
+  adjustedItemCount: number
+  matchedItemCount: number
+  increaseValuePaise: number
+  decreaseValuePaise: number
+  netValuePaise: number
+  interrupted?: boolean
+  createdAt: string
+  completedAt?: string
   actorUid: string
   actorName: string
   actorRole: AppUser['role']

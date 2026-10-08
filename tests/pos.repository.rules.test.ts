@@ -45,6 +45,9 @@ beforeEach(async () => {
     currentQuantity: 10, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
     updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
   })
+  await setDoc(doc(state.db, 'posSandboxes', 'test', 'productCosts', 'qa-product'), {
+    productId: 'qa-product', costPaise: 500, sourceValue: '5.00', importRunId: 'qa-seed', updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+  })
   await initializeHandover(owner)
   state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
 })
@@ -56,7 +59,7 @@ async function finalize() {
 }
 
 describe('POS repository workflows against deployed rules', () => {
-  it('posts a GRN stock receipt and per-receipt vendor payable atomically', async () => {
+    it('posts a GRN stock receipt and full-invoice vendor payable atomically', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
       await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
@@ -71,11 +74,13 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-1', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250 })),
+      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, ...(index === 0 ? { mrpPaise: 1200, mrpChanged: true } : {}) })),
+      invoiceTotalPaise: 13500,
     }, billing)
     const result = await submitPosGoodsReceipt(receiptId, billing)
     expect(result.totalPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(13)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('12.00')
     expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, 'purchasesV2', `grn-${receiptId}`))).data()?.grnId).toBe(receiptId)
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
@@ -83,6 +88,36 @@ describe('POS repository workflows against deployed rules', () => {
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
     expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()?.status).toBe('reversed')
+  })
+
+  it('links partial receipts to one full-invoice payable', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
+      await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
+        id: 'qa-vendor', canonicalName: 'QA Vendor', aliases: [], contact: '', address: '', suppliedBrands: [], active: true,
+        openingBalancePaise: 0, revision: 1, createdAt: timestamp, createdByUserId: owner.id, updatedAt: timestamp, updatedByUserId: owner.id,
+      })
+    })
+    const receiptInput = {
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PARTIAL', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000 }],
+      invoiceTotalPaise: 2500,
+    }
+    const firstId = await savePosGoodsReceiptDraft(receiptInput, billing)
+    const firstResult = await submitPosGoodsReceipt(firstId, billing)
+    const secondId = await savePosGoodsReceiptDraft(receiptInput, billing)
+    const secondResult = await submitPosGoodsReceipt(secondId, billing)
+    expect(firstResult.payableCreated).toBe(true)
+    expect(secondResult).toMatchObject({ payableCreated: false, purchaseId: `grn-${firstId}`, totalPaise: 2500 })
+    expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(12)
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    await reversePosGoodsReceipt(secondId, 'Reverse later partial', owner)
+    expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(11)
+    await reversePosGoodsReceipt(firstId, 'Reverse original receipt', owner)
+    expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
   })
 
   it('records physical inventory counts and adjusts stock without creating a payable', async () => {
@@ -103,6 +138,9 @@ describe('POS repository workflows against deployed rules', () => {
         barcode: `00${index}`, name: `QA Product ${index}`, searchName: `qa product ${index}`, category: 'QA', brand: 'QA', vendor: 'QA', sellingPricePaise: 1000,
         currentQuantity: index * 2, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
         updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+      })
+      for (let index = 2; index <= 5; index++) await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'productCosts', `qa-product-${index}`), {
+        productId: `qa-product-${index}`, costPaise: 500, sourceValue: '5.00', importRunId: 'qa-seed', updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
       })
     })
     const results = await reconcilePosStockAuditBatch([
@@ -126,6 +164,9 @@ describe('POS repository workflows against deployed rules', () => {
         currentQuantity: 4, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
         updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
       })
+      await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'productCosts', 'qa-product-2'), {
+        productId: 'qa-product-2', costPaise: 500, sourceValue: '5.00', importRunId: 'qa-seed', updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
+      })
     })
     await expect(reconcilePosStockAuditBatch([
       { productId: 'qa-product', physicalQuantity: 7, expectedRevision: 1 },
@@ -146,6 +187,7 @@ describe('POS repository workflows against deployed rules', () => {
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-NEW', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
       lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700 }],
+      invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
     expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'products', 'qa-new-product'))).data()).toMatchObject({ currentQuantity: 2, category: 'QA', sellingPricePaise: 700 })
@@ -164,6 +206,7 @@ describe('POS repository workflows against deployed rules', () => {
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PAID', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
       lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000 }],
+      invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
     const purchaseId = `grn-${receiptId}`

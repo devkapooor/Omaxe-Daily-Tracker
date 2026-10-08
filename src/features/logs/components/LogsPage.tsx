@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
+import type { PosStockAuditBatch } from '@/features/pos/domain/types'
+import { subscribePosStockAuditBatches } from '@/features/pos/data/posRepository'
 import { formatDisplayDate, legacyCashHolderLabel, shiftDate, today, userNameById } from '@/app/uiHelpers'
 import { db } from '@/shared/lib/firebase'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutLogTab } from '@/features/logs/components/DailyCashoutLogTab'
+import { StockAuditLogTable } from '@/features/logs/components/StockAuditLogTable'
 import { AuditLogTable, ExpenseLogTable, LoanLogTable, PaymentLogTable, PurchaseLogTable, SalesLogTable, TransferLogTable } from '@/features/logs/components/LogDataTables'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
@@ -104,6 +107,8 @@ export function LogsPage({
   const [customEnd, setCustomEnd] = useState(indiaDateKey())
   const [visibleCount, setVisibleCount] = useState(50)
   const [boundedAuditLog, setBoundedAuditLog] = useState(settingsAuditLog)
+  const [stockAuditBatches, setStockAuditBatches] = useState<PosStockAuditBatch[]>([])
+  const [stockAuditError, setStockAuditError] = useState('')
   const userNames = useMemo(() => userNameById(users), [users])
   const rangeEnd = rangePreset === 'custom' ? customEnd : indiaDateKey()
   const rangeStart = rangePreset === 'custom' ? customStart : shiftDate(rangeEnd, -(Number(rangePreset) - 1))
@@ -133,6 +138,11 @@ export function LogsPage({
       () => setBoundedAuditLog(settingsAuditLog.filter((entry) => isTimestampWithinIndiaRange(entry.createdAt, validRangeStart, validRangeEnd)).slice(0, visibleCount)),
     )
   }, [activeTab, isCustomRangeIncomplete, settingsAuditLog, validRangeEnd, validRangeStart, visibleCount])
+
+  useEffect(() => {
+    if (activeTab !== 'stockAudits') return
+    return subscribePosStockAuditBatches(setStockAuditBatches, (error) => setStockAuditError(error.message))
+  }, [activeTab])
 
   const transferPartyName = useCallback((entry: CashTransfer, side: 'from' | 'to') => {
     if (side === 'from') {
@@ -200,6 +210,11 @@ export function LogsPage({
       .sort((left, right) => compareTimestampDesc(left.createdAt, right.createdAt))
   }, [activeTab, boundedAuditLog, isCustomRangeIncomplete])
 
+  const filteredStockAudits = useMemo(() => stockAuditBatches
+    .filter((entry) => canApplyRangeToNonLoanTab && isTimestampWithinIndiaRange(entry.createdAt, validRangeStart, validRangeEnd))
+    .sort((left, right) => compareTimestampDesc(left.createdAt, right.createdAt)),
+  [canApplyRangeToNonLoanTab, stockAuditBatches, validRangeEnd, validRangeStart])
+
   const activeResultCount = {
     sales: filteredSales.length,
     expenses: filteredExpenses.length,
@@ -209,6 +224,7 @@ export function LogsPage({
     dailyCashouts: filteredDailyCashouts.length,
     cashTransfers: filteredTransfers.length,
     settingsAudit: filteredAudit.length,
+    stockAudits: filteredStockAudits.length,
   }[activeTab] ?? 0
 
   return (
@@ -242,7 +258,7 @@ export function LogsPage({
             </div>
           </CardContent>
           <div className="mx-2.5 border-t border-border pt-2.5 pb-2.5">
-            <TabsList aria-label="Log category" className="min-h-9 grid-flow-row grid-cols-2 rounded-md border-0 bg-muted/50 p-1 shadow-none sm:grid-cols-4 xl:grid-flow-col xl:grid-cols-8">
+            <TabsList aria-label="Log category" className="min-h-9 grid-flow-row grid-cols-2 rounded-md border-0 bg-muted/50 p-1 shadow-none sm:grid-cols-4 xl:grid-flow-col xl:grid-cols-9">
               <TabsTrigger className={logTabTriggerClassName} value="sales">Sales</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="expenses">Expenses</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="purchases">Purchases</TabsTrigger>
@@ -251,6 +267,7 @@ export function LogsPage({
               <TabsTrigger className={logTabTriggerClassName} value="dailyCashouts">Daily Cashouts</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="cashTransfers">Cash Transfers</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="settingsAudit">Settings Audit</TabsTrigger>
+              <TabsTrigger className={logTabTriggerClassName} value="stockAudits">Stock Audits</TabsTrigger>
             </TabsList>
           </div>
           {activeTab !== 'loans' && isCustomRangeIncomplete ? (
@@ -307,6 +324,13 @@ export function LogsPage({
         <TabsContent value="settingsAudit" className="min-h-0">
           <LogCard eyebrow="Logs" title="Settings Audit">
             <AuditLogTable entries={filteredAudit} hasMore={boundedAuditLog.length >= visibleCount} onLoadMore={() => setVisibleCount((count) => count + 50)} />
+          </LogCard>
+        </TabsContent>
+
+        <TabsContent value="stockAudits" className="min-h-0">
+          <LogCard eyebrow="Logs" title="Stock Audits">
+            {stockAuditError ? <StatusPanel variant="destructive">{stockAuditError}</StatusPanel> : null}
+            <StockAuditLogTable entries={filteredStockAudits} />
           </LogCard>
         </TabsContent>
       </Tabs>
