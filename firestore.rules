@@ -1401,13 +1401,17 @@ service cloud.firestore {
 
       match /products/{productId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && (isOwner() || (
-          isStaff() && request.resource.data.get('createdFromGoodsReceiptId', '') is string &&
-          request.resource.data.get('createdFromGoodsReceiptId', '') != '' &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.createdFromGoodsReceiptId)).data.status == 'submitted' &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.goodsReceiptId == request.resource.data.createdFromGoodsReceiptId &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId
-        )) &&
+        allow create: if sandboxId == 'test' && (
+          isOwner() ||
+          (isStaff() && request.resource.data.get('createdFromGoodsReceiptId', '') is string &&
+            request.resource.data.get('createdFromGoodsReceiptId', '') != '' &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.createdFromGoodsReceiptId)).data.status == 'submitted' &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.goodsReceiptId == request.resource.data.createdFromGoodsReceiptId &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId) ||
+          (isStaff() && request.resource.data.get('createdFromPosBarcode', false) == true &&
+            request.resource.data.currentQuantity == 0 && request.resource.data.active == true &&
+            request.resource.data.category == 'Uncategorized')
+        ) &&
           request.resource.data.barcode is string &&
           request.resource.data.name is string && request.resource.data.name.size() > 0 &&
           request.resource.data.category is string && request.resource.data.category.size() > 0 &&

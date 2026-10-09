@@ -1,6 +1,8 @@
 # POS
 
-The POS module currently stores its bills and supporting records under the existing `posSandboxes/test` Firestore path. These include actual counter sales, including bills punched on 2026-10-04; the path name does not mean those sales are disposable test data. Do not reset, move, or reclassify the records as part of a UI-label change.
+The POS product catalog is the official live inventory used by billing, goods receipts, and stock audits. Its current Firestore path is `posSandboxes/test`, a legacy compatibility path name that does not mean these are test records. It also contains real counter sales. Do not reset, move, or reclassify these records as part of a UI-label change.
+
+Products created from an unknown barcode in billing are added to this same live catalog at zero quantity, then added to the cart as normal catalog products. This does not create a stock-in movement; stock changes only through the existing receipt, audit, sale, return, and adjustment flows.
 
 ## Import
 

@@ -96,7 +96,6 @@ function NavigationLinks({
                           {collapsed && item.page === 'actions' ? <PendingBadge count={pendingApprovalCount} compact /> : null}
                         </span>
                         {!collapsed ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
-                        {!collapsed && item.page === 'pos-test' ? <span className={cn('rounded-sm px-1 py-0.5 text-[9px] font-semibold uppercase', active ? 'bg-white/15 text-primary-foreground' : 'bg-amber-50 text-amber-800 dark:bg-amber-200/10 dark:text-amber-200')}>Test</span> : null}
                         {!collapsed && item.page === 'actions' ? <PendingBadge count={pendingApprovalCount} /> : null}
                         {!collapsed && currentShortcut ? <kbd className={cn('ml-auto text-[10px] font-normal text-muted-foreground', active && 'text-primary-foreground/75')}>{currentShortcut}</kbd> : null}
                       </button>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { AlertTriangle, Barcode, ChartPie, FileClock, ClipboardCheck, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
@@ -20,6 +21,7 @@ import { calculateDiscount, paiseToRupees, posSubtotal, rupeesToPaise } from '..
 import type { PosBill, PosCartLine, PosDiscount, PosPaymentMethod, PosProduct } from '../domain/types'
 import {
   deleteHeldCart,
+  createPosProductFromBarcode,
   finalizePosBill,
   findPosProductByBarcode,
   loadRecentPosBills,
@@ -69,14 +71,16 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const [splitPayments, setSplitPayments] = useState<SplitPaymentAmounts>(emptySplitPayments)
   const [cashReceived, setCashReceived] = useState<string | null>(null)
   const [unknownBarcode, setUnknownBarcode] = useState('')
-  const [unknownDescription, setUnknownDescription] = useState('')
+  const [unknownProductName, setUnknownProductName] = useState('')
   const [unknownPrice, setUnknownPrice] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [searchResults, setSearchResults] = useState<PosProduct[]>([])
   const [searchingProducts, setSearchingProducts] = useState(false)
   const [productSearchError, setProductSearchError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [creatingProduct, setCreatingProduct] = useState(false)
   const [showCustomerDiscount, setShowCustomerDiscount] = useState(false)
+  const [showUnresolvedAlert, setShowUnresolvedAlert] = useState(false)
   const [highlightedCartKey, setHighlightedCartKey] = useState<string | null>(null)
   const [cartUpdateSequence, setCartUpdateSequence] = useState(0)
   const [checkoutWarning, setCheckoutWarning] = useState('')
@@ -155,12 +159,63 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   async function scanBarcode(value: string) {
     const barcode = value.trim()
     if (!barcode) return
+    let keepSearchTerm = false
     try {
       const product = await findPosProductByBarcode(barcode)
       if (product?.active) addProduct(product)
-      else { setUnknownBarcode(barcode); setUnknownDescription(''); setUnknownPrice(''); showToast('Unknown barcode. Add it as a temporary item.') }
+      else if (product) showToast('This barcode belongs to an inactive product. Ask a manager to reactivate it.')
+      else {
+        const matches = await searchPosProductsByName(barcode)
+        if (matches.length === 1) addProduct(matches[0])
+        else if (matches.length > 1) {
+          setSearchResults(matches)
+          keepSearchTerm = true
+        }
+        else {
+          setUnknownBarcode(barcode)
+          setUnknownProductName('')
+          setUnknownPrice('')
+          setShowUnresolvedAlert(true)
+          showToast('Product not found. Add its name and selling price to create it in inventory.')
+        }
+      }
     } catch (error) { showToast(error instanceof Error ? error.message : 'Barcode lookup failed.') }
-    finally { if (scannerRef.current) scannerRef.current.value = ''; scannerRef.current?.focus({ preventScroll: true }) }
+    finally {
+      setSearchingProducts(false)
+      if (!keepSearchTerm) setProductSearch('')
+      scannerRef.current?.focus({ preventScroll: true })
+    }
+  }
+
+  async function createUnknownProduct() {
+    if (!unknownBarcode || !unknownProductName.trim() || unknownPrice === '') {
+      showToast('Product name and selling price are required.')
+      return
+    }
+    const price = Number(unknownPrice)
+    if (!Number.isFinite(price) || price < 0) {
+      showToast('Enter a valid selling price of zero or more.')
+      return
+    }
+    setCreatingProduct(true)
+    try {
+      const product = await createPosProductFromBarcode({
+        barcode: unknownBarcode,
+        name: unknownProductName.trim(),
+        sellingPricePaise: rupeesToPaise(price),
+      }, currentUser)
+      addProduct(product)
+      setUnknownBarcode('')
+      setUnknownProductName('')
+      setUnknownPrice('')
+      setShowUnresolvedAlert(false)
+      showToast(`Product resolved and added to cart. Current stock: ${product.currentQuantity}.`)
+      focusScanner()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to add product to inventory.')
+    } finally {
+      setCreatingProduct(false)
+    }
   }
 
   function resetCart() {
@@ -170,10 +225,15 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
 
   function clearCart() {
     resetCart()
-    setUnknownBarcode(''); setUnknownDescription(''); setUnknownPrice('')
+    setUnknownBarcode(''); setUnknownProductName(''); setUnknownPrice('')
+    setShowUnresolvedAlert(false)
   }
 
   async function checkout() {
+    if (unknownBarcode || cart.some((line) => line.kind === 'temporary')) {
+      setShowUnresolvedAlert(true)
+      return
+    }
     setBusy(true)
     try {
       const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
@@ -197,7 +257,8 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     finally { setBusy(false); focusScanner() }
   }
 
-  return <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
+  return <>
+    <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
     <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
       <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
@@ -225,17 +286,15 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       {tab === 'checkout' ? <div className="grid min-h-full items-start gap-card-gap lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)] lg:items-stretch">
         <div className="grid min-w-0 gap-card-gap lg:min-h-0 lg:grid-rows-[auto_minmax(0,1fr)]">
           <Card><CardContent className="grid gap-3 pt-4">
-            <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}><Input ref={scannerRef} autoFocus inputMode="numeric" aria-label="Barcode scanner input" placeholder="Scan barcode, then Enter" className="text-lg font-bold" /><Button><Barcode />Scan</Button></form>
-            <div className="grid gap-2">
-              <Input value={productSearch} onChange={(event) => { const value = event.target.value; setProductSearch(value); setSearchResults([]); setProductSearchError(''); setSearchingProducts(value.trim().length >= 2) }} aria-label="Search products by name" placeholder="Find product by name (e.g. carry bag)" />
+            <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}>
+              <div className="flex gap-2"><Input ref={scannerRef} value={productSearch} onChange={(event) => { const value = event.target.value; setProductSearch(value); setSearchResults([]); setProductSearchError(''); setSearchingProducts(value.trim().length >= 2) }} autoFocus disabled={showUnresolvedAlert} aria-label="Scan barcode or search product name" placeholder="Scan barcode or search product name" className="text-lg font-bold" /><Button type="submit" disabled={showUnresolvedAlert}><Barcode />Add</Button></div>
               {productSearch.trim().length >= 2 ? <div className="grid max-h-36 gap-1 overflow-y-auto" aria-live="polite">
                 {productSearchError ? <p role="alert" className="text-sm text-destructive">{productSearchError}</p> : searchingProducts ? <p className="text-sm text-muted-foreground">Searching products…</p> : searchResults.length === 0 ? <p className="text-sm text-muted-foreground">No products match those name words.</p> : searchResults.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm">
                   <span className="min-w-0"><strong className="block truncate">{product.name}</strong><span className="text-xs text-muted-foreground">{product.barcode} · Stock {product.currentQuantity}</span></span>
                   <span className="flex shrink-0 items-center gap-2">{productMrp(product) ? <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">{productMrp(product)}</span> : null}<Button size="sm" type="button" disabled={!product.active} onClick={() => { addProduct(product); setProductSearch(''); setSearchResults([]); setSearchingProducts(false); focusScanner() }}>{product.active ? 'Add' : 'Inactive'}</Button></span>
                 </div>)}
               </div> : null}
-            </div>
-            {unknownBarcode ? <div className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/20 sm:grid-cols-3"><FieldLabel label="Unknown Barcode"><Input value={unknownBarcode} readOnly /></FieldLabel><FieldLabel label="Description"><Input value={unknownDescription} onChange={(event) => setUnknownDescription(event.target.value)} /></FieldLabel><FieldLabel label="Selling Price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel><Button className="sm:col-span-3" type="button" onClick={() => { if (!unknownDescription.trim() || !unknownPrice) return showToast('Description and selling price are required.'); const lineId = crypto.randomUUID(); setCart((current) => [{ id: lineId, kind: 'temporary', barcode: unknownBarcode, description: unknownDescription.trim(), quantity: 1, unitPricePaise: rupeesToPaise(Number(unknownPrice)) }, ...current]); setCartUpdateSequence((sequence) => sequence + 1); setHighlightedCartKey(lineId); if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current); highlightTimerRef.current = window.setTimeout(() => setHighlightedCartKey(null), 1100); setUnknownBarcode(''); focusScanner() }}><Plus />Add unresolved item</Button></div> : null}
+            </form>
           </CardContent></Card>
           <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent ref={cartScrollRef} className="grid gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition-colors duration-500 ${highlightedCartKey === (line.kind === 'product' ? line.productId : line.id) ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : ''}`}>
@@ -266,7 +325,29 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
         </PageCardStack>
       </div>
     </PageLayout>
-  </Tabs>
+    </Tabs>
+    {showUnresolvedAlert ? createPortal(
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3" role="alertdialog" aria-modal="true" aria-labelledby="pos-unresolved-title" aria-describedby="pos-unresolved-description">
+        <Card className="w-full max-w-xl shadow-2xl">
+          <CardHeader><SectionHeading eyebrow="Billing blocked" title="Resolve unknown product before checkout" /></CardHeader>
+          <CardContent className="grid gap-3">
+            <p id="pos-unresolved-description" className="text-sm text-muted-foreground">The bill cannot be finalized while an unknown barcode or unresolved cart item remains. Add the product to live inventory, or remove unresolved legacy items from this cart.</p>
+            {unknownBarcode ? <>
+              <FieldLabel label="Unknown barcode"><Input value={unknownBarcode} readOnly /></FieldLabel>
+              <FieldLabel label="Product name"><Input value={unknownProductName} onChange={(event) => setUnknownProductName(event.target.value)} autoFocus /></FieldLabel>
+              <FieldLabel label="Selling price"><Input type="number" min="0" step="0.01" value={unknownPrice} onChange={(event) => setUnknownPrice(event.target.value)} /></FieldLabel>
+              <p className="text-xs text-muted-foreground">Creating it adds the product to the live inventory at 0 stock, then adds it to this cart. Record received stock through GRN or correct the count through Audit.</p>
+              <Button type="button" disabled={creatingProduct} onClick={() => void createUnknownProduct()}><Plus />{creatingProduct ? 'Creating product…' : 'Create product & resolve barcode'}</Button>
+            </> : <>
+              <div className="grid gap-1 text-sm">{cart.filter((line) => line.kind === 'temporary').map((line) => <p key={line.id}><strong>{line.description}</strong> · barcode {line.barcode}</p>)}</div>
+              <Button type="button" variant="outline" onClick={() => { setCart((current) => current.filter((line) => line.kind !== 'temporary')); setShowUnresolvedAlert(false); showToast('Unresolved legacy items were removed from the cart. They will not be billed.') }}>Remove unresolved items from cart</Button>
+            </>}
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    ) : null}
+  </>
 }
 
 function billPaymentMode(bill: PosBill) {

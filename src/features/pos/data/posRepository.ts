@@ -603,6 +603,70 @@ export async function findPosProductByBarcode(barcode: string) {
   return null
 }
 
+export async function createPosProductFromBarcode(
+  input: { barcode: string; name: string; sellingPricePaise: number },
+  actor: AppUser,
+) {
+  const barcode = input.barcode.trim()
+  const name = input.name.trim()
+  if (!barcode || !name) throw new Error('Barcode and product name are required.')
+  if (!Number.isSafeInteger(input.sellingPricePaise) || input.sellingPricePaise < 0) throw new Error('Enter a valid selling price of zero or more.')
+
+  const existing = await findPosProductByBarcode(barcode)
+  if (existing) {
+    if (!existing.active) throw new Error('This barcode belongs to an inactive product. Ask a manager to reactivate it.')
+    return existing
+  }
+
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(barcode))
+  const barcodeKey = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  const productId = `barcode_${barcodeKey}`
+  const productRef = posDoc('products', productId)
+  const eventId = crypto.randomUUID()
+  const eventRef = posDoc('events', eventId)
+  const timestamp = nowIso()
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(productRef)
+    if (snapshot.exists()) {
+      const product = { id: snapshot.id, ...snapshot.data() } as PosProduct
+      if (product.barcode !== barcode) throw new Error('Barcode identifier collision. Ask an owner to review the product catalog.')
+      if (!product.active) throw new Error('This barcode belongs to an inactive product. Ask a manager to reactivate it.')
+      return product
+    }
+
+    const product: Omit<PosProduct, 'id'> & { createdFromPosBarcode: true } = {
+      barcode,
+      name,
+      searchName: normalizePosProductSearch(name),
+      searchTokens: posProductSearchTokens(name),
+      category: 'Uncategorized',
+      brand: '',
+      vendor: '',
+      sellingPricePaise: input.sellingPricePaise,
+      currentQuantity: 0,
+      revision: 1,
+      active: true,
+      createdFromPosBarcode: true,
+      createdAt: timestamp,
+      createdByUid: actor.id,
+      createdByName: actor.name,
+      updatedAt: timestamp,
+      updatedByUid: actor.id,
+      updatedByName: actor.name,
+    }
+    transaction.set(productRef, product)
+    transaction.set(eventRef, {
+      type: 'product-created-from-barcode',
+      productId,
+      barcode,
+      initialQuantity: 0,
+      createdAt: timestamp,
+      ...actorFields(actor),
+    })
+    return { id: productId, ...product } as PosProduct
+  })
+}
+
 export async function getPosCost(productId: string) {
   const snapshot = await getDoc(posDoc('productCosts', productId))
   if (!snapshot.exists()) return null
@@ -745,6 +809,9 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
   if (!navigator.onLine) throw new Error('Checkout is disabled while offline.')
   if (input.lines.length === 0) throw new Error('Cart is empty.')
   if (input.lines.length > 200) throw new Error('A bill is limited to 200 lines.')
+  if (input.lines.some((line) => line.kind !== 'product' || !line.productId)) {
+    throw new Error('Resolve or remove every unknown product before finalizing this bill.')
+  }
   if (input.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isInteger(line.unitPricePaise) || line.unitPricePaise < 0)) {
     throw new Error('Every line must have a whole positive quantity and a valid price.')
   }

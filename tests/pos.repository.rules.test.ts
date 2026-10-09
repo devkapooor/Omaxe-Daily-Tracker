@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTi
 vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, functions: {}, auth: { currentUser: { getIdTokenResult: async () => ({ claims: { auth_time: state.authTime } }) } } }))
 
 import {
-  approvePosRequest, deleteHeldCart, finalizePosBill, importPosProducts,
+  approvePosRequest, createPosProductFromBarcode, deleteHeldCart, finalizePosBill, importPosProducts,
   requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt,
 } from '../src/features/pos/data/posRepository'
 import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
@@ -59,6 +59,28 @@ async function finalize() {
 }
 
 describe('POS repository workflows against deployed rules', () => {
+  it('creates unknown barcode products in live inventory at zero stock and does not duplicate them', async () => {
+    const input = { barcode: '8901234567890', name: 'New scanned product', sellingPricePaise: 1250 }
+    const first = await createPosProductFromBarcode(input, billing)
+    const second = await createPosProductFromBarcode(input, billing)
+
+    expect(second.id).toBe(first.id)
+    expect(first).toMatchObject({ barcode: input.barcode, name: input.name, currentQuantity: 0, sellingPricePaise: 1250, category: 'Uncategorized', active: true })
+    expect((await getDocs(collection(state.db!, 'posSandboxes', 'test', 'products'))).docs.filter((item) => item.data().barcode === input.barcode)).toHaveLength(1)
+    expect((await getDocs(collection(state.db!, 'posSandboxes', 'test', 'stockMovements'))).size).toBe(0)
+    expect((await getDocs(collection(state.db!, 'posSandboxes', 'test', 'events'))).docs.filter((item) => item.data().type === 'product-created-from-barcode')).toHaveLength(1)
+  })
+
+  it('rejects unresolved temporary lines before creating any bill', async () => {
+    await expect(finalizePosBill({
+      businessDate: '2026-10-03',
+      lines: [{ id: 'unresolved-line', kind: 'temporary', barcode: '999999', description: 'Unknown', quantity: 1, unitPricePaise: 100 }],
+      discount: { mode: 'none', amountPaise: 0 },
+      payments: [{ method: 'cash', amountPaise: 100 }],
+    }, billing)).rejects.toThrow(/Resolve or remove every unknown product/)
+    expect((await getDocs(collection(state.db!, 'posSandboxes', 'test', 'bills'))).size).toBe(0)
+  })
+
     it('posts a GRN stock receipt and full-invoice vendor payable atomically', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
