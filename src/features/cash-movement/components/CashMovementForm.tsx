@@ -31,6 +31,7 @@ type CashMovementFormProps = {
   legacyCashoutEntries: DailyCashoutEntry[]
   legacyTransferEntries: CashTransfer[]
   migratedCashoutEntries: DailyCashoutEntry[]
+  totalCashAvailable: number
   onTransfer: (draft: Omit<CashTransfer, 'id' | 'createdAt'>) => Promise<void>
 }
 
@@ -44,6 +45,7 @@ export function CashMovementForm({
   legacyCashoutEntries,
   legacyTransferEntries,
   migratedCashoutEntries,
+  totalCashAvailable,
   onTransfer,
 }: CashMovementFormProps) {
   const userOptions = useMemo(
@@ -57,9 +59,14 @@ export function CashMovementForm({
         .sort((left, right) => right.amount - left.amount || left.name.localeCompare(right.name)),
     [userBalances, users],
   )
+  const cashHolderOptions = useMemo(() => userOptions.filter((user) => user.amount > 0), [userOptions])
+  const positiveCashTotal = useMemo(
+    () => cashHolderOptions.reduce((total, user) => total + user.amount, 0),
+    [cashHolderOptions],
+  )
   const senderOptions = useMemo(
-    () => userOptions.filter((user) => currentUserRole !== 'billing' || user.id === currentUserId),
-    [currentUserId, currentUserRole, userOptions],
+    () => cashHolderOptions.filter((user) => currentUserRole !== 'billing' || user.id === currentUserId),
+    [cashHolderOptions, currentUserId, currentUserRole],
   )
 
   const [transferFromUserId, setTransferFromUserId] = useState(currentUserId)
@@ -135,21 +142,29 @@ export function CashMovementForm({
   }
 
   return (
-    <PageLayout className="h-full" header={<PageHeader title="Cash Movement" />}>
+    <PageLayout className="h-full" header={<PageHeader title="Cash Movement" tools={(
+      <div className="flex min-w-0 items-center justify-between gap-3 px-1 sm:justify-start">
+        <span className="text-xs font-medium text-muted-foreground">Total Cash Available</span>
+        <strong className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-success">{money(totalCashAvailable)}</strong>
+      </div>
+    )} />}>
       <Card className="flex min-h-0 flex-1 flex-col">
         <CardHeader>
-          <SectionHeading eyebrow="Cash Control" title="Move Counter Cash To Bank" />
+          <SectionHeading eyebrow="Cash Control" title="Record Cash Movement" />
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-3">
         <div className="flex flex-nowrap gap-card-gap overflow-x-auto pb-1">
-          {userOptions.map((user) => (
+          {cashHolderOptions.length > 0 ? cashHolderOptions.map((user) => (
             <Card key={user.id} className="min-w-[9rem] flex-1">
               <CardContent className="p-2.5">
                 <span className="block truncate text-xs font-semibold text-muted-foreground">{user.name}</span>
                 <strong className="mt-1 block text-lg font-bold tracking-tight text-foreground">{money(user.amount)}</strong>
+                <span className="mt-0.5 block text-xs font-medium tabular-nums text-muted-foreground">
+                  {positiveCashTotal > 0 ? `${((user.amount / positiveCashTotal) * 100).toFixed(1)}% of cash` : '0.0% of cash'}
+                </span>
               </CardContent>
             </Card>
-          ))}
+          )) : <p className="py-2 text-sm text-muted-foreground">No cash is currently assigned to active users.</p>}
         </div>
 
         {hasLegacyWarnings ? (
