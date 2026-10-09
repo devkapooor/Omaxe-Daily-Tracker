@@ -335,8 +335,8 @@ export function AppWorkspace({
         {activePage === 'expense' ? (
           <RegisterPage
             currentUser={currentUser}
-            ensureName={ensureNameInDirectory}
             partyOptions={directoryOptions.party}
+            loans={normalizedLoans}
             saveExpense={saveCashout}
             saveLoan={saveLoanEntry}
             savePayment={savePayment}

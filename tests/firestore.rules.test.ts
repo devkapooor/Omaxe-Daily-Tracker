@@ -761,8 +761,11 @@ describe('V2 vendor ledger capability enforcement', () => {
     await assertFails(setDoc(doc(userDb('billing-user'), 'payments', 'legacy-vendor-payment'), {
       entryType: 'vendor-payment', amount: 500,
     }))
-    await assertSucceeds(setDoc(doc(userDb('owner-user'), 'payments', 'protected-loan-payment'), {
+    await assertFails(setDoc(doc(userDb('owner-user'), 'payments', 'unlinked-loan-payment'), {
       entryType: 'loan-payment', amount: 500,
+    }))
+    await assertSucceeds(setDoc(doc(userDb('owner-user'), 'payments', 'protected-loan-payment'), {
+      entryType: 'loan-payment', loanId: 'loan-selected', amount: 500,
     }))
   })
 

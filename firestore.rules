@@ -939,6 +939,9 @@ service cloud.firestore {
         (
           request.resource.data.keys().hasAny(['entryType']) &&
           request.resource.data.entryType == 'loan-payment' &&
+          request.resource.data.keys().hasAny(['loanId']) &&
+          request.resource.data.loanId is string &&
+          request.resource.data.loanId != '' &&
           isOwner()
         ) ||
         (

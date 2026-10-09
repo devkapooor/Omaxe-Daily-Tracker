@@ -63,6 +63,8 @@ export type Payment = {
   date: string
   type: 'Received' | 'Paid'
   entryType?: 'vendor-payment' | 'loan-payment'
+  /** Explicit target for new loan repayments; absent on historical FIFO records. */
+  loanId?: string
   partyName: string
   amount: number
   paymentMode: Exclude<PaymentMode, 'Credit'>

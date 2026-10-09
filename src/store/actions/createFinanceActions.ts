@@ -3,6 +3,7 @@ import { db } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
 import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
+import { allocateLoanRepayment, allocateLoanRepaymentToLoan, loanRupeesToPaise, normalizeLoanAmount } from '@/domain/loanMoney'
 import { cardSalesAfterCashoutChange } from '@/domain/cashoutSales'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
@@ -121,11 +122,11 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
         (payment) =>
           payment.type === 'Paid' &&
           payment.entryType === 'loan-payment' &&
-          payment.partyName.toLowerCase() === normalizedPartyName,
+          normalizeName(payment.partyName).toLowerCase() === normalizedPartyName,
       ),
     )
 
-    const loanState: LoanEntry[] = matchingLoans.map((loan) => ({
+    let loanState: LoanEntry[] = matchingLoans.map((loan) => ({
       ...loan,
       paidAmount: 0,
       remainingAmount: loan.amount,
@@ -135,23 +136,28 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     }))
 
     for (const payment of matchingPayments) {
-      let remainingPayment = payment.amount
-      for (const loan of loanState) {
-        if (remainingPayment <= 0) break
-        if (loan.remainingAmount <= 0) continue
-
-        const applied = Math.min(loan.remainingAmount, remainingPayment)
-        loan.paidAmount += applied
-        loan.remainingAmount -= applied
-        loan.status = loan.remainingAmount > 0 ? 'Open' : 'Settled'
-        loan.settledAt = loan.remainingAmount > 0 ? undefined : payment.updatedAt ?? payment.createdAt
-        loan.updatedAt = payment.updatedAt ?? payment.createdAt
-        remainingPayment -= applied
+      const previousState = loanState
+      let nextState: LoanEntry[]
+      if (payment.loanId) {
+        if (!previousState.some((loan) => loan.id === payment.loanId)) throw new Error(`Cannot safely recompute ${partyName}'s loans because a repayment references a missing loan.`)
+        nextState = allocateLoanRepaymentToLoan(previousState, payment.loanId, payment.amount)
+      } else {
+        nextState = allocateLoanRepayment(
+          previousState,
+          payment.amount,
+          `Cannot safely recompute loans for ${partyName} because repayment history exceeds the surviving loan balance.`,
+        )
       }
-
-      if (remainingPayment > 0) {
-        throw new Error(`Cannot safely recompute loans for ${partyName} because repayment history exceeds the surviving loan balance.`)
-      }
+      const paymentTimestamp = payment.updatedAt ?? payment.createdAt
+      loanState = nextState.map((loan, index) => {
+        if (loan.paidAmount === previousState[index].paidAmount) return loan
+        return {
+          ...loan,
+          status: loan.remainingAmount > 0 ? 'Open' : 'Settled',
+          settledAt: loan.remainingAmount > 0 ? undefined : paymentTimestamp,
+          updatedAt: paymentTimestamp,
+        }
+      })
     }
 
     return loanState
@@ -227,33 +233,27 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const paymentRecord = withoutUndefined({ ...draft, partyName: normalizedPartyName, createdAt: timestamp, updatedAt: timestamp })
 
     if (draft.type === 'Paid' && draft.entryType === 'loan-payment') {
+      if (!draft.loanId?.trim()) throw new Error('Select the specific loan this repayment should reduce.')
+      const normalizedAmount = normalizeLoanAmount(draft.amount)
+      const normalizedPaymentRecord = { ...paymentRecord, amount: normalizedAmount }
       const { loans } = getState()
-      const matchingLoans = loans
+      const selectedLoan = loans
         .map((loan) => normalizeLoanRecord(loan))
-        .filter((loan) => loan.personName.toLowerCase() === normalizedPartyName.toLowerCase() && loan.remainingAmount > 0)
-        .sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
+        .find((loan) => loan.id === draft.loanId)
 
-      if (matchingLoans.length === 0) throw new Error('No open loans found for the selected person.')
-      const totalOpenBalance = matchingLoans.reduce((total, loan) => total + loan.remainingAmount, 0)
-      if (draft.amount > totalOpenBalance) throw new Error('Loan payment exceeds the open loan balance for the selected person.')
+      if (!selectedLoan || selectedLoan.remainingAmount <= 0) throw new Error('The selected loan is no longer open. Refresh and select an open loan.')
+      if (normalizeName(selectedLoan.personName).toLowerCase() !== normalizedPartyName.toLowerCase()) throw new Error('The selected loan does not belong to the chosen party.')
+      if (loanRupeesToPaise(normalizedAmount) > loanRupeesToPaise(selectedLoan.remainingAmount)) throw new Error('Repayment exceeds the remaining balance of the selected loan.')
 
       const batch = writeBatch(db)
-      batch.set(doc(db, 'payments', id), paymentRecord)
-
-      let remainingPayment = draft.amount
-      matchingLoans.forEach((loan) => {
-        if (remainingPayment <= 0) return
-        const applied = Math.min(loan.remainingAmount, remainingPayment)
-        const nextPaidAmount = loan.paidAmount + applied
-        const nextRemainingAmount = loan.remainingAmount - applied
-        batch.update(doc(db, 'loans', loan.id), {
-          paidAmount: nextPaidAmount,
-          remainingAmount: nextRemainingAmount,
-          status: nextRemainingAmount > 0 ? 'Open' : 'Settled',
-          settledAt: nextRemainingAmount > 0 ? null : timestamp,
-          updatedAt: timestamp,
-        })
-        remainingPayment -= applied
+      batch.set(doc(db, 'payments', id), normalizedPaymentRecord)
+      const [updatedLoan] = allocateLoanRepaymentToLoan([selectedLoan], selectedLoan.id, normalizedAmount)
+      batch.update(doc(db, 'loans', selectedLoan.id), {
+        paidAmount: updatedLoan.paidAmount,
+        remainingAmount: updatedLoan.remainingAmount,
+        status: updatedLoan.remainingAmount > 0 ? 'Open' : 'Settled',
+        settledAt: updatedLoan.remainingAmount > 0 ? null : timestamp,
+        updatedAt: timestamp,
       })
 
       await batch.commit()
@@ -309,10 +309,12 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   async function saveLoanEntry(draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) {
     const id = `loan-${crypto.randomUUID()}`
     const timestamp = nowIso()
+    const amount = normalizeLoanAmount(draft.amount)
     await setDoc(doc(db, 'loans', id), {
       ...draft,
+      amount,
       paidAmount: 0,
-      remainingAmount: draft.amount,
+      remainingAmount: amount,
       status: 'Open',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -326,6 +328,9 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     const { financeData, loans } = getState()
     const targetLoan = loans.find((loan) => loan.id === loanId)
     if (!targetLoan) throw new Error('This loan record could not be found.')
+    if (financeData.payments.some((payment) => payment.entryType === 'loan-payment' && payment.loanId === loanId)) {
+      throw new Error('This loan has repayments linked to it. Remove or correct those repayment entries first; the loan cannot be deleted safely.')
+    }
 
     const remainingLoans = loans.filter((loan) => loan.id !== loanId)
     const recomputedLoans = recomputeLoansForParty(remainingLoans, financeData.payments, targetLoan.personName)

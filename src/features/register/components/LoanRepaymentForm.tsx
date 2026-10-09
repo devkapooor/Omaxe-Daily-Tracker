@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import type { Cashout, PaymentDraft } from '@/domain/financeTypes'
-import { normalizeName, numberValue, singleStoreId, today, wordCount } from '@/app/uiHelpers'
+import type { LoanEntry } from '@/domain/appTypes'
+import { normalizeName, singleStoreId, today, wordCount } from '@/app/uiHelpers'
+import { parseLoanAmount } from '@/domain/loanMoney'
+import { money } from '@/app/uiHelpers'
 import { ChequeDetailsModal } from '@/features/register/components/ChequeDetailsModal'
 import { SearchableSelect } from '@/shared/ui/searchable-select'
 import { useChequeDetails } from '@/features/register/components/useChequeDetails'
@@ -14,16 +17,21 @@ import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/utils'
 
 type LoanRepaymentFormProps = {
-  peopleOptions: string[]
+  loans: LoanEntry[]
   onSave: (draft: PaymentDraft) => Promise<void> | void
 }
 
-export function LoanRepaymentForm({ peopleOptions, onSave }: LoanRepaymentFormProps) {
+export function LoanRepaymentForm({ loans, onSave }: LoanRepaymentFormProps) {
   const [personName, setPersonName] = useState('')
+  const [loanId, setLoanId] = useState('')
   const [amount, setAmount] = useState('0')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const notesWordCount = wordCount(notes)
+  const openLoans = loans.filter((loan) => loan.remainingAmount > 0)
+  const lenderNames = [...new Set(openLoans.map((loan) => normalizeName(loan.personName)))].sort((a, b) => a.localeCompare(b))
+  const partyLoans = openLoans.filter((loan) => normalizeName(loan.personName).toLowerCase() === personName.toLowerCase())
+  const selectedLoan = partyLoans.find((loan) => loan.id === loanId)
   const {
     paymentMode,
     chequeNumber,
@@ -41,6 +49,7 @@ export function LoanRepaymentForm({ peopleOptions, onSave }: LoanRepaymentFormPr
 
   function resetForm() {
     setPersonName('')
+    setLoanId('')
     setAmount('0')
     setNotes('')
     setError('')
@@ -56,6 +65,10 @@ export function LoanRepaymentForm({ peopleOptions, onSave }: LoanRepaymentFormPr
       setError('Choose a party from the list.')
       return
     }
+    if (!selectedLoan || selectedLoan.remainingAmount <= 0) {
+      setError('Choose an open loan to repay.')
+      return
+    }
     if (notesWordCount > 50) {
       setError('Notes cannot be more than 50 words.')
       return
@@ -63,13 +76,19 @@ export function LoanRepaymentForm({ peopleOptions, onSave }: LoanRepaymentFormPr
     if (!ensureChequeDetails()) return
 
     try {
+      const repaymentAmount = parseLoanAmount(amount)
+      if (repaymentAmount > selectedLoan.remainingAmount) {
+        setError(`Repayment cannot exceed this loan's remaining balance of ${money(selectedLoan.remainingAmount)}.`)
+        return
+      }
       await onSave({
         storeId: singleStoreId,
         date: today(),
         type: 'Paid',
         entryType: 'loan-payment',
+        loanId: selectedLoan.id,
         partyName: normalizedPersonName,
-        amount: numberValue(amount),
+        amount: repaymentAmount,
         paymentMode,
         chequeNumber: isChequeMode ? chequeNumber.trim() : undefined,
         chequePayDate: isChequeMode ? chequePayDate : undefined,
@@ -93,22 +112,34 @@ export function LoanRepaymentForm({ peopleOptions, onSave }: LoanRepaymentFormPr
           <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
             <FieldLabel label="Loan Party">
               <SearchableSelect
-                options={peopleOptions}
-                placeholder="Search and select from saved names"
+                options={lenderNames}
+                placeholder={lenderNames.length ? 'Search lenders with open loans' : 'No loans currently outstanding'}
                 value={personName}
                 onValueChange={(value) => {
                   setPersonName(value)
+                  setLoanId('')
                   setError('')
                 }}
               />
             </FieldLabel>
 
+            <FieldLabel label="Loan">
+              <NativeSelect value={loanId} required disabled={!personName || partyLoans.length === 0} onChange={(event) => { setLoanId(event.target.value); setError('') }}>
+                <option value="">Select an open loan</option>
+                {partyLoans.map((loan) => <option key={loan.id} value={loan.id}>{loan.date} · Original {money(loan.amount)} · Remaining {money(loan.remainingAmount)}</option>)}
+              </NativeSelect>
+            </FieldLabel>
+
+            {selectedLoan ? <p className="text-sm font-semibold text-muted-foreground md:col-span-2">Selected loan balance: <span className="text-foreground">{money(selectedLoan.remainingAmount)}</span></p> : null}
+
             <FieldLabel label="Amount">
               <Input
                 type="number"
-                min="0"
-                step="1"
-                placeholder="0"
+                min="0.01"
+                max={selectedLoan?.remainingAmount}
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
                 required
                 value={amount}
                 onChange={(event) => {

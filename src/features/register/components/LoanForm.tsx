@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { LoanEntry } from '@/domain/appTypes'
-import { normalizeName, numberValue, today } from '@/app/uiHelpers'
+import { normalizeName, today } from '@/app/uiHelpers'
+import { parseLoanAmount } from '@/domain/loanMoney'
 import { SearchableSelect } from '@/shared/ui/searchable-select'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -24,7 +25,13 @@ export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const normalizedPersonName = normalizeName(personName)
-    const amount = numberValue(form.get('amount'))
+    let amount: number
+    try {
+      amount = parseLoanAmount(form.get('amount'))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Enter a valid loan amount.')
+      return
+    }
     const date = String(form.get('date') || '')
     const payoff = String(form.get('promisedPayoffDate') || '')
     const notes = String(form.get('notes') || '').trim()
@@ -81,7 +88,7 @@ export function LoanForm({ peopleOptions, onSave }: LoanFormProps) {
           </FieldLabel>
 
           <FieldLabel label="Amount">
-            <Input name="amount" type="number" min="0" step="1" placeholder="0" required onChange={() => setError('')} />
+            <Input name="amount" type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="0.00" required onChange={() => setError('')} />
           </FieldLabel>
 
           <FieldLabel label="Date">

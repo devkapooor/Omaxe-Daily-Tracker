@@ -139,6 +139,7 @@ const paymentColumns: LogTableColumn<Payment>[] = [
   { id: 'party', label: 'Party', value: (entry) => entry.partyName, cell: (entry) => <span className="font-semibold">{entry.partyName}</span> },
   { id: 'type', label: 'Type', value: (entry) => entry.type, cell: (entry) => <Badge variant={entry.type === 'Received' ? 'success' : 'secondary'}>{entry.type}</Badge> },
   { id: 'entryType', label: 'Entry', value: (entry) => entry.entryType ?? 'general', cell: (entry) => (entry.entryType ?? 'General').replace('-', ' ') },
+  { id: 'loanId', label: 'Loan Ref', value: (entry) => entry.loanId ?? '', cell: (entry) => entry.loanId ?? <span className="text-muted-foreground">-</span> },
   { id: 'amount', label: 'Amount', value: (entry) => entry.amount, cell: (entry) => <span className="font-semibold">{money(entry.amount)}</span>, align: 'right', sortDescFirst: true },
   { id: 'mode', label: 'Mode', value: (entry) => entry.paymentMode, cell: (entry) => <Badge variant="outline">{entry.paymentMode}</Badge> },
   { id: 'notes', label: 'Notes', value: (entry) => entry.notes, cell: (entry) => notesCell(entry.notes), sortable: false },
@@ -160,6 +161,7 @@ export function PaymentLogTable({ entries }: { entries: Payment[] }) {
           <MobileValue label="Amount" value={money(entry.amount)} />
           <MobileValue label="Mode" value={entry.paymentMode} />
           <MobileValue label="Entry" value={(entry.entryType ?? 'General').replace('-', ' ')} />
+          {entry.loanId ? <MobileValue label="Loan Ref" value={entry.loanId} /> : null}
           <MobileValue label="Notes" value={entry.notes || '-'} />
         </MobileLogCard>
       )}
@@ -188,6 +190,7 @@ export function LoanLogTable({ entries, onDelete }: { entries: LoanEntry[]; onDe
     { id: 'paid', label: 'Paid', value: (entry) => entry.paidAmount, cell: (entry) => money(entry.paidAmount), align: 'right', sortDescFirst: true },
     { id: 'remaining', label: 'Remaining', value: (entry) => entry.remainingAmount, cell: (entry) => <span className="font-semibold">{money(entry.remainingAmount)}</span>, align: 'right', sortDescFirst: true },
     { id: 'status', label: 'Status', value: (entry) => entry.status, cell: (entry) => <Badge variant={entry.status === 'Settled' ? 'success' : 'warning'}>{entry.status}</Badge> },
+    { id: 'notes', label: 'Reason / Notes', value: (entry) => entry.notes ?? '', cell: (entry) => entry.notes ? <span className="block max-w-72 whitespace-pre-wrap break-words text-sm text-muted-foreground">{entry.notes}</span> : <span className="text-muted-foreground">-</span>, sortable: false },
     { id: 'actions', label: 'Actions', value: () => '', cell: (entry) => <LoanActions entry={entry} onDelete={onDelete} />, align: 'right', hideable: false, sortable: false },
   ], [onDelete])
 
@@ -204,9 +207,11 @@ export function LoanLogTable({ entries, onDelete }: { entries: LoanEntry[]; onDe
       mobileCard={(entry) => (
         <MobileLogCard title={entry.personName} subtitle={`Loan date ${formatDisplayDate(entry.date)}`} trailing={<LoanActions entry={entry} onDelete={onDelete} />}>
           <MobileValue label="Original" value={money(entry.amount)} />
+          <MobileValue label="Payoff date" value={formatDisplayDate(entry.promisedPayoffDate)} />
           <MobileValue label="Status" value={<Badge variant={entry.status === 'Settled' ? 'success' : 'warning'}>{entry.status}</Badge>} />
           <MobileValue label="Paid" value={money(entry.paidAmount)} />
           <MobileValue label="Remaining" value={money(entry.remainingAmount)} />
+          <div className="col-span-2 min-w-0"><p className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Reason / Notes</p><p className="mt-0.5 whitespace-pre-wrap break-words font-semibold text-foreground">{entry.notes || '-'}</p></div>
         </MobileLogCard>
       )}
     />
