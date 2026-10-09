@@ -369,6 +369,7 @@ export function AppWorkspace({
               legacyTransferEntries={pendingCashNow.legacyTransferEntries}
               migratedCashoutEntries={pendingCashNow.migratedCashoutEntries}
               userBalances={pendingCashNow.userBalances}
+              totalCashAvailable={pendingCashNow.totalCounterCash}
               users={users}
               onTransfer={async (draft) => {
                 await saveCashTransfer(draft)

@@ -1,6 +1,6 @@
 # POS checkout implementation plan
 
-Status (2026-10-04): The checkout layout and payment interactions are implemented in the current worktree in `PosPage.tsx`, `CheckoutPaymentPanel.tsx`, and `checkoutPayments.ts`. The [Phase 1 checkpoint](UI_REDESIGN_PHASE_1_2026-10-04.md) records that no deployment was made; the 2026-10-03 [POS test release](POS_TEST_RELEASE_2026-10-03.md) does not establish that these later layout changes are deployed. This document remains the implementation reference; deployment of this checkout update is unconfirmed.
+Status (2026-10-10): The checkout layout, payment interactions, unified barcode/name search, and unresolved-item billing guard are implemented in `src/features/pos/components/PosPage.tsx`, `CheckoutPaymentPanel.tsx`, and `src/features/pos/domain/checkoutPayments.ts`. The [Version Log](VERSION_LOG.md) records the related production deployment and verification. No additional production check is implied by this documentation update.
 
 ## Requested behavior
 

@@ -1,13 +1,13 @@
 # Roadmap
 
-This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE on 2026-10-01. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; cleanup does not reverify or change production data.
+This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE and reconciled to the 2026-10-10 product release. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; documentation updates do not reverify or change production data.
 
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
-- Owner-created staff accounts; owner Dashboard, Action Centre and Logs; role-appropriate Settings.
+- Owner-created staff accounts; role-based POS (Billing, Dashboard, Bills, GRN and Audit), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses and owner loan operations.
-- Maintain financial write reliability, loan allocation correctness, user-ID cash ownership, planner consistency, and dependable Firebase sync.
+- Maintain financial write reliability, POS stock/payable consistency, loan allocation correctness, user-ID cash ownership, compatibility with historical planner records, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.
 - Keep App orchestration focused, features under src/features, shared UI under src/shared, and auth/finance/settings actions in the store.
 - Layouts adapt to viewport width through shared primitives, without device-specific implementations.
@@ -15,8 +15,10 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
-- [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. The owner must still deliberately initialize the production POS drawer before billing resumes.
+- [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. Drawer initialization was a prerequisite at the initial rollout; this historical note does not assert the current production drawer state.
 - [x] Implement and release trusted server time plus the restricted Cashout window and configurable blocking notices. Existing financial history was not migrated. See the [server-time and Cashout release checkpoint](./SERVER_TIME_CASHOUT_RELEASE_2026-10-04.md).
+- [x] Release POS billing, compact checkout, bill history, Goods Receipt Notes, multi-item stock audit, remembered-account login improvements, and active-session upgrade announcements. See the [2026-10-09 release entry](./VERSION_LOG.md). This status reflects the production release reported in the project conversation; it is not a fresh production verification.
+- [x] Release unified POS barcode/name search, blocking unknown-item resolution, zero-stock product creation in the official POS catalog, and Cash Movement holder percentages. See the [2026-10-10 release entry](./VERSION_LOG.md).
 
 - [x] Implement the approved source/document cleanup; source tests, lint, TypeScript/build, import/link checks and local HTTP passed. See [cleanup evidence](../archive/PROJECT_CLEANUP_AUDIT_2026-10-01.md). The resulting source structure shipped with the combined 2026-10-04 release; cleanup did not migrate or rewrite production records.
 - [ ] Execute a current [QA checklist](./QA_CHECKLIST.md), with production read-only and all mutation scenarios isolated.
@@ -26,7 +28,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [ ] Continue the outstanding UP-002/UP-004 work and UP-005 coverage below; finalized record-specific financial rules remain a prerequisite.
 - [ ] Define missing/overdue operational signals separately before extending the Action Centre.
 - [ ] Complete legacy cheque workbook import, conflict review and unified expense-cheque persistence only under a separately approved release.
-- [ ] Preserve vendor purchase/return/cheque correction and opening-adjustment requirements that are not yet exposed by a complete live workflow.
+- [ ] Review remaining vendor purchase/return/cheque correction and opening-adjustment requirements against the current GRN/payable and vendor-ledger workflows; do not assume legacy and GRN flows are interchangeable.
 - [ ] Investigate the reported dependency advisories separately without automatic upgrades.
 - [ ] Review the public-repository PII/backups exposure separately. Owner chose report-only during cleanup.
 - [ ] Restore the Java prerequisite for emulator checks if no existing runtime is available; do not install it as a cleanup side effect.
@@ -37,7 +39,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - Keep later shared-layout implementation phases queued until each one is separately approved; follow the staged [shared layout plan](./SHARED_PAGE_LAYOUT_REDESIGN_PLAN_2026-10-04.md).
 - A cash-identity diagnostics/review screen may be considered if needed; never use it to authorize automatic live data repairs.
 - Maintainability work keeps expenses and loans untouched and does not broaden financial scope.
-- Multi-store, inventory, payroll, GST/tax workflows, offline financial writes, and backend job orchestration are outside the current approved scope.
+- Multi-store, payroll, GST/tax workflows, offline financial writes, and backend job orchestration are outside the current approved scope. Single-store POS inventory receiving and physical stock audit are implemented workflows.
 - Legacy browser import, loan repayment allocation, shared searchable selectors, cashout audit persistence, user-ID cash ownership, release tags and PWA installability remain established functionality.
 
 ## Delivery Rules

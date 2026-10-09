@@ -1,5 +1,26 @@
 # Version Log
 
+## POS Billing and Cash Movement - 2026-10-10
+
+- Commits: `2ffd2af` and `6839a83`.
+- Deployment: Firebase Hosting production website, `https://alphahub-f137b.web.app`; Hosting returned HTTP 200 and the live bundle was checked for the released POS behavior.
+- Summary:
+  - Cash Movement holder cards show each positive holder's share of the displayed cash total.
+  - POS uses one field for barcode scans and product-name searches; the misleading Test navigation badge was removed.
+  - Unknown barcodes open a blocking resolution dialog. New catalog products are saved at zero stock, added to the cart, and audited without recording a stock-in movement.
+  - Checkout rejects unresolved items in both the UI and repository.
+- Data safety: the existing POS catalog and historical records remain in place at `posSandboxes/test`; this is a compatibility path containing live business data, not disposable test data.
+
+## POS and Login Upgrades - 2026-10-09
+
+- Commit: `bf1ba5d` (release changes span the POS/GRN/audit and login commits immediately before it on `main`).
+- Deployment: Firebase Hosting production website, reported deployed in the project conversation; Hosting version/deployment identifier was not recorded here. This entry is not a fresh production verification.
+- Summary:
+  - Added POS Billing, Dashboard, Bills, GRN, and Stock Audit navigation; compact checkout and incremental bill-history loading.
+  - Added multi-item Goods Receipt Notes for stock receipt and vendor payable recording, plus multi-item stock audit with audit history and rupee impact.
+  - Added remembered-account login, password focus on selection, and active-session upgrade announcements with hard-refresh guidance.
+- Data safety: POS uses the existing `posSandboxes/test` Firestore path, which contains actual business records. No production financial history or inventory was altered by this documentation update.
+
 ## Project Cleanup Candidate - 2026-10-01
 
 - Status: verified local candidate; not deployed. Deployment requires separate confirmation.

@@ -17,7 +17,11 @@ Only a deliberate action by an authorized user through an approved live financia
 ## Current Scope
 
 - Owner, manager, and billing login with Firebase Authentication
+- Remembered-account login cards, focused password entry, password-reset flow, and dark-mode login screen
 - Shared Firestore-backed live data across devices
+- POS billing, dashboard, and bill history
+- Goods Receipt Notes for stock receiving/vendor payables and multi-item physical stock audits
+- Shared POS drawer reconciliation at login/logout with discrepancy review
 - Owner dashboard with T/T-1/T-2 performance, comparisons, trend, coverage and projections
 - Owner Action Centre for cashout corrections, vendor payment corrections and return decisions
 - Vendor Workspace for vendor profiles, purchases, separate payments, invoices, returns, corrections, cheques and balances
@@ -37,6 +41,7 @@ Only a deliberate action by an authorized user through an approved live financia
 - TypeScript
 - Firebase Authentication
 - Firestore
+- Cloud Functions callable for trusted server time used by cashout controls
 - Tailwind CSS v4
 - Local shadcn-style UI primitives
 - Web app manifest and service worker installability
@@ -45,6 +50,7 @@ Only a deliberate action by an authorized user through an approved live financia
 
 Owner sees:
 
+- `POS` (Billing, Dashboard, Bills, GRN, Audit)
 - `Dashboard`
 - `Action Centre`
 - `Vendor Workspace`
@@ -57,6 +63,7 @@ Owner sees:
 
 Manager sees:
 
+- `POS` (Billing, Dashboard, Bills, GRN, Audit)
 - `Vendor Workspace`
 - `Directory`
 - `Register`
@@ -66,6 +73,7 @@ Manager sees:
 
 Billing sees:
 
+- `POS` (Billing, Dashboard, Bills, GRN, Audit)
 - `Vendor Workspace`
 - `Directory`
 - `Register`
@@ -109,7 +117,7 @@ npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-`npm run test:rules` uses the `demo-alphahub` Firestore emulator and requires Java and Firebase CLI. See [Firebase setup](docs/setup/FIREBASE_SETUP.md) and the [QA checklist](docs/operations/QA_CHECKLIST.md). No Cloud Function or Blaze service is needed.
+`npm run test:rules` uses the `demo-alphahub` Firestore emulator and requires Java and Firebase CLI. See [Firebase setup](docs/setup/FIREBASE_SETUP.md) and the [QA checklist](docs/operations/QA_CHECKLIST.md). Cashout's trusted clock calls the deployed `getServerTime` Cloud Function; check the target Firebase project's current billing and runtime requirements before deploying Functions.
 
 ## Root Files
 
