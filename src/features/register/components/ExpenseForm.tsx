@@ -25,7 +25,7 @@ type ExpenseFormProps = {
 }
 
 export function ExpenseForm({ currentUser, onSave }: ExpenseFormProps) {
-  const expenseCategories = cashoutCategories.filter((item) => item !== 'Stock Purchase' && item !== 'Loan Repayment')
+  const expenseCategories = cashoutCategories
   const [amount, setAmount] = useState('0')
   const [category, setCategory] = useState(expenseCategories[0] ?? 'Rent')
   const [notes, setNotes] = useState('')

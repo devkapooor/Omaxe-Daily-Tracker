@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
-import { money, normalizeName } from '@/app/uiHelpers'
-import type { LoanEntry } from '@/domain/appTypes'
+import { normalizeName } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { FieldLabel } from '@/shared/ui/field-label'
@@ -16,7 +15,6 @@ type DirectoryPageProps = {
   isBusy: boolean
   partyOptions: string[]
   savedPartyNames: string[]
-  loans: LoanEntry[]
   onAddParty: (name: string) => Promise<void>
   onRenameParty: (previousName: string, nextName: string) => Promise<void>
 }
@@ -25,7 +23,6 @@ export function DirectoryPage({
   isBusy,
   partyOptions,
   savedPartyNames,
-  loans,
   onAddParty,
   onRenameParty,
 }: DirectoryPageProps) {
@@ -44,28 +41,6 @@ export function DirectoryPage({
     return partyOptions.filter((party) => party.toLowerCase().includes(query))
   }, [partyOptions, partySearch])
   const selectedPartyIsEditable = selectedParty ? savedPartyKeys.has(selectedParty.toLowerCase()) : false
-  const loanTotalsByParty = useMemo(() => {
-    const totals = new Map<string, { name: string; loanCount: number; principal: number; repaid: number; outstanding: number }>()
-    for (const loan of loans) {
-      const key = loan.personName.trim().toLowerCase()
-      const current = totals.get(key) ?? { name: loan.personName.trim(), loanCount: 0, principal: 0, repaid: 0, outstanding: 0 }
-      current.loanCount += 1
-      current.principal += loan.amount
-      current.repaid += loan.paidAmount
-      current.outstanding += loan.remainingAmount
-      totals.set(key, current)
-    }
-    return [...totals.values()].sort((left, right) => right.outstanding - left.outstanding || left.name.localeCompare(right.name))
-  }, [loans])
-  const allLoanTotals = useMemo(
-    () => loanTotalsByParty.reduce((total, party) => ({
-      principal: total.principal + party.principal,
-      repaid: total.repaid + party.repaid,
-      outstanding: total.outstanding + party.outstanding,
-    }), { principal: 0, repaid: 0, outstanding: 0 }),
-    [loanTotalsByParty],
-  )
-
   function openPartyDetails(party: string) {
     setSelectedParty(party)
     setPartyRename(party)
@@ -119,10 +94,9 @@ export function DirectoryPage({
           <PageHeader
             title="Party Directory"
             tools={(
-              <PageHeaderTabsList aria-label="Party directory sections" className="grid w-full grid-cols-3 sm:w-auto">
+              <PageHeaderTabsList aria-label="Party directory sections" className="grid w-full grid-cols-2 sm:w-auto">
                 <PageHeaderTab value="add">Add Party</PageHeaderTab>
                 <PageHeaderTab value="parties">View Parties</PageHeaderTab>
-                <PageHeaderTab value="loans">Loans</PageHeaderTab>
               </PageHeaderTabsList>
             )}
           />
@@ -181,45 +155,6 @@ export function DirectoryPage({
         </PageCardStack>
       </TabsContent>
 
-      <TabsContent value="loans" className="m-0">
-        <PageCardStack>
-          <Card>
-            <CardHeader>
-              <SectionHeading eyebrow="Read-only" title="Existing Loan Totals" description="Totals are grouped from existing loan records. This view does not change loan data." />
-            </CardHeader>
-            <CardContent className="grid gap-card-gap">
-              <div className="grid gap-card-gap sm:grid-cols-3">
-                <LoanTotal label="Principal issued" value={allLoanTotals.principal} />
-                <LoanTotal label="Repaid" value={allLoanTotals.repaid} />
-                <LoanTotal label="Outstanding" value={allLoanTotals.outstanding} />
-              </div>
-              {loanTotalsByParty.length === 0 ? (
-                <p className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">No loan records are available.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
-                    <thead className="border-b border-border text-xs text-muted-foreground">
-                      <tr><th className="px-2 py-2 font-semibold">Party</th><th className="px-2 py-2 text-right font-semibold">Loans</th><th className="px-2 py-2 text-right font-semibold">Principal</th><th className="px-2 py-2 text-right font-semibold">Repaid</th><th className="px-2 py-2 text-right font-semibold">Outstanding</th></tr>
-                    </thead>
-                    <tbody>
-                      {loanTotalsByParty.map((party) => (
-                        <tr key={party.name.toLowerCase()} className="border-b border-border/70 last:border-0">
-                          <th className="px-2 py-2.5 font-medium text-foreground">{party.name}</th>
-                          <td className="px-2 py-2.5 text-right tabular-nums">{party.loanCount}</td>
-                          <td className="px-2 py-2.5 text-right tabular-nums">{money(party.principal)}</td>
-                          <td className="px-2 py-2.5 text-right tabular-nums">{money(party.repaid)}</td>
-                          <td className="px-2 py-2.5 text-right font-semibold tabular-nums">{money(party.outstanding)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </PageCardStack>
-      </TabsContent>
-
       {selectedParty ? (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 px-3 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="party-details-title">
           <Card className="max-h-[90vh] w-full max-w-[32rem] overflow-y-auto">
@@ -257,15 +192,6 @@ export function DirectoryPage({
       ) : null}
       </PageLayout>
     </Tabs>
-  )
-}
-
-function LoanTotal({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-border bg-muted/50 px-3 py-2.5">
-      <span className="block text-xs text-muted-foreground">{label}</span>
-      <strong className="mt-1 block text-base font-semibold tabular-nums text-foreground">{money(value)}</strong>
-    </div>
   )
 }
 

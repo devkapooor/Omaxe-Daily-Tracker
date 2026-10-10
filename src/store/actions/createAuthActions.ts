@@ -96,6 +96,7 @@ export function createAuthActions({
   }
 
   async function signOutCurrentUser() {
+    setAuthError(null)
     await signOut(auth)
   }
 

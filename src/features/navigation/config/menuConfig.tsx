@@ -3,9 +3,10 @@ import {
   ArrowRightLeft,
   ClipboardCheck,
   LayoutDashboard,
-  Banknote,
   LogOut,
   Logs,
+  PackageSearch,
+  HandCoins,
   ReceiptText,
   ScanBarcode,
   Settings,
@@ -34,18 +35,20 @@ export function pageTitle(page: Page) {
       return 'Action Centre'
     case 'pos-test':
       return 'POS'
+    case 'stock':
+      return 'Current Stock'
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
       return 'Party Directory'
     case 'expense':
       return 'Register'
+    case 'loans':
+      return 'Loans'
     case 'cashout':
       return 'Cashout'
     case 'movement':
       return 'Cash Movement'
-    case 'payroll':
-      return 'Payroll'
     case 'logs':
       return 'Logs'
     case 'settings':
@@ -59,6 +62,15 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
   const items: NavItem[] = []
 
   if (currentUser.role === 'owner') {
+    items.push({
+      icon: <HandCoins className="size-4 shrink-0" />,
+      label: 'Loans',
+      page: 'loans',
+      gradient: '',
+      hoverClass: '',
+      activeClass: 'bg-secondary text-foreground',
+      action: 'page',
+    })
     items.push({
       icon: <LayoutDashboard className="size-4 shrink-0" />,
       label: 'Dashboard',
@@ -83,6 +95,16 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
     icon: <ScanBarcode className="size-4 shrink-0" />,
     label: 'POS',
     page: 'pos-test',
+    gradient: '',
+    hoverClass: '',
+    activeClass: 'bg-secondary text-foreground',
+    action: 'page',
+  })
+
+  items.push({
+    icon: <PackageSearch className="size-4 shrink-0" />,
+    label: 'Current Stock',
+    page: 'stock',
     gradient: '',
     hoverClass: '',
     activeClass: 'bg-secondary text-foreground',
@@ -131,15 +153,6 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
       icon: <ArrowRightLeft className="size-4 shrink-0" />,
       label: 'Cash Movement',
       page: 'movement',
-      gradient: '',
-      hoverClass: '',
-      activeClass: 'bg-secondary text-foreground',
-      action: 'page',
-    },
-    {
-      icon: <Banknote className="size-4 shrink-0" />,
-      label: 'Payroll',
-      page: 'payroll',
       gradient: '',
       hoverClass: '',
       activeClass: 'bg-secondary text-foreground',

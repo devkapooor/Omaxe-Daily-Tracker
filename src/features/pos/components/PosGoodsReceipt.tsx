@@ -12,7 +12,7 @@ import { today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import { normalizeInvoiceNumber, rupeesToPaise, type VendorV2 } from '@/domain/vendorLedgerV2'
 import type { PosGoodsReceipt, PosGoodsReceiptLine, PosProduct } from '../domain/types'
-import { completePosStockAuditBatch, findPosProductByBarcode, getPosCost, subscribePosGoodsReceipts, savePosGoodsReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reversePosGoodsReceipt } from '../data/posRepository'
+import { completePosStockAuditBatch, findPosProductByBarcode, getPosCost, subscribePosGoodsReceipts, savePosGoodsReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reversePosGoodsReceipt, correctPosGoodsReceiptMrp } from '../data/posRepository'
 import { createVendorV2 } from '@/store/vendorLedgerV2Repository'
 import { serverNowIso } from '@/shared/lib/serverClock'
 
@@ -21,6 +21,15 @@ function productMrpPaise(product: PosProduct) {
   if (!raw?.trim()) return null
   const amount = Number(raw.replace(/[₹,\s]/g, ''))
   return Number.isFinite(amount) && amount >= 0 ? rupeesToPaise(amount) : null
+}
+
+function latestReceiptMrpPaise(receipt: PosGoodsReceipt, productId: string, fallback: number | null | undefined) {
+  let mrpPaise = fallback ?? null
+  receipt.mrpCorrections?.forEach((correction) => {
+    const correctedLine = correction.lines.find((line) => line.productId === productId)
+    if (correctedLine) mrpPaise = correctedLine.afterMrpPaise
+  })
+  return mrpPaise
 }
 
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -41,7 +50,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
   const [lines, setLines] = useState<PosGoodsReceiptLine[]>([])
   const [draftId, setDraftId] = useState<string | undefined>()
   const [barcode, setBarcode] = useState('')
-  const [newProduct, setNewProduct] = useState<{ barcode: string; name: string; category: string; price: string; mrp: string } | null>(null)
+  const [newProduct, setNewProduct] = useState<{ barcode: string; name: string; category: string; mrp: string } | null>(null)
   const [newName, setNewName] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [newContact, setNewContact] = useState('')
@@ -52,13 +61,19 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
   const [view, setView] = useState<'receipt' | 'history'>('receipt')
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [historySearch, setHistorySearch] = useState('')
+  const [selectedReceipt, setSelectedReceipt] = useState<PosGoodsReceipt | null>(null)
+  const [receiptAction, setReceiptAction] = useState<'view' | 'correct' | 'reverse' | null>(null)
+  const [correctionMrps, setCorrectionMrps] = useState<Record<string, string>>({})
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [reverseReason, setReverseReason] = useState('')
   const scanRef = useRef<HTMLInputElement>(null)
   const activeVendors = useMemo(() => vendors.filter((vendor) => vendor.active).sort((a, b) => a.canonicalName.localeCompare(b.canonicalName)), [vendors])
   const selectedVendor = activeVendors.find((vendor) => vendor.id === vendorId)
   const matchingInvoice = receipts.find((receipt) => receipt.status === 'submitted' && receipt.vendorId === vendorId && normalizeInvoiceNumber(receipt.invoiceNumber) === normalizeInvoiceNumber(invoiceNumber))
   const receivedValuePaise = lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
   const totalPaise = invoiceTotal.trim() && Number.isFinite(Number(invoiceTotal)) ? rupeesToPaise(Number(invoiceTotal)) : 0
-  const visibleReceipts = receipts.filter((receipt) => `${receipt.vendorName} ${receipt.invoiceNumber} ${receipt.status} ${receipt.receiptDate}`.toLocaleLowerCase('en-IN').includes(historySearch.trim().toLocaleLowerCase('en-IN')))
+  const linesReady = lines.length > 0 && lines.every((line) => Number.isInteger(line.quantity) && line.quantity > 0 && Number.isSafeInteger(line.unitCostPaise) && line.unitCostPaise > 0 && Number.isSafeInteger(line.sellingPricePaise) && (line.sellingPricePaise ?? -1) >= 0 && Number.isSafeInteger(line.mrpPaise) && (line.mrpPaise ?? -1) >= 0)
+  const visibleReceipts = receipts.filter((receipt) => `${receipt.vendorName} ${receipt.invoiceNumber} ${receipt.status} ${receipt.receiptDate} ${receipt.lines.map((line) => `${line.barcode} ${line.productName}`).join(' ')}`.toLocaleLowerCase('en-IN').includes(historySearch.trim().toLocaleLowerCase('en-IN')))
 
   useEffect(() => subscribePosGoodsReceipts(setReceipts, (cause) => setError(cause.message)), [])
 
@@ -78,7 +93,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       }
       const product = await findPosProductByBarcode(value)
       if (!product || !product.active) {
-        setNewProduct({ barcode: value, name: '', category: '', price: '', mrp: '' })
+        setNewProduct({ barcode: value, name: '', category: '', mrp: '' })
         return
       }
       const cost = await getPosCost(product.id)
@@ -88,6 +103,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
         return [{
           productId: product.id, barcode: product.barcode, productName: product.name, category: product.category,
           quantity: 0, unitCostPaise: cost ?? 0, unitCostInput: cost ? (cost / 100).toFixed(2) : '',
+          sellingPricePaise: productMrpPaise(product) ?? undefined, sellingPriceInput: productMrpPaise(product) === null ? '' : ((productMrpPaise(product) ?? 0) / 100).toFixed(2), sellingPriceManuallyEdited: false,
           lineTotalPaise: 0, stockAtScan: product.currentQuantity, mrpPaise: productMrpPaise(product),
           mrpInput: productMrpPaise(product) === null ? '' : String((productMrpPaise(product) ?? 0) / 100),
         }, ...current]
@@ -97,18 +113,18 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
   }
 
   function addNewProduct() {
-    if (!newProduct || !newProduct.name.trim() || !newProduct.category.trim() || newProduct.price === '') {
-      setError('New products require a name, category, and selling price.')
+    if (!newProduct || !newProduct.name.trim() || !newProduct.category.trim() || !newProduct.mrp.trim()) {
+      setError('New products require a name, category, and MRP.')
       return
     }
     const id = `pos-${crypto.randomUUID()}`
-    const mrpValue = newProduct.mrp.trim() ? Number(newProduct.mrp) : null
-    if (mrpValue !== null && (!Number.isFinite(mrpValue) || mrpValue < 0)) { setError('MRP must be zero or greater.'); return }
+    const mrpValue = Number(newProduct.mrp)
+    if (!Number.isFinite(mrpValue) || mrpValue < 0) { setError('Enter a valid MRP of zero or greater.'); return }
     setLines((current) => [{
       productId: id, barcode: newProduct.barcode, productName: newProduct.name.trim(), category: newProduct.category.trim(),
       quantity: 0, unitCostPaise: 0, unitCostInput: '', lineTotalPaise: 0, newProduct: true,
-      sellingPricePaise: rupeesToPaise(Number(newProduct.price)),
-      ...(mrpValue !== null ? { mrpPaise: rupeesToPaise(mrpValue), mrpInput: mrpValue.toFixed(2), mrpChanged: true } : {}),
+      sellingPricePaise: rupeesToPaise(mrpValue), sellingPriceInput: mrpValue.toFixed(2), sellingPriceManuallyEdited: false,
+      mrpPaise: rupeesToPaise(mrpValue), mrpInput: mrpValue.toFixed(2), mrpChanged: true,
     }, ...current])
     setNewProduct(null)
     scanRef.current?.focus()
@@ -166,7 +182,52 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
 
   function editDraft(receipt: PosGoodsReceipt) {
     setDraftId(receipt.id); setVendorId(receipt.vendorId); setInvoiceNumber(receipt.invoiceNumber)
-    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : '', mrpInput: line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); setView('receipt'); setError('')
+    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); setView('receipt'); setError('')
+  }
+
+  function openReceipt(receipt: PosGoodsReceipt, action: 'view' | 'correct' | 'reverse') {
+    setError('')
+    setSelectedReceipt(receipt)
+    setReceiptAction(action)
+    setCorrectionReason('')
+    setReverseReason('')
+    setCorrectionMrps(Object.fromEntries(receipt.lines.map((line) => {
+      const mrpPaise = latestReceiptMrpPaise(receipt, line.productId, line.mrpPaise)
+      return [line.productId, mrpPaise === null ? '' : String(mrpPaise / 100)]
+    })))
+  }
+
+  async function saveMrpCorrection() {
+    if (!selectedReceipt) return
+    try {
+      const corrections = selectedReceipt.lines.map((line) => {
+        const value = correctionMrps[line.productId]?.trim() ?? ''
+        if (!value) return { productId: line.productId, mrpPaise: null }
+        const amount = Number(value)
+        if (!Number.isFinite(amount) || amount < 0) throw new Error(`Enter a valid MRP for ${line.productName}.`)
+        return { productId: line.productId, mrpPaise: rupeesToPaise(amount) }
+      }).filter((correction) => {
+        const line = selectedReceipt.lines.find((item) => item.productId === correction.productId)
+        return correction.mrpPaise !== latestReceiptMrpPaise(selectedReceipt, correction.productId, line?.mrpPaise)
+      })
+      setBusy(true)
+      const correction = await correctPosGoodsReceiptMrp(selectedReceipt.id, corrections, correctionReason, currentUser)
+      showToast('GRN MRP correction saved with an audit record.')
+      setSelectedReceipt((receipt) => receipt ? { ...receipt, mrpCorrections: [...(receipt.mrpCorrections ?? []), correction], revision: receipt.revision + 1, updatedByName: currentUser.name } : receipt)
+      setReceiptAction('view')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to correct the GRN.') }
+    finally { setBusy(false) }
+  }
+
+  async function reverseReceipt() {
+    if (!selectedReceipt) return
+    setBusy(true)
+    try {
+      await reversePosGoodsReceipt(selectedReceipt.id, reverseReason, currentUser)
+      showToast('GRN reversed with stock and payable adjustments.')
+      setReceiptAction(null)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to reverse the GRN.') }
+    finally { setBusy(false) }
   }
 
   return <div className="grid gap-3">
@@ -187,20 +248,20 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scan() }}><Input ref={scanRef} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan barcode, then Enter" aria-label="Scan product barcode" autoFocus /><Button type="submit">Scan item</Button></form>
       {newProduct ? <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 sm:grid-cols-5">
         <p className="sm:col-span-4 text-sm font-semibold">Barcode {newProduct.barcode} is not in the catalog. Create product.</p>
-        <FieldLabel label="Product name"><Input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} /></FieldLabel>
-        <FieldLabel label="Category"><Input value={newProduct.category} onChange={(event) => setNewProduct({ ...newProduct, category: event.target.value })} /></FieldLabel>
-        <FieldLabel label="Selling price"><Input type="number" min="0" step="0.01" value={newProduct.price} onChange={(event) => setNewProduct({ ...newProduct, price: event.target.value })} /></FieldLabel>
-        <FieldLabel label="MRP"><Input type="text" inputMode="decimal" value={newProduct.mrp} onChange={(event) => setNewProduct({ ...newProduct, mrp: event.target.value })} placeholder="Optional" /></FieldLabel>
+        <FieldLabel label="Product name"><Input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} required /></FieldLabel>
+        <FieldLabel label="Category"><Input value={newProduct.category} onChange={(event) => setNewProduct({ ...newProduct, category: event.target.value })} required /></FieldLabel>
+        <FieldLabel label="MRP"><Input type="number" min="0" step="0.01" value={newProduct.mrp} onChange={(event) => setNewProduct({ ...newProduct, mrp: event.target.value })} required /></FieldLabel>
         <Button type="button" className="self-end" onClick={addNewProduct}>Add to GRN</Button>
       </div> : null}
       <div className="overflow-x-auto rounded-md border border-border">
-        <div className="grid min-w-[900px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span className="text-right">Line value</span><span /></div>
-        <div className="max-h-[48vh] min-w-[900px] overflow-y-auto">
-          {lines.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Scan a barcode to add received goods. Quantity starts at 0.</p> : lines.map((line) => <div key={line.productId} className="grid grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b px-3 py-2 last:border-0">
+        <div className="grid min-w-[1080px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span>Selling price</span><span className="text-right">Line value</span><span /></div>
+        <div className="max-h-[48vh] min-w-[1080px] overflow-y-auto">
+          {lines.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Scan a barcode to add received goods. Enter quantity, cost, MRP, and selling price for every line.</p> : lines.map((line) => <div key={line.productId} className="grid grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b px-3 py-2 last:border-0">
             <div className="min-w-0"><strong className="block truncate text-sm">{line.productName}{line.newProduct ? <Badge variant="secondary" className="ml-2">New</Badge> : null}</strong><span className="text-[11px] text-muted-foreground">{line.barcode} · Stock {line.stockAtScan ?? 0}</span></div>
-            <Input aria-label={`Received quantity for ${line.productName}`} className="h-8 px-2" type="number" min="0" step="1" value={line.quantity} onChange={(event) => setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, quantity: event.target.value === '' ? 0 : Math.max(0, Math.trunc(Number(event.target.value) || 0)) } : item))} />
-            <Input aria-label={`Unit cost for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" value={line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : '')} placeholder="Enter cost" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, unitCostInput: value, unitCostPaise: valid ? rupeesToPaise(parsed) : 0 } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.unitCostInput); return item.unitCostInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, unitCostInput: parsed.toFixed(2), unitCostPaise: rupeesToPaise(parsed) } : item }))} />
-            <Input aria-label={`MRP for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" value={line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100))} placeholder="Enter MRP" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, mrpInput: value, mrpPaise: valid ? rupeesToPaise(parsed) : null, mrpChanged: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.mrpInput); return item.mrpInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, mrpInput: parsed.toFixed(2), mrpPaise: rupeesToPaise(parsed), mrpChanged: true } : item }))} />
+            <Input aria-label={`Received quantity for ${line.productName}`} className="h-8 px-2" type="number" min="1" step="1" required value={line.quantity || ''} onChange={(event) => setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, quantity: event.target.value === '' ? 0 : Math.max(0, Math.trunc(Number(event.target.value) || 0)) } : item))} />
+            <Input aria-label={`Unit cost for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : '')} placeholder="Enter cost" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, unitCostInput: value, unitCostPaise: valid ? rupeesToPaise(parsed) : 0 } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.unitCostInput); return item.unitCostInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, unitCostInput: parsed.toFixed(2), unitCostPaise: rupeesToPaise(parsed) } : item }))} />
+            <Input aria-label={`MRP for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100))} placeholder="Enter MRP" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, mrpInput: value, mrpPaise: valid ? rupeesToPaise(parsed) : null, sellingPriceInput: valid ? parsed.toFixed(2) : '', sellingPricePaise: valid ? rupeesToPaise(parsed) : undefined, sellingPriceManuallyEdited: false, mrpChanged: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.mrpInput); return item.mrpInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, mrpInput: parsed.toFixed(2), mrpPaise: rupeesToPaise(parsed), sellingPriceInput: parsed.toFixed(2), sellingPricePaise: rupeesToPaise(parsed), sellingPriceManuallyEdited: false, mrpChanged: true } : item }))} />
+            <Input aria-label={`Selling price for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2))} placeholder="Enter price" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, sellingPriceInput: value, sellingPricePaise: valid ? rupeesToPaise(parsed) : undefined, sellingPriceManuallyEdited: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.sellingPriceInput); return item.sellingPriceInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, sellingPriceInput: parsed.toFixed(2), sellingPricePaise: rupeesToPaise(parsed), sellingPriceManuallyEdited: true } : item }))} />
             <strong className="w-full text-right text-sm tabular-nums">{money(line.quantity * line.unitCostPaise)}</strong>
             <Button type="button" size="sm" variant="ghost" aria-label={`Remove ${line.productName}`} onClick={() => setLines((items) => items.filter((item) => item.productId !== line.productId))}>Remove</Button>
           </div>)}
@@ -209,20 +270,35 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_13rem_auto] sm:items-end">
         <div className="text-sm"><span className="block text-muted-foreground">Received stock value</span><strong>{money(receivedValuePaise)}</strong></div>
         <FieldLabel label="Full invoice payable"><Input type="number" min="0.01" step="0.01" value={invoiceTotal} onChange={(event) => setInvoiceTotal(event.target.value)} placeholder="Invoice total" required /></FieldLabel>
-        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !lines.some((line) => line.quantity > 0) || !vendorId || !invoiceNumber.trim() || !totalPaise} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !vendorId || !invoiceNumber.trim() || !totalPaise} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
       </div>
-      <p className="text-xs text-muted-foreground">The payable is the full invoice amount; stock increases only by the quantities received above.</p>
+      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and can be changed. The payable is the full invoice amount; stock increases only by the quantities received above.</p>
     </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recent activity" title="GRN History" description="Search receipts and continue or review saved GRNs." /></CardHeader><CardContent className="grid content-start gap-3">
-      <Input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search vendor, invoice, status or date" aria-label="Search GRN history" />
+      <Input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search vendor, invoice, barcode, product or date" aria-label="Search GRN history" />
       <div className="grid max-h-[65vh] content-start gap-2 overflow-y-auto">
         {visibleReceipts.map((receipt) => <article key={receipt.id} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
           <div className="min-w-0"><strong className="block truncate">{receipt.vendorName}</strong><p className="text-xs text-muted-foreground">Invoice {receipt.invoiceNumber} · {receipt.receiptDate} · {receipt.lines.length} line(s)</p></div>
           <div className="flex items-center gap-2"><Badge variant={receipt.status === 'submitted' ? 'success' : 'secondary'}>{receipt.status}</Badge><strong>{money(receipt.invoiceTotalPaise ?? receipt.totalPaise)}</strong></div>
-          {receipt.status === 'draft' ? <div className="flex gap-1"><Button size="sm" variant="outline" disabled={busy} onClick={() => editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void submitDraft(receipt.id)}>Submit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => void deletePosGoodsReceiptDraft(receipt.id, currentUser).then(() => showToast('Draft deleted.')).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to delete draft.'))}>Delete</Button></div> : receipt.status === 'submitted' && currentUser.role === 'owner' ? <Button size="sm" variant="outline" disabled={busy} onClick={() => { const reason = window.prompt('Reason for reversing this GRN?'); if (!reason?.trim()) return; setBusy(true); void reversePosGoodsReceipt(receipt.id, reason, currentUser).then(() => showToast('GRN reversed with stock and payable adjustments. Create a corrected GRN if needed.')).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to reverse GRN.')).finally(() => setBusy(false)) }}>Reverse / correct</Button> : null}
+          <div className="flex flex-wrap justify-end gap-1"><Button size="sm" variant="outline" disabled={busy} onClick={() => openReceipt(receipt, 'view')}>View</Button>{receipt.status === 'draft' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void submitDraft(receipt.id)}>Submit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => void deletePosGoodsReceiptDraft(receipt.id, currentUser).then(() => showToast('Draft deleted.')).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to delete draft.'))}>Delete</Button></> : receipt.status === 'submitted' && currentUser.role === 'owner' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => openReceipt(receipt, 'correct')}>Correct MRP</Button><Button size="sm" variant="destructive" disabled={busy} onClick={() => openReceipt(receipt, 'reverse')}>Reverse</Button></> : null}</div>
         </article>)}
         {visibleReceipts.length === 0 ? <p className="rounded border border-dashed p-5 text-center text-sm text-muted-foreground">{receipts.length ? 'No GRNs match that search.' : 'No GRNs recorded yet.'}</p> : null}
       </div>
     </CardContent></Card>}
+    {selectedReceipt && receiptAction ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setReceiptAction(null) }}>
+      <Card role="dialog" aria-modal="true" aria-labelledby="grn-detail-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex-row items-center justify-between border-b"><SectionHeading eyebrow="Goods receipt" title={receiptAction === 'correct' ? 'Correct GRN MRP' : receiptAction === 'reverse' ? 'Reverse GRN' : 'GRN details'} description={`${selectedReceipt.vendorName} · Invoice ${selectedReceipt.invoiceNumber} · ${selectedReceipt.receiptDate}`} /><Button type="button" size="icon" variant="ghost" aria-label="Close GRN details" disabled={busy} onClick={() => setReceiptAction(null)}><X /></Button></CardHeader>
+        <CardContent className="grid gap-3 overflow-y-auto pt-4">
+          {receiptAction === 'reverse' ? <><p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">Reversing adjusts the received quantities and payable. This action is recorded and cannot be undone from this screen.</p><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Explain why this GRN is being reversed" /></FieldLabel><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button type="button" variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"><span>Invoice date: {selectedReceipt.invoiceDate}</span><span>Status: {selectedReceipt.status}</span><span>Created by: {selectedReceipt.createdByName}</span><span>Last updated by: {selectedReceipt.updatedByName}</span></div>
+            <div className="overflow-x-auto rounded-md border"><div className={`grid gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold ${receiptAction === 'correct' ? 'min-w-[850px] grid-cols-[minmax(13rem,1fr)_5rem_7rem_7rem_8rem_8rem]' : 'min-w-[700px] grid-cols-[1fr_7rem_7rem_7rem_8rem]'}`}><span>Product / barcode</span><span>Received</span><span>Unit cost</span><span>Selling price</span>{receiptAction === 'correct' ? <><span>Previous MRP</span><span>New MRP</span></> : <span>GRN MRP</span>}</div>
+              {selectedReceipt.lines.map((line) => <div key={line.productId} className={`grid items-center gap-2 border-b px-3 py-2 last:border-0 ${receiptAction === 'correct' ? 'min-w-[850px] grid-cols-[minmax(13rem,1fr)_5rem_7rem_7rem_8rem_8rem]' : 'min-w-[700px] grid-cols-[1fr_7rem_7rem_7rem_8rem]'}`}><div className="min-w-0"><strong className="block truncate text-sm">{line.productName}</strong><span className="text-xs text-muted-foreground">{line.barcode}</span></div><span className="text-sm">{line.quantity}</span><span className="text-sm">{money(line.unitCostPaise)}</span><span className="text-sm">{line.sellingPricePaise === undefined ? '—' : money(line.sellingPricePaise)}</span>{receiptAction === 'correct' ? <><span className="text-sm font-medium">{latestReceiptMrpPaise(selectedReceipt, line.productId, line.mrpPaise) === null ? 'No MRP' : money(latestReceiptMrpPaise(selectedReceipt, line.productId, line.mrpPaise) as number)}</span><Input aria-label={`Correct MRP for ${line.productName}`} inputMode="decimal" type="number" min="0" step="0.01" value={correctionMrps[line.productId] ?? ''} onChange={(event) => setCorrectionMrps((values) => ({ ...values, [line.productId]: event.target.value }))} placeholder="No MRP" /></> : <span className="text-sm">{line.mrpPaise === null || line.mrpPaise === undefined ? '—' : money(line.mrpPaise)}</span>}</div>)}
+            </div>
+            {(selectedReceipt.mrpCorrections ?? []).length ? <section className="grid gap-2"><h3 className="text-sm font-semibold">MRP correction history</h3>{selectedReceipt.mrpCorrections?.map((correction, index) => <article key={`${correction.createdAt}-${index}`} className="rounded-md border p-3 text-sm"><p>{correction.reason}</p><p className="text-xs text-muted-foreground">{correction.createdAt} · {correction.actorName}</p>{correction.lines.map((entry) => <p key={`${entry.productId}-${index}`} className="mt-1 text-xs">{entry.productName} ({entry.barcode}): {entry.beforeMrpPaise === null ? 'No MRP' : money(entry.beforeMrpPaise)} → {entry.afterMrpPaise === null ? 'No MRP' : money(entry.afterMrpPaise)}</p>)}</article>)}</section> : null}
+            {receiptAction === 'correct' ? <><FieldLabel label="Reason for correction"><Textarea value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Explain the MRP correction" /></FieldLabel><p className="text-xs text-muted-foreground">Correcting MRP updates the product from this GRN and records the previous value, new value, reason, and user. Quantity and payable are unchanged.</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button type="button" disabled={busy || !correctionReason.trim()} onClick={() => void saveMrpCorrection()}>{busy ? 'Saving…' : 'Save correction'}</Button></div></> : <div className="flex justify-end"><Button type="button" onClick={() => setReceiptAction(null)}>Close</Button></div>}
+          </>}
+        </CardContent>
+      </Card>
+    </div> : null}
     {showVendorForm ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setShowVendorForm(false) }}>
       <Card role="dialog" aria-modal="true" aria-labelledby="new-vendor-title" className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden shadow-xl">
         <CardHeader className="flex-row items-center justify-between border-b"><SectionHeading eyebrow="Vendor directory" title="Add vendor" /><Button type="button" size="icon" variant="ghost" aria-label="Close add vendor" disabled={busy} onClick={() => setShowVendorForm(false)}><X /></Button></CardHeader>

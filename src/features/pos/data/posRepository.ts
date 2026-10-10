@@ -57,6 +57,7 @@ import {
   type PosPaymentMethod,
   type PosProduct,
   type PosGoodsReceipt,
+  type PosGoodsReceiptLine,
   type PosStockAudit,
   type PosStockAuditBatch,
   type PosRefundEvent,
@@ -66,6 +67,33 @@ import { calculatePosDashboard } from '../domain/posDashboard'
 const root = () => doc(db, 'posSandboxes', POS_SANDBOX_ID)
 const posCollection = (name: string) => collection(root(), name)
 const posDoc = (name: string, id: string) => doc(root(), name, id)
+
+function productMrpPaise(product: PosProduct | undefined) {
+  const raw = Object.entries(product?.sourceValues ?? {}).find(([key]) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')?.[1]
+  if (!raw?.trim()) return null
+  const amount = Number(raw.replace(/[₹,\s]/g, ''))
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) : null
+}
+
+function sourceValuesWithMrp(sourceValues: Record<string, string>, mrpPaise: number | null) {
+  const next = Object.fromEntries(Object.entries(sourceValues).filter(([key]) => key.trim().toLocaleLowerCase('en-IN') !== 'printed mrp'))
+  if (mrpPaise !== null) next['Printed MRP'] = (mrpPaise / 100).toFixed(2)
+  return next
+}
+
+function reversedReceiptProductUpdates(product: PosProduct, line: PosGoodsReceiptLine, movementId: string, timestamp: string, actor: AppUser) {
+  const updates: Record<string, unknown> = {
+    currentQuantity: product.currentQuantity - line.quantity, revision: product.revision + 1, lastMovementId: movementId,
+    updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+  }
+  if (line.sellingPriceBeforePaise !== undefined && line.sellingPriceBeforePaise !== null && product.sellingPricePaise === line.sellingPricePaise) {
+    updates.sellingPricePaise = line.sellingPriceBeforePaise
+  }
+  if (line.mrpChanged && line.mrpBeforePaise !== undefined && productMrpPaise(product) === line.mrpPaise) {
+    updates.sourceValues = sourceValuesWithMrp(product.sourceValues ?? {}, line.mrpBeforePaise)
+  }
+  return updates
+}
 const nowIso = serverNowIso
 const actorFields = (actor: AppUser) => ({ actorUid: actor.id, actorName: actor.name, actorRole: actor.role })
 
@@ -273,11 +301,10 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
     const receipt = receiptSnapshot.data() as PosGoodsReceipt
     if (receipt.status !== 'draft') throw new Error('This GRN has already been submitted.')
     if (!receipt.lines.length) throw new Error('The GRN has no product lines.')
-    const receivedLines = receipt.lines.filter((line) => line.quantity > 0)
-    if (!receivedLines.length) throw new Error('Enter a received quantity greater than zero for at least one product.')
+    const receivedLines = receipt.lines
     const totalPaise = receipt.invoiceTotalPaise ?? 0
     if (!Number.isSafeInteger(totalPaise) || totalPaise <= 0) throw new Error('Enter the full vendor invoice payable before submitting.')
-    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 0 || !Number.isInteger(line.unitCostPaise) || line.unitCostPaise < 0 || (line.quantity > 0 && line.unitCostPaise <= 0) || (line.mrpChanged && line.mrpPaise !== null && line.mrpPaise !== undefined && (!Number.isSafeInteger(line.mrpPaise) || line.mrpPaise < 0)) || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0)))) throw new Error('Received lines need a positive whole quantity and purchase cost. New products also need a category and selling price; MRP must be zero or greater.')
+    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isSafeInteger(line.unitCostPaise) || line.unitCostPaise <= 0 || !Number.isSafeInteger(line.mrpPaise) || (line.mrpPaise ?? -1) < 0 || !Number.isSafeInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0 || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise))))) throw new Error('Every GRN line requires a positive whole quantity, unit cost, MRP, and selling price.')
     if (new Set(receivedLines.map((line) => line.productId)).size !== receivedLines.length) throw new Error('A product can appear only once per GRN. Update its quantity on the existing line.')
 
     const configRef = doc(db, 'appMetadata', 'vendorLedgerV2Config')
@@ -298,6 +325,14 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       if (!snapshot.exists() && !line.newProduct) throw new Error(`Product ${line.productName} no longer exists. Re-scan its barcode.`)
       if (snapshot.exists() && line.newProduct) throw new Error(`Product ${line.productName} already exists. Re-scan its barcode.`)
       if (!snapshot.exists() && receipt.lines.some((other, otherIndex) => otherIndex !== index && other.barcode === line.barcode)) throw new Error(`Barcode ${line.barcode} appears more than once in this GRN.`)
+    })
+    const submittedLines = receivedLines.map((line, index) => {
+      const existing = productSnapshots[index].data() as PosProduct | undefined
+      return {
+        ...line,
+        sellingPriceBeforePaise: existing?.sellingPricePaise ?? null,
+        mrpBeforePaise: productMrpPaise(existing),
+      }
     })
     const accountSnapshot = await transaction.get(accountRef)
     const currentAccount = accountSnapshot.data() as VendorAccountStateV2 | undefined
@@ -347,7 +382,7 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
         transaction.get(purchaseRef), transaction.get(ledgerRef), transaction.get(invoiceStateRef),
       ])
       if (purchaseSnap.exists() || ledgerSnap.exists() || invoiceStateSnap.exists()) throw new Error('This GRN payable already exists or conflicts with another record.')
-      const purchase = { ...posting.purchase, grnId: id, lines: receivedLines }
+      const purchase = { ...posting.purchase, grnId: id, lines: submittedLines }
       timestamp = posting.purchase.createdAt
       payableCreated = true
       payableOwner = true
@@ -375,6 +410,7 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       if (snapshot.exists()) {
         const updates: Record<string, unknown> = {
           currentQuantity: afterQuantity, revision: beforeRevision + 1, lastMovementId: movementId,
+          sellingPricePaise: line.sellingPricePaise,
           updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
         }
         if (line.mrpChanged) {
@@ -403,7 +439,7 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       }, { merge: true })
     })
     transaction.update(receiptRef, {
-      status: 'submitted', totalPaise, invoiceTotalPaise: totalPaise, lines: receivedLines, payablePurchaseId, payableOwner,
+      status: 'submitted', totalPaise, invoiceTotalPaise: totalPaise, lines: submittedLines, payablePurchaseId, payableOwner,
       ...(originatingGoodsReceiptId ? { originatingGoodsReceiptId } : {}),
       revision: receipt.revision + 1,
       updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
@@ -413,6 +449,71 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       totalPaise, payableCreated, createdAt: timestamp, ...actorFields(actor),
     })
     return { purchaseId: payablePurchaseId, totalPaise, payableCreated }
+  })
+}
+
+export async function correctPosGoodsReceiptMrp(
+  id: string,
+  corrections: Array<{ productId: string; mrpPaise: number | null }>,
+  reason: string,
+  actor: AppUser,
+) {
+  if (actor.role !== 'owner') throw new Error('Only the owner can correct a submitted GRN.')
+  if (!reason.trim()) throw new Error('Enter a reason for correcting this GRN.')
+  if (!corrections.length) throw new Error('Change at least one product MRP.')
+  if (corrections.length > 5) throw new Error('Correct up to five products at a time.')
+  if (corrections.some(({ mrpPaise }) => mrpPaise !== null && (!Number.isSafeInteger(mrpPaise) || mrpPaise < 0))) throw new Error('MRP must be zero or greater.')
+  const uniqueCorrections = new Map(corrections.map((correction) => [correction.productId, correction.mrpPaise]))
+  if (uniqueCorrections.size !== corrections.length) throw new Error('A product can only appear once in a correction.')
+  const correctionId = crypto.randomUUID()
+  return runTransaction(db, async (transaction) => {
+    const receiptRef = posDoc('goodsReceipts', id)
+    const receiptSnapshot = await transaction.get(receiptRef)
+    if (!receiptSnapshot.exists()) throw new Error('GRN was not found.')
+    const receipt = receiptSnapshot.data() as PosGoodsReceipt
+    if (receipt.status !== 'submitted') throw new Error('Only a submitted GRN can be corrected.')
+    const receiptLines = new Map(receipt.lines.map((line) => [line.productId, line]))
+    const entries = [...uniqueCorrections.entries()]
+    const productRefs = entries.map(([productId]) => posDoc('products', productId))
+    const products = await Promise.all(productRefs.map((reference) => transaction.get(reference)))
+    const timestamp = nowIso()
+    const correctedLines: Array<{ productId: string; barcode: string; productName: string; beforeMrpPaise: number | null; afterMrpPaise: number | null }> = []
+    products.forEach((snapshot, index) => {
+      const [productId, afterMrpPaise] = entries[index]
+      const line = receiptLines.get(productId)
+      if (!line) throw new Error('A product in the correction is not part of this GRN.')
+      if (!snapshot.exists()) throw new Error(`Product ${line.productName} no longer exists.`)
+      const product = snapshot.data() as PosProduct
+      const sourceValues = { ...(product.sourceValues ?? {}) }
+      const existingMrpKey = Object.keys(sourceValues).find((key) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')
+      const rawBefore = existingMrpKey ? Number(sourceValues[existingMrpKey].replace(/[₹,\s]/g, '')) : NaN
+      const beforeMrpPaise = Number.isFinite(rawBefore) && rawBefore >= 0 ? Math.round(rawBefore * 100) : null
+      for (const key of Object.keys(sourceValues)) if (key.trim().toLocaleLowerCase('en-IN') === 'printed mrp') delete sourceValues[key]
+      if (afterMrpPaise !== null) sourceValues['Printed MRP'] = (afterMrpPaise / 100).toFixed(2)
+      const movementId = crypto.randomUUID()
+      transaction.update(productRefs[index], {
+        sourceValues, revision: product.revision + 1, lastMovementId: movementId,
+        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+      })
+      transaction.set(posDoc('stockMovements', movementId), {
+        id: movementId, productId, barcode: line.barcode, type: 'goods-receipt-mrp-correction', quantityDelta: 0,
+        beforeQuantity: product.currentQuantity, afterQuantity: product.currentQuantity,
+        productRevisionBefore: product.revision, productRevisionAfter: product.revision + 1,
+        businessDate: receipt.receiptDate, goodsReceiptId: id, correctionId, reason: reason.trim(),
+        createdAt: timestamp, ...actorFields(actor),
+      })
+      correctedLines.push({ productId, barcode: line.barcode, productName: line.productName, beforeMrpPaise, afterMrpPaise })
+    })
+    const correction = { reason: reason.trim(), createdAt: timestamp, actorUid: actor.id, actorName: actor.name, lines: correctedLines }
+    transaction.update(receiptRef, {
+      mrpCorrections: [...(receipt.mrpCorrections ?? []), correction], revision: receipt.revision + 1,
+      updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
+    })
+    transaction.set(posDoc('events', correctionId), {
+      id: correctionId, type: 'goods-receipt-mrp-corrected', goodsReceiptId: id, reason: reason.trim(),
+      lines: correctedLines, createdAt: timestamp, ...actorFields(actor),
+    })
+    return correction
   })
 }
 
@@ -443,10 +544,7 @@ export async function reversePosGoodsReceipt(id: string, reason: string, actor: 
         const product = products[index].data() as PosProduct
         const movementId = crypto.randomUUID()
         const afterQuantity = product.currentQuantity - line.quantity
-        transaction.update(productRefs[index], {
-          currentQuantity: afterQuantity, revision: product.revision + 1, lastMovementId: movementId,
-          updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
-        })
+        transaction.update(productRefs[index], reversedReceiptProductUpdates(product, line, movementId, timestamp, actor))
         transaction.set(posDoc('stockMovements', movementId), {
           id: movementId, productId: line.productId, barcode: line.barcode, type: 'goods-receipt-reversal', quantityDelta: -line.quantity,
           beforeQuantity: product.currentQuantity, afterQuantity, productRevisionBefore: product.revision,
@@ -515,10 +613,7 @@ export async function reversePosGoodsReceipt(id: string, reason: string, actor: 
       const product = products[index].data() as PosProduct
       const movementId = crypto.randomUUID()
       const afterQuantity = product.currentQuantity - line.quantity
-      transaction.update(productRefs[index], {
-        currentQuantity: afterQuantity, revision: product.revision + 1, lastMovementId: movementId,
-        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
-      })
+      transaction.update(productRefs[index], reversedReceiptProductUpdates(product, line, movementId, timestamp, actor))
       transaction.set(posDoc('stockMovements', movementId), {
         id: movementId, productId: line.productId, barcode: line.barcode, type: 'goods-receipt-reversal', quantityDelta: -line.quantity,
         beforeQuantity: product.currentQuantity, afterQuantity, productRevisionBefore: product.revision,

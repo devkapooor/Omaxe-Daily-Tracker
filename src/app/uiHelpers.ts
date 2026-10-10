@@ -16,13 +16,10 @@ export const singleStoreId = 'single-store'
 
 export const cashoutCategories = [
   'Rent',
-  'Maintenance',
   'Electricity',
-  'Salary',
-  'Stock Purchase',
-  'Transportation',
+  'Store Maintenance',
+  'Stock Delivery',
   'Staff Welfare',
-  'Loan Repayment',
 ]
 
 export const cashoutPaymentModes: Cashout['paymentMode'][] = ['Cash', 'Bank Transfer', 'Cheque']
@@ -184,7 +181,7 @@ export function uniqNames(values: string[]) {
 
 export function resolveActivePage(role: string, activePage: Page) {
   if (role === 'owner') return activePage
-  if (activePage === 'dashboard' || activePage === 'actions' || activePage === 'logs') return 'expense'
+  if (activePage === 'dashboard' || activePage === 'actions' || activePage === 'logs' || activePage === 'loans') return 'expense'
   return activePage
 }
 

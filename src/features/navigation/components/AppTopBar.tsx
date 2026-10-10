@@ -29,8 +29,8 @@ function userInitials(name: string) {
 }
 
 function groupFor(item: NavItem): NavigationGroup {
-  if (item.page === 'dashboard' || item.page === 'actions' || item.page === 'pos-test' || item.page === 'vendor-preview' || item.page === 'directory') return 'Core Engine'
-  if (item.page === 'expense' || item.page === 'cashout' || item.page === 'movement' || item.page === 'payroll') return 'Ledger & Cash Flow'
+  if (item.page === 'dashboard' || item.page === 'actions' || item.page === 'pos-test' || item.page === 'stock' || item.page === 'vendor-preview' || item.page === 'directory') return 'Core Engine'
+  if (item.page === 'expense' || item.page === 'cashout' || item.page === 'movement') return 'Ledger & Cash Flow'
   return 'Governance & Audit'
 }
 

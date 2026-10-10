@@ -1,12 +1,12 @@
 # Roadmap
 
-This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE and reconciled to the 2026-10-10 product release. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; documentation updates do not reverify or change production data.
+This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE and reconciled to the 2026-10-11 release candidate. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; documentation updates do not reverify or change production data.
 
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
 - Owner-created staff accounts; role-based POS (Billing, Dashboard, Bills, GRN and Audit), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
-- Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses and owner loan operations.
+- Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses. The owner-only Loans page contains loan totals, details, creation and repayment history. All staff can view Current Stock including costs and recorded movements.
 - Maintain financial write reliability, POS stock/payable consistency, loan allocation correctness, user-ID cash ownership, compatibility with historical planner records, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.
 - Keep App orchestration focused, features under src/features, shared UI under src/shared, and auth/finance/settings actions in the store.
@@ -14,6 +14,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - Historical baseline tag: v1.0.0. Live Hosting: https://alphahub-f137b.web.app. Historical cash identity cutover: 2026-06-05.
 
 ## Current execution queue
+
+- [x] Prepare the approved v1.1.0 release: Current Stock, compact cart rows, today's POS sales card, GRN price and correction improvements, owner-only Loans consolidation, Payroll UI retirement, login error handling and register/party cleanup. See [release scope and validation](./VERSION_LOG.md) and [group refresh instructions](./UPGRADE_MESSAGE_2026-10-11.md).
 
 - [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. Drawer initialization was a prerequisite at the initial rollout; this historical note does not assert the current production drawer state.
 - [x] Implement and release trusted server time plus the restricted Cashout window and configurable blocking notices. Existing financial history was not migrated. See the [server-time and Cashout release checkpoint](./SERVER_TIME_CASHOUT_RELEASE_2026-10-04.md).

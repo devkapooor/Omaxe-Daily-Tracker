@@ -5,7 +5,7 @@ import { buildMenu } from '@/features/navigation/config/menuConfig'
 describe('owner-only route resolution', () => {
   it('opens POS by default for staff and managers on sign-in while preserving the owner preference', () => {
     expect(defaultSignInPage('manager', 'vendor-preview')).toBe('pos-test')
-    expect(defaultSignInPage('billing', 'payroll')).toBe('pos-test')
+    expect(defaultSignInPage('billing', 'movement')).toBe('pos-test')
     expect(defaultSignInPage('owner', 'actions')).toBe('actions')
   })
 
@@ -19,8 +19,6 @@ describe('owner-only route resolution', () => {
     expect(resolveActivePage('manager', 'vendor-preview')).toBe('vendor-preview')
     expect(resolveActivePage('billing', 'actions')).toBe('expense')
     expect(resolveActivePage('billing', 'vendor-preview')).toBe('vendor-preview')
-    expect(resolveActivePage('manager', 'payroll')).toBe('payroll')
-    expect(resolveActivePage('billing', 'payroll')).toBe('payroll')
   })
 
   it('adds the Action Centre navigation item only for the owner', () => {
@@ -30,9 +28,9 @@ describe('owner-only route resolution', () => {
     expect(pagesFor('billing')).not.toContain('actions')
     expect(pagesFor('manager')).toContain('vendor-preview')
     expect(pagesFor('billing')).toContain('vendor-preview')
-    expect(pagesFor('owner')).toContain('payroll')
-    expect(pagesFor('manager')).toContain('payroll')
-    expect(pagesFor('billing')).toContain('payroll')
+    expect(pagesFor('owner')).not.toContain('payroll')
+    expect(pagesFor('manager')).not.toContain('payroll')
+    expect(pagesFor('billing')).not.toContain('payroll')
     expect(pagesFor('owner')).not.toContain('planner')
     expect(pagesFor('manager')).not.toContain('planner')
     expect(pagesFor('billing')).not.toContain('planner')

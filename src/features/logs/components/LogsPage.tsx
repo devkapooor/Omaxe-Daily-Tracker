@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
-import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
+import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, SettingsAuditEntry, UserAccount } from '@/domain/appTypes'
 import type { PosStockAuditBatch } from '@/features/pos/domain/types'
 import { subscribePosStockAuditBatches } from '@/features/pos/data/posRepository'
 import { formatDisplayDate, legacyCashHolderLabel, shiftDate, today, userNameById } from '@/app/uiHelpers'
@@ -9,7 +9,7 @@ import { db } from '@/shared/lib/firebase'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutLogTab } from '@/features/logs/components/DailyCashoutLogTab'
 import { StockAuditLogTable } from '@/features/logs/components/StockAuditLogTable'
-import { AuditLogTable, ExpenseLogTable, LoanLogTable, PaymentLogTable, PurchaseLogTable, SalesLogTable, TransferLogTable } from '@/features/logs/components/LogDataTables'
+import { AuditLogTable, ExpenseLogTable, PaymentLogTable, PurchaseLogTable, SalesLogTable, TransferLogTable } from '@/features/logs/components/LogDataTables'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
@@ -22,13 +22,11 @@ type LogsPageProps = {
   expenses: Cashout[]
   purchases: Purchase[]
   payments: Payment[]
-  loans: LoanEntry[]
   dailyCashouts: DailyCashoutEntry[]
   cashTransfers: CashTransfer[]
   cashoutCorrectionRequests: CashoutCorrectionRequest[]
   settingsAuditLog: SettingsAuditEntry[]
   users: UserAccount[]
-  onDeleteLoan: (loan: LoanEntry) => Promise<void> | void
   onDeleteDailyCashout: (entry: DailyCashoutEntry) => Promise<void> | void
   onEditDailyCashout: (entry: DailyCashoutEntry, values: CashoutCorrectionValues, reason: string) => Promise<void> | void
 }
@@ -91,13 +89,11 @@ export function LogsPage({
   expenses,
   purchases,
   payments,
-  loans,
   dailyCashouts,
   cashTransfers,
   cashoutCorrectionRequests,
   settingsAuditLog,
   users,
-  onDeleteLoan,
   onDeleteDailyCashout,
   onEditDailyCashout,
 }: LogsPageProps) {
@@ -115,7 +111,7 @@ export function LogsPage({
   const validRangeStart = rangeStart <= rangeEnd ? rangeStart : rangeEnd
   const validRangeEnd = rangeStart <= rangeEnd ? rangeEnd : rangeStart
   const isCustomRangeIncomplete = rangePreset === 'custom' && (!customStart || !customEnd)
-  const canApplyRangeToNonLoanTab = activeTab === 'loans' || !isCustomRangeIncomplete
+  const canApplyRangeToNonLoanTab = !isCustomRangeIncomplete
 
   function resetResults() {
     setVisibleCount(50)
@@ -177,16 +173,9 @@ export function LogsPage({
 
   const filteredPayments = useMemo(() => {
     return payments
-      .filter((entry) => canApplyRangeToNonLoanTab && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
+      .filter((entry) => canApplyRangeToNonLoanTab && entry.entryType !== 'loan-payment' && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
   }, [canApplyRangeToNonLoanTab, payments, validRangeEnd, validRangeStart])
-
-  const filteredLoans = useMemo(() => {
-    return loans
-      .filter((entry) => isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
-      .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
-  }, [loans, validRangeEnd, validRangeStart])
-
 
   const filteredTransfers = useMemo(() => {
     return cashTransfers
@@ -220,7 +209,6 @@ export function LogsPage({
     expenses: filteredExpenses.length,
     purchases: filteredPurchases.length,
     payments: filteredPayments.length,
-    loans: filteredLoans.length,
     dailyCashouts: filteredDailyCashouts.length,
     cashTransfers: filteredTransfers.length,
     settingsAudit: filteredAudit.length,
@@ -253,7 +241,7 @@ export function LogsPage({
               <div className="flex min-h-9 items-center gap-2 border-l border-border pl-3 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">{activeResultCount} result{activeResultCount === 1 ? '' : 's'}</span>
                 <span aria-hidden="true" className="text-border">|</span>
-                <span>{activeTab !== 'loans' && isCustomRangeIncomplete ? 'Select both dates' : `${formatDisplayDate(validRangeStart)} to ${formatDisplayDate(validRangeEnd)}`}</span>
+                <span>{isCustomRangeIncomplete ? 'Select both dates' : `${formatDisplayDate(validRangeStart)} to ${formatDisplayDate(validRangeEnd)}`}</span>
               </div>
             </div>
           </CardContent>
@@ -263,14 +251,13 @@ export function LogsPage({
               <TabsTrigger className={logTabTriggerClassName} value="expenses">Expenses</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="purchases">Purchases</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="payments">Payments</TabsTrigger>
-              <TabsTrigger className={logTabTriggerClassName} value="loans">Loans</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="dailyCashouts">Daily Cashouts</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="cashTransfers">Cash Transfers</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="settingsAudit">Settings Audit</TabsTrigger>
               <TabsTrigger className={logTabTriggerClassName} value="stockAudits">Stock Audits</TabsTrigger>
             </TabsList>
           </div>
-          {activeTab !== 'loans' && isCustomRangeIncomplete ? (
+          {isCustomRangeIncomplete ? (
             <div className="px-2.5 pb-2.5">
               <StatusPanel variant="warning">Choose both start and end dates to filter this log.</StatusPanel>
             </div>
@@ -298,12 +285,6 @@ export function LogsPage({
         <TabsContent value="payments" className="min-h-0">
           <LogCard eyebrow="Logs" title="Payments">
             <PaymentLogTable entries={filteredPayments} />
-          </LogCard>
-        </TabsContent>
-
-        <TabsContent value="loans" className="min-h-0">
-          <LogCard eyebrow="Logs" title="Loans">
-            <LoanLogTable entries={filteredLoans} onDelete={onDeleteLoan} />
           </LogCard>
         </TabsContent>
 

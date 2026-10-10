@@ -78,7 +78,7 @@ export function useAppStore() {
     return onAuthStateChanged(auth, (nextUser) => {
       setAuthUser(nextUser)
       setAuthReady(true)
-      setAuthError(null)
+      if (nextUser) setAuthError(null)
       setLoadedCollections(initialLoadedCollections)
       setFinanceData(emptyFinanceData)
       setAppSettings(defaultAppSettings)
@@ -134,8 +134,8 @@ export function useAppStore() {
         await synchronizeServerClock()
         const profileSnapshot = await getDoc(doc(db, 'users', currentAuthUser.uid))
         if (!profileSnapshot.exists()) {
-          if (!cancelled) setVerifiedRole('owner')
-          if (!cancelled) setCanStartSubscriptions(true)
+          if (!cancelled) setAuthError('Your Firebase login exists, but there is no matching workspace profile. Contact the owner to restore your account access.')
+          await signOut(auth)
           return
         }
 

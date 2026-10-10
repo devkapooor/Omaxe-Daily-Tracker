@@ -28,6 +28,9 @@ test-results/
 coverage/
 .cache/
 .vite/
+.playwright-cli/
+/output/
+/firebase.rules-test.local.json
 functions/node_modules/
 functions/lib/
 

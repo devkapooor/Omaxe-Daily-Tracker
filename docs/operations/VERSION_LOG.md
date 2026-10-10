@@ -1,5 +1,25 @@
 # Version Log
 
+## v1.1.0 - 2026-10-11
+
+- Tag: `v1.1.0`
+- Deployment target: Firebase Hosting, Firestore Rules and Cloud Functions, `https://alphahub-f137b.web.app`.
+- Summary:
+  - Added Current Stock for owner, manager and billing with all fields, combined filters, case-insensitive text search, exact barcode lookup, sorting, full matching totals, 50-product display pages and recorded movement history.
+  - Applied Title Case to stock display without rewriting inventory records; latest unit cost and imported opening quantity remain distinct.
+  - Made POS cart rows compact and top-aligned, with a 72px normal row height, separate product metadata and controls that adapt to available width.
+  - Added a single Today's POS Sales card to the owner dashboard.
+  - Added GRN viewing, owner MRP correction and reversal actions, recorded prior prices, mandatory product values and selling price defaulting to MRP with manual override.
+  - Consolidated loans, party totals, details, creation and repayment history into the owner-only Loans page; removed active Payroll UI while preserving historical records.
+  - Preserved login errors and reject missing workspace profiles without granting provisional owner access.
+  - Updated Register expense categories to Rent, Electricity, Store Maintenance, Stock Delivery and Staff Welfare; removed expense labels from Party Directory display.
+  - Included the previously committed cash-transfer balance controls and server-authorized cash movement callable.
+- Validation: production build, TypeScript, source/test ESLint and read-only local cart inspection. Automated source and emulator suites were not rerun for this release.
+- Build safety: local auto-login fields are empty and emulator connections disabled for the release build. Local `.env` files remain outside Git.
+- Data safety: no production bills, stock, cashouts, loans or historical financial records are changed by deployment. Current Stock uses the existing live `posSandboxes/test` data.
+- Refresh instructions: [Group Announcement](./UPGRADE_MESSAGE_2026-10-11.md).
+- Rollback: rebuild and redeploy an appropriate compatible prior commit; do not reset `main` or rewrite financial history.
+
 ## POS Billing and Cash Movement - 2026-10-10
 
 - Commits: `2ffd2af` and `6839a83`.

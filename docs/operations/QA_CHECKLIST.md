@@ -51,7 +51,7 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 
 ## Register, cashout and cash movement
 
-- Register contains Expenses and owner-only Loan Taken/Loan Repayment. Vendor purchases/payments belong in Vendor Workspace.
+- Register contains Expenses with Rent, Electricity, Store Maintenance, Stock Delivery and Staff Welfare. Loan creation, repayments, history and party totals belong in the owner-only Loans page. Vendor purchases/payments belong in Vendor Workspace.
 - Check expense validation, cheque details and logs. Cancelling a cheque-details modal must not save.
 - With emulator fixtures only, confirm existing loan creation/repayment, oldest-open-loan allocation, overpayment rejection and protected permissions; cleanup must not change their calculations.
 - Daily cashout confirmation cancellation does not save. Validate denomination totals, expected cash, matched/cash-less/cash-more status, particulars and linked daily sales.
@@ -67,10 +67,13 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - Before/proposed values and cash-impact warnings are complete; stale requests cannot be approved. Close as Outdated records its fixed reason without financial changes.
 - Returns and V2 settlement corrections retain source-specific actions and permissions. Direct owner edit and reviewed cashout history remain in Logs, without pending approval buttons.
 - Logs default to seven IST calendar days and provide 15/30/90/custom ranges, date/name search, sorting, column visibility and pagination.
-- Cover all Logs tabs: sales, expenses, purchases, payments, loans, daily cashouts, transfers and settings audit. Range filtering must not truncate shared financial calculations.
+- Cover Logs tabs: sales, expenses, purchases, non-loan payments, daily cashouts, transfers, settings audit and stock audits. Loan details and repayment history are in Loans. Range filtering must not truncate shared financial calculations.
 - Verify owner projection settings and settings audit, and role-appropriate password changes. Sales logs remain read-only.
 
 ## POS billing, stock, and drawer
+
+- Inspect cart rows with one, two and many products: normal rows remain compact at 72px, start at the top, show metadata beneath the product name and scroll on overflow. Long names, narrow layouts and stock warnings must remain readable.
+- Inspect Current Stock as owner, manager and billing: all fields including latest cost are accessible; combined filters and sorts cover the full catalogue, totals span every matching page and recorded movements load only for the selected product. Opening quantity and current quantity remain distinct; zero is not missing. Use read-only production inspection.
 
 - Scan/add multiple products; confirm latest additions remain visible, duplicate barcode scans increase quantity, search clears after add, and quantity/removal/discount/payment totals stay consistent.
 - Verify finalizing a bill atomically records the bill and stock deduction; canceled/failed checkout must not deduct stock. Use emulator or isolated non-production fixtures only.

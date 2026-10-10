@@ -6,6 +6,7 @@ import { SalesMixDonutCard } from '@/features/dashboard/components/SalesMixDonut
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/domain/deriveMonthlyPerformance'
 import { GlowCard } from '@/shared/ui/spotlight-card'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
+import { TodayPosSalesCard } from '@/features/dashboard/components/TodayPosSalesCard'
 
 type MonthlyProjectionPanelProps = {
   performance: MonthlyPerformanceMetrics
@@ -33,7 +34,8 @@ export function MonthlyProjectionPanel({ performance, marginPercentage }: Monthl
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3">
+        <TodayPosSalesCard />
         <SummaryCard label="Total Sales" value={money(performance.sales)} comparison={comparison(performance.sales, performance.previous.sales)} />
         <SummaryCard label="Recorded Expenses" value={money(performance.expenses)} comparison={comparison(performance.expenses, performance.previous.expenses, false)} />
         <SummaryCard label="Net After Recorded Expenses" value={money(performance.operatingBalance)} comparison={comparison(performance.operatingBalance, performance.previous.operatingBalance)} />

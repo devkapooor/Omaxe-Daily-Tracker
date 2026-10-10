@@ -170,14 +170,6 @@ export function setupAppStoreSubscriptions({
         unsubscribers.push(fallbackUnsubscribe)
       },
     ),
-    onSnapshot(collection(db, 'loans'), (snapshot) => {
-      setLoans(
-        sortByCreatedAtDesc(
-          snapshot.docs.map((item) => normalizeLoanRecord(mapDoc(item.id, item.data() as Omit<LoanEntry, 'id'>))),
-        ),
-      )
-      markLoaded('loans')
-    }, onSubscriptionError),
     onSnapshot(collection(db, 'dailyCashouts'), (snapshot) => {
       setDailyCashouts(
         sortByCreatedAtDesc(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<DailyCashoutEntry, 'id'>))),
@@ -251,6 +243,22 @@ export function setupAppStoreSubscriptions({
       markLoaded('workspaceMetrics')
     }, onSubscriptionError),
   ]
+
+  if (currentUserRole === 'owner') {
+    unsubscribers.push(
+      onSnapshot(collection(db, 'loans'), (snapshot) => {
+        setLoans(
+          sortByCreatedAtDesc(
+            snapshot.docs.map((item) => normalizeLoanRecord(mapDoc(item.id, item.data() as Omit<LoanEntry, 'id'>))),
+          ),
+        )
+        markLoaded('loans')
+      }, onSubscriptionError),
+    )
+  } else {
+    setLoans([])
+    markLoaded('loans')
+  }
 
   if (currentUserRole === 'owner') {
     unsubscribers.push(

@@ -1,4 +1,4 @@
-import { IST_TIMEZONE, daysBetweenInclusive, shiftDate, today, uniqNames } from '@/app/uiHelpers'
+import { IST_TIMEZONE, cashoutCategories, daysBetweenInclusive, shiftDate, today, uniqNames } from '@/app/uiHelpers'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, MonthlyReportMeta, UserAccount, VendorRecord } from '@/domain/appTypes'
 import type { Cashout, FinanceData, Payment } from '@/domain/financeTypes'
 import type {
@@ -417,8 +417,19 @@ export function deriveDirectoryOptions(args: {
   vendors: VendorRecord[]
 }) {
   const { financeData, loans, nameDirectory, users, vendors } = args
+  // Keep historical expense labels out of the party list after categories change.
+  const expenseCategoryNames = new Set([
+    ...cashoutCategories,
+    'Maintenance',
+    'Transportation',
+    'Salary',
+    'Stock Purchase',
+    'Loan Repayment',
+  ].map((category) => category.trim().toLowerCase()))
   const derivedPartyNames = [
-    ...financeData.cashouts.map((cashout) => cashout.paidTo),
+    ...financeData.cashouts
+      .filter((cashout) => !expenseCategoryNames.has(cashout.paidTo.trim().toLowerCase()))
+      .map((cashout) => cashout.paidTo),
     ...financeData.payments.map((payment) => payment.partyName),
     ...loans.map((loan) => loan.personName),
   ]
@@ -427,7 +438,7 @@ export function deriveDirectoryOptions(args: {
   const vendorNames = vendors.map((vendor) => vendor.name)
   const vendorNameKeys = new Set(vendorNames.map((vendor) => vendor.trim().toLowerCase()))
   const party = uniqNames([...nameDirectory.people, ...derivedPartyNames, ...userNames]).filter(
-    (name) => !vendorNameKeys.has(name.trim().toLowerCase()),
+    (name) => !vendorNameKeys.has(name.trim().toLowerCase()) && !expenseCategoryNames.has(name.trim().toLowerCase()),
   )
 
   return {

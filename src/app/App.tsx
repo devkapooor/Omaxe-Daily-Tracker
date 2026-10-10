@@ -21,7 +21,7 @@ import { synchronizeServerClock } from '@/shared/lib/serverClock'
 import { rememberAccount } from '@/features/auth/lib/rememberedAccounts'
 
 function isPage(value: string | null): value is Page {
-  return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'cashout' || value === 'movement' || value === 'payroll' || value === 'logs' || value === 'settings'
+  return value === 'dashboard' || value === 'actions' || value === 'pos-test' || value === 'stock' || value === 'vendor-preview' || value === 'directory' || value === 'expense' || value === 'loans' || value === 'cashout' || value === 'movement' || value === 'logs' || value === 'settings'
 }
 
 export default function App() {

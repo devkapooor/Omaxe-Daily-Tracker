@@ -262,9 +262,6 @@ export function SettingsPage({
                   <div className="sm:col-span-2 xl:col-span-3">
                     <Button disabled={isBusy}>{isBusy ? 'Creating...' : 'Create User'}</Button>
                   </div>
-                  <p className="text-xs leading-5 text-muted-foreground sm:col-span-2 xl:col-span-3">
-                    Active Billing and Manager accounts appear automatically in Payroll. Enrollment and salary terms are managed there.
-                  </p>
                 </form>
               </CardContent>
               </Card>

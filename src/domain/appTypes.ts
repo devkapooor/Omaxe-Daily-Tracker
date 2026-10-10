@@ -34,7 +34,7 @@ export type VendorLedgerV2Config = {
   updatedByUserId?: string
 }
 
-export type Page = 'dashboard' | 'actions' | 'pos-test' | 'vendor-preview' | 'directory' | 'expense' | 'cashout' | 'movement' | 'payroll' | 'logs' | 'settings'
+export type Page = 'dashboard' | 'actions' | 'pos-test' | 'stock' | 'vendor-preview' | 'directory' | 'expense' | 'loans' | 'cashout' | 'movement' | 'logs' | 'settings'
 
 export type ScheduledNotification = {
   id: string

@@ -22,11 +22,12 @@ import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
 import { RegisterPage } from '@/features/register/components/RegisterPage'
+import { LoansPage } from '@/features/loans/components/LoansPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
-import { PayrollPage } from '@/features/payroll/components/PayrollPage'
 import { PosPage } from '@/features/pos/components/PosPage'
+import { CurrentStockPage } from '@/features/stock/components/CurrentStockPage'
 import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
 import { CashierDiscrepanciesPanel } from '@/features/pos/components/CashierDiscrepanciesPanel'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
@@ -200,6 +201,27 @@ export function AppWorkspace({
     settlementStates: vendorLedger.settlementStates,
     vendorNames,
   })
+
+  async function handleDeleteLoan(loan: LoanEntry) {
+    if (!await confirmation.confirm({
+      title: 'Delete this loan entry?',
+      details: [
+        `Party: ${loan.personName}`,
+        `Amount: ${money(loan.amount)}`,
+        `Remaining: ${money(loan.remainingAmount)}`,
+        `Loan Date: ${formatDisplayDate(loan.date)}`,
+      ],
+      warning: loan.paidAmount > 0 ? 'Warning: this loan already has repayment applied and balances will be recomputed.' : 'This action cannot be undone.',
+      confirmLabel: 'Delete Loan',
+    })) return
+    try {
+      await deleteLoanEntry(loan.id)
+      showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to delete this loan entry.')
+    }
+  }
+
   return (
     <main className="mx-auto flex h-[100dvh] w-full overflow-hidden">
       <AppTopBar
@@ -307,6 +329,8 @@ export function AppWorkspace({
           <PosPage currentUser={currentUser} showToast={showToast} />
         ) : null}
 
+        {activePage === 'stock' ? <CurrentStockPage /> : null}
+
         {activePage === 'vendor-preview' ? (
           <VendorLedgerWorkspacePage
             currentUser={currentUser}
@@ -321,7 +345,6 @@ export function AppWorkspace({
               isBusy={isBusy}
               partyOptions={directoryOptions.party}
               savedPartyNames={savedPartyNames}
-              loans={normalizedLoans}
               onAddParty={async (name) => {
                 await ensureNameInDirectory('people', name)
                 showToast(`Party saved: ${name}`)
@@ -337,14 +360,21 @@ export function AppWorkspace({
         {activePage === 'expense' ? (
           <RegisterPage
             currentUser={currentUser}
-            partyOptions={directoryOptions.party}
-            loans={normalizedLoans}
             saveExpense={saveCashout}
-            saveLoan={saveLoanEntry}
-            savePayment={savePayment}
             showToast={showToast}
             todayExpense={todayCashout}
             todayPaymentNet={todayPaymentNet}
+          />
+        ) : null}
+        {activePage === 'loans' && currentUser.role === 'owner' ? (
+          <LoansPage
+            loans={normalizedLoans}
+            payments={data.payments}
+            partyOptions={directoryOptions.party}
+            saveLoan={saveLoanEntry}
+            savePayment={savePayment}
+            onDeleteLoan={handleDeleteLoan}
+            showToast={showToast}
           />
         ) : null}
         {activePage === 'cashout' && cashoutAllowed ? (
@@ -389,12 +419,6 @@ export function AppWorkspace({
           </section>
         ) : null}
 
-        {activePage === 'payroll' ? (
-          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <PayrollPage currentUser={currentUser} users={users} showToast={showToast} />
-          </section>
-        ) : null}
-
         {activePage === 'logs' && currentUser.role === 'owner' ? (
           <section className="mt-2.5 min-h-0 flex-1 overflow-y-auto pr-1">
             <LogsPage
@@ -402,31 +426,11 @@ export function AppWorkspace({
               expenses={data.cashouts}
               purchases={data.purchases}
               payments={data.payments}
-              loans={normalizedLoans}
               dailyCashouts={dailyCashouts}
               cashTransfers={cashTransfers}
               cashoutCorrectionRequests={cashoutCorrectionRequests}
               settingsAuditLog={settingsAuditLog}
               users={users}
-              onDeleteLoan={async (loan) => {
-                if (!await confirmation.confirm({
-                  title: 'Delete this loan entry?',
-                  details: [
-                    `Party: ${loan.personName}`,
-                    `Amount: ${money(loan.amount)}`,
-                    `Remaining: ${money(loan.remainingAmount)}`,
-                    `Loan Date: ${formatDisplayDate(loan.date)}`,
-                  ],
-                  warning: loan.paidAmount > 0 ? 'Warning: this loan already has repayment applied and balances will be recomputed.' : 'This action cannot be undone.',
-                  confirmLabel: 'Delete Loan',
-                })) return
-                try {
-                  await deleteLoanEntry(loan.id)
-                  showToast(`Loan deleted: ${loan.personName} - ${money(loan.amount)}`)
-                } catch (error) {
-                  showToast(error instanceof Error ? error.message : 'Unable to delete this loan entry.')
-                }
-              }}
               onDeleteDailyCashout={async (entry) => {
                 const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
                 if (!await confirmation.confirm({

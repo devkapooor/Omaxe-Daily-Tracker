@@ -53,6 +53,10 @@ export type PosGoodsReceiptLine = {
   unitCostPaise: number
   /** Raw editable cost text, kept while the user is typing a decimal amount. */
   unitCostInput?: string
+  sellingPriceInput?: string
+  sellingPriceManuallyEdited?: boolean
+  sellingPriceBeforePaise?: number | null
+  mrpBeforePaise?: number | null
   lineTotalPaise: number
   newProduct?: true
   sellingPricePaise?: number
@@ -71,6 +75,13 @@ export type PosGoodsReceipt = {
   invoiceDate: string
   receiptDate: string
   lines: PosGoodsReceiptLine[]
+  mrpCorrections?: Array<{
+    reason: string
+    createdAt: string
+    actorUid: string
+    actorName: string
+    lines: Array<{ productId: string; barcode: string; productName: string; beforeMrpPaise: number | null; afterMrpPaise: number | null }>
+  }>
   totalPaise: number
   /** Full vendor invoice payable; differs from value of stock physically received. */
   invoiceTotalPaise?: number

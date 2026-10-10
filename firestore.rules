@@ -952,7 +952,7 @@ service cloud.firestore {
     }
 
     match /loans/{documentId} {
-      allow read: if isStaff();
+      allow read: if isOwner();
       allow write: if isOwner();
     }
 
@@ -1202,7 +1202,12 @@ service cloud.firestore {
           movement.productRevisionBefore == resource.data.revision &&
           movement.productRevisionAfter == request.resource.data.revision &&
           movement.beforeQuantity == resource.data.currentQuantity &&
-          movement.afterQuantity == request.resource.data.currentQuantity;
+          movement.afterQuantity == request.resource.data.currentQuantity &&
+          (movement.type != 'goods-receipt-mrp-correction' || (isOwner() &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/events/$(movement.correctionId)).data.type == 'goods-receipt-mrp-corrected' &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/events/$(movement.correctionId)).data.goodsReceiptId == movement.goodsReceiptId &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/events/$(movement.correctionId)).data.actorUid == request.auth.uid &&
+            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(movement.goodsReceiptId)).data.status == 'submitted'));
       }
 
       function validSubmittedGoodsReceipt(receiptId) {
@@ -1443,9 +1448,10 @@ service cloud.firestore {
               ]) ||
               (
                 request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                  'currentQuantity', 'sourceValues', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
+                  'currentQuantity', 'sourceValues', 'sellingPricePaise', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
                 ]) &&
                 request.resource.data.currentQuantity is int &&
+                request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
                 request.resource.data.updatedByUid == request.auth.uid &&
                 validProductStockMovement(productId)
               )
@@ -1498,6 +1504,10 @@ service cloud.firestore {
            (resource.data.status == 'submitted' && request.resource.data.status == 'submitted' &&
              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedReceiptIds', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName']) &&
              request.resource.data.linkedReceiptIds is list) ||
+           (isOwner() && resource.data.status == 'submitted' && request.resource.data.status == 'submitted' &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mrpCorrections', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName']) &&
+             request.resource.data.mrpCorrections is list &&
+             request.resource.data.mrpCorrections.size() == resource.data.get('mrpCorrections', []).size() + 1) ||
            (isOwner() && resource.data.status == 'submitted' && resource.data.payableOwner == false &&
              request.resource.data.status == 'reversed' && request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reversalReason', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'])) ||

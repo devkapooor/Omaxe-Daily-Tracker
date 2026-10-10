@@ -9,7 +9,7 @@ vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, function
 
 import {
   approvePosRequest, createPosProductFromBarcode, deleteHeldCart, finalizePosBill, importPosProducts,
-  requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt,
+  requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt, correctPosGoodsReceiptMrp,
 } from '../src/features/pos/data/posRepository'
 import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
 import { cashierRef, handoverRef, initializeHandover, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
@@ -96,18 +96,24 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-1', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, ...(index === 0 ? { mrpPaise: 1200, mrpChanged: true } : {}) })),
+      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, sellingPricePaise: 1300, mrpPaise: 1200, mrpChanged: true })),
       invoiceTotalPaise: 13500,
     }, billing)
     const result = await submitPosGoodsReceipt(receiptId, billing)
     expect(result.totalPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(13)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('12.00')
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.sellingPricePaise).toBe(1300)
     expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, 'purchasesV2', `grn-${receiptId}`))).data()?.grnId).toBe(receiptId)
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    await correctPosGoodsReceiptMrp(receiptId, [{ productId: 'qa-product', mrpPaise: 17500 }], 'Correct package MRP', owner)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('175.00')
+    const correctedReceipt = (await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()
+    expect(correctedReceipt?.mrpCorrections?.[0]).toMatchObject({ reason: 'Correct package MRP', lines: [{ beforeMrpPaise: 1200, afterMrpPaise: 17500 }] })
     await reversePosGoodsReceipt(receiptId, 'QA reverse verification', owner)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.sellingPricePaise).toBe(1000)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
     expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()?.status).toBe('reversed')
   })
@@ -122,7 +128,7 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptInput = {
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PARTIAL', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000 }],
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
       invoiceTotalPaise: 2500,
     }
     const firstId = await savePosGoodsReceiptDraft(receiptInput, billing)
@@ -140,6 +146,15 @@ describe('POS repository workflows against deployed rules', () => {
     await reversePosGoodsReceipt(firstId, 'Reverse original receipt', owner)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
+  })
+
+  it('rejects GRN submission when a required product value is missing', async () => {
+    const receiptId = await savePosGoodsReceiptDraft({
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-INCOMPLETE', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000, sellingPricePaise: 1200 }],
+      invoiceTotalPaise: 1000,
+    }, billing)
+    await expect(submitPosGoodsReceipt(receiptId, billing)).rejects.toThrow(/requires a positive whole quantity, unit cost, MRP, and selling price/)
   })
 
   it('records physical inventory counts and adjusts stock without creating a payable', async () => {
@@ -208,7 +223,7 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-NEW', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700 }],
+      lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700, mrpPaise: 1000, mrpChanged: true }],
       invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
@@ -227,7 +242,7 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PAID', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000 }],
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
       invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
