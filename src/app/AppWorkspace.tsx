@@ -1,6 +1,6 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
 import type { Page, UserAccount, UpgradeAnnouncement } from '@/domain/appTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
@@ -25,11 +25,13 @@ import { RegisterPage } from '@/features/register/components/RegisterPage'
 import { LoansPage } from '@/features/loans/components/LoansPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 import { ActionCenterPage } from '@/features/action-center/components/ActionCenterPage'
+import { useActionCentreSources } from '@/features/action-center/hooks/useActionCentreSources'
+import { actionCentreEntries } from '@/features/action-center/domain/actionCentreEntries'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
 import { PosPage } from '@/features/pos/components/PosPage'
 import { CurrentStockPage } from '@/features/stock/components/CurrentStockPage'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
-import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
+import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON, OUTDATED_VENDOR_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
 import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
@@ -191,14 +193,18 @@ export function AppWorkspace({
   try { trustedNow = serverNowMs() } catch { /* Closed until trusted time is synchronized. */ }
   const cashoutAllowed = currentUser.role === 'owner' || (trustedNow !== null && isCashoutWindowOpen(trustedNow))
   const confirmation = useConfirmationDialog()
-  const vendorLedger = useVendorLedgerV2(currentUser)
+  const vendorLedger = useVendorLedgerV2(currentUser, activePage)
+  const actionSources = useActionCentreSources(currentUser)
   const vendorNames = Object.fromEntries(vendorLedger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
   const approvalQueue = deriveApprovalQueue(cashoutCorrectionRequests, dailyCashouts, {
     correctionRequests: vendorLedger.correctionRequests,
     returns: vendorLedger.returns,
     settlementStates: vendorLedger.settlementStates,
     vendorNames,
+    settlementStatesLoaded: activePage === 'vendor-preview',
   })
+  const pendingEntries = useMemo(() => actionCentreEntries(approvalQueue, actionSources.posRequests, actionSources.handovers, users).filter((entry) => entry.pending), [approvalQueue, actionSources.posRequests, actionSources.handovers, users])
+  const pendingCount = !cashoutCorrectionsReady || cashoutCorrectionsError || vendorLedger.pendingLoading || vendorLedger.pendingError || actionSources.loading || actionSources.posError || actionSources.handoverError ? null : pendingEntries.length
 
   async function handleDeleteLoan(loan: LoanEntry) {
     if (!await confirmation.confirm({
@@ -225,7 +231,7 @@ export function AppWorkspace({
       <AppTopBar
         currentUser={currentUser}
         activePage={activePage}
-        pendingApprovalCount={approvalQueue.pendingCount}
+        pendingApprovalCount={pendingCount}
         cashoutAllowed={cashoutAllowed}
         onPageChange={onPageChange}
         onLogout={onLogout}
@@ -280,6 +286,11 @@ export function AppWorkspace({
             isLoading={!cashoutCorrectionsReady}
             vendorError={vendorLedger.error}
             vendorLoading={vendorLedger.loading}
+            sources={actionSources}
+            pendingCount={pendingCount}
+            dailyCashouts={dailyCashouts}
+            vendorNames={vendorNames}
+            vendorEnabled={vendorLedger.config?.enabled === true}
             queue={approvalQueue}
             onApprove={async (item) => {
               if (item.kind === 'cashout-correction') {
@@ -296,7 +307,7 @@ export function AppWorkspace({
                 showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated request closed: ${item.recordedBy}` : `Cashout correction rejected: ${item.recordedBy}`)
               } else if (item.kind === 'vendor-settlement-correction') {
                 await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, serverNowIso())
-                showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
+                showToast(reason === OUTDATED_VENDOR_CORRECTION_REASON || reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
               }
             }}
             onResolveReturn={async (item, decision) => {

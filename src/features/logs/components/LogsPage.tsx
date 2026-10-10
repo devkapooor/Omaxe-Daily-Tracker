@@ -103,6 +103,9 @@ export function LogsPage({
   const [customEnd, setCustomEnd] = useState(indiaDateKey())
   const [visibleCount, setVisibleCount] = useState(50)
   const [boundedAuditLog, setBoundedAuditLog] = useState(settingsAuditLog)
+  const [boundedCorrectionRequests, setBoundedCorrectionRequests] = useState(cashoutCorrectionRequests)
+  const [correctionHistoryError, setCorrectionHistoryError] = useState<string | null>(null)
+  const [correctionHistoryRange, setCorrectionHistoryRange] = useState('')
   const [stockAuditBatches, setStockAuditBatches] = useState<PosStockAuditBatch[]>([])
   const [stockAuditError, setStockAuditError] = useState('')
   const userNames = useMemo(() => userNameById(users), [users])
@@ -112,6 +115,8 @@ export function LogsPage({
   const validRangeEnd = rangeStart <= rangeEnd ? rangeEnd : rangeStart
   const isCustomRangeIncomplete = rangePreset === 'custom' && (!customStart || !customEnd)
   const canApplyRangeToNonLoanTab = !isCustomRangeIncomplete
+  const correctionRangeKey = `${validRangeStart}:${validRangeEnd}`
+  const correctionHistoryLoading = activeTab === 'dailyCashouts' && !isCustomRangeIncomplete && correctionHistoryRange !== correctionRangeKey
 
   function resetResults() {
     setVisibleCount(50)
@@ -139,6 +144,18 @@ export function LogsPage({
     if (activeTab !== 'stockAudits') return
     return subscribePosStockAuditBatches(setStockAuditBatches, (error) => setStockAuditError(error.message))
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'dailyCashouts' || isCustomRangeIncomplete) return
+    const historyQuery = query(collection(db, 'cashoutCorrectionRequests'),
+      where('createdAt', '>=', `${validRangeStart}T00:00:00.000Z`),
+      where('createdAt', '<=', `${validRangeEnd}T23:59:59.999Z`), orderBy('createdAt', 'desc'))
+    return onSnapshot(historyQuery, (snapshot) => {
+      setBoundedCorrectionRequests(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as CashoutCorrectionRequest))
+      setCorrectionHistoryRange(correctionRangeKey)
+      setCorrectionHistoryError(null)
+    }, (cause) => { setCorrectionHistoryError(cause.message); setCorrectionHistoryRange(correctionRangeKey) })
+  }, [activeTab, isCustomRangeIncomplete, validRangeStart, validRangeEnd, correctionRangeKey])
 
   const transferPartyName = useCallback((entry: CashTransfer, side: 'from' | 'to') => {
     if (side === 'from') {
@@ -189,8 +206,8 @@ export function LogsPage({
   )
 
   const rangedCorrectionRequests = useMemo(
-    () => cashoutCorrectionRequests.filter((entry) => canApplyRangeToNonLoanTab && entry.status !== 'pending' && isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
-    [canApplyRangeToNonLoanTab, cashoutCorrectionRequests, validRangeEnd, validRangeStart],
+    () => boundedCorrectionRequests.filter((entry) => canApplyRangeToNonLoanTab && entry.status !== 'pending' && isDateWithinRange(entry.createdAt, validRangeStart, validRangeEnd)),
+    [canApplyRangeToNonLoanTab, boundedCorrectionRequests, validRangeEnd, validRangeStart],
   )
 
   const filteredAudit = useMemo(() => {
@@ -289,6 +306,8 @@ export function LogsPage({
         </TabsContent>
 
         <TabsContent value="dailyCashouts" className="min-h-0">
+          {correctionHistoryLoading ? <p role="status" className="p-2 text-sm text-muted-foreground">Loading Correction History…</p> : null}
+          {correctionHistoryError ? <StatusPanel variant="destructive" role="alert">{correctionHistoryError}</StatusPanel> : null}
           <DailyCashoutLogTab
             correctionRequests={rangedCorrectionRequests}
             entries={filteredDailyCashouts}

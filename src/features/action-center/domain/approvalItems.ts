@@ -13,6 +13,7 @@ import {
 } from '@/domain/vendorLedgerV2'
 
 export const OUTDATED_CORRECTION_REASON = 'Closed as outdated because the source cashout changed after submission.'
+export const OUTDATED_VENDOR_CORRECTION_REASON = 'Closed as outdated because the source vendor payment changed after submission.'
 export const RECENT_APPROVAL_LIMIT = 20
 
 export type CashoutCorrectionApprovalItem = {
@@ -144,6 +145,8 @@ export function deriveApprovalQueue(
     returns: VendorReturnV2[]
     settlementStates: VendorSettlementStateV2[]
     vendorNames: Record<string, string>
+    recentLimit?: number
+    settlementStatesLoaded?: boolean
   },
 ): ApprovalQueue
 export function deriveApprovalQueue(
@@ -154,6 +157,8 @@ export function deriveApprovalQueue(
     returns: VendorReturnV2[]
     settlementStates: VendorSettlementStateV2[]
     vendorNames: Record<string, string>
+    recentLimit?: number
+    settlementStatesLoaded?: boolean
   },
 ): ApprovalQueue | CashoutApprovalQueue {
   const cashoutsById = new Map(dailyCashouts.map((entry) => [entry.id, entry]))
@@ -161,7 +166,7 @@ export function deriveApprovalQueue(
   const stateById = new Map((vendor?.settlementStates ?? []).map((state) => [state.id, state]))
   const correctionItems: VendorSettlementCorrectionApprovalItem[] = (vendor?.correctionRequests ?? []).map((request) => {
     const state = stateById.get(request.sourceRecordId)
-    const staleReason = !state
+    const staleReason = vendor?.settlementStatesLoaded === false ? undefined : !state
       ? 'The source vendor payment no longer exists.'
       : state.revision !== request.sourceRevision
         ? 'The vendor payment revision changed after this request was submitted.'
@@ -210,7 +215,7 @@ export function deriveApprovalQueue(
   const recent = items
     .filter((item) => item.status !== 'pending')
     .sort((left, right) => (right.reviewedAt ?? right.submittedAt).localeCompare(left.reviewedAt ?? left.submittedAt))
-    .slice(0, RECENT_APPROVAL_LIMIT)
+    .slice(0, vendor?.recentLimit ?? RECENT_APPROVAL_LIMIT)
 
   return { pending, recent, pendingCount: pending.length }
 }

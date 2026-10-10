@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDisplayDate, formatDisplayDateTime, money } from '@/app/uiHelpers'
 import type { UserAccount } from '@/domain/appTypes'
+import { settlementCorrectionValuesEqualV2, settlementCorrectionValuesV2, type VendorSettlementStateV2 } from '@/domain/vendorLedgerV2'
 import { HANDOVER_START } from '@/features/pos/domain/cashierHandover'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -21,7 +22,8 @@ type Props = {
   decisionError: string | null
   requestLoading: boolean
   requestError: string | null
-  loadPosSource: (billId: string, refresh?: boolean) => Promise<PosReviewSource>
+  loadPosSource: (billId: string, refresh?: boolean, expectedRevision?: number) => Promise<PosReviewSource>
+  loadVendorSource: (id: string, refresh?: boolean, expectedRevision?: number) => Promise<VendorSettlementStateV2 | null>
   onClose: () => void
   onDecide: (entry: ActionCentreEntry, decision: ReviewDecision, source: PosReviewSource | null) => Promise<boolean>
 }
@@ -75,11 +77,14 @@ function HandoverDetails({ entry }: { entry: Extract<ActionCentreEntry, { source
   return <><dl className="grid gap-3 sm:grid-cols-2"><Field label="Business Date" value={formatDisplayDate(record.date)} /><Field label="Handover" value={record.kind === 'login' ? 'Login' : 'Logout'} /><Field label="Staff Note" value={record.note} /><Field label="Cash Denominations" value={Object.entries(record.denominations).map(([denomination, count]) => `₹${denomination} × ${count}`).join('\n')} /><Field label="Loose Coins" value={money(record.coinPaise / 100)} /></dl><div className="overflow-x-auto rounded-md border border-border"><table className="w-full text-left text-sm"><thead className="bg-muted"><tr><th className="p-2">Payment</th><th className="p-2">Expected</th><th className="p-2">Actual</th><th className="p-2">Difference</th></tr></thead><tbody>{(['cash', 'upi', 'card'] as const).map((method) => <tr key={method} className="border-t border-border"><th className="p-2">{paymentLabel(method)}</th><td className="p-2">{money(record.expected[method] / 100)}</td><td className="p-2">{money(record.actual[method] / 100)}</td><td className={`p-2 ${record.delta[method] ? 'text-destructive' : ''}`}>{money(record.delta[method] / 100)}</td></tr>)}</tbody></table></div><p className="text-sm text-muted-foreground">Mark Reviewed records owner acknowledgement. It does not adjust cash, payment totals or stock.</p></>
 }
 
-export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, decisionError, requestLoading, requestError, loadPosSource, onClose, onDecide }: Props) {
+export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, decisionError, requestLoading, requestError, loadPosSource, loadVendorSource, onClose, onDecide }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const paymentSourceId = entry.pending && entry.source === 'approval' && entry.item.kind === 'vendor-settlement-correction' ? entry.item.sourceRequest.sourceRecordId : null
   const [source, setSource] = useState<PosReviewSource | null>(null)
+  const [vendorSource, setVendorSource] = useState<VendorSettlementStateV2 | null>(null)
+  const [vendorSourceReady, setVendorSourceReady] = useState(false)
   const [sourceError, setSourceError] = useState<string | null>(null)
-  const [sourceLoading, setSourceLoading] = useState(entry.source === 'pos')
+  const [sourceLoading, setSourceLoading] = useState(entry.source === 'pos' || Boolean(paymentSourceId))
   const [refresh, setRefresh] = useState(0)
   const [reason, setReason] = useState('')
   const [outcome, setOutcome] = useState<'vendor-credit' | 'replacement' | 'rejected'>('vendor-credit')
@@ -89,6 +94,7 @@ export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, deci
   const [decisionEntry, setDecisionEntry] = useState(entry)
   const [validationError, setValidationError] = useState<string | null>(null)
   const billId = entry.source === 'pos' ? entry.item.billId : null
+  const sourceRevision = entry.source === 'pos' ? entry.item.sourceBillRevision : entry.source === 'approval' && entry.item.kind === 'vendor-settlement-correction' ? entry.item.sourceRequest.sourceRevision : undefined
   useEffect(() => {
     const node = dialog.current
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -98,11 +104,20 @@ export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, deci
   useEffect(() => {
     if (!billId) return
     let active = true
-    void loadPosSource(billId, refresh > 0).then((result) => { if (active) { setSource(result); setSourceLoading(false); setSourceError(null) } }, (error: unknown) => { if (active) { setSourceError(error instanceof Error ? error.message : 'Unable to load the source bill.'); setSourceLoading(false) } })
+    void loadPosSource(billId, refresh > 0, sourceRevision).then((result) => { if (active) { setSource(result); setSourceLoading(false); setSourceError(null) } }, (error: unknown) => { if (active) { setSourceError(error instanceof Error ? error.message : 'Unable to load the source bill.'); setSourceLoading(false) } })
     return () => { active = false }
-  }, [billId, loadPosSource, refresh])
+  }, [billId, loadPosSource, refresh, sourceRevision])
+  useEffect(() => {
+    if (!paymentSourceId) return
+    let active = true
+    void loadVendorSource(paymentSourceId, refresh > 0, sourceRevision).then((result) => { if (active) { setVendorSource(result); setVendorSourceReady(true); setSourceLoading(false); setSourceError(null) } }, (cause: unknown) => { if (active) { setSourceError(cause instanceof Error ? cause.message : 'Unable to load the source payment.'); setSourceLoading(false) } })
+    return () => { active = false }
+  }, [paymentSourceId, loadVendorSource, refresh, sourceRevision])
   const resolveName = (id?: string) => id ? users.find((user) => user.id === id)?.name ?? id : undefined
-  const sourceProblem = entry.source === 'pos' && entry.pending && source ? posSourceProblem(entry.item, source) : entry.source === 'approval' && entry.item.isStale ? entry.item.staleReason ?? 'The source record changed after submission.' : null
+  let sourceProblem = entry.source === 'pos' && entry.pending && source ? posSourceProblem(entry.item, source) : entry.source === 'approval' && entry.item.isStale ? entry.item.staleReason ?? 'The source record changed after submission.' : null
+  if (paymentSourceId && vendorSourceReady && entry.source === 'approval' && entry.item.kind === 'vendor-settlement-correction') {
+    sourceProblem = !vendorSource ? 'The source vendor payment no longer exists.' : vendorSource.vendorId !== entry.item.vendorId || vendorSource.revision !== entry.item.sourceRequest.sourceRevision || !settlementCorrectionValuesEqualV2(settlementCorrectionValuesV2(vendorSource), entry.item.before) ? 'The source vendor payment changed after submission. Ask staff to submit a new correction.' : null
+  }
   const actionsBlocked = busy || unavailable || sourceLoading || requestLoading || Boolean(requestError)
   const approvalBlocked = actionsBlocked || Boolean(sourceProblem || sourceError)
   const isVendorReturn = entry.source === 'approval' && entry.item.kind === 'vendor-return'
@@ -122,7 +137,7 @@ export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, deci
       if (outcome === 'vendor-credit' && (!Number.isFinite(amount) || !Number.isSafeInteger(paise) || paise <= 0 || paise > entry.item.sourceReturn.valuePaise)) { setValidationError('Credit must be greater than zero and cannot exceed the return value.'); return }
       if (outcome === 'replacement' && (!/^\d{4}-\d{2}-\d{2}$/.test(replacementDate) || !Number.isFinite(Date.parse(replacementDate)))) { setValidationError('Enter the replacement received date.'); return }
       setConfirmation({ action, returnDecision: { outcome, outcomeReason: reason.trim(), ...(outcome === 'vendor-credit' ? { creditedValuePaise: paise } : {}), ...(outcome === 'replacement' ? { replacementReceivedAt: replacementDate } : {}) } })
-    } else setConfirmation({ action, ...(action === 'reject' ? { reason: reason.trim() } : {}) })
+    } else setConfirmation({ action, ...(action === 'reject' ? { reason: reason.trim() } : {}), ...(action === 'close-outdated' && sourceProblem ? { outdatedReason: sourceProblem } : {}) })
   }
 
   function confirmationEffect(decision: ReviewDecision) {
@@ -149,13 +164,13 @@ export function ActionCentreDetailsPanel({ entry, users, busy, unavailable, deci
         {sourceProblem ? <StatusPanel variant="warning">Approval Blocked: {sourceProblem}</StatusPanel> : null}
         {confirmation ? <><dl className="grid gap-3 sm:grid-cols-2"><Field label="Request" value={entryReference(entry)} /><Field label="Requested By" value={entry.requester} /><Field label="Decision" value={confirmation.action === 'resolve-return' ? actionStatusLabel(confirmation.returnDecision!.outcome) : confirmLabel} /><Field label="Decision Reason" value={confirmation.reason ?? confirmation.returnDecision?.outcomeReason} /></dl><StatusPanel variant="warning">{confirmationEffect(confirmation)}</StatusPanel><p className="text-sm text-muted-foreground">Confirm to record this decision using the existing audited workflow.</p></> : <>
           <dl className="grid gap-3 sm:grid-cols-2"><Field label="Requested By" value={entry.requester} /><Field label="Requested At" value={formatDisplayDateTime(entry.submittedAt)} /><Field label="Request Reference" value={entry.item.id} /><Field label="Request Reason" value={originalReason} />{!entry.pending ? <><Field label="Reviewed By" value={reviewedBy} /><Field label="Reviewed At" value={reviewedAt ? formatDisplayDateTime(reviewedAt) : undefined} /><Field label="Decision Reason" value={decisionReason} /></> : null}</dl>
-          {entry.source === 'approval' ? <ApprovalDetails entry={entry} /> : entry.source === 'handover' ? <HandoverDetails entry={entry} /> : <>{sourceLoading ? <p role="status" className="text-sm text-muted-foreground">Loading Source Bill…</p> : null}{sourceError ? <StatusPanel variant="destructive" role="alert">{sourceError}</StatusPanel> : null}{source && !sourceLoading && !sourceError ? <PosDetails entry={entry} source={source} /> : null}<Button variant="outline" size="sm" disabled={busy || sourceLoading} onClick={() => { setSourceLoading(true); setSourceError(null); setRefresh((value) => value + 1) }}>{sourceError ? 'Retry Source' : 'Refresh Source'}</Button></>}
+          {entry.source === 'approval' ? <><ApprovalDetails entry={entry} />{paymentSourceId ? <>{sourceLoading ? <p role="status" className="text-sm text-muted-foreground">Loading Source Payment...</p> : null}{sourceError ? <StatusPanel variant="destructive" role="alert">{sourceError}</StatusPanel> : null}<Button size="sm" variant="outline" disabled={busy || sourceLoading} onClick={() => { setSourceLoading(true); setSourceError(null); setVendorSourceReady(false); setRefresh((value) => value + 1) }}>{sourceError ? 'Retry Source' : 'Refresh Source'}</Button></> : null}</> : entry.source === 'handover' ? <HandoverDetails entry={entry} /> : <>{sourceLoading ? <p role="status" className="text-sm text-muted-foreground">Loading Source Bill…</p> : null}{sourceError ? <StatusPanel variant="destructive" role="alert">{sourceError}</StatusPanel> : null}{source && !sourceLoading && !sourceError ? <PosDetails entry={entry} source={source} /> : null}<Button variant="outline" size="sm" disabled={busy || sourceLoading} onClick={() => { setSourceLoading(true); setSourceError(null); setRefresh((value) => value + 1) }}>{sourceError ? 'Retry Source' : 'Refresh Source'}</Button></>}
           {entry.pending && isVendorReturn ? <fieldset disabled={actionsBlocked} className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-2"><legend className="px-1 text-sm font-semibold">Return Decision</legend><FieldLabel label="Outcome"><NativeSelect value={outcome} onChange={(event) => setOutcome(event.target.value as typeof outcome)}><option value="vendor-credit">Vendor Credit</option><option value="replacement">Replacement Received</option><option value="rejected">Reject Return</option></NativeSelect></FieldLabel>{outcome === 'vendor-credit' ? <FieldLabel label="Credit Amount"><Input type="number" min="0.01" step="0.01" value={credit} onChange={(event) => setCredit(event.target.value)} /></FieldLabel> : outcome === 'replacement' ? <FieldLabel label="Replacement Received Date"><Input type="date" value={replacementDate} onChange={(event) => setReplacementDate(event.target.value)} /></FieldLabel> : null}<FieldLabel className="sm:col-span-2" label="Mandatory Decision Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} /></FieldLabel><p className="text-sm text-muted-foreground sm:col-span-2">{outcome === 'vendor-credit' ? `Proposed outstanding reduction: ${Number.isFinite(Number(credit)) ? money(Number(credit)) : 'Enter A Valid Amount'}. No POS stock adjustment.` : outcome === 'replacement' ? 'Records replacement receipt only. Receive stock through GRN when required.' : 'Rejects this return. No outstanding or stock adjustment.'}</p></fieldset> : entry.pending && entry.source !== 'handover' ? <FieldLabel label="Rejection Reason"><Textarea disabled={actionsBlocked} placeholder="Required When Rejecting" value={reason} onChange={(event) => setReason(event.target.value)} /></FieldLabel> : null}
           {validationError ? <StatusPanel variant="destructive" role="alert">{validationError}</StatusPanel> : null}
         </>}
       </div>
       <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border p-4">
-        {confirmation ? <><Button variant="outline" disabled={busy} onClick={() => setConfirmation(null)}>Back To Details</Button><Button disabled={!entry.pending || (confirmation.action === 'reject' || confirmation.action === 'close-outdated' ? actionsBlocked : approvalBlocked)} onClick={async () => { const success = await onDecide(decisionEntry, confirmation, source); if (!success) setConfirmation(null) }}>{busy ? 'Processing…' : confirmLabel}</Button></> : entry.pending ? isVendorReturn ? <Button disabled={approvalBlocked} onClick={() => prepare('resolve-return')}>Review Return Decision</Button> : entry.source === 'handover' ? <Button disabled={actionsBlocked} onClick={() => prepare('mark-reviewed')}>Mark Reviewed</Button> : <>{entry.source === 'approval' && entry.item.isStale ? <Button disabled={actionsBlocked} variant="destructive" onClick={() => prepare('close-outdated')}>Close Outdated</Button> : <Button disabled={actionsBlocked} variant="outline" onClick={() => prepare('reject')}>Reject</Button>}<Button disabled={approvalBlocked} onClick={() => prepare('approve')}>Approve</Button></> : <Button variant="outline" onClick={onClose}>Done</Button>}
+        {confirmation ? <><Button variant="outline" disabled={busy} onClick={() => setConfirmation(null)}>Back To Details</Button><Button disabled={!entry.pending || (confirmation.action === 'reject' || confirmation.action === 'close-outdated' ? actionsBlocked : approvalBlocked)} onClick={async () => { const success = await onDecide(decisionEntry, confirmation, source); if (!success) setConfirmation(null) }}>{busy ? 'Processing…' : confirmLabel}</Button></> : entry.pending ? isVendorReturn ? <Button disabled={approvalBlocked} onClick={() => prepare('resolve-return')}>Review Return Decision</Button> : entry.source === 'handover' ? <Button disabled={actionsBlocked} onClick={() => prepare('mark-reviewed')}>Mark Reviewed</Button> : <>{entry.source === 'approval' && sourceProblem ? <Button disabled={actionsBlocked} variant="destructive" onClick={() => prepare('close-outdated')}>Close Outdated</Button> : <Button disabled={actionsBlocked} variant="outline" onClick={() => prepare('reject')}>Reject</Button>}<Button disabled={approvalBlocked} onClick={() => prepare('approve')}>Approve</Button></> : <Button variant="outline" onClick={onClose}>Done</Button>}
       </footer>
     </div>
   </dialog>, document.body)

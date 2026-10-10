@@ -10,7 +10,7 @@ import { getActiveTheme, saveTheme, subscribeToTheme, type Theme } from '@/share
 type AppTopBarProps = {
   currentUser: AppUser
   activePage: Page
-  pendingApprovalCount: number
+  pendingApprovalCount: number | null
   cashoutAllowed: boolean
   onPageChange: (page: Page) => void
   onLogout: () => void
@@ -34,17 +34,18 @@ function groupFor(item: NavItem): NavigationGroup {
   return 'Governance & Audit'
 }
 
-function PendingBadge({ count, compact = false }: { count: number; compact?: boolean }) {
-  if (count <= 0) return null
+function PendingBadge({ count, compact = false }: { count: number | null; compact?: boolean }) {
+  if (count !== null && count <= 0) return null
   return (
     <span
       className={cn(
         'grid min-h-5 min-w-5 place-items-center rounded-sm border border-amber-200 bg-amber-50 px-1.5 text-[10px] font-semibold tabular-nums text-amber-800 dark:border-amber-200/40 dark:bg-amber-200/10 dark:text-amber-200',
         compact && 'absolute -right-2 -top-1.5 min-h-4 min-w-4 px-1 text-[9px]',
       )}
-      aria-label={`${count} pending approval${count === 1 ? '' : 's'}`}
+      aria-label={count === null ? 'Pending count loading or unavailable' : `${count} pending request${count === 1 ? '' : 's'}`}
+      title={count === null ? 'Pending count loading or unavailable' : `${count} pending requests and reviews`}
     >
-      {count > 99 ? '99+' : count}
+      {count === null ? '…' : count > 99 ? '99+' : count}
     </span>
   )
 }
@@ -59,7 +60,7 @@ function NavigationLinks({
   items: NavItem[]
   activePage: Page
   collapsed: boolean
-  pendingApprovalCount: number
+  pendingApprovalCount: number | null
   onSelect: (item: NavItem) => void
 }) {
   const groups: NavigationGroup[] = ['Core Engine', 'Ledger & Cash Flow', 'Governance & Audit']

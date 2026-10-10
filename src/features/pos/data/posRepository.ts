@@ -855,7 +855,7 @@ async function loadPosCashoutPaymentMix(date: string): Promise<PosCashoutPayment
 }
 
 export function subscribePosApprovals(callback: (requests: PosApprovalRequest[]) => void, onError: (error: Error) => void) {
-  return onSnapshot(query(posCollection('approvals'), orderBy('requestedAt', 'desc'), limit(100)), (snapshot) => {
+  return onSnapshot(query(posCollection('approvals'), where('status', '==', 'pending')), (snapshot) => {
     callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosApprovalRequest))
   }, onError)
 }
@@ -1093,13 +1093,16 @@ export async function requestBillAction(input: Omit<PosApprovalRequest, 'id' | '
 }
 
 /** On-demand Action Centre preview; no listener or write. Bills are immutable. */
-export async function loadPosApprovalSource(billId: string): Promise<{ bill: PosBill; state: PosBillState; loadedAt: string }> {
+export async function loadPosApprovalSource(billId: string, cachedBill?: PosBill): Promise<{ bill: PosBill; state: PosBillState; loadedAt: string }> {
   const [bill, state] = await Promise.all([
-    getDocFromServer(posDoc('bills', billId)),
+    cachedBill ? Promise.resolve(cachedBill) : getDocFromServer(posDoc('bills', billId)).then((snapshot) => {
+      if (!snapshot.exists()) throw new Error('The source bill no longer exists.')
+      return { ...snapshot.data(), id: snapshot.id } as PosBill
+    }),
     getDocFromServer(posDoc('billStates', billId)),
   ])
-  if (!bill.exists() || !state.exists()) throw new Error('The source bill or its state no longer exists.')
-  return { bill: { ...bill.data(), id: bill.id } as PosBill, state: state.data() as PosBillState, loadedAt: new Date().toISOString() }
+  if (!state.exists()) throw new Error('The source bill state no longer exists.')
+  return { bill, state: state.data() as PosBillState, loadedAt: new Date().toISOString() }
 }
 
 export async function rejectPosApproval(requestId: string, reviewReason: string, actor: AppUser) {

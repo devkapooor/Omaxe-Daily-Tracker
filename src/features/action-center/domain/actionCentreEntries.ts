@@ -35,16 +35,12 @@ export function actionCentreEntries(queue: ApprovalQueue, pos: PosApprovalReques
     pending: item.status === 'pending',
     searchText: [name(item.requester), item.reason, item.reviewReason, item.id, item.kind === 'cashout-correction' ? `${item.cashoutDate} ${item.recordedBy}` : item.vendorName].join(' '),
   }))
-  const recentPos = pos.filter((item) => item.status !== 'pending')
-    .sort((left, right) => (right.reviewedAt ?? right.requestedAt).localeCompare(left.reviewedAt ?? left.requestedAt)).slice(0, 20)
-  const recentHandovers = handovers.filter((item) => item.reviewStatus !== 'pending')
-    .sort((left, right) => (right.reviewedAt ?? right.createdAt).localeCompare(left.reviewedAt ?? left.createdAt)).slice(0, 20)
-  const posEntries: ActionCentreEntry[] = [...pos.filter((item) => item.status === 'pending'), ...recentPos].map((item) => ({
+  const posEntries: ActionCentreEntry[] = pos.map((item) => ({
     key: `pos:${item.id}`, type: item.type === 'void' ? 'pos-void' : 'pos-return', source: 'pos', item,
     requester: item.requestedByName, submittedAt: item.requestedAt, historyAt: item.reviewedAt ?? item.requestedAt,
     pending: item.status === 'pending', searchText: [item.receiptNumber, item.requestedByName, item.reason, item.reviewReason].join(' '),
   }))
-  const handoverEntries: ActionCentreEntry[] = [...handovers.filter((item) => item.reviewStatus === 'pending'), ...recentHandovers].map((item) => ({
+  const handoverEntries: ActionCentreEntry[] = handovers.map((item) => ({
     key: `handover:${item.id}`, type: 'handover', source: 'handover', item,
     requester: item.name, submittedAt: item.createdAt, historyAt: item.reviewedAt ?? item.createdAt,
     pending: item.reviewStatus === 'pending', searchText: [item.name, item.date, item.kind, item.note].join(' '),

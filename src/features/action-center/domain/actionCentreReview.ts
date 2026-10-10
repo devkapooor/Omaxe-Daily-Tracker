@@ -1,17 +1,17 @@
 import type { PosApprovalRequest, PosBill, PosBillState } from '@/features/pos/domain/types'
 import type { ActionCentreEntry } from './actionCentreEntries'
-import { OUTDATED_CORRECTION_REASON } from './approvalItems'
+import { OUTDATED_CORRECTION_REASON, OUTDATED_VENDOR_CORRECTION_REASON } from './approvalItems'
 
 export type PosReviewSource = { bill: PosBill; state: PosBillState; loadedAt: string }
 export type ReturnDecision = { outcome: 'vendor-credit' | 'replacement' | 'rejected'; outcomeReason: string; creditedValuePaise?: number; replacementReceivedAt?: string }
-export type ReviewDecision = { action: 'approve' | 'reject' | 'close-outdated' | 'mark-reviewed' | 'resolve-return'; reason?: string; returnDecision?: ReturnDecision }
+export type ReviewDecision = { action: 'approve' | 'reject' | 'close-outdated' | 'mark-reviewed' | 'resolve-return'; reason?: string; outdatedReason?: string; returnDecision?: ReturnDecision }
 
 export function paymentLabel(method?: string) {
   return ({ cash: 'Cash', upi: 'UPI', card: 'Card', 'bank-transfer': 'Bank Transfer' } as Record<string, string>)[method ?? ''] ?? (method || 'Not Recorded')
 }
 
 export function entryStatus(entry: ActionCentreEntry) {
-  if (entry.source === 'approval' && entry.item.status === 'rejected' && entry.item.reviewReason === OUTDATED_CORRECTION_REASON) return 'stale'
+  if (entry.source === 'approval' && entry.item.status === 'rejected' && (entry.item.reviewReason === OUTDATED_CORRECTION_REASON || entry.item.reviewReason === OUTDATED_VENDOR_CORRECTION_REASON)) return 'stale'
   return entry.source === 'handover' ? entry.item.reviewStatus : entry.item.status
 }
 

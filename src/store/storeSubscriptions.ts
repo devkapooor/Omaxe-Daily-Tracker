@@ -74,7 +74,7 @@ export function setupCashoutCorrectionSubscription(
 ) {
   const requestsRef = collection(db, 'cashoutCorrectionRequests')
   const requestsQuery = currentUser.role === 'owner'
-    ? requestsRef
+    ? query(requestsRef, where('status', '==', 'pending'))
     : query(requestsRef, where('requestedByUserId', '==', currentUser.id))
 
   return onSnapshot(requestsQuery, (snapshot) => {
