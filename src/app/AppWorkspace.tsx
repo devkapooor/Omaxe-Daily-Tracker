@@ -28,8 +28,6 @@ import { ActionCenterPage } from '@/features/action-center/components/ActionCent
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
 import { PosPage } from '@/features/pos/components/PosPage'
 import { CurrentStockPage } from '@/features/stock/components/CurrentStockPage'
-import { PosActionCentrePanel } from '@/features/pos/components/PosActionCentrePanel'
-import { CashierDiscrepanciesPanel } from '@/features/pos/components/CashierDiscrepanciesPanel'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -275,11 +273,9 @@ export function AppWorkspace({
 
         {activePage === 'actions' && currentUser.role === 'owner' ? (
           <ActionCenterPage
-            scheduledNotifications={appSettings.scheduledNotifications}
-            onSaveScheduledNotifications={async (notices) => {
-              await saveScheduledNotifications(notices, currentUser.name)
-              showToast('Scheduled notifications updated.')
-            }}
+            currentUser={currentUser}
+            users={users}
+            showToast={showToast}
             error={cashoutCorrectionsError}
             isLoading={!cashoutCorrectionsReady}
             queue={approvalQueue}
@@ -321,7 +317,6 @@ export function AppWorkspace({
                 showToast(error instanceof Error ? error.message : 'Unable to resolve this vendor return.')
               }
             }}
-            testPosPanel={<div className="space-y-2.5"><CashierDiscrepanciesPanel currentUser={currentUser} showToast={showToast} /><PosActionCentrePanel currentUser={currentUser} showToast={showToast} /></div>}
           />
         ) : null}
 
@@ -468,6 +463,11 @@ export function AppWorkspace({
               operationalExpenseBreakdown={appSettings.operationalExpenseBreakdown}
               upgradeAnnouncement={appSettings.upgradeAnnouncement}
               marginPercentage={appSettings.marginPercentage}
+              scheduledNotifications={appSettings.scheduledNotifications}
+              onSaveScheduledNotifications={async (notices) => {
+                await saveScheduledNotifications(notices, currentUser.name)
+                showToast('Scheduled notifications updated.')
+              }}
               onCreateUser={async (draft) => {
                 await createUserAccount(draft, currentUser.name)
                 showToast(`User created: ${draft.name}`)

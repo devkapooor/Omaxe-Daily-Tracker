@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Inbox, XCircle } from 'lucide-react'
 import { formatDisplayDate, formatDisplayDateTime, money } from '@/app/uiHelpers'
 import { DailyCashoutDetailsModal } from '@/features/cashout/components/DailyCashoutDetailsModal'
@@ -7,21 +7,27 @@ import type { ResolveVendorReturnV2Input } from '@/domain/vendorLedgerV2'
 import { OUTDATED_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader } from '@/shared/ui/card'
+import { Card } from '@/shared/ui/card'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
-import { PageCardStack } from '@/shared/ui/page-card-stack'
-import { PageHeader } from '@/shared/ui/page-header'
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
+import { Tabs, TabsContent } from '@/shared/ui/tabs'
+import { NativeSelect } from '@/shared/ui/native-select'
+import { SelectField } from '@/shared/ui/select-field'
+import { useActionCentreSources } from '../hooks/useActionCentreSources'
+import { actionCentreEntries, actionStatusLabel, actionTypes, filterActionCentreEntries } from '../domain/actionCentreEntries'
+import { AuxiliaryHistoryItem, HandoverRequestItem, PosRequestItem } from './AuxiliaryRequestItems'
+import type { AppUser } from '@/domain/financeTypes'
 import { PageLayout } from '@/shared/ui/page-layout'
 import { Textarea } from '@/shared/ui/textarea'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
-import type { ScheduledNotification } from '@/domain/appTypes'
+import type { UserAccount } from '@/domain/appTypes'
 
 type ActionCenterPageProps = {
-  scheduledNotifications: ScheduledNotification[]
-  onSaveScheduledNotifications: (notices: ScheduledNotification[]) => Promise<void>
-  testPosPanel?: ReactNode
+  currentUser: AppUser
+  users: UserAccount[]
+  showToast: (message: string) => void
   error: string | null
   isLoading: boolean
   queue: ApprovalQueue
@@ -97,17 +103,17 @@ function CashoutChangeSummary({ item }: { item: Extract<ApprovalActionItem, { ki
 
 function RecentDecision({ item }: { item: ApprovalActionItem }) {
   const title = item.kind === 'cashout-correction'
-    ? `Cashout correction | ${formatDisplayDate(item.cashoutDate)}`
+    ? `Cashout Correction | ${formatDisplayDate(item.cashoutDate)}`
     : item.kind === 'vendor-settlement-correction'
-      ? `Vendor payment correction | ${item.vendorName}`
-      : `Vendor return | ${item.vendorName}`
+      ? `Vendor Payment Correction | ${item.vendorName}`
+      : `Vendor Return | ${item.vendorName}`
   return (
     <div className="grid gap-1.5 border-b border-border py-2 text-xs last:border-b-0 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${item.status === 'approved' ? 'bg-emerald-500' : item.status === 'rejected' ? 'bg-rose-500' : 'bg-muted-foreground'}`} />
         <p className="font-semibold text-foreground">{title}</p>
         <span className="text-muted-foreground">{formatDisplayDate(item.reviewedAt ?? item.submittedAt)}</span>
-        <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+        <Badge variant={statusVariant(item.status)}>{actionStatusLabel(item.status)}</Badge>
       </div>
       <p className="truncate text-muted-foreground" title={item.reviewReason ?? item.reason}>{item.reviewReason || item.reason}</p>
       <details className="text-muted-foreground sm:text-right">
@@ -186,16 +192,30 @@ function VendorReturnDecision({
   )
 }
 
-export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn, testPosPanel, scheduledNotifications, onSaveScheduledNotifications }: ActionCenterPageProps) {
+export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject, onResolveReturn, currentUser, users, showToast }: ActionCenterPageProps) {
   const confirmation = useConfirmationDialog()
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<ApprovalActionItem | null>(null)
-  const [previousNotifications, setPreviousNotifications] = useState(scheduledNotifications)
-  const [notices, setNotices] = useState(scheduledNotifications)
-  const [savingNotices, setSavingNotices] = useState(false)
-  if (previousNotifications !== scheduledNotifications) {
-    setPreviousNotifications(scheduledNotifications)
-    setNotices(scheduledNotifications)
+  const [tab, setTab] = useState<'pending' | 'history'>('pending')
+  const [type, setType] = useState('')
+  const [requester, setRequester] = useState('')
+  const [search, setSearch] = useState('')
+  const sources = useActionCentreSources(currentUser)
+  const entries = useMemo(() => actionCentreEntries(queue, sources.posRequests, sources.handovers, users), [queue, sources.posRequests, sources.handovers, users])
+  const visible = useMemo(() => filterActionCentreEntries(entries, tab, type, requester, search), [entries, tab, type, requester, search])
+  const requesterOptions = useMemo(() => [{ value: '', label: 'All' }, ...[...new Set(entries.map((entry) => entry.requester))].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }))], [entries])
+  const pendingCount = entries.filter((entry) => entry.pending).length
+  const loading = isLoading || sources.loading
+  const errors = [error ? 'Corrections: ' + error : null, sources.posError ? 'POS Requests: ' + sources.posError : null, sources.handoverError ? 'Handover Reviews: ' + sources.handoverError : null].filter(Boolean)
+
+  async function runAuxiliary(key: string, action: () => Promise<unknown>, message: string) {
+    setBusyItemId(key)
+    try {
+      const result = await action()
+      showToast(result === 'stale' ? 'Request closed as stale because the bill state changed.' : message)
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Unable to review this request.')
+    } finally { setBusyItemId(null) }
   }
 
   async function run(item: ApprovalActionItem, action: () => Promise<void>) {
@@ -249,77 +269,47 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
   }
 
   return (
-    <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
-      <PageHeader title="Action Centre" tools={(
-        <Badge variant={queue.pendingCount > 0 ? 'warning' : 'success'} className="shrink-0 px-3 py-1 text-xs">
-          {queue.pendingCount} pending
-        </Badge>
-      )} />
-    )}>
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <PageCardStack className="w-full pb-4">
-          <p className="sr-only">Owner workspace. Financial records change only after explicit approval.</p>
-
-        <Card>
-          <CardHeader className="border-b border-border px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">While browser is open</p>
-            <h2 className="text-sm font-semibold tracking-tight text-foreground">Scheduled blocking notifications</h2>
-            <p className="text-xs text-muted-foreground">Staff see each enabled notice at its IST trigger time and must acknowledge it before using the app.</p>
-          </CardHeader>
-          <CardContent className="space-y-2 p-3">
-            {notices.map((notice, index) => <div key={notice.id} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-12 sm:items-end">
-              <FieldLabel className="sm:col-span-3" label="Title"><Input value={notice.title} maxLength={100} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, title: event.target.value } : item))} /></FieldLabel>
-              <FieldLabel className="sm:col-span-4" label="Message"><Input value={notice.message} maxLength={1000} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, message: event.target.value } : item))} /></FieldLabel>
-              <FieldLabel className="sm:col-span-2" label="Trigger time (IST)"><Input type="time" value={notice.triggerTime} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, triggerTime: event.target.value } : item))} /></FieldLabel>
-              <fieldset className="sm:col-span-2"><legend className="mb-1 text-xs font-medium">Show to</legend><div className="flex gap-2 text-xs">{(['billing', 'manager'] as const).map((role) => <label key={role} className="flex items-center gap-1"><input type="checkbox" checked={notice.targetRoles.includes(role)} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, targetRoles: event.target.checked ? [...item.targetRoles, role] : item.targetRoles.filter((value) => value !== role) } : item))} />{role}</label>)}</div></fieldset>
-              <div className="flex items-center gap-2 sm:col-span-1"><label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={notice.enabled} onChange={(event) => setNotices((items) => items.map((item, i) => i === index ? { ...item, enabled: event.target.checked } : item))} />On</label><Button type="button" size="sm" variant="ghost" onClick={() => setNotices((items) => items.filter((_, i) => i !== index))}>Remove</Button></div>
-            </div>)}
-            <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={notices.length >= 25} onClick={() => setNotices((items) => [...items, { id: crypto.randomUUID(), title: '', message: '', triggerTime: '23:50', targetRoles: ['billing', 'manager'], enabled: true }])}>Add notification</Button><Button type="button" disabled={savingNotices || notices.some((notice) => !notice.title.trim() || !notice.message.trim() || !notice.targetRoles.length)} onClick={() => { setSavingNotices(true); void onSaveScheduledNotifications(notices).finally(() => setSavingNotices(false)) }}>{savingNotices ? 'Saving…' : 'Save notifications'}</Button></div>
-          </CardContent>
+    <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PageLayout className="min-h-0 flex-1 overflow-hidden" header={
+        <PageHeader title="Action Centre" className="shrink-0" tools={
+          <PageHeaderTabsList aria-label="Action Centre Sections">
+            <PageHeaderTab value="pending">Pending {loading ? '…' : '(' + pendingCount + ')'}</PageHeaderTab>
+            <PageHeaderTab value="history">History</PageHeaderTab>
+          </PageHeaderTabsList>
+        } />
+      }>
+        <Card className="shrink-0 p-3" role="region" aria-label="Action Centre Filters">
+          <div className="grid grid-cols-2 items-end gap-2 lg:grid-cols-[minmax(14rem,2fr)_repeat(2,minmax(0,1fr))_auto]">
+            <FieldLabel className="col-span-2 lg:col-span-1" label="Search"><Input value={search} placeholder="Bill Number, Vendor Or Person" onChange={(event) => setSearch(event.target.value)} /></FieldLabel>
+            <FieldLabel label="Request Type"><NativeSelect value={type} onChange={(event) => setType(event.target.value)}><option value="">All</option>{actionTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</NativeSelect></FieldLabel>
+            <FieldLabel label="Requested By"><SelectField value={requester} options={requesterOptions} onValueChange={setRequester} /></FieldLabel>
+            <Button variant="outline" className="col-span-2 lg:col-span-1" onClick={() => { setType(''); setRequester(''); setSearch('') }}>Clear Filters</Button>
+          </div>
         </Card>
-
-        {isLoading && !error ? (
-          <Card>
-            <CardContent className="flex items-center gap-3 py-4 text-sm font-semibold text-muted-foreground">
-              <Clock3 className="h-5 w-5 animate-pulse text-primary" /> Loading approval requests...
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {error ? (
-          <StatusPanel variant="destructive" className="flex items-start gap-3 py-5">
-            <AlertTriangle className="mt-0.5 h-5 w-5 flex-none" />
-            <div><strong className="block">Approval requests could not be loaded</strong><span className="text-xs text-muted-foreground">{error}</span></div>
-          </StatusPanel>
-        ) : null}
-
-        {!isLoading && !error ? <Card>
-          <CardHeader className="flex-row items-end justify-between gap-3 border-b border-border px-3 py-2">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Needs Review</p>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">Pending Approvals</h2>
-            </div>
-            <span className="hidden text-[10px] text-muted-foreground sm:inline">Sorted oldest first</span>
-          </CardHeader>
-          <CardContent className="space-y-2 px-3 pb-3 pt-2">
-            {queue.pending.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-2.5 text-xs text-muted-foreground">
-                <Inbox className="h-4 w-4 text-emerald-600" />
-                <p className="font-medium text-foreground">No approvals are waiting</p>
-              </div>
-            ) : null}
-
-            {queue.pending.map((item) => (
-              <article key={item.id} className="rounded-md border border-border bg-card px-3 py-2.5">
+        <TabsContent value={tab} className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          <p className="sr-only">Owner workspace. Financial records change only after explicit approval.</p>
+          {loading ? <Card className="flex items-center gap-2 p-3 text-sm text-muted-foreground" role="status"><Clock3 className="size-4 animate-pulse" />Loading Requests…</Card> : null}
+          {errors.map((message) => <StatusPanel key={message} variant="destructive" role="alert">{message}</StatusPanel>)}
+          <p className="text-xs text-muted-foreground">{tab === 'pending' ? 'Oldest First · Handover Items Need Review Only' : 'Recent History · Newest Decisions First'}</p>
+          {!loading && !visible.length ? <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Inbox className="size-4" />{errors.length ? 'Some Requests Could Not Be Loaded.' : type || requester || search.trim() ? 'No Requests Match These Filters.' : tab === 'pending' ? 'No Requests Are Waiting.' : 'No Recent History To Show.'}</Card> : null}
+          {visible.map((entry) => {
+            if (tab === 'history') return entry.source === 'approval'
+              ? <Card key={entry.key} className="px-3"><RecentDecision item={{ ...entry.item, requester: entry.requester }} /></Card>
+              : <AuxiliaryHistoryItem key={entry.key} item={entry.item} />
+            if (entry.source === 'pos') return <PosRequestItem key={entry.key} request={entry.item} currentUser={currentUser} busy={busyItemId !== null} run={runAuxiliary} />
+            if (entry.source === 'handover') return <HandoverRequestItem key={entry.key} record={entry.item} currentUser={currentUser} busy={busyItemId !== null} run={runAuxiliary} />
+            const item = entry.item
+            return (
+              <article key={entry.key} className="rounded-md border border-border bg-card px-3 py-2.5">
                 <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(190px,0.9fr)_auto] md:items-center">
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{item.kind === 'cashout-correction' ? 'Cashout correction' : item.kind === 'vendor-settlement-correction' ? 'Vendor payment' : 'Vendor return'}</Badge>
+                      <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{item.kind === 'cashout-correction' ? 'Cashout Correction' : item.kind === 'vendor-settlement-correction' ? 'Vendor Payment Correction' : 'Vendor Return'}</Badge>
                       {item.isStale ? <Badge variant="destructive">Outdated</Badge> : null}
                       <span className="text-[11px] font-medium text-foreground">{item.kind === 'cashout-correction' ? item.requester : item.vendorName}</span>
                       <span className="text-[11px] text-muted-foreground">{formatDisplayDate(item.kind === 'cashout-correction' ? item.cashoutDate : item.kind === 'vendor-settlement-correction' ? item.proposed.date : item.sourceReturn.date)}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">{item.kind === 'cashout-correction' ? `Recorded by ${item.recordedBy} · ` : 'Requested by '}{item.requester} · {formatDisplayDateTime(item.submittedAt)}</p>
+                    <p className="text-[10px] text-muted-foreground">{item.kind === 'cashout-correction' ? `Recorded by ${item.recordedBy} · ` : 'Requested by '}{entry.requester} · {formatDisplayDateTime(item.submittedAt)}</p>
                     <p className="text-[10px] leading-4 text-foreground"><span className="font-semibold">Reason:</span> {item.reason}</p>
                   </div>
                   <div className="min-w-0">
@@ -338,10 +328,10 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
                     </div> : null}
                   </div>
                   <div className="flex flex-wrap justify-end gap-1.5 md:flex-row md:items-center">
-                    {item.kind === 'cashout-correction' && item.sourceCashout ? <Button type="button" size="sm" variant="outline" className="h-8 px-2.5 text-xs" onClick={() => setSelectedItem(item)}>View details</Button> : null}
+                    {item.kind === 'cashout-correction' && item.sourceCashout ? <Button type="button" size="sm" variant="outline" className="h-8 px-2.5 text-xs" onClick={() => setSelectedItem(item)}>View Details</Button> : null}
                     {item.kind === 'vendor-return' ? null : item.isStale ? (
                       <Button type="button" size="sm" variant="destructive" disabled={busyItemId !== null} onClick={() => void closeOutdated(item)}>
-                        <XCircle className="h-3.5 w-3.5" /> Close outdated
+                        <XCircle className="h-3.5 w-3.5" /> Close Outdated
                       </Button>
                     ) : (
                       <>
@@ -365,37 +355,12 @@ export function ActionCenterPage({ error, isLoading, queue, onApprove, onReject,
 
                 {item.kind === 'vendor-return' ? <VendorReturnDecision busy={busyItemId !== null} item={item} onResolve={(decision) => run(item, () => onResolveReturn(item, decision))} /> : null}
               </article>
-            ))}
-          </CardContent>
-        </Card> : null}
-
-        {!isLoading && !error ? <Card>
-          <CardHeader className="flex-row items-end justify-between gap-3 px-3 py-2">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Audit Snapshot</p>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">Recent Decisions</h2>
-            </div>
-            <span className="text-[10px] text-muted-foreground">Latest 20 · Full history in Logs</span>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {queue.recent.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-                <Clock3 className="h-4 w-4" /> No completed approval decisions yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {queue.recent.map((item) => <RecentDecision key={item.id} item={item} />)}
-              </div>
-            )}
-          </CardContent>
-        </Card> : null}
-
-        {testPosPanel}
-        </PageCardStack>
-      </div>
-
-      <DailyCashoutDetailsModal entry={selectedItem?.kind === 'cashout-correction' ? selectedItem.sourceCashout ?? null : null} onClose={() => setSelectedItem(null)} />
-      {confirmation.dialog}
-    </PageLayout>
+            )
+          })}
+        </TabsContent>
+        <DailyCashoutDetailsModal entry={selectedItem?.kind === 'cashout-correction' ? selectedItem.sourceCashout ?? null : null} onClose={() => setSelectedItem(null)} />
+        {confirmation.dialog}
+      </PageLayout>
+    </Tabs>
   )
 }

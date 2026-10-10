@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, UserRole } from '@/domain/financeTypes'
-import type { UpgradeAnnouncement, UserAccount } from '@/domain/appTypes'
+import type { ScheduledNotification, UpgradeAnnouncement, UserAccount } from '@/domain/appTypes'
 import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -14,6 +14,7 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { subscribePosConfig, updateDiscountLimit } from '@/features/pos/data/posRepository'
+import { StaffNotificationsSettings } from './StaffNotificationsSettings'
 
 type SettingsPageProps = {
   currentUser: AppUser
@@ -35,6 +36,8 @@ type SettingsPageProps = {
   upgradeAnnouncement: UpgradeAnnouncement | null
   onPublishUpgradeAnnouncement: (title: string, message: string, durationHours: number) => Promise<void>
   onClearUpgradeAnnouncement: () => Promise<void>
+  scheduledNotifications: ScheduledNotification[]
+  onSaveScheduledNotifications: (notices: ScheduledNotification[]) => Promise<void>
 }
 
 export function SettingsPage({
@@ -51,6 +54,8 @@ export function SettingsPage({
   upgradeAnnouncement,
   onPublishUpgradeAnnouncement,
   onClearUpgradeAnnouncement,
+  scheduledNotifications,
+  onSaveScheduledNotifications,
 }: SettingsPageProps) {
   const [error, setError] = useState('')
   const [userSearch, setUserSearch] = useState('')
@@ -219,11 +224,12 @@ export function SettingsPage({
           <PageHeader
             title="Settings"
             tools={(
-              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-cols-5 xl:grid-cols-5' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
+              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-flow-row grid-cols-3 xl:grid-flow-col xl:grid-cols-6' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
                 <PageHeaderTab value="staff">Staff</PageHeaderTab>
                 {canManageUsers ? <PageHeaderTab value="operations">Operations</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="pos">POS</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="announcements">Announcements</PageHeaderTab> : null}
+                {canManageUsers ? <PageHeaderTab value="notifications">Staff Notifications</PageHeaderTab> : null}
                 <PageHeaderTab value="password">Update Password</PageHeaderTab>
               </PageHeaderTabsList>
             )}
@@ -393,6 +399,10 @@ export function SettingsPage({
             </Card>
           </TabsContent>
         ) : null}
+
+        {canManageUsers ? <TabsContent value="notifications" className="min-h-0 flex-1 overflow-y-auto">
+          <StaffNotificationsSettings notifications={scheduledNotifications} onSave={onSaveScheduledNotifications} />
+        </TabsContent> : null}
 
         {canManageUsers ? (
           <TabsContent value="announcements" className="min-h-0 flex-1 overflow-y-auto">
