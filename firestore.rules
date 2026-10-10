@@ -42,6 +42,16 @@ service cloud.firestore {
       return /databases/$(database)/documents/posSandboxes/test/drawerClosures/$(cashoutId);
     }
 
+    function cashMovementControlPath() {
+      return /databases/$(database)/documents/cashMovementControl/main;
+    }
+
+    function cashMovementControlAfter(operation, operationId) {
+      let control = getAfter(cashMovementControlPath()).data;
+      return control.lastOperation == operation && control.lastOperationId == operationId &&
+        control.revision == (exists(cashMovementControlPath()) ? get(cashMovementControlPath()).data.revision + 1 : 1);
+    }
+
     function validCashoutClosureDate(date) {
       let istTime = request.time + duration.value(19800, 's');
       let minuteOfDay = istTime.hours() * 60 + istTime.minutes();
@@ -56,10 +66,13 @@ service cloud.firestore {
       return data.id == documentId && data.drawerClosureId == documentId &&
         data.recordedByUserId == request.auth.uid && validCashoutClosureDate(data.date) &&
         data.drawerTotal is number && data.drawerTotal >= 0 &&
+        data.holderBalancesAtClose is list && data.holderBalancesRevision is int &&
         data.cashRemovedPaise is int && data.cashRemovedPaise == data.drawerTotal * 100 &&
         data.closingDrawerPaise == 0 && closure.cashoutId == documentId &&
         closure.recordedByUid == request.auth.uid && closure.countedPaise == data.cashRemovedPaise &&
         closure.removedPaise == data.cashRemovedPaise && closure.closingBalancePaise == 0 &&
+        cashMovementControlAfter('daily-close', documentId) &&
+        getAfter(cashMovementControlPath()).data.revision == data.holderBalancesRevision &&
         handover.lastOperation == 'cashout-close' && handover.lastOperationId == documentId;
     }
 
@@ -648,23 +661,6 @@ service cloud.firestore {
       ]) && request.resource.data.createdAt == resource.data.createdAt;
     }
 
-    function validCashTransferCreate(data, documentId) {
-      return hasDocumentId(data, documentId) &&
-        data.date is string &&
-        data.fromUserId is string &&
-        data.toType in ['person', 'bank'] &&
-        isNonNegativeNumber(data.amount) &&
-        data.amount > 0 &&
-        data.reason is string &&
-        data.reason.size() > 0 &&
-        data.createdBy is string &&
-        data.createdAt is string &&
-        (
-          (data.toType == 'bank' && (!('bankDepositMethod' in data) || data.bankDepositMethod in ['bank', 'cdm'])) ||
-          (data.toType == 'person' && data.toUserId is string && data.toUserId != data.fromUserId && !('bankDepositMethod' in data))
-        );
-    }
-
     match /users/{userId} {
       allow read: if isStaff() || (isSignedIn() && request.auth.uid == userId);
       allow create, update: if isOwner();
@@ -963,11 +959,27 @@ service cloud.firestore {
     match /dailyCashouts/{documentId} {
       allow read: if isStaff();
       allow create: if isStaff() && (isOwner() || isCashoutWindowOpen()) && validLinkedDailyCashout(request.resource.data, documentId);
-      allow update: if isOwner() &&
+      allow update: if isOwner() && cashMovementControlAfter('cashout-correction', documentId) &&
         ((resource.data.keys().hasAny(['drawerClosureId']) && preservesDrawerClosureLink()) ||
           (!resource.data.keys().hasAny(['drawerClosureId']) &&
             (!request.resource.data.keys().hasAny(['drawerClosureId']) || validHistoricalDrawerClosureLink(request.resource.data, documentId))));
-      allow delete: if isOwner() && !resource.data.keys().hasAny(['drawerClosureId']);
+      allow delete: if isOwner() && !resource.data.keys().hasAny(['drawerClosureId']) &&
+        cashMovementControlAfter('cashout-delete', documentId);
+    }
+
+    match /cashMovementControl/{controlId} {
+      allow read: if isStaff() && controlId == 'main';
+      allow create: if isStaff() && controlId == 'main' && request.resource.data.revision == 1 &&
+        ((request.resource.data.lastOperation == 'daily-close' &&
+          getAfter(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.lastOperationId)).data.recordedByUserId == request.auth.uid) ||
+         (isOwner() && request.resource.data.lastOperation in ['cashout-correction', 'cashout-delete']));
+      allow update: if isStaff() && controlId == 'main' &&
+        request.resource.data.revision == resource.data.revision + 1 &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'lastOperation', 'lastOperationId', 'updatedAt']) &&
+        ((request.resource.data.lastOperation == 'daily-close' &&
+          getAfter(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.lastOperationId)).data.recordedByUserId == request.auth.uid) ||
+         (isOwner() && request.resource.data.lastOperation in ['cashout-correction', 'cashout-delete']));
+      allow delete: if false;
     }
 
     match /cashoutCorrectionRequests/{documentId} {
@@ -1002,10 +1014,8 @@ service cloud.firestore {
 
     match /cashTransfers/{documentId} {
       allow read: if isStaff();
-      allow create: if validCashTransferCreate(request.resource.data, documentId) && (
-        isManagerOrOwner() || (isBilling() && request.resource.data.fromUserId == request.auth.uid)
-      );
-      allow update, delete: if isOwner();
+      // Creation is server-authoritative so concurrent transfers cannot spend the same balance twice.
+      allow create, update, delete: if false;
     }
 
     match /plannedPayments/{documentId} {

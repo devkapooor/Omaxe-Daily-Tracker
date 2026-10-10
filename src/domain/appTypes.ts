@@ -91,6 +91,9 @@ export type DailyCashoutEntry = {
   drawerClosureId?: string
   cashRemovedPaise?: number
   closingDrawerPaise?: number
+  /** Snapshot of every active staff member's derived cash balance at this close. */
+  holderBalancesAtClose?: Array<{ userId: string; name: string; amountPaise: number }>
+  holderBalancesRevision?: number
   auditDifference?: number
   auditStatus?: 'matched' | 'cash-less' | 'cash-more'
   auditMessage?: string

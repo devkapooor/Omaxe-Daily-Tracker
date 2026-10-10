@@ -120,25 +120,25 @@ describe('Firestore role enforcement', () => {
     await assertSucceeds(deleteDoc(doc(owner, 'cashouts', 'expense-1')))
   })
 
-  it('restricts billing cash movement to the signed-in user', async () => {
+  it('requires all cash transfer writes to pass through the server balance guard', async () => {
     const billing = userDb('billing-user')
     const baseTransfer = {
       id: 'transfer-1', date: '2026-10-01', toType: 'bank', bankDepositMethod: 'bank', amount: 100,
       reason: 'Deposit', createdBy: 'billing-user', createdAt: timestamp,
     }
 
-    await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-1'), { ...baseTransfer, fromUserId: 'billing-user' }))
+    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-1'), { ...baseTransfer, fromUserId: 'billing-user' }))
     await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-2'), { ...baseTransfer, id: 'transfer-2', fromUserId: 'manager-user' }))
-    await assertSucceeds(setDoc(doc(userDb('manager-user'), 'cashTransfers', 'transfer-3'), { ...baseTransfer, id: 'transfer-3', fromUserId: 'billing-user' }))
+    await assertFails(setDoc(doc(userDb('manager-user'), 'cashTransfers', 'transfer-3'), { ...baseTransfer, id: 'transfer-3', fromUserId: 'billing-user' }))
     const bankTransferWithoutMethod = {
       id: 'transfer-4', date: '2026-10-01', toType: 'bank', amount: 100,
       reason: 'Deposit', createdBy: 'billing-user', createdAt: timestamp, fromUserId: 'billing-user',
     }
-    await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-4'), bankTransferWithoutMethod))
+    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-4'), bankTransferWithoutMethod))
     await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-invalid-method'), {
       ...baseTransfer, id: 'transfer-invalid-method', fromUserId: 'billing-user', bankDepositMethod: 'unknown',
     }))
-    await assertSucceeds(setDoc(doc(billing, 'cashTransfers', 'transfer-5'), {
+    await assertFails(setDoc(doc(billing, 'cashTransfers', 'transfer-5'), {
       id: 'transfer-5', date: '2026-10-01', fromUserId: 'billing-user', toType: 'person', toUserId: 'manager-user',
       amount: 100, reason: 'Cash handover', createdBy: 'billing-user', createdAt: timestamp,
     }))
@@ -191,16 +191,8 @@ describe('Firestore role enforcement', () => {
     }
     await assertFails(setDoc(doc(owner, 'dailyCashouts', 'cashout-1'), cashout))
     await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-2'), { ...cashout, recordedByUserId: 'manager-user' }))
-    // Rules evaluate against emulator request.time; staff entry is allowed only in the configured IST window.
-    const ist = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
-    const hour = Number(ist.find((part) => part.type === 'hour')?.value)
-    const minute = Number(ist.find((part) => part.type === 'minute')?.value)
-    const minuteOfDay = hour * 60 + minute
-    if (minuteOfDay >= 1435 || minuteOfDay <= 20) {
-      await assertSucceeds(setDoc(doc(billing, 'dailyCashouts', 'cashout-3'), cashout))
-    } else {
-      await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-3'), cashout))
-    }
+    // A cashout must now include its matching drawer closure and per-holder balance snapshot.
+    await assertFails(setDoc(doc(billing, 'dailyCashouts', 'cashout-3'), cashout))
 
     const sales = {
       storeId: 'single-store', date: '2026-10-01', totalSales: 900, cashSales: 500,
@@ -363,8 +355,10 @@ describe('POS shared cashier handover integrity', () => {
       creditSales: 0, returns: 0, cashExpense: 0, cashAudit: 100, drawerTotal: 100, remainingBalance: 100,
       drawerDenominations: { denom500: 0, denom200: 0, denom100: 1, denom50: 0, denom20: 0, denom10: 0, change: 0 },
       actualCashParticulars: '100 x 1', pendingCashParticulars: '', drawerClosureId: id,
+      holderBalancesAtClose: [{ userId: 'owner-user', name: 'Owner', amountPaise: 10000 }], holderBalancesRevision: 1,
       cashRemovedPaise: 10000, closingDrawerPaise: 0, createdAt: timestamp, revision: 1,
     })
+    batch.set(doc(db, 'cashMovementControl', 'main'), { revision: 1, lastOperation: 'daily-close', lastOperationId: id, updatedAt: timestamp })
     batch.set(ref(db, 'drawerClosures', id), closure)
     batch.update(ref(db, 'handover', 'main'), {
       revision: 2, lastOperation: 'cashout-close', lastOperationId: id, updatedByUid: 'owner-user',

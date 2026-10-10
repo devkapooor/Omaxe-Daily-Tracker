@@ -228,6 +228,8 @@ export function AppWorkspace({
               onClick={() => {
                 void importLegacyData().then((imported) => {
                   if (imported) showToast('Legacy browser data imported into Firebase.')
+                }).catch((error) => {
+                  showToast(error instanceof Error ? error.message : 'Unable to import legacy browser data.')
                 })
               }}
             >

@@ -68,6 +68,13 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Audit Status" value={auditMessage} />
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Drawer Particulars" value={entry.actualCashParticulars} />
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Pending Cash Particulars" value={entry.pendingCashParticulars} />
+          <DetailBlock
+            className="md:col-span-2 xl:col-span-3"
+            label="Staff Cash Balances At Close"
+            value={entry.holderBalancesAtClose?.length
+              ? entry.holderBalancesAtClose.map((balance) => `${balance.name}: ${money(balance.amountPaise / 100)}`).join('\n')
+              : 'Not recorded on this historical cashout.'}
+          />
         </CardContent>
       </Card>
     </div>,

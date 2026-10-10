@@ -1,4 +1,4 @@
-import { doc, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
+import { doc, increment, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
 import { shiftDate, today } from '@/app/uiHelpers'
 import { cashoutCorrectionValuesEqual, cashoutEntryFromCorrection, correctionValuesFromEntry, normalizeCorrectionValues } from '@/domain/cashoutCorrections'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, DailyCashoutEntry } from '@/domain/appTypes'
@@ -82,6 +82,9 @@ export function createCashoutCorrectionActions({ getState, writeSalesSyncToBatch
     const nextEntries = state.dailyCashouts.map((candidate) => candidate.id === entry.id ? correctedEntry : candidate)
     const batch = writeBatch(db)
     batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
+    batch.set(doc(db, 'cashMovementControl', 'main'), {
+      revision: increment(1), lastOperation: 'cashout-correction', lastOperationId: entry.id, updatedAt: timestamp,
+    }, { merge: true })
     writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData, state.dailyCashouts)
     batch.update(doc(db, 'cashoutCorrectionRequests', request.id), {
       status: 'approved', reviewedAt: timestamp, reviewedByUserId: actor.id, reviewedBy: actor.name, reviewReason: 'Approved by owner.',
@@ -139,6 +142,9 @@ export function createCashoutCorrectionActions({ getState, writeSalesSyncToBatch
     const batch = writeBatch(db)
     batch.set(doc(db, 'dailyCashouts', entry.id), correctedEntry)
     batch.set(doc(db, 'cashoutCorrectionRequests', requestId), request)
+    batch.set(doc(db, 'cashMovementControl', 'main'), {
+      revision: increment(1), lastOperation: 'cashout-correction', lastOperationId: entry.id, updatedAt: timestamp,
+    }, { merge: true })
     writeSalesSyncToBatch(batch, entry.date, nextEntries, state.financeData, state.dailyCashouts)
     await batch.commit()
   }

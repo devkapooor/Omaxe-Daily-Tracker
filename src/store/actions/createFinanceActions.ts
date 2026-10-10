@@ -1,10 +1,13 @@
-import { deleteDoc, deleteField, doc, runTransaction, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
-import { db } from '@/shared/lib/firebase'
+import { collection, deleteDoc, deleteField, doc, getDocFromServer, getDocsFromServer, runTransaction, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/shared/lib/firebase'
 import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
 import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
+import type { UserAccount } from '@/domain/appTypes'
 import { allocateLoanRepayment, allocateLoanRepaymentToLoan, loanRupeesToPaise, normalizeLoanAmount } from '@/domain/loanMoney'
 import { cardSalesAfterCashoutChange } from '@/domain/cashoutSales'
+import { derivePendingCash } from '@/store/deriveCashMetrics'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
   normalizeLoanRecord,
@@ -36,6 +39,33 @@ function sortByBusinessOrder<T extends { date: string; createdAt: string }>(item
 }
 
 export function createFinanceActions({ ensureNameInDirectory, getState, setIsBusy }: FinanceActionArgs) {
+  async function loadHolderBalancesForClose(closingEntry: DailyCashoutEntry) {
+    const controlRef = doc(db, 'cashMovementControl', 'main')
+    const before = await getDocFromServer(controlRef)
+    const revision = before.exists() ? Number(before.data().revision ?? 0) : 0
+    const [usersSnapshot, cashoutsSnapshot, transfersSnapshot, after] = await Promise.all([
+      getDocsFromServer(collection(db, 'users')),
+      getDocsFromServer(collection(db, 'dailyCashouts')),
+      getDocsFromServer(collection(db, 'cashTransfers')),
+      getDocFromServer(controlRef),
+    ])
+    const afterRevision = after.exists() ? Number(after.data().revision ?? 0) : 0
+    if (revision !== afterRevision) throw new Error('Cash activity changed while preparing the closing snapshot. Refresh and submit the count again.')
+
+    const users = usersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as UserAccount)
+    const cashouts = cashoutsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as DailyCashoutEntry)
+    const transfers = transfersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as CashTransfer)
+    const pending = derivePendingCash(users, [...cashouts, closingEntry], transfers)
+    return {
+      revision,
+      balances: pending.userBalances.map((balance) => ({
+        userId: balance.userId,
+        name: balance.name,
+        amountPaise: rupeesToPaise(balance.amount),
+      })),
+    }
+  }
+
   function writeSalesSyncToBatch(batch: WriteBatch, date: string, nextDailyCashouts: DailyCashoutEntry[], financeData: FinanceData, previousDailyCashouts: DailyCashoutEntry[]) {
     const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
     const salesId = salesDocId(singleStoreId, date)
@@ -381,20 +411,26 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       createdAt: timestamp,
       revision: 1,
     }
+    const holderClose = await loadHolderBalancesForClose(entry)
+    entry.holderBalancesAtClose = holderClose.balances
+    entry.holderBalancesRevision = holderClose.revision + 1
     const salesId = salesDocId(singleStoreId, draft.date)
     const cashoutRef = doc(db, 'dailyCashouts', id)
     const salesRef = doc(db, 'sales', salesId)
     const closureRef = doc(db, 'posSandboxes', 'test', 'drawerClosures', id)
 
     await runTransaction(db, async (transaction) => {
-      const [ledgerSnapshot, cashoutSnapshot, salesSnapshot, closureSnapshot] = await Promise.all([
+      const [ledgerSnapshot, cashoutSnapshot, salesSnapshot, closureSnapshot, cashControlSnapshot] = await Promise.all([
         transaction.get(handoverRef()),
         transaction.get(cashoutRef),
         transaction.get(salesRef),
         transaction.get(closureRef),
+        transaction.get(doc(db, 'cashMovementControl', 'main')),
       ])
       if (cashoutSnapshot.exists() || closureSnapshot.exists()) throw new Error('This cashout has already closed the drawer.')
       const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
+      const cashControlRevision = cashControlSnapshot.exists() ? Number(cashControlSnapshot.data().revision ?? 0) : 0
+      if (cashControlRevision !== holderClose.revision) throw new Error('Cash activity changed while the closing count was being prepared. Refresh and submit again.')
       if (!ledger?.initialized) throw new Error('The shared POS drawer must be initialized before completing Cashout.')
       if (!ledger.checkpoint) throw new Error('Complete a cashier handover count before closing the shared POS drawer.')
 
@@ -433,6 +469,12 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       transaction.set(cashoutRef, entry)
       transaction.set(salesRef, sales)
       transaction.set(closureRef, closure)
+      transaction.set(doc(db, 'cashMovementControl', 'main'), {
+        revision: cashControlRevision + 1,
+        lastOperation: 'daily-close',
+        lastOperationId: id,
+        updatedAt: timestamp,
+      })
       transaction.set(handoverRef(), {
         ...ledger,
         revision: ledger.revision + 1,
@@ -497,7 +539,20 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     if (!targetEntry) throw new Error('This daily cashout record could not be found.')
     if (targetEntry.drawerClosureId) throw new Error('A drawer-closing cashout cannot be deleted. Use the audited correction workflow.')
 
-    await deleteDoc(doc(db, 'dailyCashouts', entryId))
+    await runTransaction(db, async (transaction) => {
+      const entryRef = doc(db, 'dailyCashouts', entryId)
+      const controlRef = doc(db, 'cashMovementControl', 'main')
+      const [entrySnapshot, controlSnapshot] = await Promise.all([transaction.get(entryRef), transaction.get(controlRef)])
+      if (!entrySnapshot.exists()) throw new Error('This daily cashout record could not be found.')
+      if (entrySnapshot.data().drawerClosureId) throw new Error('A drawer-closing cashout cannot be deleted. Use the audited correction workflow.')
+      transaction.delete(entryRef)
+      transaction.set(controlRef, {
+        revision: (controlSnapshot.exists() ? Number(controlSnapshot.data().revision ?? 0) : 0) + 1,
+        lastOperation: 'cashout-delete',
+        lastOperationId: entryId,
+        updatedAt: nowIso(),
+      })
+    })
     await syncSalesForDate(
       targetEntry.date,
       dailyCashouts.filter((entry) => entry.id !== entryId),
@@ -505,25 +560,13 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   }
 
   async function saveCashTransfer(draft: Omit<CashTransfer, 'id' | 'createdAt'>) {
-    const transfer: CashTransfer = { ...draft, id: `cash-transfer-${crypto.randomUUID()}`, createdAt: nowIso() }
-    await setDoc(doc(db, 'cashTransfers', transfer.id), {
-      id: transfer.id,
-      date: transfer.date,
-      ...(transfer.fromUserId ? { fromUserId: transfer.fromUserId } : {}),
-      toType: transfer.toType,
-      ...(transfer.toUserId ? { toUserId: transfer.toUserId } : {}),
-      ...(transfer.bankDepositMethod ? { bankDepositMethod: transfer.bankDepositMethod } : {}),
-      amount: transfer.amount,
-      reason: transfer.reason,
-      createdBy: transfer.createdBy,
-      ...(transfer.recordType ? { recordType: transfer.recordType } : {}),
-      createdAt: transfer.createdAt,
-    })
+    const createTransfer = httpsCallable<typeof draft & { operationId: string }, { id: string; createdAt: string }>(functions, 'createCashTransfer')
+    await createTransfer({ ...draft, operationId: `cash-transfer-${crypto.randomUUID()}` })
   }
 
   async function deleteCashTransferEntry(transferId: string) {
     if (!transferId.trim()) throw new Error('Cash transfer id is required.')
-    await deleteDoc(doc(db, 'cashTransfers', transferId))
+    throw new Error(`Cash movements are preserved for audit. Record a reverse transfer instead of deleting ${transferId}.`)
   }
 
   async function deleteSettingsAuditEntry(entryId: string) {
@@ -534,6 +577,10 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
   async function importLegacyData() {
     const legacyPayload = readLegacyImportPayload()
     if (!legacyPayload) return false
+
+    if (legacyPayload.dailyCashouts.length > 0 || legacyPayload.cashTransfers.length > 0) {
+      throw new Error('Legacy cash history cannot be imported through this screen because it would bypass the new audited cash controls. Contact the owner before clearing or migrating this browser data.')
+    }
 
     setIsBusy(true)
     try {
@@ -560,8 +607,6 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
         })
       })
       legacyPayload.loans.forEach((loan) => batch.set(doc(db, 'loans', loan.id), loan))
-      legacyPayload.dailyCashouts.forEach((entry) => batch.set(doc(db, 'dailyCashouts', entry.id), entry))
-      legacyPayload.cashTransfers.forEach((entry) => batch.set(doc(db, 'cashTransfers', entry.id), entry))
       legacyPayload.settingsAuditLog.forEach((entry) => batch.set(doc(db, 'settingsAudit', entry.id), entry))
       if (legacyPayload.nameDirectory.people.length > 0 || legacyPayload.nameDirectory.vendors.length > 0) {
         batch.set(doc(db, 'appMetadata', 'nameDirectory'), legacyPayload.nameDirectory, { merge: true })
