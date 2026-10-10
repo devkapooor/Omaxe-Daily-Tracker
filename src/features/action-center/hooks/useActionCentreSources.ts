@@ -14,9 +14,9 @@ export function useActionCentreSources(currentUser: AppUser) {
   const [handoverReady, setHandoverReady] = useState(false)
   useEffect(() => {
     if (currentUser.role !== 'owner') return
-    const stopPos = subscribePosApprovals((items) => { setPosRequests(items); setPosReady(true) }, (error) => { setPosError(error.message); setPosReady(true) })
-    const stopHandovers = subscribeReconciliations((items) => { setHandovers(items); setHandoverReady(true) }, (error) => { setHandoverError(error.message); setHandoverReady(true) })
+    const stopPos = subscribePosApprovals((items) => { setPosRequests(items); setPosReady(true); setPosError(null) }, (error) => { setPosError(error.message); setPosReady(true) })
+    const stopHandovers = subscribeReconciliations(setHandovers, (error) => { setHandoverError(error.message); setHandoverReady(true) }, () => setHandoverReady(true))
     return () => { stopPos(); stopHandovers() }
   }, [currentUser.role])
-  return { posRequests, handovers, posError, handoverError, loading: !posReady || !handoverReady }
+  return { posRequests, handovers, posError, handoverError, posLoading: !posReady, handoverLoading: !handoverReady, loading: !posReady || !handoverReady }
 }

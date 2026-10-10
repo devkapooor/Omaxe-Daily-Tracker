@@ -278,44 +278,34 @@ export function AppWorkspace({
             showToast={showToast}
             error={cashoutCorrectionsError}
             isLoading={!cashoutCorrectionsReady}
+            vendorError={vendorLedger.error}
+            vendorLoading={vendorLedger.loading}
             queue={approvalQueue}
             onApprove={async (item) => {
-              try {
-                if (item.kind === 'cashout-correction') {
-                  await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
-                  showToast(`Cashout correction approved: ${item.recordedBy}`)
-                } else if (item.kind === 'vendor-settlement-correction') {
-                  await applySettlementCorrectionV2(item.sourceRequest.id, { id: currentUser.id, name: currentUser.name }, serverNowIso())
-                  showToast(`Vendor payment correction approved: ${item.vendorName}`)
-                }
-              } catch (error) {
-                showToast(error instanceof Error ? error.message : 'Unable to approve this correction.')
+              if (item.kind === 'cashout-correction') {
+                await approveCashoutCorrectionRequest(item.sourceRequest.id, currentUser)
+                showToast(`Cashout correction approved: ${item.recordedBy}`)
+              } else if (item.kind === 'vendor-settlement-correction') {
+                await applySettlementCorrectionV2(item.sourceRequest.id, { id: currentUser.id, name: currentUser.name }, serverNowIso())
+                showToast(`Vendor payment correction approved: ${item.vendorName}`)
               }
             }}
             onReject={async (item, reason) => {
-              try {
-                if (item.kind === 'cashout-correction') {
-                  await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
-                  showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated request closed: ${item.recordedBy}` : `Cashout correction rejected: ${item.recordedBy}`)
-                } else if (item.kind === 'vendor-settlement-correction') {
-                  await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, serverNowIso())
-                  showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
-                }
-              } catch (error) {
-                showToast(error instanceof Error ? error.message : 'Unable to close this correction request.')
+              if (item.kind === 'cashout-correction') {
+                await rejectCashoutCorrectionRequest(item.sourceRequest.id, reason, currentUser)
+                showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated request closed: ${item.recordedBy}` : `Cashout correction rejected: ${item.recordedBy}`)
+              } else if (item.kind === 'vendor-settlement-correction') {
+                await rejectSettlementCorrectionRequestV2(item.sourceRequest.id, reason, { id: currentUser.id, name: currentUser.name }, serverNowIso())
+                showToast(reason === OUTDATED_CORRECTION_REASON ? `Outdated vendor correction closed: ${item.vendorName}` : `Vendor correction rejected: ${item.vendorName}`)
               }
             }}
             onResolveReturn={async (item, decision) => {
-              try {
-                await resolveVendorReturnV2(item.sourceReturn.id, {
-                  ...decision,
-                  actor: { id: currentUser.id, name: currentUser.name },
-                  timestamp: serverNowIso(),
-                })
-                showToast(`Vendor return marked ${decision.outcome}: ${item.vendorName}`)
-              } catch (error) {
-                showToast(error instanceof Error ? error.message : 'Unable to resolve this vendor return.')
-              }
+              await resolveVendorReturnV2(item.sourceReturn.id, {
+                ...decision,
+                actor: { id: currentUser.id, name: currentUser.name },
+                timestamp: serverNowIso(),
+              })
+              showToast(`Vendor return marked ${decision.outcome}: ${item.vendorName}`)
             }}
           />
         ) : null}

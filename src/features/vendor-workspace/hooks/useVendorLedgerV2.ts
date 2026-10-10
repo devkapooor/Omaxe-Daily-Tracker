@@ -53,12 +53,14 @@ export function useVendorLedgerV2(currentUser: AppUser): VendorLedgerV2Data {
       }
 
       setState((current) => ({ ...current, config, loading: true, error: null }))
+      const ready = new Set<keyof VendorLedgerV2Data>()
       const subscribe = <T,>(name: keyof typeof vendorLedgerV2Collections, key: keyof VendorLedgerV2Data) => {
         dataUnsubscribers.push(onSnapshot(collection(db, vendorLedgerV2Collections[name]), (result) => {
+          ready.add(key)
           setState((current) => ({
             ...current,
             [key]: result.docs.map((entry) => entry.data() as T),
-            loading: false,
+            loading: !current.error && ready.size < 9,
           }))
         }, fail))
       }
@@ -77,10 +79,11 @@ export function useVendorLedgerV2(currentUser: AppUser): VendorLedgerV2Data {
             where('requestedByUserId', '==', currentUser.id),
           )
       dataUnsubscribers.push(onSnapshot(correctionSource, (result) => {
+        ready.add('correctionRequests')
         setState((current) => ({
           ...current,
           correctionRequests: result.docs.map((entry) => entry.data() as VendorLedgerCorrectionRequestV2),
-          loading: false,
+          loading: !current.error && ready.size < 9,
         }))
       }, fail))
     }, fail)

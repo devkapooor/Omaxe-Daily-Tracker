@@ -89,12 +89,15 @@ export async function submitHandover(actor: AppUser, kind: 'login' | 'logout', c
   })
 }
 
-export function subscribeReconciliations(callback: (records: CashierReconciliation[]) => void, error: (error: Error) => void) {
+export function subscribeReconciliations(callback: (records: CashierReconciliation[]) => void, error: (error: Error) => void, onReady?: () => void) {
   let recent: CashierReconciliation[] = []
   let pending: CashierReconciliation[] = []
+  let recentReady = false
+  let pendingReady = false
   const publish = () => callback([...new Map([...recent, ...pending].map((item) => [item.id, item])).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
-  const stopRecent = onSnapshot(query(records(), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => { recent = snapshot.docs.map((item) => item.data() as CashierReconciliation); publish() }, error)
-  const stopPending = onSnapshot(query(records(), where('reviewStatus', '==', 'pending')), (snapshot) => { pending = snapshot.docs.map((item) => item.data() as CashierReconciliation); publish() }, error)
+  const ready = () => { if (recentReady && pendingReady) onReady?.() }
+  const stopRecent = onSnapshot(query(records(), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => { recent = snapshot.docs.map((item) => item.data() as CashierReconciliation); recentReady = true; publish(); ready() }, error)
+  const stopPending = onSnapshot(query(records(), where('reviewStatus', '==', 'pending')), (snapshot) => { pending = snapshot.docs.map((item) => item.data() as CashierReconciliation); pendingReady = true; publish(); ready() }, error)
   return () => { stopRecent(); stopPending() }
 }
 export async function acknowledgeReconciliation(id: string, uid: string) {

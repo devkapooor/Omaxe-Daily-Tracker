@@ -15,6 +15,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
+- [ ] Complete the Action Centre upgrade batch: [Phase 1](./ACTION_CENTRE_PHASE_1_2026-10-11.md) and [Phase 2](./ACTION_CENTRE_PHASE_2_2026-10-11.md) are implemented locally, with visual review and deployment pending. Phase 3 covers older pending requests, complete counts, history pagination and subscription/read optimization; it requires separate approval.
+
 - [x] Prepare the approved v1.1.0 release: Current Stock, compact cart rows, today's POS sales card, GRN price and correction improvements, owner-only Loans consolidation, Payroll UI retirement, login error handling and register/party cleanup. See [release scope and validation](./VERSION_LOG.md) and [group refresh instructions](./UPGRADE_MESSAGE_2026-10-11.md).
 
 - [x] Implement, validate, and deploy [mandatory cashier handover/reconciliation](./CASHIER_HANDOVER_PLAN_2026-10-04.md): shared drawer/terminal, login/logout counts, carried physical balances, Action Centre discrepancies and protected POS accounting. Hosting, Firestore rules, and indexes were deployed and verified on 2026-10-04. Drawer initialization was a prerequisite at the initial rollout; this historical note does not assert the current production drawer state.

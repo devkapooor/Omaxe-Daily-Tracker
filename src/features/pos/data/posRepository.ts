@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -1089,6 +1090,16 @@ export async function requestBillAction(input: Omit<PosApprovalRequest, 'id' | '
     requestedByName: actor.name,
   })
   return requestId
+}
+
+/** On-demand Action Centre preview; no listener or write. Bills are immutable. */
+export async function loadPosApprovalSource(billId: string): Promise<{ bill: PosBill; state: PosBillState; loadedAt: string }> {
+  const [bill, state] = await Promise.all([
+    getDocFromServer(posDoc('bills', billId)),
+    getDocFromServer(posDoc('billStates', billId)),
+  ])
+  if (!bill.exists() || !state.exists()) throw new Error('The source bill or its state no longer exists.')
+  return { bill: { ...bill.data(), id: bill.id } as PosBill, state: state.data() as PosBillState, loadedAt: new Date().toISOString() }
 }
 
 export async function rejectPosApproval(requestId: string, reviewReason: string, actor: AppUser) {
