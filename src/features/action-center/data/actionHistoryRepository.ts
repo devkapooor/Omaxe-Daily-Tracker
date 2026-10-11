@@ -3,6 +3,7 @@ import type { CashoutCorrectionRequest } from '@/domain/appTypes'
 import type { VendorLedgerCorrectionRequestV2, VendorReturnV2 } from '@/domain/vendorLedgerV2'
 import type { CashierReconciliation } from '@/features/pos/domain/cashierHandover'
 import type { PosApprovalRequest } from '@/features/pos/domain/types'
+import type { StockPriceChange } from '@/features/stock/domain/stockPriceChange'
 import { db } from '@/shared/lib/firebase'
 import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
 
@@ -12,6 +13,7 @@ export type HistoryRecord =
   | { kind: 'vendor-return'; value: VendorReturnV2 }
   | { kind: 'pos'; value: PosApprovalRequest }
   | { kind: 'handover'; value: CashierReconciliation }
+  | { kind: 'stock-price'; value: StockPriceChange }
 
 type Source = { id: string; name: string; path: string[]; field: 'reviewedAt' | 'createdAt'; kind: HistoryRecord['kind']; matchedOnly?: boolean }
 type Cursor = QueryDocumentSnapshot<DocumentData> | null
@@ -29,6 +31,7 @@ function sources(vendorEnabled: boolean): Source[] {
       { id: 'vendor-return', name: 'Vendor Returns', path: [vendorLedgerV2Collections.returns], field: 'reviewedAt', kind: 'vendor-return' } as Source,
     ] : []),
     { id: 'pos', name: 'POS Requests', path: ['posSandboxes', 'test', 'approvals'], field: 'reviewedAt', kind: 'pos' },
+    { id: 'stock-price', name: 'Stock Price Changes', path: ['posSandboxes', 'test', 'stockPriceChanges'], field: 'reviewedAt', kind: 'stock-price' },
     { id: 'handover-reviewed', name: 'Reviewed Handovers', path: ['posSandboxes', 'test', 'reconciliations'], field: 'reviewedAt', kind: 'handover' },
     { id: 'handover-matched', name: 'Matched Handovers', path: ['posSandboxes', 'test', 'reconciliations'], field: 'createdAt', kind: 'handover', matchedOnly: true },
   ]
@@ -46,7 +49,7 @@ async function fill(stream: Stream) {
   const snapshot = await getDocsFromServer(query(ref, orderBy(source.field, 'desc'), ...(stream.cursor ? [startAfter(stream.cursor)] : []), limit(batchSize)))
   const records = snapshot.docs.flatMap((item): HistoryRecord[] => {
     const value: DocumentData = { ...item.data(), id: item.id }
-    if (source.matchedOnly ? value.reviewStatus !== 'matched' : source.kind === 'handover' ? value.reviewStatus !== 'reviewed' : source.kind === 'vendor-return' ? value.outcome === 'pending' : value.status === 'pending') return []
+    if (source.matchedOnly ? value.reviewStatus !== 'matched' : source.kind === 'handover' || source.kind === 'stock-price' ? value.reviewStatus !== 'reviewed' : source.kind === 'vendor-return' ? value.outcome === 'pending' : value.status === 'pending') return []
     return [{ kind: source.kind, value } as HistoryRecord]
   })
   // Update only after a successful read; failed streams keep their cursor for Retry.

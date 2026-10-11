@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { subscribeStockMovements, type StockMovement } from '../data/stockRepository'
 import { NOT_RECORDED, stockDate, stockQuantity, stockTitleCase, type StockRow } from '../domain/currentStock'
 import { stockColumns } from './stockColumns'
+import { StockPriceEditor } from './StockPriceEditor'
 
 function MovementHistory({ productId }: { productId: string }) {
   const [movements, setMovements] = useState<StockMovement[]>([])
@@ -46,8 +47,12 @@ function MovementHistory({ productId }: { productId: string }) {
   </div>
 }
 
-export function StockProductDetails({ product, onClose }: { product: StockRow; onClose: () => void }) {
+export function StockProductDetails({ product, onClose, initialEdit = false }: { product: StockRow; onClose: () => void; initialEdit?: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const [editing, setEditing] = useState(initialEdit)
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   useEffect(() => {
     const dialog = dialogRef.current
     dialog?.showModal()
@@ -55,15 +60,20 @@ export function StockProductDetails({ product, onClose }: { product: StockRow; o
   }, [])
   // React's development effect cleanup also closes the native dialog. Only user
   // cancellation should clear the selected product, not that cleanup close event.
-  return <dialog ref={dialogRef} aria-labelledby="stock-product-title" onCancel={(event) => { event.preventDefault(); onClose() }} className="m-auto max-h-[88dvh] w-[calc(100%_-_2rem)] max-w-6xl overflow-y-auto rounded-lg border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50">
+  return <dialog ref={dialogRef} aria-labelledby="stock-product-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose() }} className="m-auto max-h-[88dvh] w-[calc(100%_-_2rem)] max-w-6xl overflow-y-auto rounded-lg border border-border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/50">
     <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card p-4">
       <h2 id="stock-product-title" className="text-lg font-semibold">{stockTitleCase(product.name)}</h2>
-      <Button variant="ghost" size="icon" aria-label="Close Product Details" onClick={onClose}><X className="size-5" /></Button>
+      <div className="flex shrink-0 gap-2"><Button variant="outline" disabled={editing || busy} onClick={() => { setSaved(false); setEditing(true) }}>Edit Stock</Button><Button variant="ghost" size="icon" disabled={busy} aria-label="Close Product Details" onClick={onClose}><X className="size-5" /></Button></div>
     </div>
     <div className="space-y-5 p-4">
+      {editing ? <StockPriceEditor product={product} onBusy={setBusy} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); setSaved(true) }} /> : null}
+      {saved ? <p role="status" className="text-sm text-success">Prices Updated. The Owner Can Review This Change In Action Centre.</p> : null}
       <dl className="grid grid-cols-2 gap-x-5 gap-y-4 md:grid-cols-3 lg:grid-cols-4">{stockColumns.map((column) => <div key={column.key} className="min-w-0"><dt className="text-xs text-muted-foreground">{column.label}</dt><dd className={`mt-1 break-words text-sm font-medium ${column.key === 'currentQuantity' && product.currentQuantity < 0 ? 'text-destructive' : ''} ${column.key === 'id' || column.key === 'barcode' ? 'font-mono' : ''}`}>{column.value(product)}</dd></div>)}</dl>
       <p className="text-xs text-muted-foreground">Cost Price Is The Latest Recorded Unit Cost. Margin (%) Uses Selling Price And This Cost, Before Discounts And Expenses. Opening Quantity Is The Original Imported Quantity.</p>
-      <div className="space-y-3"><h3 className="text-base font-semibold">Recorded Movement History</h3><MovementHistory productId={product.id} /></div>
+      <details className="rounded-md border border-border p-3" onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer text-base font-semibold">Recorded Movement History</summary>
+        {historyOpen ? <div className="mt-3"><MovementHistory productId={product.id} /></div> : null}
+      </details>
     </div>
   </dialog>
 }

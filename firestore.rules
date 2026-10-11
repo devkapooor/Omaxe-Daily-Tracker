@@ -1497,7 +1497,7 @@ service cloud.firestore {
             request.resource.data.createdByUid == resource.data.createdByUid &&
             (
               request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'barcode', 'name', 'searchName', 'searchTokens', 'category', 'brand', 'vendor', 'sellingPricePaise',
+                'barcode', 'name', 'searchName', 'searchTokens', 'category', 'brand', 'vendor',
                 'active', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'
               ]) ||
               (
@@ -1511,6 +1511,12 @@ service cloud.firestore {
               )
             )));
         allow delete: if sandboxId == 'test' && isOwner();
+      }
+
+      // Authenticated server functions apply prices and record immutable evidence.
+      match /stockPriceChanges/{changeId} {
+        allow read: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
 
       match /productCosts/{productId} {

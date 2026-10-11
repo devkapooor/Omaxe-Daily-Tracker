@@ -27,6 +27,9 @@ import { usePosReviewSource } from '../hooks/usePosReviewSource'
 import { actionCentreEntries, actionStatusLabel, actionTypes, filterActionCentreEntries, type ActionCentreEntry } from '../domain/actionCentreEntries'
 import { entryReference, entryStatus, paymentLabel, posSourceProblem, type PosReviewSource, type ReviewDecision } from '../domain/actionCentreReview'
 import { ActionCentreDetailsPanel } from './ActionCentreDetailsPanel'
+import { StockPriceReviewDetails } from './StockPriceReviewDetails'
+import { reviewStockPriceChange } from '@/features/stock/data/stockPriceRepository'
+import { stockMoney } from '@/features/stock/domain/currentStock'
 
 type ActionCenterPageProps = {
   currentUser: AppUser
@@ -48,6 +51,7 @@ type ActionCenterPageProps = {
 }
 
 function requestSummary(entry: ActionCentreEntry) {
+  if (entry.source === 'stock-price') return `Applied: MRP ${stockMoney(entry.item.before.mrpPaise)} → ${stockMoney(entry.item.after.mrpPaise)} · Selling Price ${stockMoney(entry.item.before.sellingPricePaise)} → ${stockMoney(entry.item.after.sellingPricePaise)}`
   if (entry.source === 'handover') return `Difference: Cash ${money(entry.item.delta.cash / 100)} · UPI ${money(entry.item.delta.upi / 100)} · Card ${money(entry.item.delta.card / 100)}`
   if (entry.source === 'pos') return entry.item.type === 'return' ? `Requested Refund: ${entry.item.refundAmountPaise === undefined ? 'Not Recorded' : money(entry.item.refundAmountPaise / 100)} · ${paymentLabel(entry.item.refundMethod)}` : 'Bill Cancellation · Review Payments And Stock Effect'
   const item = entry.item
@@ -66,14 +70,15 @@ export function ActionCenterPage({ error, isLoading, vendorError, vendorLoading,
   const loadPosSource = usePosReviewSource()
   const loadVendorSource = useVendorReviewSource()
   const history = useActionCentreHistory(tab === 'history', !vendorLoading && !vendorError, vendorEnabled)
-  const entries = useMemo(() => [...actionCentreEntries({ ...queue, recent: [] }, sources.posRequests, sources.handovers, users), ...actionHistoryEntries(history.records, dailyCashouts, vendorNames, users)], [queue, sources.posRequests, sources.handovers, users, history.records, dailyCashouts, vendorNames])
+  const entries = useMemo(() => [...actionCentreEntries({ ...queue, recent: [] }, sources.posRequests, sources.handovers, users, sources.stockChanges), ...actionHistoryEntries(history.records, dailyCashouts, vendorNames, users)], [queue, sources.posRequests, sources.handovers, sources.stockChanges, users, history.records, dailyCashouts, vendorNames])
   const visible = useMemo(() => filterActionCentreEntries(entries, tab, type, requester, search), [entries, tab, type, requester, search])
   const requesterOptions = useMemo(() => [{ value: '', label: 'All' }, ...[...new Set(entries.map((entry) => entry.requester))].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }))], [entries])
   const selectedLive = selected ? entries.find((entry) => entry.key === selected.key) : undefined
-  const selectedRequestLoading = selected?.source === 'approval' ? selected.item.kind === 'cashout-correction' ? isLoading && !error : vendorLoading : selected?.source === 'pos' ? sources.posLoading : sources.handoverLoading
-  const selectedRequestError = selected?.source === 'approval' ? selected.item.kind === 'cashout-correction' ? error : vendorError : selected?.source === 'pos' ? sources.posError : sources.handoverError
+  const selectedRecord = selectedLive ?? selected
+  const selectedRequestLoading = selected?.source === 'stock-price' ? sources.stockLoading : selected?.source === 'approval' ? selected.item.kind === 'cashout-correction' ? isLoading && !error : vendorLoading : selected?.source === 'pos' ? sources.posLoading : sources.handoverLoading
+  const selectedRequestError = selected?.source === 'stock-price' ? sources.stockError : selected?.source === 'approval' ? selected.item.kind === 'cashout-correction' ? error : vendorError : selected?.source === 'pos' ? sources.posError : sources.handoverError
   const loading = (isLoading && !error) || vendorLoading || sources.loading
-  const errors = [error ? 'Cashout Corrections: ' + error : null, vendorError ? 'Vendor Requests: ' + vendorError : null, sources.posError ? 'POS Requests: ' + sources.posError : null, sources.handoverError ? 'Handover Reviews: ' + sources.handoverError : null].filter(Boolean)
+  const errors = [error ? 'Cashout Corrections: ' + error : null, vendorError ? 'Vendor Requests: ' + vendorError : null, sources.posError ? 'POS Requests: ' + sources.posError : null, sources.handoverError ? 'Handover Reviews: ' + sources.handoverError : null, sources.stockError ? 'Stock Changes: ' + sources.stockError : null].filter(Boolean)
 
   async function decide(snapshot: ActionCentreEntry, decision: ReviewDecision, source: PosReviewSource | null): Promise<boolean> {
     if (processing.current) return false
@@ -82,7 +87,7 @@ export function ActionCenterPage({ error, isLoading, vendorError, vendorLoading,
     const fail = (message: string) => { setDecisionError(message); return false }
     if (!latest?.pending) return fail('This request is no longer pending. Review its latest history entry.')
     if (JSON.stringify(latest.item) !== JSON.stringify(snapshot.item)) return fail('This request or its source changed while you were reviewing it. Review the updated details and confirm again.')
-    const sourceLoading = latest.source === 'approval' ? latest.item.kind === 'cashout-correction' ? isLoading || Boolean(error) : vendorLoading || Boolean(vendorError) : latest.source === 'pos' ? Boolean(sources.posError) : Boolean(sources.handoverError)
+    const sourceLoading = latest.source === 'approval' ? latest.item.kind === 'cashout-correction' ? isLoading || Boolean(error) : vendorLoading || Boolean(vendorError) : latest.source === 'pos' ? Boolean(sources.posError) : latest.source === 'stock-price' ? Boolean(sources.stockError) : Boolean(sources.handoverError)
     if (sourceLoading) return fail('The required request data is still loading or unavailable. Wait for it to load before deciding.')
     if (decision.action === 'approve') {
       if (latest.source === 'approval' && latest.item.isStale) return fail(latest.item.staleReason ?? 'This request is outdated.')
@@ -108,7 +113,8 @@ export function ActionCenterPage({ error, isLoading, vendorError, vendorLoading,
           showToast(`Request approved: ${latest.item.receiptNumber}`)
         } else if (decision.action === 'reject' && decision.reason) { await rejectPosApproval(latest.item.id, decision.reason, currentUser); showToast(`Request rejected: ${latest.item.receiptNumber}`) }
         else throw new Error('This decision is not available for this POS request.')
-      } else if (decision.action === 'mark-reviewed') { await acknowledgeReconciliation(latest.item.id, currentUser.id); showToast('Handover marked reviewed. No balances changed.') }
+      } else if (latest.source === 'stock-price' && decision.action === 'mark-reviewed') { await reviewStockPriceChange(latest.item.id); showToast('Stock price change marked reviewed.') }
+      else if (latest.source === 'handover' && decision.action === 'mark-reviewed') { await acknowledgeReconciliation(latest.item.id, currentUser.id); showToast('Handover marked reviewed. No balances changed.') }
       else throw new Error('Handovers can only be marked reviewed.')
       history.refresh()
       setSelected(null)
@@ -130,10 +136,10 @@ export function ActionCenterPage({ error, isLoading, vendorError, vendorLoading,
         {errors.map((message) => <StatusPanel key={message} variant="destructive" role="alert">{message}</StatusPanel>)}
         <p className="text-xs text-muted-foreground">{tab === 'pending' ? 'Oldest First · Open Details To Review And Decide' : 'Newest Decisions First · Filters Apply To Loaded History'}</p>
         {!(tab === 'pending' ? loading : history.loading || !history.started) && !visible.length ? <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Inbox className="size-4" />{errors.length ? 'Some Requests Could Not Be Loaded.' : type || requester || search.trim() ? 'No Requests Match These Filters.' : tab === 'pending' ? 'No Requests Are Waiting.' : history.hasMore ? 'No Matching History Loaded Yet. Load More To Continue.' : 'No History To Show.'}</Card> : null}
-        {visible.map((entry) => { const status = entryStatus(entry); return <article key={entry.key} className="space-y-2 rounded-md border border-border bg-card p-3"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{actionTypes.find((option) => option.value === entry.type)?.label}</Badge><strong className="min-w-0 break-words text-sm">{entry.source === 'approval' && entry.item.kind === 'cashout-correction' ? formatDisplayDate(entry.item.cashoutDate) : entryReference(entry)}</strong><Badge variant={status === 'pending' ? 'warning' : status === 'rejected' ? 'destructive' : status === 'approved' || status === 'reviewed' || status === 'matched' ? 'success' : 'secondary'}>{actionStatusLabel(status)}</Badge>{entry.source === 'approval' && entry.item.isStale ? <Badge variant="destructive">Outdated</Badge> : null}</div><p className="text-xs text-muted-foreground">Requested By {entry.requester} · {formatDisplayDateTime(entry.pending ? entry.submittedAt : entry.historyAt)}</p><p className="text-sm">{requestSummary(entry)}</p><div className="flex flex-wrap items-end justify-between gap-2"><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">{entry.source === 'handover' ? entry.item.note : !entry.pending && entry.item.reviewReason ? entry.item.reviewReason : entry.item.reason}</p><Button size="sm" variant="outline" disabled={busy} onClick={() => { setDecisionError(null); setSelected(entry) }}>View Details</Button></div></article> })}
+        {visible.map((entry) => { const status = entryStatus(entry); return <article key={entry.key} className="space-y-2 rounded-md border border-border bg-card p-3"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{actionTypes.find((option) => option.value === entry.type)?.label}</Badge><strong className="min-w-0 break-words text-sm">{entry.source === 'approval' && entry.item.kind === 'cashout-correction' ? formatDisplayDate(entry.item.cashoutDate) : entryReference(entry)}</strong><Badge variant={status === 'pending' ? 'warning' : status === 'rejected' ? 'destructive' : status === 'approved' || status === 'reviewed' || status === 'matched' ? 'success' : 'secondary'}>{entry.source === 'stock-price' && entry.pending ? 'Applied · Awaiting Review' : actionStatusLabel(status)}</Badge>{entry.source === 'approval' && entry.item.isStale ? <Badge variant="destructive">Outdated</Badge> : null}</div><p className="text-xs text-muted-foreground">{entry.source === 'stock-price' ? 'Changed By' : 'Requested By'} {entry.requester} · {formatDisplayDateTime(entry.pending ? entry.submittedAt : entry.historyAt)}</p><p className="text-sm">{requestSummary(entry)}</p><div className="flex flex-wrap items-end justify-between gap-2"><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">{entry.source === 'handover' ? entry.item.note : !entry.pending && entry.item.reviewReason ? entry.item.reviewReason : entry.item.reason}</p><Button size="sm" variant="outline" disabled={busy} onClick={() => { setDecisionError(null); setSelected(entry) }}>View Details</Button></div></article> })}
         {tab === 'history' ? <div className="flex justify-center p-3">{history.loading ? <p role="status" className="text-sm text-muted-foreground">Loading History...</p> : history.hasMore || history.error ? <Button variant="outline" onClick={() => void history.loadMore()}>{history.error ? 'Retry History' : 'Load More History'}</Button> : <p className="text-xs text-muted-foreground">All History Loaded</p>}</div> : null}
       </TabsContent>
-      {selected ? <ActionCentreDetailsPanel key={selected.key} entry={selectedLive ?? selected} users={users} busy={busy} unavailable={!selectedLive} decisionError={decisionError} requestLoading={selectedRequestLoading} requestError={selectedRequestError} loadPosSource={loadPosSource} loadVendorSource={loadVendorSource} onClose={() => { if (!processing.current) setSelected(null) }} onDecide={decide} /> : null}
+      {selectedRecord ? selectedRecord.source === 'stock-price' ? <StockPriceReviewDetails key={selectedRecord.key} entry={selectedRecord} busy={busy} unavailable={!selectedLive || selectedRequestLoading} error={decisionError ?? selectedRequestError} onClose={() => { if (!processing.current) setSelected(null) }} onReview={() => decide(selectedRecord, { action: 'mark-reviewed' }, null)} /> : <ActionCentreDetailsPanel key={selectedRecord.key} entry={selectedRecord} users={users} busy={busy} unavailable={!selectedLive} decisionError={decisionError} requestLoading={selectedRequestLoading} requestError={selectedRequestError} loadPosSource={loadPosSource} loadVendorSource={loadVendorSource} onClose={() => { if (!processing.current) setSelected(null) }} onDecide={decide} /> : null}
     </PageLayout>
   </Tabs>
 }

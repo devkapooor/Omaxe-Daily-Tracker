@@ -23,6 +23,7 @@ export function CurrentStockPage() {
   const [descending, setDescending] = useState(false)
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editSelected, setEditSelected] = useState(false)
   const vendorOptions = useMemo(() => stockFacetOptions(rows, 'vendor'), [rows])
   const matching = useMemo(() => filterStockRows(rows, filters, 'barcode'), [rows, filters])
   const sorted = useMemo(() => sortStockRows(matching, sort, descending), [matching, sort, descending])
@@ -30,6 +31,7 @@ export function CurrentStockPage() {
   const currentPage = Math.min(page, pages - 1)
   const visible = sorted.slice(currentPage * 50, (currentPage + 1) * 50)
   const selected = rows.find((row) => row.id === selectedId)
+  function openProduct(id: string, edit = false) { setEditSelected(edit); setSelectedId(id) }
   function updateFilter(key: 'search' | 'stockStatus' | 'vendor', value: string) { setFilters((previous) => ({ ...previous, [key]: value })); setPage(0) }
   function changeSort(value: StockSort) { setSort(value); setDescending(sort === value ? !descending : false); setPage(0) }
 
@@ -51,13 +53,13 @@ export function CurrentStockPage() {
                 <button type="button" className={`inline-flex items-center gap-1 py-2 ${column.numeric ? 'justify-end' : 'text-left'}`} onClick={() => changeSort(column.sort!)} aria-label={`Sort By ${column.label}`}>
                   {column.label}{column.sort === sort ? descending ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" /> : <ArrowUpDown className="size-3 text-muted-foreground" />}
                 </button>
-              </TableHead>)}</TableRow></TableHeader>
-              <TableBody>{visible.map((row) => <TableRow key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>{stockTableColumns.map((column) => <TableCell key={column.key} className={`${column.key === 'name' ? 'min-w-56' : ''} ${column.numeric ? 'text-right tabular-nums' : ''} ${(column.key === 'currentQuantity' && row.currentQuantity < 0) || (column.key === 'marginPercent' && row.marginPercent !== null && row.marginPercent < 0) ? 'font-semibold text-destructive' : ''} ${column.key === 'barcode' ? 'font-mono text-xs' : ''}`}>{column.key === 'name' ? <button type="button" className="max-w-80 whitespace-normal text-left font-medium text-primary underline-offset-4 hover:underline" onClick={() => setSelectedId(row.id)}>{column.value(row)}</button> : column.value(row)}</TableCell>)}</TableRow>)}</TableBody>
+              </TableHead>)}<TableHead className="sticky right-0 z-20 bg-muted normal-case tracking-normal">Actions</TableHead></TableRow></TableHeader>
+              <TableBody>{visible.map((row) => <TableRow key={row.id} className="cursor-pointer" onClick={() => openProduct(row.id)}>{stockTableColumns.map((column) => <TableCell key={column.key} className={`${column.key === 'name' ? 'min-w-56' : ''} ${column.numeric ? 'text-right tabular-nums' : ''} ${(column.key === 'currentQuantity' && row.currentQuantity < 0) || (column.key === 'marginPercent' && row.marginPercent !== null && row.marginPercent < 0) ? 'font-semibold text-destructive' : ''} ${column.key === 'barcode' ? 'font-mono text-xs' : ''}`}>{column.key === 'name' ? <button type="button" className="max-w-80 whitespace-normal text-left font-medium text-primary underline-offset-4 hover:underline" onClick={() => openProduct(row.id)}>{column.value(row)}</button> : column.value(row)}</TableCell>)}<TableCell className="sticky right-0 bg-card"><Button size="sm" variant="outline" aria-label={`Edit Stock Prices For ${row.name}`} onClick={(event) => { event.stopPropagation(); openProduct(row.id, true) }}>Edit</Button></TableCell></TableRow>)}</TableBody>
             </Table></div>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-label="Stock Pagination">
               <span aria-live="polite">Page {currentPage + 1} Of {pages}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={currentPage === pages - 1} onClick={() => setPage(currentPage + 1)}>Next</Button></div>
             </div>
           </>}
-    {selected ? <StockProductDetails key={selected.id} product={selected} onClose={() => setSelectedId(null)} /> : null}
+    {selected ? <StockProductDetails key={selected.id} product={selected} initialEdit={editSelected} onClose={() => setSelectedId(null)} /> : null}
   </PageLayout>
 }

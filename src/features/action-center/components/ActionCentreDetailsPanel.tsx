@@ -15,7 +15,7 @@ import { actionStatusLabel, actionTypes, type ActionCentreEntry } from '../domai
 import { entryReference, entryStatus, paymentLabel, posSourceProblem, type PosReviewSource, type ReviewDecision } from '../domain/actionCentreReview'
 
 type Props = {
-  entry: ActionCentreEntry
+  entry: Exclude<ActionCentreEntry, { source: 'stock-price' }>
   users: UserAccount[]
   busy: boolean
   unavailable: boolean

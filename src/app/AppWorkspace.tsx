@@ -203,8 +203,8 @@ export function AppWorkspace({
     vendorNames,
     settlementStatesLoaded: activePage === 'vendor-preview',
   })
-  const pendingEntries = useMemo(() => actionCentreEntries(approvalQueue, actionSources.posRequests, actionSources.handovers, users).filter((entry) => entry.pending), [approvalQueue, actionSources.posRequests, actionSources.handovers, users])
-  const pendingCount = !cashoutCorrectionsReady || cashoutCorrectionsError || vendorLedger.pendingLoading || vendorLedger.pendingError || actionSources.loading || actionSources.posError || actionSources.handoverError ? null : pendingEntries.length
+  const pendingEntries = useMemo(() => actionCentreEntries(approvalQueue, actionSources.posRequests, actionSources.handovers, users, actionSources.stockChanges).filter((entry) => entry.pending), [approvalQueue, actionSources.posRequests, actionSources.handovers, actionSources.stockChanges, users])
+  const pendingCount = !cashoutCorrectionsReady || cashoutCorrectionsError || vendorLedger.pendingLoading || vendorLedger.pendingError || actionSources.loading || actionSources.posError || actionSources.handoverError || actionSources.stockError ? null : pendingEntries.length
 
   async function handleDeleteLoan(loan: LoanEntry) {
     if (!await confirmation.confirm({

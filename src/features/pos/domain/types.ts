@@ -32,6 +32,7 @@ export type PosProduct = {
   updatedByUid: string
   updatedByName: string
   lastMovementId?: string
+  lastPriceEdit?: { changeId: string; at: string; byUid: string; byName: string }
 }
 
 export type PosProductCost = {

@@ -24,6 +24,8 @@ export const stockColumns: StockColumn[] = [
   },
   { key: 'active', label: 'Product Status', value: (row) => row.active ? 'Active' : 'Inactive' },
   { key: 'updatedAt', label: 'Last Updated', value: (row) => stockDate(row.updatedAt) },
+  { key: 'lastPriceEditor', label: 'Prices Last Edited By', value: (row) => row.lastPriceEdit?.byName || NOT_RECORDED },
+  { key: 'lastPriceEditAt', label: 'Prices Last Edited At', value: (row) => row.lastPriceEdit ? stockDate(row.lastPriceEdit.at) : NOT_RECORDED },
 ]
 
 export const stockTableColumns = ['barcode', 'name', 'currentQuantity', 'mrpPaise', 'sellingPricePaise', 'costPaise', 'marginPercent']

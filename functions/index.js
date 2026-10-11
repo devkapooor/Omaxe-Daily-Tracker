@@ -5,6 +5,10 @@ const { activeUser, pendingCashForUser } = require('./cashBalance')
 
 if (getApps().length === 0) initializeApp()
 const db = getFirestore()
+const stockPrices = require('./stockPrices').createStockPriceHandlers(db)
+
+exports.changeStockPrices = onCall({ region: 'asia-south1' }, stockPrices.change)
+exports.reviewStockPriceChange = onCall({ region: 'asia-south1' }, stockPrices.review)
 
 exports.getServerTime = onCall({ region: 'asia-south1' }, (request) => {
   if (!request.auth) {

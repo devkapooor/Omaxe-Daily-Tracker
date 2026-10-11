@@ -2,6 +2,7 @@ import type { UserAccount } from '@/domain/appTypes'
 import type { CashierReconciliation } from '@/features/pos/domain/cashierHandover'
 import type { PosApprovalRequest } from '@/features/pos/domain/types'
 import type { ApprovalActionItem, ApprovalQueue } from './approvalItems'
+import type { StockPriceChange } from '@/features/stock/domain/stockPriceChange'
 
 export const actionTypes = [
   { value: 'cashout-correction', label: 'Cashout Correction' },
@@ -10,6 +11,7 @@ export const actionTypes = [
   { value: 'pos-void', label: 'POS Void' },
   { value: 'pos-return', label: 'POS Return' },
   { value: 'handover', label: 'Handover Review' },
+  { value: 'stock-price', label: 'Stock Price Change' },
 ] as const
 
 export type ActionType = typeof actionTypes[number]['value']
@@ -18,6 +20,7 @@ export type ActionCentreEntry = EntrySummary & (
   | { source: 'approval'; item: ApprovalActionItem }
   | { source: 'pos'; item: PosApprovalRequest }
   | { source: 'handover'; item: CashierReconciliation }
+  | { source: 'stock-price'; item: StockPriceChange }
 )
 
 const statusLabels: Record<string, string> = {
@@ -26,7 +29,7 @@ const statusLabels: Record<string, string> = {
 }
 export const actionStatusLabel = (status: string) => statusLabels[status] ?? status
 
-export function actionCentreEntries(queue: ApprovalQueue, pos: PosApprovalRequest[], handovers: CashierReconciliation[], users: UserAccount[]): ActionCentreEntry[] {
+export function actionCentreEntries(queue: ApprovalQueue, pos: PosApprovalRequest[], handovers: CashierReconciliation[], users: UserAccount[], stockChanges: StockPriceChange[] = []): ActionCentreEntry[] {
   const names = new Map(users.map((user) => [user.id, user.name]))
   const name = (value: string) => names.get(value) ?? value
   const approvals: ActionCentreEntry[] = [...queue.pending, ...queue.recent].map((item) => ({
@@ -45,7 +48,12 @@ export function actionCentreEntries(queue: ApprovalQueue, pos: PosApprovalReques
     requester: item.name, submittedAt: item.createdAt, historyAt: item.reviewedAt ?? item.createdAt,
     pending: item.reviewStatus === 'pending', searchText: [item.name, item.date, item.kind, item.note].join(' '),
   }))
-  return [...approvals, ...posEntries, ...handoverEntries]
+  const priceEntries: ActionCentreEntry[] = stockChanges.map((item) => ({
+    key: `stock-price:${item.id}`, type: 'stock-price', source: 'stock-price', item,
+    requester: item.actorName, submittedAt: item.createdAt, historyAt: item.reviewedAt ?? item.createdAt,
+    pending: item.reviewStatus === 'pending', searchText: [item.productName, item.barcode, item.actorName, item.reason].join(' '),
+  }))
+  return [...approvals, ...posEntries, ...handoverEntries, ...priceEntries]
 }
 
 export function filterActionCentreEntries(entries: ActionCentreEntry[], tab: 'pending' | 'history', type: string, requester: string, search: string) {

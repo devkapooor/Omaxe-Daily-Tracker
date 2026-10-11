@@ -12,11 +12,11 @@ export function paymentLabel(method?: string) {
 
 export function entryStatus(entry: ActionCentreEntry) {
   if (entry.source === 'approval' && entry.item.status === 'rejected' && (entry.item.reviewReason === OUTDATED_CORRECTION_REASON || entry.item.reviewReason === OUTDATED_VENDOR_CORRECTION_REASON)) return 'stale'
-  return entry.source === 'handover' ? entry.item.reviewStatus : entry.item.status
+  return entry.source === 'handover' || entry.source === 'stock-price' ? entry.item.reviewStatus : entry.item.status
 }
 
 export function entryReference(entry: ActionCentreEntry) {
-  return entry.source === 'pos' ? entry.item.receiptNumber : entry.source === 'handover' ? `${entry.item.name} · ${entry.item.kind === 'login' ? 'Login' : 'Logout'}` : entry.item.kind === 'cashout-correction' ? entry.item.cashoutDate : entry.item.vendorName
+  return entry.source === 'stock-price' ? `${entry.item.barcode} · ${entry.item.productName}` : entry.source === 'pos' ? entry.item.receiptNumber : entry.source === 'handover' ? `${entry.item.name} · ${entry.item.kind === 'login' ? 'Login' : 'Logout'}` : entry.item.kind === 'cashout-correction' ? entry.item.cashoutDate : entry.item.vendorName
 }
 
 export function posSourceProblem(request: PosApprovalRequest, source: PosReviewSource) {

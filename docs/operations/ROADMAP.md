@@ -15,6 +15,9 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
+- [ ] Release and complete user acceptance of [Current Stock price editing](./STOCK_PRICE_EDITS_2026-10-12.md), implemented and validated locally on 2026-10-12: all staff may edit MRP and selling price from the row Edit button; selling price cannot exceed MRP; server posting records before/after evidence and last editor, with owner Action Centre acknowledgement. Movement history loads only when expanded. Build, focused lint, 32 tests and synthetic desktop/phone UI checks passed. New callable functions, Rules, and Hosting are not deployed.
+- [ ] Implement the proposed filter-first, server-query Current Stock loading separately. The current catalogue and cost listeners still load all stock; collapsing movement history reduces only the history reads.
+
 - [ ] Complete user visual acceptance of the POS scanner-spacing fix, deployed in [v1.3.1](./VERSION_LOG.md) on 2026-10-11. Checkout status no longer stretches into an empty row; desktop/phone CSS previews, focused lint, production build and live asset hashes passed. Installed-app cache repair remains deferred at the user's request.
 
 - [ ] Complete user visual acceptance of [opening balance entry in Add Vendor](./VENDOR_OPENING_BALANCE_2026-10-11.md). Owner-entered amount/date/reason and atomic payable posting were committed and deployed in v1.3.0 on 2026-10-11; 33 domain and 17 vendor-ledger emulator tests, build and focused lint passed. Hosting asset hashes were verified; existing Rules support the workflow.
