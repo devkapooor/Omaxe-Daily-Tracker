@@ -1,6 +1,6 @@
 # Opening balance when adding a vendor
 
-Status: Implemented and verified locally on 2026-10-11. Not included in the deployed v1.2.0 release; Hosting deployment remains pending.
+Status: Implemented and verified as `3466ccd` on 2026-10-11. The user explicitly authorized commit, push and deployment; prepared for the v1.3.0 Hosting release. User visual acceptance remains pending.
 
 ## Behavior
 

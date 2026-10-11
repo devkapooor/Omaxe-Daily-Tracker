@@ -1,5 +1,16 @@
 # Version Log
 
+## v1.3.0 - 2026-10-11
+
+- Tag: `v1.3.0`.
+- Status: release preparation; user explicitly authorized commit, push and deployment on 2026-10-11.
+- Target: Firebase Hosting, `alphahub-f137b`, `https://alphahub-f137b.web.app`.
+- Feature commit: `3466ccd`. Add Vendor now allows owner-entered opening payable, date and audit reason. Vendor, immutable opening evidence and account balance save atomically; retries do not duplicate the opening or reset subsequent payments. Staff and GRN quick-add retain zero openings.
+- Validation from the unchanged feature checkpoint: 33 vendor domain tests and 17 isolated vendor-ledger emulator tests passed, along with focused source/test lint and TypeScript/Vite build. Unrelated suites were not rerun; browser visual acceptance remains pending.
+- Final release build uses empty local login credentials and disables auth bypass/emulators. Public asset hashes are verified after deployment; receipts are retained under ignored `output/release-v1.3.0/`.
+- Existing Rules already authorize this workflow. Rules, indexes and Cloud Functions are unchanged; deployment is Hosting only. No production vendor or financial record is created or changed by release verification.
+- Details: [vendor opening balance checkpoint](./VENDOR_OPENING_BALANCE_2026-10-11.md).
+
 ## v1.2.0 - 2026-10-11
 
 - Tag: `v1.2.0`.
