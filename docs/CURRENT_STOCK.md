@@ -28,4 +28,4 @@ The Current Stock menu is available to owner, manager and billing accounts. All 
 - The page header and second filter bar remain fixed within the app workspace. Only the data area scrolls; desktop table headings stay visible and pagination stays beneath the data area.
 - The table shows Barcode first, followed by Product Name, Current Quantity, MRP, Selling Price, Cost Price and Margin (%). Each column heading controls sorting. Narrow screens scroll horizontally within the table; all recorded fields remain available in details.
 
-This feature is included in the approved v1.1.0 release. See [release scope and validation](operations/VERSION_LOG.md).
+Current Stock was introduced in v1.1.0. The display, filter and margin upgrades described here were committed as `6618e27` and deployed in v1.2.0 on 2026-10-11. See [release scope and validation](operations/VERSION_LOG.md).

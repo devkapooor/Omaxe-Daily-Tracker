@@ -15,9 +15,9 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
-- [ ] Review and release the [shared POS counter and mandatory logout-count upgrade](./POS_SHARED_COUNTER_2026-10-11.md), approved on 2026-10-11. Local implementation includes server-enforced counter joins, counting reservations, logout checkpoints and Cashout closure. Deployment and two-computer runtime acceptance remain pending.
+- [ ] Complete isolated two-computer runtime acceptance for the [shared POS counter and mandatory logout-count upgrade](./POS_SHARED_COUNTER_2026-10-11.md), approved on 2026-10-11. Server-enforced counter joins, counting reservations, logout checkpoints and Cashout closure were committed and deployed in v1.2.0 on 2026-10-11. Build/lint/Rules compilation and live asset checks passed; runtime acceptance remains pending.
 
-- [ ] Review and release the Action Centre upgrade batch: [Phase 1](./ACTION_CENTRE_PHASE_1_2026-10-11.md), [Phase 2](./ACTION_CENTRE_PHASE_2_2026-10-11.md) and [Phase 3](./ACTION_CENTRE_PHASE_3_2026-10-11.md) are implemented locally. Visual review and deployment remain pending. Phase 3 completes pending feeds/counts, adds history pagination and scopes subscriptions/read caching.
+- [ ] Complete visual/runtime acceptance of the Action Centre upgrade batch: [Phase 1](./ACTION_CENTRE_PHASE_1_2026-10-11.md), [Phase 2](./ACTION_CENTRE_PHASE_2_2026-10-11.md) and [Phase 3](./ACTION_CENTRE_PHASE_3_2026-10-11.md) were committed and deployed in v1.2.0 on 2026-10-11. Phase 3 completes pending feeds/counts, adds history pagination and scopes subscriptions/read caching. Visual/runtime acceptance remains pending.
 
 - [x] Prepare the approved v1.1.0 release: Current Stock, compact cart rows, today's POS sales card, GRN price and correction improvements, owner-only Loans consolidation, Payroll UI retirement, login error handling and register/party cleanup. See [release scope and validation](./VERSION_LOG.md) and [group refresh instructions](./UPGRADE_MESSAGE_2026-10-11.md).
 

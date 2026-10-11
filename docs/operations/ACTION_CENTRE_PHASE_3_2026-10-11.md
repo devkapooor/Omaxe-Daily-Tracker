@@ -1,6 +1,6 @@
 # Action Centre Phase 3 — 11 October 2026
 
-Status: Implemented locally; user visual review pending; not deployed.
+Status: Committed as `e225cde`; all three Action Centre phases deployed in v1.2.0 on 2026-10-11 after user authorization. User visual/runtime acceptance remains pending. The sections below retain the original implementation-checkpoint evidence.
 
 ## Scope and protection
 

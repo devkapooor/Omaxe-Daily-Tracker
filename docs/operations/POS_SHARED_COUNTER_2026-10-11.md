@@ -1,6 +1,6 @@
 # Shared POS counter and mandatory logout counts
 
-Status: Release candidate verified with TypeScript/Vite, focused source lint, whitespace checks, credential-safe build inspection and Firebase Rules compilation (`deploy --dry-run`). The user authorized commit and deployment on 2026-10-11 after requesting a change summary. Deployment proceeds as v1.2.0; two-computer runtime acceptance remains pending.
+Status: Committed as `b18fe7c` and deployed in v1.2.0 (`b93a4de`) on 2026-10-11 after user authorization. TypeScript/Vite, focused source lint, whitespace checks, credential-safe build inspection and Firebase Rules compilation (`deploy --dry-run`) passed. Rules released before Hosting; live HTML/JS/CSS hashes matched the release at 17:18 IST. Two-computer runtime acceptance remains pending.
 
 ## Approved operating policy
 
