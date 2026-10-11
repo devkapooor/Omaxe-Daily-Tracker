@@ -35,7 +35,7 @@ function recordedNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export type StockRow = PosProduct & { subcategory: string; openingQuantity: number | null; mrpPaise: number | null; costPaise: number | null }
+export type StockRow = PosProduct & { subcategory: string; openingQuantity: number | null; mrpPaise: number | null; costPaise: number | null; marginPercent: number | null }
 
 export function deriveStockRows(products: PosProduct[], costs: PosProductCost[]): StockRow[] {
   const costMap = new Map(costs.map((cost) => [cost.productId, cost]))
@@ -43,12 +43,17 @@ export function deriveStockRows(products: PosProduct[], costs: PosProductCost[])
     // The original workbook MRP is historical evidence, not a fallback after a correction.
     const mrp = recordedNumber(sourceValue(product, ['Printed MRP']))
     const cost = costMap.get(product.id)
+    const costPaise = cost?.costPaise ?? null
+    const marginPercent = costPaise !== null && Number.isFinite(costPaise) && Number.isFinite(product.sellingPricePaise) && product.sellingPricePaise > 0
+      ? ((product.sellingPricePaise - costPaise) / product.sellingPricePaise) * 100
+      : null
     return {
       ...product,
       subcategory: sourceValue(product, ['Subcategory', 'Source subCategoryOf']),
       openingQuantity: recordedNumber(sourceValue(product, ['Opening Quantity', 'Source quantity'])),
       mrpPaise: mrp === null ? null : Math.round(mrp * 100),
-      costPaise: cost?.costPaise ?? null,
+      costPaise,
+      marginPercent,
       updatedAt: cost?.updatedAt && Date.parse(cost.updatedAt) > Date.parse(product.updatedAt) ? cost.updatedAt : product.updatedAt,
     }
   })
@@ -82,11 +87,11 @@ export function stockFilterError(filters: StockFilters) {
   return null
 }
 
-export function filterStockRows(rows: StockRow[], filters: StockFilters) {
+export function filterStockRows(rows: StockRow[], filters: StockFilters, searchMode: 'text' | 'barcode' = 'text') {
   if (stockFilterError(filters)) return []
   const search = normalizeStockText(filters.search)
   const terms = search.split(' ').filter(Boolean)
-  const exactIdentifiers = search ? new Set(rows.filter((row) => normalizeStockText(row.barcode) === search || normalizeStockText(row.id) === search).map((row) => row.id)) : new Set<string>()
+  const exactIdentifiers = search && searchMode === 'text' ? new Set(rows.filter((row) => normalizeStockText(row.barcode) === search || normalizeStockText(row.id) === search).map((row) => row.id)) : new Set<string>()
   return rows.filter((row) => {
     if (filters.active === 'active' && !row.active) return false
     if (filters.active === 'inactive' && row.active) return false
@@ -99,6 +104,7 @@ export function filterStockRows(rows: StockRow[], filters: StockFilters) {
       if (filters[facet] && facetKey(row[facet]) !== filters[facet]) return false
     }
     if (!search) return true
+    if (searchMode === 'barcode') return row.barcode.trim() === filters.search.trim()
     if (exactIdentifiers.size) return exactIdentifiers.has(row.id)
     // Barcode scans are exact, keeping leading zeros and avoiding partial matches.
     if (/^\d+$/.test(search)) return row.barcode.trim() === filters.search.trim() || row.id === filters.search.trim()
@@ -107,7 +113,7 @@ export function filterStockRows(rows: StockRow[], filters: StockFilters) {
   })
 }
 
-export type StockSort = 'name' | 'currentQuantity' | 'mrpPaise' | 'sellingPricePaise' | 'costPaise'
+export type StockSort = 'name' | 'barcode' | 'currentQuantity' | 'mrpPaise' | 'sellingPricePaise' | 'costPaise' | 'marginPercent'
 export function sortStockRows(rows: StockRow[], sort: StockSort, descending: boolean) {
   return [...rows].sort((a, b) => {
     const left = a[sort], right = b[sort]

@@ -62,7 +62,7 @@ export function StockProductDetails({ product, onClose }: { product: StockRow; o
     </div>
     <div className="space-y-5 p-4">
       <dl className="grid grid-cols-2 gap-x-5 gap-y-4 md:grid-cols-3 lg:grid-cols-4">{stockColumns.map((column) => <div key={column.key} className="min-w-0"><dt className="text-xs text-muted-foreground">{column.label}</dt><dd className={`mt-1 break-words text-sm font-medium ${column.key === 'currentQuantity' && product.currentQuantity < 0 ? 'text-destructive' : ''} ${column.key === 'id' || column.key === 'barcode' ? 'font-mono' : ''}`}>{column.value(product)}</dd></div>)}</dl>
-      <p className="text-xs text-muted-foreground">Cost Price Is The Latest Recorded Unit Cost. Opening Quantity Is The Original Imported Quantity.</p>
+      <p className="text-xs text-muted-foreground">Cost Price Is The Latest Recorded Unit Cost. Margin (%) Uses Selling Price And This Cost, Before Discounts And Expenses. Opening Quantity Is The Original Imported Quantity.</p>
       <div className="space-y-3"><h3 className="text-base font-semibold">Recorded Movement History</h3><MovementHistory productId={product.id} /></div>
     </div>
   </dialog>
