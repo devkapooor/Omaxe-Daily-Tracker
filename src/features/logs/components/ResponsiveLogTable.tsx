@@ -11,6 +11,7 @@ import {
   globalFilteringFeature,
   rowPaginationFeature,
   rowSortingFeature,
+  sortFn_basic,
   tableFeatures,
   useTable,
   type RowData,
@@ -45,6 +46,7 @@ export type LogTableColumn<TData extends RowData> = {
   hideable?: boolean
   sortable?: boolean
   sortDescFirst?: boolean
+  sortFn?: typeof sortFn_basic
 }
 
 type ResponsiveLogTableProps<TData extends RowData> = {
@@ -113,6 +115,7 @@ export function ResponsiveLogTable<TData extends RowData>({
       enableHiding: definition.hideable !== false,
       enableSorting: definition.sortable !== false,
       sortDescFirst: definition.sortDescFirst,
+      sortFn: definition.sortFn ?? 'auto',
     })),
     columnHelper.accessor((entry) => normalizeLogSearchText(searchText(entry)), {
       id: '_search',

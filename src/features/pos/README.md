@@ -19,4 +19,10 @@ The approved source files are:
 
 `products`, `productCosts`, `stockMovements`, `bills`, `billStates`, `heldCarts`, `approvals`, `events`, `sequences`, `configuration`, and `importRuns` are subcollections of `posSandboxes/test`.
 
-Bills, stock movements, and events are append-only. Bill status and returned quantities live in separate revisioned `billStates` documents, so finalized receipt evidence is never edited. Costs are stored separately and are unreadable by billing users. No sandbox-reset operation is available in the POS Admin UI or repository API.
+Bills, stock movements, and events are append-only. Bill status and returned quantities live in separate revisioned `billStates` documents, so finalized receipt evidence is never edited. Costs are stored separately and remain readable by active staff under the existing Stock permissions. No sandbox-reset operation is available in the POS Admin UI or repository API.
+
+## Stock workspace (local implementation, deployment pending)
+
+POS now contains Billing, Dashboard and Bills. Receive Stock and Stock Audit reuse the existing workflows in the separate four-tab Stock workspace. Collection paths and existing financial posting algorithms remain unchanged. Checkout-only listeners stop outside Billing; dashboard bills/refunds use complete date ranges through bounded realtime pages, and state queries use only selected bill IDs. The active billing draft survives navigation to Stock in memory and is discarded on logout/user change.
+
+See [Stock workspace checkpoint](../../../docs/operations/STOCK_WORKSPACE_2026-10-12.md) for query limits, index requirements, historical-field limitations and remaining server-authority gaps.

@@ -1,13 +1,17 @@
 import { useState, type ComponentType } from 'react'
 import { AlertTriangle, Banknote, Boxes, CreditCard, IndianRupee, PackageX, QrCode, ReceiptText, ShoppingBasket } from 'lucide-react'
 import { today } from '@/app/uiHelpers'
-import type { PosPaymentMethod, PosProduct } from '../domain/types'
+import type { PosPaymentMethod } from '../domain/types'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/ui/tabs'
 import { calculatePosDashboard } from '../domain/posDashboard'
 import { usePosDashboard } from '../hooks/usePosDashboard'
+import { loadStockAttention } from '../data/posDashboardRepository'
+import { useServerPage } from '@/features/stock/hooks/useServerPage'
+import { Button } from '@/shared/ui/button'
+import { stockDate } from '@/features/stock/domain/currentStock'
 
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -34,11 +38,13 @@ function dayRange(offset: DayOffset) {
   }
 }
 
-export function PosDashboard({ products }: { products: PosProduct[] }) {
+export function PosDashboard() {
   const [dayOffset, setDayOffset] = useState<DayOffset>(0)
   const range = dayRange(dayOffset)
   const data = usePosDashboard(range.from, range.to)
-  const metrics = calculatePosDashboard(data.bills, data.states, data.refunds, range.from, range.to, products)
+  const attention = useServerPage('stock-attention', () => loadStockAttention())
+  const stock = attention.items[0]
+  const metrics = calculatePosDashboard(data.bills, data.states, data.refunds, range.from, range.to)
   const cards = [
     { label: 'Net Sales', value: money(metrics.netPaise), note: `${money(metrics.salesPaise)} before refunds`, icon: IndianRupee },
     { label: 'Bills', value: String(metrics.billCount), note: `${metrics.splitBillCount} split payments`, icon: ReceiptText },
@@ -60,7 +66,7 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
       </CardContent>
     </Card>
 
-    {data.error ? <StatusPanel variant="destructive">{data.error}</StatusPanel> : data.loading ? <StatusPanel>Loading POS activity…</StatusPanel> : <>
+    {data.error ? <StatusPanel variant="destructive">{data.error}<Button size="sm" variant="outline" onClick={data.retry}>Retry</Button></StatusPanel> : data.loading ? <StatusPanel>Loading POS activity…</StatusPanel> : <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon
@@ -118,13 +124,18 @@ export function PosDashboard({ products }: { products: PosProduct[] }) {
         <Card>
           <CardHeader className="pb-2"><SectionHeading eyebrow="Inventory" title="Stock Attention" description="Active products at zero or negative stock." /></CardHeader>
           <CardContent className="grid gap-2.5">
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{attention.at ? 'Snapshot ' + stockDate(attention.at) : 'Loading stock snapshot…'}</span><Button size="sm" variant="outline" disabled={attention.loading} onClick={attention.refresh}>Refresh stock</Button></div>
+            {attention.error ? <StatusPanel variant="destructive">{attention.error}</StatusPanel> : attention.loading ? <StatusPanel>Loading stock attention…</StatusPanel> : null}
+
+            {stock && !attention.error && !attention.loading ? <>
             <div className="grid grid-cols-2 gap-2">
-              <ExceptionMetric label="Negative stock" value={String(metrics.negativeStockCount)} note="Below zero" alert={metrics.negativeStockCount > 0} />
-              <ExceptionMetric label="Out of stock" value={String(metrics.zeroStockCount)} note="Exactly zero" alert={metrics.zeroStockCount > 0} />
+              <ExceptionMetric label="Negative stock" value={String((stock?.negativeStockCount ?? 0))} note="Below zero" alert={(stock?.negativeStockCount ?? 0) > 0} />
+              <ExceptionMetric label="Out of stock" value={String((stock?.zeroStockCount ?? 0))} note="Exactly zero" alert={(stock?.zeroStockCount ?? 0) > 0} />
             </div>
-            {metrics.stockAttention.length === 0 ? <EmptyState text="No active products at zero or negative stock." /> : <div className="divide-y divide-border rounded-lg border border-border px-3">
-              {metrics.stockAttention.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 py-2.5 text-sm"><span className="min-w-0 truncate font-medium">{product.name}</span><strong className={product.currentQuantity < 0 ? 'text-destructive' : 'text-warning'}>{product.currentQuantity.toLocaleString('en-IN')}</strong></div>)}
+            {(stock?.stockAttention ?? []).length === 0 ? <EmptyState text="No active products at zero or negative stock." /> : <div className="divide-y divide-border rounded-lg border border-border px-3">
+              {(stock?.stockAttention ?? []).map((product) => <div key={product.id} className="flex items-center justify-between gap-3 py-2.5 text-sm"><span className="min-w-0 truncate font-medium">{product.name}</span><strong className={product.currentQuantity < 0 ? 'text-destructive' : 'text-warning'}>{product.currentQuantity.toLocaleString('en-IN')}</strong></div>)}
             </div>}
+            </> : null}
           </CardContent>
         </Card>
       </div>

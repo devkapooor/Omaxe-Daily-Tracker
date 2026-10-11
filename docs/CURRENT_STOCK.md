@@ -1,31 +1,33 @@
-# Current Stock
+# Current Stock in the Stock workspace
 
-The Current Stock menu is available to owner, manager and billing accounts. All roles can view every field, including the latest recorded cost price. This page has no write actions; GRN and Stock Audit continue to own their correction workflows.
+Current Stock is the first of four Stock tabs, alongside Receive Stock, Stock Audit and Stock History. All active owner, manager and billing accounts can view recorded quantities/prices/costs and use the direct row Edit action. MRP and selling price edits require a reason, update current stock through the existing authenticated server function, record the last editor and create an owner Action Centre review record. Selling price must not exceed MRP. Quantity is read-only here; physical changes use Stock Audit.
 
-## Data and reads
+The workspace is implemented locally after `APPROVE IMPLEMENTATION`; this change has not been deployed. See [scope, role matrix, queries, history, indexes and validation](operations/STOCK_WORKSPACE_2026-10-12.md). Earlier v1.1–v1.4 releases remain historical entries in [Version Log](operations/VERSION_LOG.md).
 
-- Products and latest unit costs come from the existing `posSandboxes/test/products` and `productCosts` collections used by POS.
-- Full collection listeners are mounted only while Current Stock is open and removed on exit. Opening the page initially reads the complete catalogue and cost collection. Pagination is a presentation limit of 50 products, not a Firestore read limit.
-- This complete dataset supports combined filters, case and whitespace grouping and table sorting beyond the existing 200-product POS search limit. The page does not display stock metrics or quantity totals.
-- Selecting a product mounts a listener for that product's recorded stock movements, sorted newest first and displayed 50 at a time. Closing details removes it. Existing movement records without a timestamp remain visible.
-- Existing staff read rules cover all three collections. No new index, service or rules change is required.
+## Loading and filtering
+
+- Opening Current Stock without a filter sends no product/cost catalogue request. Choose an exact barcode, name prefix, exact recorded vendor or stock status.
+- Matching products use Firestore cursor pages of 50 with explicit order and document-ID tie-breaker. Latest costs are fetched for only the returned IDs, in groups of at most 30. No complete catalogue download or local slice simulates server pagination.
+- Barcode preserves leading zeros. Name prefix uses existing normalized `searchName`; unrestricted substring search is not supported. Vendor matching is exact and case sensitive; aliases are not grouped by downloading the catalogue.
+- Product name, barcode, quantity and selling price orders use supported server queries. Name-prefix and nonzero quantity-range filters constrain the effective server order, which is displayed. MRP, cost and margin sorts explicitly apply only to the loaded page.
+- All active/inactive products remain eligible, as in the existing Current Stock view. Status in details still controls existing billing/receipt behavior.
+- Filters reset pagination. Pending inputs hide stale rows. Loading, empty, error and Retry states are explicit. Refresh resets to the first page and reads from the server; returning to the tab also fetches afresh. Snapshot time explains freshness between refreshes.
+
+## Product details and history
+
+Selecting a row or its direct Edit button loads fresh product and cost document listeners. They stop when the popup closes. The editor preserves the before-state/revision for conflict checking. Other-terminal changes remain visible in the open details; an interrupted save can retry its existing operation ID.
+
+Recorded Movement History is collapsed initially. Expanding mounts the same bounded history pager as Stock History; collapsing or closing unmounts it. Dated history excludes missing timestamps. The explicitly labelled undated legacy view requires an exact product ID and scans bounded product-specific pages. Source records are fetched only when opened. Missing historical actor, reason, price or barcode values are displayed honestly. Nothing is backfilled.
 
 ## Field interpretation
 
-- MRP is the current `Printed MRP` value in `sourceValues`. Original workbook evidence is never used to resurrect a cleared current MRP.
-- Opening Quantity and Subcategory are read from the imported source fields when available. Products created later may have no opening quantity.
-- Cost Price comes from `productCosts`, not the old imported cost, and is the latest recorded unit cost rather than a weighted average.
-- Margin (%) is derived from `(Selling Price - Cost Price) / Selling Price * 100` using the current selling price and latest recorded cost. It updates with those values and is not persisted as a separate source field. This is the current gross margin before bill discounts and operating expenses, not historical realised profit. Missing cost shows Not Recorded; zero selling price shows Not Applicable. Recorded zero cost gives 100% margin when selling price is positive; negative margins are highlighted in the table.
-- Last Updated includes a later cost-record update when applicable.
-- Missing values show Not Recorded; zero remains zero. Negative current quantity is highlighted.
+- Current MRP comes from current `Printed MRP` sourceValues evidence, not an old workbook fallback.
+- Opening quantity and subcategory use existing imported fields when recorded. Later-created products can have no opening quantity.
+- Cost is the latest recorded unit cost, not a weighted average. Existing GRN reversal can clear its own latest cost; a missing cost is shown as Not Recorded.
+- Margin is `(Selling Price - Cost Price) / Selling Price * 100`, before discounts and expenses. Missing cost is Not Recorded; zero selling price is Not Applicable. It is derived for display and not a stock-wide total.
+- Last Updated includes the later cost update when recorded. Dedicated last-price-edit attribution survives subsequent stock movements. Zero remains zero and negative quantities are highlighted.
+- Presentation title case does not rewrite source values. Details retain all available fields. The table scrolls inside its container; row Edit remains reachable at the right edge.
 
-## Display, search and filters
+## Operational boundaries
 
-- Title Case and whitespace cleanup apply to presentation only. Barcode and Product ID remain exact. Acronyms, deliberate mixed case names and measurement units are retained.
-- Vendor options merge case and whitespace variants without changing source records. Vendor and stock status combine. Product Status, Category, Subcategory, Brand and quantity-range filters are not shown.
-- Search accepts typed, pasted or scanned barcodes and matches the complete barcode after trimming surrounding whitespace. Leading zeros are retained; product names and IDs are not searched.
-- All products are shown regardless of active/inactive status; zero and negative stock remain included. Clear Filters restores that default. Product Status remains visible in product details and continues to control existing POS workflows.
-- The page header and second filter bar remain fixed within the app workspace. Only the data area scrolls; desktop table headings stay visible and pagination stays beneath the data area.
-- The table shows Barcode first, followed by Product Name, Current Quantity, MRP, Selling Price, Cost Price and Margin (%). Each column heading controls sorting. Narrow screens scroll horizontally within the table; all recorded fields remain available in details.
-
-Current Stock was introduced in v1.1.0. The display, filter and margin upgrades described here were committed as `6618e27` and deployed in v1.2.0 on 2026-10-11. See [release scope and validation](operations/VERSION_LOG.md).
+The live catalogue remains under `posSandboxes/test`; that legacy name does not make its production records disposable. Page views do not post stock/financial writes. Price edits/review retain server authority; existing GRN/audit/checkout/return browser transactions and their Rules remain, with the retired GRN correction path denied. A financial posting migration requires separate scope and approval.

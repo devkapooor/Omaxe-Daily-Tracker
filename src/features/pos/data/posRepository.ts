@@ -127,11 +127,6 @@ export function subscribePosStockAuditBatches(callback: (audits: PosStockAuditBa
   }, onError)
 }
 
-export async function loadPosStockAuditItems(batchId: string) {
-  const snapshot = await getDocs(query(posCollection('stockAudits'), where('batchId', '==', batchId)))
-  return snapshot.docs.map((item) => item.data() as PosStockAudit).sort((left, right) => left.productName.localeCompare(right.productName))
-}
-
 export type PosStockAuditCountInput = {
   productId: string
   physicalQuantity: number
@@ -305,7 +300,7 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
     const receivedLines = receipt.lines
     const totalPaise = receipt.invoiceTotalPaise ?? 0
     if (!Number.isSafeInteger(totalPaise) || totalPaise <= 0) throw new Error('Enter the full vendor invoice payable before submitting.')
-    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isSafeInteger(line.unitCostPaise) || line.unitCostPaise <= 0 || !Number.isSafeInteger(line.mrpPaise) || (line.mrpPaise ?? -1) < 0 || !Number.isSafeInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0 || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise))))) throw new Error('Every GRN line requires a positive whole quantity, unit cost, MRP, and selling price.')
+    if (receipt.lines.some((line) => !Number.isInteger(line.quantity) || line.quantity <= 0 || !Number.isSafeInteger(line.unitCostPaise) || line.unitCostPaise <= 0 || !Number.isSafeInteger(line.mrpPaise) || (line.mrpPaise ?? -1) < 0 || !Number.isSafeInteger(line.sellingPricePaise) || (line.sellingPricePaise ?? -1) < 0 || (line.sellingPricePaise ?? Infinity) > (line.mrpPaise ?? -1) || (line.newProduct && (!line.category.trim() || !Number.isInteger(line.sellingPricePaise))))) throw new Error('Every GRN line requires a positive whole quantity, unit cost, MRP, and selling price at or below MRP.')
     if (new Set(receivedLines.map((line) => line.productId)).size !== receivedLines.length) throw new Error('A product can appear only once per GRN. Update its quantity on the existing line.')
 
     const configRef = doc(db, 'appMetadata', 'vendorLedgerV2Config')
@@ -450,71 +445,6 @@ export async function submitPosGoodsReceipt(id: string, actor: AppUser) {
       totalPaise, payableCreated, createdAt: timestamp, ...actorFields(actor),
     })
     return { purchaseId: payablePurchaseId, totalPaise, payableCreated }
-  })
-}
-
-export async function correctPosGoodsReceiptMrp(
-  id: string,
-  corrections: Array<{ productId: string; mrpPaise: number | null }>,
-  reason: string,
-  actor: AppUser,
-) {
-  if (actor.role !== 'owner') throw new Error('Only the owner can correct a submitted GRN.')
-  if (!reason.trim()) throw new Error('Enter a reason for correcting this GRN.')
-  if (!corrections.length) throw new Error('Change at least one product MRP.')
-  if (corrections.length > 5) throw new Error('Correct up to five products at a time.')
-  if (corrections.some(({ mrpPaise }) => mrpPaise !== null && (!Number.isSafeInteger(mrpPaise) || mrpPaise < 0))) throw new Error('MRP must be zero or greater.')
-  const uniqueCorrections = new Map(corrections.map((correction) => [correction.productId, correction.mrpPaise]))
-  if (uniqueCorrections.size !== corrections.length) throw new Error('A product can only appear once in a correction.')
-  const correctionId = crypto.randomUUID()
-  return runTransaction(db, async (transaction) => {
-    const receiptRef = posDoc('goodsReceipts', id)
-    const receiptSnapshot = await transaction.get(receiptRef)
-    if (!receiptSnapshot.exists()) throw new Error('GRN was not found.')
-    const receipt = receiptSnapshot.data() as PosGoodsReceipt
-    if (receipt.status !== 'submitted') throw new Error('Only a submitted GRN can be corrected.')
-    const receiptLines = new Map(receipt.lines.map((line) => [line.productId, line]))
-    const entries = [...uniqueCorrections.entries()]
-    const productRefs = entries.map(([productId]) => posDoc('products', productId))
-    const products = await Promise.all(productRefs.map((reference) => transaction.get(reference)))
-    const timestamp = nowIso()
-    const correctedLines: Array<{ productId: string; barcode: string; productName: string; beforeMrpPaise: number | null; afterMrpPaise: number | null }> = []
-    products.forEach((snapshot, index) => {
-      const [productId, afterMrpPaise] = entries[index]
-      const line = receiptLines.get(productId)
-      if (!line) throw new Error('A product in the correction is not part of this GRN.')
-      if (!snapshot.exists()) throw new Error(`Product ${line.productName} no longer exists.`)
-      const product = snapshot.data() as PosProduct
-      const sourceValues = { ...(product.sourceValues ?? {}) }
-      const existingMrpKey = Object.keys(sourceValues).find((key) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')
-      const rawBefore = existingMrpKey ? Number(sourceValues[existingMrpKey].replace(/[₹,\s]/g, '')) : NaN
-      const beforeMrpPaise = Number.isFinite(rawBefore) && rawBefore >= 0 ? Math.round(rawBefore * 100) : null
-      for (const key of Object.keys(sourceValues)) if (key.trim().toLocaleLowerCase('en-IN') === 'printed mrp') delete sourceValues[key]
-      if (afterMrpPaise !== null) sourceValues['Printed MRP'] = (afterMrpPaise / 100).toFixed(2)
-      const movementId = crypto.randomUUID()
-      transaction.update(productRefs[index], {
-        sourceValues, revision: product.revision + 1, lastMovementId: movementId,
-        updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
-      })
-      transaction.set(posDoc('stockMovements', movementId), {
-        id: movementId, productId, barcode: line.barcode, type: 'goods-receipt-mrp-correction', quantityDelta: 0,
-        beforeQuantity: product.currentQuantity, afterQuantity: product.currentQuantity,
-        productRevisionBefore: product.revision, productRevisionAfter: product.revision + 1,
-        businessDate: receipt.receiptDate, goodsReceiptId: id, correctionId, reason: reason.trim(),
-        createdAt: timestamp, ...actorFields(actor),
-      })
-      correctedLines.push({ productId, barcode: line.barcode, productName: line.productName, beforeMrpPaise, afterMrpPaise })
-    })
-    const correction = { reason: reason.trim(), createdAt: timestamp, actorUid: actor.id, actorName: actor.name, lines: correctedLines }
-    transaction.update(receiptRef, {
-      mrpCorrections: [...(receipt.mrpCorrections ?? []), correction], revision: receipt.revision + 1,
-      updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name,
-    })
-    transaction.set(posDoc('events', correctionId), {
-      id: correctionId, type: 'goods-receipt-mrp-corrected', goodsReceiptId: id, reason: reason.trim(),
-      lines: correctedLines, createdAt: timestamp, ...actorFields(actor),
-    })
-    return correction
   })
 }
 
@@ -771,7 +701,8 @@ export async function getPosCost(productId: string) {
 }
 
 export function subscribePosConfig(callback: (config: PosCheckoutConfig) => void, onError: (error: Error) => void) {
-  return onSnapshot(posDoc('configuration', 'checkout'), (snapshot) => {
+  return onSnapshot(posDoc('configuration', 'checkout'), { includeMetadataChanges: true }, (snapshot) => {
+    if (snapshot.metadata.fromCache) return
     const data = snapshot.data() as Partial<PosCheckoutConfig> | undefined
     callback({ billingMaxDiscountPercentage: typeof data?.billingMaxDiscountPercentage === 'number' ? data.billingMaxDiscountPercentage : null })
   }, onError)
@@ -794,22 +725,6 @@ export async function loadRecentPosBills(count = 10, after: PosBillPageCursor | 
     bills: snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill),
     nextCursor: snapshot.docs.at(-1) ?? null,
   }
-}
-
-export function subscribePosDashboardBills(from: string, to: string, callback: (bills: PosBill[]) => void, onError: (error: Error) => void) {
-  return onSnapshot(query(posCollection('bills'), where('businessDate', '>=', from), where('businessDate', '<=', to), orderBy('businessDate')), (snapshot) => {
-    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosBill))
-  }, onError)
-}
-
-export function subscribePosBillStates(callback: (states: PosBillState[]) => void, onError: (error: Error) => void) {
-  return onSnapshot(posCollection('billStates'), (snapshot) => callback(snapshot.docs.map((item) => item.data() as PosBillState)), onError)
-}
-
-export function subscribePosDashboardRefunds(from: string, to: string, callback: (refunds: PosRefundEvent[]) => void, onError: (error: Error) => void) {
-  return onSnapshot(query(posCollection('events'), where('refundDate', '>=', from), where('refundDate', '<=', to), orderBy('refundDate')), (snapshot) => {
-    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as PosRefundEvent))
-  }, onError)
 }
 
 type PosCashoutPaymentMix = {

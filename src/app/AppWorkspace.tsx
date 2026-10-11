@@ -29,7 +29,8 @@ import { useActionCentreSources } from '@/features/action-center/hooks/useAction
 import { actionCentreEntries } from '@/features/action-center/domain/actionCentreEntries'
 import { VendorLedgerWorkspacePage } from '@/features/vendor-workspace/components/VendorLedgerWorkspacePage'
 import { PosPage } from '@/features/pos/components/PosPage'
-import { CurrentStockPage } from '@/features/stock/components/CurrentStockPage'
+import { StockWorkspacePage } from '@/features/stock/components/StockWorkspacePage'
+import { createPosDraft } from '@/features/pos/hooks/usePosDraftState'
 import { useVendorLedgerV2 } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { deriveApprovalQueue, OUTDATED_CORRECTION_REASON, OUTDATED_VENDOR_CORRECTION_REASON } from '@/features/action-center/domain/approvalItems'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
@@ -193,6 +194,7 @@ export function AppWorkspace({
   try { trustedNow = serverNowMs() } catch { /* Closed until trusted time is synchronized. */ }
   const cashoutAllowed = currentUser.role === 'owner' || (trustedNow !== null && isCashoutWindowOpen(trustedNow))
   const confirmation = useConfirmationDialog()
+  const billingDraft = useMemo(() => createPosDraft(currentUser.id), [currentUser.id])
   const vendorLedger = useVendorLedgerV2(currentUser, activePage)
   const actionSources = useActionCentreSources(currentUser)
   const vendorNames = Object.fromEntries(vendorLedger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
@@ -322,10 +324,10 @@ export function AppWorkspace({
         ) : null}
 
         {activePage === 'pos-test' ? (
-          <PosPage currentUser={currentUser} showToast={showToast} />
+          <PosPage draft={billingDraft} currentUser={currentUser} showToast={showToast} />
         ) : null}
 
-        {activePage === 'stock' ? <CurrentStockPage /> : null}
+        {activePage === 'stock' ? <StockWorkspacePage currentUser={currentUser} ownerVendorEnabled={currentUser.role === 'owner' ? vendorLedger.config?.enabled === true : undefined} showToast={showToast} /> : null}
 
         {activePage === 'vendor-preview' ? (
           <VendorLedgerWorkspacePage

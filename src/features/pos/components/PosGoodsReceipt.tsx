@@ -12,9 +12,17 @@ import { today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import { normalizeInvoiceNumber, rupeesToPaise, type VendorV2 } from '@/domain/vendorLedgerV2'
 import type { PosGoodsReceipt, PosGoodsReceiptLine, PosProduct } from '../domain/types'
-import { completePosStockAuditBatch, findPosProductByBarcode, getPosCost, subscribePosGoodsReceipts, savePosGoodsReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reversePosGoodsReceipt, correctPosGoodsReceiptMrp } from '../data/posRepository'
+import { completePosStockAuditBatch, findPosProductByBarcode, getPosCost, savePosGoodsReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reversePosGoodsReceipt } from '../data/posRepository'
 import { createVendorV2 } from '@/store/vendorLedgerV2Repository'
 import { serverNowIso } from '@/shared/lib/serverClock'
+import { where } from 'firebase/firestore'
+import { dateConstraints, readPage, readSource } from '@/features/stock/data/stockQueries'
+import { lookupReceiptInvoice } from '@/features/stock/data/receiveStockRepository'
+import { useServerPage } from '@/features/stock/hooks/useServerPage'
+import { StockPageControls } from '@/features/stock/components/StockPageControls'
+import { SourceRecord } from '@/features/stock/components/StockSourceDetails'
+import { recentStockDate } from '@/features/stock/domain/stockDates'
+import { StatusPanel } from '@/shared/ui/status-panel'
 
 function productMrpPaise(product: PosProduct) {
   const raw = Object.entries(product.sourceValues ?? {}).find(([key]) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')?.[1]
@@ -23,24 +31,16 @@ function productMrpPaise(product: PosProduct) {
   return Number.isFinite(amount) && amount >= 0 ? rupeesToPaise(amount) : null
 }
 
-function latestReceiptMrpPaise(receipt: PosGoodsReceipt, productId: string, fallback: number | null | undefined) {
-  let mrpPaise = fallback ?? null
-  receipt.mrpCorrections?.forEach((correction) => {
-    const correctedLine = correction.lines.find((line) => line.productId === productId)
-    if (correctedLine) mrpPaise = correctedLine.afterMrpPaise
-  })
-  return mrpPaise
-}
-
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
+export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVendorChange, onFindVendors }: {
   currentUser: AppUser
   vendors: VendorV2[]
   enabled: boolean
   showToast: (message: string) => void
+  onVendorChange: (id: string) => void
+  onFindVendors: () => void
 }) {
-  const [receipts, setReceipts] = useState<PosGoodsReceipt[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [vendorId, setVendorId] = useState('')
@@ -60,22 +60,38 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
   const [showVendorForm, setShowVendorForm] = useState(false)
   const [view, setView] = useState<'receipt' | 'history'>('receipt')
   const [invoiceTotal, setInvoiceTotal] = useState('')
-  const [historySearch, setHistorySearch] = useState('')
+  const [historyInvoice, setHistoryInvoice] = useState('')
+  const [historyFrom, setHistoryFrom] = useState(recentStockDate)
+  const [historyTo, setHistoryTo] = useState(today)
+  const [historyStatus, setHistoryStatus] = useState('')
+  const [historyVendor, setHistoryVendor] = useState('')
+  const [historySearch, setHistorySearch] = useState({ vendor: '', invoice: '' })
+  useEffect(() => { const timer = window.setTimeout(() => setHistorySearch({ vendor: historyVendor, invoice: historyInvoice }), 300); return () => window.clearTimeout(timer) }, [historyVendor, historyInvoice])
+  const historyPending = historyVendor !== historySearch.vendor || historyInvoice !== historySearch.invoice
+  const historyKey = JSON.stringify([historyFrom, historyTo, historyStatus, historySearch])
+  const history = useServerPage<PosGoodsReceipt>(historyKey, (cursor) => readPage('goodsReceipts', [...dateConstraints(historyFrom, historyTo), ...(historyStatus ? [where('status', '==', historyStatus)] : []), ...(historySearch.vendor.trim() ? [where('vendorId', '==', historySearch.vendor.trim())] : []), ...(historySearch.invoice.trim() ? [where('invoiceNumber', '==', historySearch.invoice.trim())] : [])], cursor, 25, historyKey), view === 'history')
+  const [invoiceResult, setInvoiceResult] = useState<{ key: string; value: PosGoodsReceipt | null; error: string }>({ key: '', value: null, error: '' })
+  const [invoiceAttempt, setInvoiceAttempt] = useState(0)
+  const invoiceKey = JSON.stringify([vendorId, normalizeInvoiceNumber(invoiceNumber)])
   const [selectedReceipt, setSelectedReceipt] = useState<PosGoodsReceipt | null>(null)
-  const [receiptAction, setReceiptAction] = useState<'view' | 'correct' | 'reverse' | null>(null)
-  const [correctionMrps, setCorrectionMrps] = useState<Record<string, string>>({})
-  const [correctionReason, setCorrectionReason] = useState('')
+  const [receiptAction, setReceiptAction] = useState<'view' | 'reverse' | null>(null)
   const [reverseReason, setReverseReason] = useState('')
   const scanRef = useRef<HTMLInputElement>(null)
   const activeVendors = useMemo(() => vendors.filter((vendor) => vendor.active).sort((a, b) => a.canonicalName.localeCompare(b.canonicalName)), [vendors])
   const selectedVendor = activeVendors.find((vendor) => vendor.id === vendorId)
-  const matchingInvoice = receipts.find((receipt) => receipt.status === 'submitted' && receipt.vendorId === vendorId && normalizeInvoiceNumber(receipt.invoiceNumber) === normalizeInvoiceNumber(invoiceNumber))
+  const matchingInvoice = invoiceResult.key === invoiceKey ? invoiceResult.value : null
   const receivedValuePaise = lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
   const totalPaise = invoiceTotal.trim() && Number.isFinite(Number(invoiceTotal)) ? rupeesToPaise(Number(invoiceTotal)) : 0
-  const linesReady = lines.length > 0 && lines.every((line) => Number.isInteger(line.quantity) && line.quantity > 0 && Number.isSafeInteger(line.unitCostPaise) && line.unitCostPaise > 0 && Number.isSafeInteger(line.sellingPricePaise) && (line.sellingPricePaise ?? -1) >= 0 && Number.isSafeInteger(line.mrpPaise) && (line.mrpPaise ?? -1) >= 0)
-  const visibleReceipts = receipts.filter((receipt) => `${receipt.vendorName} ${receipt.invoiceNumber} ${receipt.status} ${receipt.receiptDate} ${receipt.lines.map((line) => `${line.barcode} ${line.productName}`).join(' ')}`.toLocaleLowerCase('en-IN').includes(historySearch.trim().toLocaleLowerCase('en-IN')))
-
-  useEffect(() => subscribePosGoodsReceipts(setReceipts, (cause) => setError(cause.message)), [])
+  const linesReady = lines.length > 0 && lines.every((line) => Number.isInteger(line.quantity) && line.quantity > 0 && Number.isSafeInteger(line.unitCostPaise) && line.unitCostPaise > 0 && Number.isSafeInteger(line.sellingPricePaise) && (line.sellingPricePaise ?? -1) >= 0 && Number.isSafeInteger(line.mrpPaise) && (line.mrpPaise ?? -1) >= 0 && (line.sellingPricePaise ?? Infinity) <= (line.mrpPaise ?? -1))
+  useEffect(() => { onVendorChange(vendorId) }, [vendorId, onVendorChange])
+  useEffect(() => {
+    if (!vendorId || !invoiceNumber.trim() || !enabled) return
+    let active = true
+    const timer = window.setTimeout(() => {
+      void lookupReceiptInvoice(vendorId, invoiceNumber).then((value) => { if (active) setInvoiceResult({ key: invoiceKey, value, error: '' }) }).catch((cause: unknown) => { if (active) setInvoiceResult({ key: invoiceKey, value: null, error: cause instanceof Error ? cause.message : 'Invoice lookup failed.' }) })
+    }, 300)
+    return () => { active = false; window.clearTimeout(timer) }
+  }, [vendorId, invoiceNumber, enabled, invoiceKey, invoiceAttempt])
 
   function resetForm() {
     setVendorId(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); setNewProduct(null); setInvoiceTotal('')
@@ -153,7 +169,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       showToast(result.payableCreated
         ? `GRN submitted. Stock updated and invoice payable created: ${money(result.totalPaise)}.`
         : `Partial receipt submitted. Stock updated and linked to existing invoice payable ${money(result.totalPaise)}.`)
-      resetForm()
+      resetForm(); history.refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to submit GRN.') }
     finally { setBusy(false) }
   }
@@ -180,42 +196,22 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
     finally { setBusy(false) }
   }
 
-  function editDraft(receipt: PosGoodsReceipt) {
+  async function editDraft(cached: PosGoodsReceipt) {
+    const receipt = await readSource<PosGoodsReceipt>('goodsReceipts', cached.id).catch((cause: unknown) => { setError(cause instanceof Error ? cause.message : 'Unable to open draft.'); return null })
+    if (!receipt || receipt.status !== 'draft') { if (receipt) setError('This receipt is no longer a draft. Refresh history.'); return }
     setDraftId(receipt.id); setVendorId(receipt.vendorId); setInvoiceNumber(receipt.invoiceNumber)
     setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); setView('receipt'); setError('')
   }
 
-  function openReceipt(receipt: PosGoodsReceipt, action: 'view' | 'correct' | 'reverse') {
-    setError('')
-    setSelectedReceipt(receipt)
-    setReceiptAction(action)
-    setCorrectionReason('')
-    setReverseReason('')
-    setCorrectionMrps(Object.fromEntries(receipt.lines.map((line) => {
-      const mrpPaise = latestReceiptMrpPaise(receipt, line.productId, line.mrpPaise)
-      return [line.productId, mrpPaise === null ? '' : String(mrpPaise / 100)]
-    })))
-  }
-
-  async function saveMrpCorrection() {
-    if (!selectedReceipt) return
+  async function openReceipt(cached: PosGoodsReceipt, action: 'view' | 'reverse') {
+    if (busy) return
+    setBusy(true); setError('')
     try {
-      const corrections = selectedReceipt.lines.map((line) => {
-        const value = correctionMrps[line.productId]?.trim() ?? ''
-        if (!value) return { productId: line.productId, mrpPaise: null }
-        const amount = Number(value)
-        if (!Number.isFinite(amount) || amount < 0) throw new Error(`Enter a valid MRP for ${line.productName}.`)
-        return { productId: line.productId, mrpPaise: rupeesToPaise(amount) }
-      }).filter((correction) => {
-        const line = selectedReceipt.lines.find((item) => item.productId === correction.productId)
-        return correction.mrpPaise !== latestReceiptMrpPaise(selectedReceipt, correction.productId, line?.mrpPaise)
-      })
-      setBusy(true)
-      const correction = await correctPosGoodsReceiptMrp(selectedReceipt.id, corrections, correctionReason, currentUser)
-      showToast('GRN MRP correction saved with an audit record.')
-      setSelectedReceipt((receipt) => receipt ? { ...receipt, mrpCorrections: [...(receipt.mrpCorrections ?? []), correction], revision: receipt.revision + 1, updatedByName: currentUser.name } : receipt)
-      setReceiptAction('view')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to correct the GRN.') }
+      const receipt = await readSource<PosGoodsReceipt>('goodsReceipts', cached.id)
+      if (!receipt) throw new Error('GRN was not found.')
+      if (action === 'reverse' && receipt.status !== 'submitted') throw new Error('Only a submitted GRN can be reversed.')
+      setSelectedReceipt(receipt); setReceiptAction(action); setReverseReason('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open GRN.') }
     finally { setBusy(false) }
   }
 
@@ -225,7 +221,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
     try {
       await reversePosGoodsReceipt(selectedReceipt.id, reverseReason, currentUser)
       showToast('GRN reversed with stock and payable adjustments.')
-      setReceiptAction(null)
+      setReceiptAction(null); history.refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to reverse the GRN.') }
     finally { setBusy(false) }
   }
@@ -236,10 +232,12 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       <Button type="button" role="tab" aria-selected={view === 'history'} variant={view === 'history' ? 'default' : 'ghost'} onClick={() => setView('history')}>History</Button>
     </div>
     {error ? <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">{error}</p> : null}
+    {vendorId && invoiceNumber.trim() && enabled && invoiceResult.key !== invoiceKey ? <StatusPanel>Checking invoice reference…</StatusPanel> : null}
+    {invoiceResult.key === invoiceKey && invoiceResult.error ? <StatusPanel variant="destructive">{invoiceResult.error}<Button variant="outline" size="sm" onClick={() => setInvoiceAttempt((value) => value + 1)}>Retry invoice lookup</Button></StatusPanel> : null}
     {view === 'receipt' ? <Card><CardHeader className="pb-2"><h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Goods Receipt Note (GRN)</h2></CardHeader><CardContent className="grid gap-3">
       {!enabled ? <p role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">The vendor ledger is not active. A GRN cannot be submitted until it is enabled.</p> : null}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <FieldLabel label="Vendor"><div className="flex gap-2"><NativeSelect className="min-w-0 flex-1" value={vendorId} onChange={(event) => setVendorId(event.target.value)}><option value="">Choose vendor</option>{activeVendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.canonicalName}</option>)}</NativeSelect><Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
+        <FieldLabel label="Vendor"><div className="flex gap-2"><NativeSelect className="min-w-0 flex-1" value={vendorId} onFocus={onFindVendors} onChange={(event) => setVendorId(event.target.value)}><option value="">Choose vendor</option>{activeVendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.canonicalName}</option>)}</NativeSelect><Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
         <FieldLabel label="Vendor invoice number"><Input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Invoice date"><Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Receipt date"><Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} required /></FieldLabel>
@@ -270,32 +268,32 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast }: {
       <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_13rem_auto] sm:items-end">
         <div className="text-sm"><span className="block text-muted-foreground">Received stock value</span><strong>{money(receivedValuePaise)}</strong></div>
         <FieldLabel label="Full invoice payable"><Input type="number" min="0.01" step="0.01" value={invoiceTotal} onChange={(event) => setInvoiceTotal(event.target.value)} placeholder="Invoice total" required /></FieldLabel>
-        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !vendorId || !invoiceNumber.trim() || !totalPaise} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error)} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
       </div>
-      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and can be changed. The payable is the full invoice amount; stock increases only by the quantities received above.</p>
-    </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recent activity" title="GRN History" description="Search receipts and continue or review saved GRNs." /></CardHeader><CardContent className="grid content-start gap-3">
-      <Input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search vendor, invoice, barcode, product or date" aria-label="Search GRN history" />
-      <div className="grid max-h-[65vh] content-start gap-2 overflow-y-auto">
-        {visibleReceipts.map((receipt) => <article key={receipt.id} className="grid gap-2 rounded-md border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-          <div className="min-w-0"><strong className="block truncate">{receipt.vendorName}</strong><p className="text-xs text-muted-foreground">Invoice {receipt.invoiceNumber} · {receipt.receiptDate} · {receipt.lines.length} line(s)</p></div>
-          <div className="flex items-center gap-2"><Badge variant={receipt.status === 'submitted' ? 'success' : 'secondary'}>{receipt.status}</Badge><strong>{money(receipt.invoiceTotalPaise ?? receipt.totalPaise)}</strong></div>
-          <div className="flex flex-wrap justify-end gap-1"><Button size="sm" variant="outline" disabled={busy} onClick={() => openReceipt(receipt, 'view')}>View</Button>{receipt.status === 'draft' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void submitDraft(receipt.id)}>Submit</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => void deletePosGoodsReceiptDraft(receipt.id, currentUser).then(() => showToast('Draft deleted.')).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to delete draft.'))}>Delete</Button></> : receipt.status === 'submitted' && currentUser.role === 'owner' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => openReceipt(receipt, 'correct')}>Correct MRP</Button><Button size="sm" variant="destructive" disabled={busy} onClick={() => openReceipt(receipt, 'reverse')}>Reverse</Button></> : null}</div>
-        </article>)}
-        {visibleReceipts.length === 0 ? <p className="rounded border border-dashed p-5 text-center text-sm text-muted-foreground">{receipts.length ? 'No GRNs match that search.' : 'No GRNs recorded yet.'}</p> : null}
+      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. The payable is the full invoice amount; stock increases only by the quantities received above.</p>
+    </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recorded activity" title="GRN History" description="Filtered server pages. Blank dates include older receipts." /></CardHeader><CardContent className="grid gap-3">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <FieldLabel label="From"><Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} /></FieldLabel>
+        <FieldLabel label="To"><Input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} /></FieldLabel>
+        <FieldLabel label="Status"><NativeSelect value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}><option value="">All</option><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="reversed">Reversed</option></NativeSelect></FieldLabel>
+        <FieldLabel label="Exact vendor ID"><Input value={historyVendor} onChange={(event) => setHistoryVendor(event.target.value)} /></FieldLabel>
+        <FieldLabel label="Exact invoice"><Input value={historyInvoice} onChange={(event) => setHistoryInvoice(event.target.value)} /></FieldLabel>
       </div>
+      {historyPending || history.loading ? <StatusPanel>Loading receipts…</StatusPanel> : history.error ? <StatusPanel variant="destructive">{history.error}<Button variant="outline" size="sm" onClick={history.retry}>Retry</Button></StatusPanel> : <div className="grid gap-2">
+        {history.items.map((receipt) => <article key={receipt.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"><div className="min-w-0"><strong className="block truncate">{receipt.vendorName}</strong><p className="text-xs text-muted-foreground">Invoice {receipt.invoiceNumber} · {receipt.receiptDate} · {receipt.lines.length} lines</p></div><div className="flex items-center gap-2"><Badge variant={receipt.status === 'submitted' ? 'success' : receipt.status === 'reversed' ? 'destructive' : 'secondary'}>{receipt.status}</Badge><strong className="text-sm">{money(receipt.invoiceTotalPaise ?? receipt.totalPaise)}</strong></div><div className="flex flex-wrap gap-1">
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void openReceipt(receipt, 'view')}>View</Button>
+          {receipt.status === 'draft' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => void editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void submitDraft(receipt.id)}>Submit</Button>{currentUser.role === 'owner' || receipt.createdByUid === currentUser.id ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void deletePosGoodsReceiptDraft(receipt.id, currentUser).then(() => { showToast('Draft deleted.'); history.refresh() }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Unable to delete draft.'))}>Delete</Button> : null}</> : receipt.status === 'submitted' && currentUser.role === 'owner' ? <Button size="sm" variant="destructive" disabled={busy} onClick={() => void openReceipt(receipt, 'reverse')}>Reverse</Button> : null}
+        </div></article>)}
+        {!history.items.length ? <StatusPanel>No GRNs match these filters.</StatusPanel> : null}
+      </div>}
+      <StockPageControls {...history} loading={history.loading || historyPending} />
     </CardContent></Card>}
-    {selectedReceipt && receiptAction ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setReceiptAction(null) }}>
-      <Card role="dialog" aria-modal="true" aria-labelledby="grn-detail-title" className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden shadow-xl">
-        <CardHeader className="flex-row items-center justify-between border-b"><SectionHeading eyebrow="Goods receipt" title={receiptAction === 'correct' ? 'Correct GRN MRP' : receiptAction === 'reverse' ? 'Reverse GRN' : 'GRN details'} description={`${selectedReceipt.vendorName} · Invoice ${selectedReceipt.invoiceNumber} · ${selectedReceipt.receiptDate}`} /><Button type="button" size="icon" variant="ghost" aria-label="Close GRN details" disabled={busy} onClick={() => setReceiptAction(null)}><X /></Button></CardHeader>
-        <CardContent className="grid gap-3 overflow-y-auto pt-4">
-          {receiptAction === 'reverse' ? <><p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">Reversing adjusts the received quantities and payable. This action is recorded and cannot be undone from this screen.</p><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Explain why this GRN is being reversed" /></FieldLabel><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button type="button" variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"><span>Invoice date: {selectedReceipt.invoiceDate}</span><span>Status: {selectedReceipt.status}</span><span>Created by: {selectedReceipt.createdByName}</span><span>Last updated by: {selectedReceipt.updatedByName}</span></div>
-            <div className="overflow-x-auto rounded-md border"><div className={`grid gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold ${receiptAction === 'correct' ? 'min-w-[850px] grid-cols-[minmax(13rem,1fr)_5rem_7rem_7rem_8rem_8rem]' : 'min-w-[700px] grid-cols-[1fr_7rem_7rem_7rem_8rem]'}`}><span>Product / barcode</span><span>Received</span><span>Unit cost</span><span>Selling price</span>{receiptAction === 'correct' ? <><span>Previous MRP</span><span>New MRP</span></> : <span>GRN MRP</span>}</div>
-              {selectedReceipt.lines.map((line) => <div key={line.productId} className={`grid items-center gap-2 border-b px-3 py-2 last:border-0 ${receiptAction === 'correct' ? 'min-w-[850px] grid-cols-[minmax(13rem,1fr)_5rem_7rem_7rem_8rem_8rem]' : 'min-w-[700px] grid-cols-[1fr_7rem_7rem_7rem_8rem]'}`}><div className="min-w-0"><strong className="block truncate text-sm">{line.productName}</strong><span className="text-xs text-muted-foreground">{line.barcode}</span></div><span className="text-sm">{line.quantity}</span><span className="text-sm">{money(line.unitCostPaise)}</span><span className="text-sm">{line.sellingPricePaise === undefined ? '—' : money(line.sellingPricePaise)}</span>{receiptAction === 'correct' ? <><span className="text-sm font-medium">{latestReceiptMrpPaise(selectedReceipt, line.productId, line.mrpPaise) === null ? 'No MRP' : money(latestReceiptMrpPaise(selectedReceipt, line.productId, line.mrpPaise) as number)}</span><Input aria-label={`Correct MRP for ${line.productName}`} inputMode="decimal" type="number" min="0" step="0.01" value={correctionMrps[line.productId] ?? ''} onChange={(event) => setCorrectionMrps((values) => ({ ...values, [line.productId]: event.target.value }))} placeholder="No MRP" /></> : <span className="text-sm">{line.mrpPaise === null || line.mrpPaise === undefined ? '—' : money(line.mrpPaise)}</span>}</div>)}
-            </div>
-            {(selectedReceipt.mrpCorrections ?? []).length ? <section className="grid gap-2"><h3 className="text-sm font-semibold">MRP correction history</h3>{selectedReceipt.mrpCorrections?.map((correction, index) => <article key={`${correction.createdAt}-${index}`} className="rounded-md border p-3 text-sm"><p>{correction.reason}</p><p className="text-xs text-muted-foreground">{correction.createdAt} · {correction.actorName}</p>{correction.lines.map((entry) => <p key={`${entry.productId}-${index}`} className="mt-1 text-xs">{entry.productName} ({entry.barcode}): {entry.beforeMrpPaise === null ? 'No MRP' : money(entry.beforeMrpPaise)} → {entry.afterMrpPaise === null ? 'No MRP' : money(entry.afterMrpPaise)}</p>)}</article>)}</section> : null}
-            {receiptAction === 'correct' ? <><FieldLabel label="Reason for correction"><Textarea value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Explain the MRP correction" /></FieldLabel><p className="text-xs text-muted-foreground">Correcting MRP updates the product from this GRN and records the previous value, new value, reason, and user. Quantity and payable are unchanged.</p><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button type="button" disabled={busy || !correctionReason.trim()} onClick={() => void saveMrpCorrection()}>{busy ? 'Saving…' : 'Save correction'}</Button></div></> : <div className="flex justify-end"><Button type="button" onClick={() => setReceiptAction(null)}>Close</Button></div>}
-          </>}
+    {selectedReceipt && receiptAction ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3">
+      <Card role="dialog" aria-modal="true" aria-label={receiptAction === 'reverse' ? 'Reverse GRN' : 'GRN details'} className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex-row items-center justify-between border-b"><h2 className="font-semibold">{receiptAction === 'reverse' ? 'Reverse GRN' : 'GRN details'}</h2><Button size="icon" variant="ghost" disabled={busy} aria-label="Close GRN details" onClick={() => setReceiptAction(null)}><X /></Button></CardHeader>
+        <CardContent className="space-y-3 overflow-y-auto pt-4">
+          <SourceRecord title="Goods receipt" value={selectedReceipt as unknown as Record<string, unknown>} />
+          {receiptAction === 'reverse' ? <><p className="text-sm text-destructive">Reversal adjusts received stock and the linked payable and is permanently recorded.</p><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} /></FieldLabel><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <div className="flex justify-end"><Button onClick={() => setReceiptAction(null)}>Close</Button></div>}
         </CardContent>
       </Card>
     </div> : null}

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { collection, doc, onSnapshot } from 'firebase/firestore'
-import { AlertTriangle, Barcode, ChartPie, FileClock, ClipboardCheck, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { formatDisplayDateTime, today } from '@/app/uiHelpers'
 import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/components/ResponsiveLogTable'
@@ -36,14 +35,11 @@ import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
 import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
 import { serverNowDate } from '@/shared/lib/serverClock'
-import { db } from '@/shared/lib/firebase'
-import type { VendorV2 } from '@/domain/vendorLedgerV2'
-import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
 import { expectedHandover, handoverDate } from '../domain/cashierHandover'
 import { useCashierHandover } from '../hooks/useCashierHandover'
-import { PosGoodsReceipt, PosStockAuditPage } from './PosGoodsReceipt'
+import { usePosDraftState, type PosDraft } from '../hooks/usePosDraftState'
 
-type Tab = 'checkout' | 'dashboard' | 'bills' | 'grn' | 'audit'
+type Tab = 'checkout' | 'dashboard' | 'bills'
 const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
 ]
@@ -55,31 +51,29 @@ function productMrp(product: PosProduct) {
   return Number.isFinite(amount) && amount >= 0 ? `MRP ${money(rupeesToPaise(amount))}` : null
 }
 
-export function PosPage({ currentUser, showToast }: { currentUser: AppUser; showToast: (message: string) => void }) {
+export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUser; showToast: (message: string) => void; draft: PosDraft }) {
   const handover = useCashierHandover()
   const [tab, setTab] = useState<Tab>('checkout')
-  const [grnVendors, setGrnVendors] = useState<VendorV2[]>([])
-  const [vendorLedgerEnabled, setVendorLedgerEnabled] = useState(false)
-  const sandbox = usePosSandbox({})
-  const [cart, setCart] = useState<PosCartLine[]>([])
-  const [customerName, setCustomerName] = useState('')
-  const [customerMobile, setCustomerMobile] = useState('')
-  const [discountMode, setDiscountMode] = useState<PosDiscount['mode']>('none')
-  const [discountValue, setDiscountValue] = useState('0')
-  const [discountReason, setDiscountReason] = useState('')
-  const [paymentMode, setPaymentMode] = useState<CheckoutPaymentMode>('cash')
-  const [splitPayments, setSplitPayments] = useState<SplitPaymentAmounts>(emptySplitPayments)
-  const [cashReceived, setCashReceived] = useState<string | null>(null)
-  const [unknownBarcode, setUnknownBarcode] = useState('')
-  const [unknownProductName, setUnknownProductName] = useState('')
-  const [unknownPrice, setUnknownPrice] = useState('')
+  const sandbox = usePosSandbox(tab === 'checkout')
+  const [cart, setCart] = usePosDraftState<PosCartLine[]>(draft, currentUser.id, 'cart', [])
+  const [customerName, setCustomerName] = usePosDraftState(draft, currentUser.id, 'customerName', '')
+  const [customerMobile, setCustomerMobile] = usePosDraftState(draft, currentUser.id, 'customerMobile', '')
+  const [discountMode, setDiscountMode] = usePosDraftState<PosDiscount['mode']>(draft, currentUser.id, 'discountMode', 'none')
+  const [discountValue, setDiscountValue] = usePosDraftState(draft, currentUser.id, 'discountValue', '0')
+  const [discountReason, setDiscountReason] = usePosDraftState(draft, currentUser.id, 'discountReason', '')
+  const [paymentMode, setPaymentMode] = usePosDraftState<CheckoutPaymentMode>(draft, currentUser.id, 'paymentMode', 'cash')
+  const [splitPayments, setSplitPayments] = usePosDraftState<SplitPaymentAmounts>(draft, currentUser.id, 'splitPayments', emptySplitPayments)
+  const [cashReceived, setCashReceived] = usePosDraftState<string | null>(draft, currentUser.id, 'cashReceived', null)
+  const [unknownBarcode, setUnknownBarcode] = usePosDraftState(draft, currentUser.id, 'unknownBarcode', '')
+  const [unknownProductName, setUnknownProductName] = usePosDraftState(draft, currentUser.id, 'unknownProductName', '')
+  const [unknownPrice, setUnknownPrice] = usePosDraftState(draft, currentUser.id, 'unknownPrice', '')
   const [productSearch, setProductSearch] = useState('')
   const [searchResults, setSearchResults] = useState<PosProduct[]>([])
   const [searchingProducts, setSearchingProducts] = useState(false)
   const [productSearchError, setProductSearchError] = useState('')
   const [busy, setBusy] = useState(false)
   const [creatingProduct, setCreatingProduct] = useState(false)
-  const [showCustomerDiscount, setShowCustomerDiscount] = useState(false)
+  const [showCustomerDiscount, setShowCustomerDiscount] = usePosDraftState(draft, currentUser.id, 'showCustomerDiscount', false)
   const [showUnresolvedAlert, setShowUnresolvedAlert] = useState(false)
   const [highlightedCartKey, setHighlightedCartKey] = useState<string | null>(null)
   const [cartUpdateSequence, setCartUpdateSequence] = useState(0)
@@ -89,21 +83,9 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
   const highlightTimerRef = useRef<number | null>(null)
   const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
   useEffect(() => {
-    if (tab !== 'grn') return
-    const unsubscribeConfig = onSnapshot(doc(db, 'appMetadata', 'vendorLedgerV2Config'), (snapshot) => {
-      const enabled = snapshot.data()?.enabled === true
-      setVendorLedgerEnabled(enabled)
-      if (!enabled) setGrnVendors([])
-    })
-    const unsubscribeVendors = onSnapshot(collection(db, vendorLedgerV2Collections.vendors), (snapshot) => {
-      setGrnVendors(snapshot.docs.map((item) => item.data() as VendorV2))
-    })
-    return () => { unsubscribeConfig(); unsubscribeVendors() }
-  }, [tab])
-  useEffect(() => {
     const term = productSearch.trim()
     let active = true
-    if (term.length < 2) return () => { active = false }
+    if (tab !== 'checkout' || term.length < 2) return () => { active = false }
     const timer = window.setTimeout(() => {
       setSearchingProducts(true)
       setProductSearchError('')
@@ -114,7 +96,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       }).finally(() => { if (active) setSearchingProducts(false) })
     }, 250)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [productSearch])
+  }, [productSearch, tab])
   const subtotal = posSubtotal(cart)
   const cartQuantity = cart.reduce((quantity, line) => quantity + line.quantity, 0)
   let discount: PosDiscount = { mode: 'none', amountPaise: 0 }
@@ -129,7 +111,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
     && effectiveDiscountPercentage > sandbox.config.billingMaxDiscountPercentage
   useEffect(() => {
     if (requiresDiscountOverrideReason) setShowCustomerDiscount(true)
-  }, [requiresDiscountOverrideReason])
+  }, [requiresDiscountOverrideReason, setShowCustomerDiscount])
   useEffect(() => {
     if (cartUpdateSequence > 0) cartScrollRef.current?.scrollTo({ top: 0 })
   }, [cartUpdateSequence])
@@ -234,6 +216,7 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       setShowUnresolvedAlert(true)
       return
     }
+    if (!sandbox.ready || sandbox.error) { showToast('Wait for current checkout configuration.'); return }
     setBusy(true)
     try {
       const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
@@ -263,12 +246,10 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       <PageHeader title="POS" tools={(
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center">
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-5">
+            <PageHeaderTabsList aria-label="POS sections" className="grid min-w-max grid-cols-3">
               <PageHeaderTab value="checkout"><ShoppingCart />Billing</PageHeaderTab>
               <PageHeaderTab value="dashboard"><ChartPie />Dashboard</PageHeaderTab>
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
-              <PageHeaderTab value="grn"><Barcode />GRN</PageHeaderTab>
-              <PageHeaderTab value="audit"><ClipboardCheck />Audit</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
           <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
@@ -319,14 +300,12 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
           <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
           {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); setShowCustomerDiscount(Boolean(held.customerName || held.customerMobile || held.discount.mode !== 'none')); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
           </div>
-          <div className="grid shrink-0 gap-2 border-t border-border pt-3"><div className="grid gap-2 sm:grid-cols-2">{checkoutWarning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:col-span-2"><AlertTriangle className="mr-1 inline size-3.5" />{checkoutWarning}</p> : null}<Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !navigator.onLine || Boolean(paymentError) || !handover.counterOpen || !handover.joined || Boolean(handover.reservation)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div></div>
+          <div className="grid shrink-0 gap-2 border-t border-border pt-3"><div className="grid gap-2 sm:grid-cols-2">{checkoutWarning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:col-span-2"><AlertTriangle className="mr-1 inline size-3.5" />{checkoutWarning}</p> : null}<Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !sandbox.ready || Boolean(sandbox.error) || !navigator.onLine || Boolean(paymentError) || !handover.counterOpen || !handover.joined || Boolean(handover.reservation)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div></div>
         </CardContent></Card>
       </div> : null}
 
-      {tab === 'dashboard' ? <PosDashboard products={sandbox.products} /> : null}
+      {tab === 'dashboard' ? <PosDashboard /> : null}
       {tab === 'bills' ? <BillsPanel currentUser={currentUser} showToast={showToast} /> : null}
-      {tab === 'grn' ? <PosGoodsReceipt currentUser={currentUser} vendors={grnVendors} enabled={vendorLedgerEnabled} showToast={showToast} /> : null}
-      {tab === 'audit' ? <PosStockAuditPage currentUser={currentUser} showToast={showToast} /> : null}
         </PageCardStack>
       </div>
     </PageLayout>

@@ -2,18 +2,21 @@ import { useEffect, useState } from 'react'
 import {
   subscribeHeldCarts,
   subscribePosConfig,
-  subscribePosProducts,
 } from '../data/posRepository'
-import type { PosCheckoutConfig, PosHeldCart, PosProduct } from '../domain/types'
+import type { PosCheckoutConfig, PosHeldCart } from '../domain/types'
 
-export function usePosSandbox(filters: { prefix?: string; category?: string; brand?: string }) {
-  const { prefix, category, brand } = filters
-  const [products, setProducts] = useState<PosProduct[]>([])
+export function usePosSandbox(billingActive: boolean) {
   const [heldCarts, setHeldCarts] = useState<PosHeldCart[]>([])
   const [config, setConfig] = useState<PosCheckoutConfig>({ billingMaxDiscountPercentage: null })
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => subscribePosProducts(setProducts, (next) => setError(next.message), { prefix, category, brand }), [prefix, category, brand])
-  useEffect(() => subscribeHeldCarts(setHeldCarts, (next) => setError(next.message)), [])
-  useEffect(() => subscribePosConfig(setConfig, (next) => setError(next.message)), [])
-  return { products, heldCarts, config, error }
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (!billingActive) return
+    let active = true
+    const fail = (next: Error) => { if (active) setError(next.message) }
+    const stopCarts = subscribeHeldCarts((items) => { if (active) setHeldCarts(items) }, fail)
+    const stopConfig = subscribePosConfig((next) => { if (active) { setConfig(next); setReady(true); setError(null) } }, fail)
+    return () => { active = false; stopCarts(); stopConfig(); setReady(false) }
+  }, [billingActive])
+  return { heldCarts, config, error, ready }
 }

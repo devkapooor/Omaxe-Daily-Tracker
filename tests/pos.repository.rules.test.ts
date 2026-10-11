@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { collection, doc, getDoc, getDocs, setDoc, type Firestore } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where, setDoc, type Firestore } from 'firebase/firestore'
 import type { AppUser } from '../src/domain/financeTypes'
 
 const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTime: 123 }))
@@ -9,10 +9,10 @@ vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, function
 
 import {
   approvePosRequest, createPosProductFromBarcode, deleteHeldCart, finalizePosBill, importPosProducts,
-  requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt, correctPosGoodsReceiptMrp,
+  requestBillAction, saveHeldCart, updateDiscountLimit, savePosGoodsReceiptDraft, submitPosGoodsReceipt, reconcilePosStockAuditBatch, reconcilePosStockCount, reversePosGoodsReceipt,
 } from '../src/features/pos/data/posRepository'
 import { parseApprovedPosCsv } from '../src/features/pos/domain/csvImport'
-import { cashierRef, handoverRef, initializeHandover, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
+import { cashierRef, handoverRef, initializeHandover, joinCounter, reserveCount, submitHandover } from '../src/features/pos/data/cashierHandoverRepository'
 import { handoverDate } from '../src/features/pos/domain/cashierHandover'
 import { setServerClockSample } from '../src/shared/lib/serverClock'
 import { createFinanceActions } from '../src/store/actions/createFinanceActions'
@@ -50,9 +50,15 @@ beforeEach(async () => {
   })
   await initializeHandover(owner)
   state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
+  await count('login', {}, 0, 0, 0)
 })
 
 afterAll(async () => { vi.unstubAllGlobals(); await environment.cleanup() })
+
+async function count(kind: 'login' | 'logout', denominations: Record<string, number>, coins: number, upi: number, card: number, note = '') {
+  const reservation = await reserveCount(billing, kind)
+  return submitHandover(billing, kind, denominations, coins, upi, card, reservation.revision, handoverDate(), note, reservation.id)
+}
 
 async function finalize() {
   return finalizePosBill({ businessDate: '2026-10-03', lines: [line], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 1000 }, { method: 'upi', amountPaise: 1000 }], cashTenderedPaise: 1500 }, billing)
@@ -96,21 +102,29 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-1', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, sellingPricePaise: 1300, mrpPaise: 1200, mrpChanged: true })),
+      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, sellingPricePaise: 1300, mrpPaise: 1500, mrpChanged: true })),
       invoiceTotalPaise: 13500,
     }, billing)
     const result = await submitPosGoodsReceipt(receiptId, billing)
     expect(result.totalPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(13)
-    expect((await getDoc(doc(state.db!, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('12.00')
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('15.00')
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.sellingPricePaise).toBe(1300)
     expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, 'purchasesV2', `grn-${receiptId}`))).data()?.grnId).toBe(receiptId)
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-    await correctPosGoodsReceiptMrp(receiptId, [{ productId: 'qa-product', mrpPaise: 17500 }], 'Correct package MRP', owner)
+    // Preserve and exercise a historical correction without re-enabling its retired write path.
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore()
+      const receiptRef = doc(database, 'posSandboxes', 'test', 'goodsReceipts', receiptId)
+      const receipt = (await getDoc(receiptRef)).data()!
+      await setDoc(receiptRef, { ...receipt, mrpCorrections: [{ reason: 'Historical package MRP correction', createdAt: timestamp, actorUid: owner.id, actorName: owner.name, lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', beforeMrpPaise: 1500, afterMrpPaise: 17500 }] }] })
+      const productRef = doc(database, ...productPath)
+      const product = (await getDoc(productRef)).data()!
+      await setDoc(productRef, { ...product, sourceValues: { ...product.sourceValues, 'Printed MRP': '175.00' }, revision: product.revision + 1 })
+    })
     expect((await getDoc(doc(state.db, ...productPath))).data()?.sourceValues?.['Printed MRP']).toBe('175.00')
-    const correctedReceipt = (await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()
-    expect(correctedReceipt?.mrpCorrections?.[0]).toMatchObject({ reason: 'Correct package MRP', lines: [{ beforeMrpPaise: 1200, afterMrpPaise: 17500 }] })
+    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()?.mrpCorrections).toHaveLength(1)
     await reversePosGoodsReceipt(receiptId, 'QA reverse verification', owner)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.sellingPricePaise).toBe(1000)
@@ -257,60 +271,58 @@ describe('POS repository workflows against deployed rules', () => {
     expect((await getDoc(doc(state.db, 'invoiceStatesV2', purchaseId))).data()?.openAmountPaise).toBe(0)
   })
 
-  it('requires a fresh login count after this cashier has billed, then allows checkout', async () => {
+  it('joins the open counter after reauthentication without repeating the opening count', async () => {
     await finalize()
+    const before = (await getDocs(query(collection(state.db!, 'posSandboxes', 'test', 'reconciliations'), where('uid', '==', billing.id)))).size
     state.authTime = 456
     state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
-    await expect(finalize()).rejects.toThrow(/mandatory login cash count/)
-    const ledger = (await getDoc(handoverRef())).data()!
-    const reconciliation = await submitHandover(billing, 'login', { '10': 1 }, 0, 1000, 0, ledger.revision, handoverDate(), '')
-    expect(reconciliation.hasDiscrepancy).toBe(false)
+    await expect(finalize()).rejects.toThrow(/Join the open shared counter/)
+    await joinCounter(billing)
+    expect((await getDocs(query(collection(state.db, 'posSandboxes', 'test', 'reconciliations'), where('uid', '==', billing.id)))).size).toBe(before)
     const next = await finalizePosBill({ businessDate: handoverDate(), lines: [{ ...line, expectedProductRevision: 2 }], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 2000 }] }, billing)
-    expect(next.cashierAuthTime).toBe(456)
+    expect(next.receiptNumber).toBeTruthy()
   })
 
   it('saves discrepancies atomically and unlocks without owner approval', async () => {
     await finalize()
-    const ledger = (await getDoc(handoverRef())).data()!
-    const result = await submitHandover(billing, 'logout', {}, 0, 500, 0, ledger.revision, handoverDate(), 'Short drawer')
+    const result = await count('logout', {}, 0, 500, 0, 'Short drawer')
     expect(result).toMatchObject({ hasDiscrepancy: true, reviewStatus: 'pending', delta: { cash: -1000, upi: -500, card: 0 } })
     expect((await getDoc(cashierRef(billing.id))).data()?.needsLogoutCheck).toBe(false)
     expect((await getDoc(handoverRef())).data()?.cashNetPaise).toBe(1000)
     expect((await getDoc(handoverRef())).data()?.checkpoint.cashActualPaise).toBe(0)
   })
 
-  it('rejects a stale counting snapshot when another bill changes the shared totals', async () => {
-    const revision = (await getDoc(handoverRef())).data()!.revision
+  it('blocks checkout during a live count and rejects a stale counting revision', async () => {
     await finalize()
-    await expect(submitHandover(billing, 'logout', {}, 0, 0, 0, revision, handoverDate(), '')).rejects.toThrow(/changed the totals/)
+    const reservation = await reserveCount(billing, 'logout')
+    await expect(finalize()).rejects.toThrow(/counting the shared drawer/)
+    await expect(submitHandover(billing, 'logout', {}, 0, 0, 0, reservation.revision - 1, handoverDate(), '', reservation.id)).rejects.toThrow(/changed the totals/)
   })
 
-  it('blocks checkout with a still-valid token after logout and requires an opening count', async () => {
+  it('requires rejoining after logout and keeps the shared counter open', async () => {
     await finalize()
-    let ledger = (await getDoc(handoverRef())).data()!
-    await submitHandover(billing, 'logout', { '10': 1 }, 0, 1000, 0, ledger.revision, handoverDate(), '')
-    await expect(finalize()).rejects.toThrow(/mandatory login cash count/)
-    ledger = (await getDoc(handoverRef())).data()!
-    await submitHandover(billing, 'login', { '10': 1 }, 0, 1000, 0, ledger.revision, handoverDate(), '')
-    const bill = await finalizePosBill({ businessDate: handoverDate(), lines: [{ ...line, expectedProductRevision: 2 }], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 2000 }] }, billing)
-    expect(bill.totalPaise).toBe(2000)
+    await count('logout', { '10': 1 }, 0, 1000, 0)
+    await expect(finalize()).rejects.toThrow(/Join the open shared counter/)
+    await joinCounter(billing)
+    expect((await getDoc(cashierRef(billing.id))).data()?.closed).toBe(false)
+    expect((await getDoc(handoverRef())).data()?.counterSession.status).toBe('open')
   })
 
-  it('accepts only one reconciliation against the same shared revision', async () => {
-    const revision = (await getDoc(handoverRef())).data()!.revision
+  it('accepts only one reconciliation for the same reservation', async () => {
+    const reservation = await reserveCount(billing, 'logout')
     const results = await Promise.allSettled([
-      submitHandover(billing, 'login', {}, 0, 0, 0, revision, handoverDate(), ''),
-      submitHandover(billing, 'login', {}, 0, 0, 0, revision, handoverDate(), ''),
+      submitHandover(billing, 'logout', {}, 0, 0, 0, reservation.revision, handoverDate(), '', reservation.id),
+      submitHandover(billing, 'logout', {}, 0, 0, 0, reservation.revision, handoverDate(), '', reservation.id),
     ])
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
-    expect((await getDoc(handoverRef())).data()?.revision).toBe(revision + 1)
+    expect((await getDoc(handoverRef())).data()?.revision).toBe(reservation.revision + 1)
   })
 
   it('saves daily cashout, sales, immutable closure, and zero cash checkpoint atomically', async () => {
     await finalize()
     let ledger = (await getDoc(handoverRef())).data()!
-    await submitHandover(billing, 'logout', { '10': 1 }, 0, 1000, 0, ledger.revision, handoverDate(), '')
+    await count('logout', { '10': 1 }, 0, 1000, 0)
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     const actions = createFinanceActions({
       getState: () => ({ financeData: { sales: [] }, dailyCashouts: [] }) as never,

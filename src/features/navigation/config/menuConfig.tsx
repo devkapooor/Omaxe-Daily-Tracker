@@ -36,7 +36,7 @@ export function pageTitle(page: Page) {
     case 'pos-test':
       return 'POS'
     case 'stock':
-      return 'Current Stock'
+      return 'Stock'
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
@@ -103,7 +103,7 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
 
   items.push({
     icon: <PackageSearch className="size-4 shrink-0" />,
-    label: 'Current Stock',
+    label: 'Stock',
     page: 'stock',
     gradient: '',
     hoverClass: '',

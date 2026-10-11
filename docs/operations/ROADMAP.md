@@ -2,10 +2,15 @@
 
 This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE and reconciled to the 2026-10-11 release candidate. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; documentation updates do not reverify or change production data.
 
+## Approved Stock workspace checkpoint
+
+- [x] Implement the approved four-tab Stock workspace, simplify POS, add bounded filtered queries, lazy details/history, scoped listeners and preserve role/posting boundaries. See [implementation and validation checkpoint](./STOCK_WORKSPACE_2026-10-12.md).
+- [ ] Obtain user visual acceptance of the local desktop/mobile interface; deploy only after separate explicit authorization. Rules, composite indexes and hosting for this workspace are not deployed.
+
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
-- Owner-created staff accounts; role-based POS (Billing, Dashboard, Bills, GRN and Audit), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
+- Owner-created staff accounts; role-based POS (Billing, Dashboard and Bills) and a Stock workspace (Current Stock, Receive Stock, Stock Audit and Stock History; implemented locally, deployment pending), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses. The owner-only Loans page contains loan totals, details, creation and repayment history. All staff can view Current Stock including costs and recorded movements.
 - Maintain financial write reliability, POS stock/payable consistency, loan allocation correctness, user-ID cash ownership, compatibility with historical planner records, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.

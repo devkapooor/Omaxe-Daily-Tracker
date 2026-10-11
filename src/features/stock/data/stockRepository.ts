@@ -1,36 +1,50 @@
-import { collection, doc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore'
+import { doc, documentId, getDocsFromServer, limit, onSnapshot, orderBy, query, where, type QueryConstraint } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { POS_SANDBOX_ID, type PosProduct, type PosProductCost } from '@/features/pos/domain/types'
+import { deriveStockRows, type StockSort } from '../domain/currentStock'
+import { stockQueryPlan, type StockQueryFilters } from '../domain/stockQueryPlan'
+import { readPage, singleFlight, stockCollection, type Cursor } from './stockQueries'
 
-const stockCollection = (name: string) => collection(doc(db, 'posSandboxes', POS_SANDBOX_ID), name)
-
-/** Full catalogue listeners belong to the stock page, never the shared app store. */
-export function subscribeStockProducts(callback: (products: PosProduct[]) => void, onError: (error: Error) => void): Unsubscribe {
-  return onSnapshot(stockCollection('products'), { includeMetadataChanges: true }, (snapshot) => {
-    // A cache populated by POS's limited queries may contain only part of the catalogue.
-    if (snapshot.metadata.fromCache) return
-    callback(snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id } as PosProduct)))
-  }, onError)
+export async function loadStockPage(filters: StockQueryFilters, sort: StockSort, descending: boolean, cursor: Cursor) {
+  const identity = JSON.stringify([filters, sort, descending])
+  const constraints: QueryConstraint[] = []
+  if (filters.vendor.trim()) constraints.push(where('vendor', '==', filters.vendor.trim()))
+  if (filters.stockStatus) constraints.push(where('currentQuantity', filters.stockStatus === 'zero' ? '==' : filters.stockStatus === 'positive' ? '>' : '<', 0))
+  if (filters.search.trim()) {
+    if (filters.searchMode === 'barcode') constraints.push(where('barcode', '==', filters.search.trim()))
+    else { const prefix = filters.search.trim().toLowerCase(); constraints.push(where('searchName', '>=', prefix), where('searchName', '<=', `${prefix}\uf8ff`)) }
+  }
+  const plan = stockQueryPlan(filters, sort, descending)
+  const secondary = filters.searchMode === 'name' && filters.search.trim() && ['positive', 'negative'].includes(filters.stockStatus) ? ['currentQuantity'] : []
+  const page = await readPage<PosProduct>('products', constraints, cursor, 50, identity, plan.field, plan.direction, secondary)
+  const ids = page.items.map((item) => item.id)
+  const costs: PosProductCost[] = []
+  for (let offset = 0; offset < ids.length; offset += 30) {
+    const chunk = ids.slice(offset, offset + 30)
+    const result = await singleFlight(`costs:${JSON.stringify(chunk)}`, () => getDocsFromServer(query(stockCollection('productCosts'), where(documentId(), 'in', chunk), orderBy(documentId()), limit(chunk.length))))
+    costs.push(...result.docs.map((entry) => ({ ...entry.data(), productId: entry.id } as PosProductCost)))
+  }
+  return { ...page, items: deriveStockRows(page.items, costs) }
 }
-export function subscribeStockCosts(callback: (costs: PosProductCost[]) => void, onError: (error: Error) => void): Unsubscribe {
-  return onSnapshot(stockCollection('productCosts'), { includeMetadataChanges: true }, (snapshot) => {
-    if (snapshot.metadata.fromCache) return
-    callback(snapshot.docs.map((entry) => ({ ...entry.data(), productId: entry.id } as PosProductCost)))
-  }, onError)
+export function subscribeStockProduct(id: string, next: (product: ReturnType<typeof deriveStockRows>[number]) => void, fail: (cause: Error) => void) {
+  let product: PosProduct | null = null, cost: PosProductCost | null = null, productReady = false, costReady = false, active = true
+  const publish = () => { if (active && productReady && costReady && product) next(deriveStockRows([product], cost ? [cost] : [])[0]) }
+  const stops = [
+    onSnapshot(doc(db, 'posSandboxes', POS_SANDBOX_ID, 'products', id), { includeMetadataChanges: true }, (snapshot) => {
+      if (!active || snapshot.metadata.fromCache) return
+      if (!snapshot.exists()) { fail(new Error('This product no longer exists.')); return }
+      product = { ...snapshot.data(), id } as PosProduct; productReady = true; publish()
+    }, fail),
+    onSnapshot(doc(db, 'posSandboxes', POS_SANDBOX_ID, 'productCosts', id), { includeMetadataChanges: true }, (snapshot) => {
+      if (!active || snapshot.metadata.fromCache) return
+      cost = snapshot.exists() ? { ...snapshot.data(), productId: id } as PosProductCost : null; costReady = true; publish()
+    }, fail),
+  ]
+  return () => { active = false; stops.forEach((stop) => stop()) }
 }
-
 export type StockMovement = {
-  id: string; productId: string; type: string; quantityDelta: number; beforeQuantity?: number; afterQuantity?: number
-  createdAt: string; businessDate?: string; actorName?: string; reason?: string
-  goodsReceiptId?: string; billId?: string; stockAuditId?: string; approvalId?: string
-  beforeMrpPaise?: number | null; afterMrpPaise?: number | null
-}
-
-export function subscribeStockMovements(productId: string, callback: (movements: StockMovement[]) => void, onError: (error: Error) => void): Unsubscribe {
-  // Filtering by product only also retains legacy movements without a createdAt field.
-  return onSnapshot(query(stockCollection('stockMovements'), where('productId', '==', productId)), { includeMetadataChanges: true }, (snapshot) => {
-    if (snapshot.metadata.fromCache) return
-    const movements = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id } as StockMovement))
-    callback(movements.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')) || a.id.localeCompare(b.id)))
-  }, onError)
+  id: string; productId?: string; barcode?: string; productName?: string; type: string; quantityDelta: number; beforeQuantity?: number; afterQuantity?: number
+  createdAt?: string; businessDate?: string; actorName?: string; actorUid?: string; reason?: string; sourceReference?: string
+  goodsReceiptId?: string; billId?: string; stockAuditId?: string; approvalId?: string; correctionId?: string
+  beforeMrpPaise?: number | null; afterMrpPaise?: number | null; beforeSellingPricePaise?: number; afterSellingPricePaise?: number
 }

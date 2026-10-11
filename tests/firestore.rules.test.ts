@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, Timestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import {
   activateVendorLedgerV2,
   applyOwnerSettlementCorrectionV2,
@@ -313,10 +313,13 @@ describe('POS shared cashier handover integrity', () => {
   const ledger = { initialized: true, revision: 1, cashNetPaise: 10000, dailyTotals: { [date]: { upi: 20000, card: 30000 } }, lastOperation: 'initialize', lastOperationId: 'initial', updatedByUid: 'owner-user' }
   const cashierDb = (uid = 'billing-user', time = authTime) => testEnvironment.authenticatedContext(uid, { auth_time: time }).firestore()
   const ref = (db: ReturnType<typeof cashierDb>, name: string, id: string) => doc(db, 'posSandboxes', 'test', name, id)
-  async function seedLedger(state?: Record<string, unknown>) {
+  let previousCashier: Record<string, unknown>
+  const session = { status: 'open', date, openingReconciliationId: 'prior', openedByUid: 'owner-user' }
+  async function seedLedger(state?: Record<string, unknown>, mode: 'open' | 'count' = 'count') {
+    previousCashier = { uid: 'billing-user', authTime, needsLogoutCheck: false, closed: false, joinedCounterId: 'prior', joinedAt: Timestamp.fromMillis(1000), lastBillId: '', lastReconciliationId: '', updatedAt: timestamp, ...state }
     await testEnvironment.withSecurityRulesDisabled(async context => {
-      await setDoc(ref(context.firestore(), 'handover', 'main'), ledger)
-      if (state) await setDoc(ref(context.firestore(), 'cashierStates', 'billing-user'), state)
+      await setDoc(ref(context.firestore(), 'handover', 'main'), { ...ledger, checkpoint: { date, cashActualPaise: 0, cashNetPaise: 0, upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'prior' }, counterSession: { ...session, status: mode === 'open' ? 'open' : 'closed' }, ...(mode === 'count' ? { countReservation: { id: 'count-1', uid: 'billing-user', name: 'billing-user', authTime, kind: 'login', date, revision: 1, startedAt: Timestamp.now() } } : {}) })
+      await setDoc(ref(context.firestore(), 'cashierStates', 'billing-user'), previousCashier)
     })
   }
   function reconciliationBatch(overrides: Record<string, unknown> = {}, checkpointOverrides: Record<string, unknown> = {}, uid = 'billing-user') {
@@ -324,9 +327,9 @@ describe('POS shared cashier handover integrity', () => {
     const id = 'recon-1'
     const actual = { cash: 10000, upi: 20000, card: 30000 }
     const batch = writeBatch(db)
-    batch.set(ref(db, 'reconciliations', id), { uid, name: uid, authTime, kind: 'login', date, denominations: { '100': 1 }, coinPaise: 0, actual, expected: actual, delta: { cash: 0, upi: 0, card: 0 }, hasDiscrepancy: false, createdAt: timestamp, reviewStatus: 'matched', ...overrides })
-    batch.update(ref(db, 'handover', 'main'), { revision: 2, lastOperation: 'reconciliation', lastOperationId: id, updatedByUid: uid, checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: id, ...checkpointOverrides } })
-    batch.set(ref(db, 'cashierStates', uid), { uid, authTime, needsLogoutCheck: false, lastBillId: '', lastReconciliationId: id, updatedAt: timestamp })
+    batch.set(ref(db, 'reconciliations', id), { id, uid, name: uid, authTime, kind: 'login', date, recordedAt: serverTimestamp(), reservationId: 'count-1', denominations: { '100': 1 }, coinPaise: 0, actual, expected: actual, delta: { cash: 0, upi: 0, card: 0 }, hasDiscrepancy: false, createdAt: timestamp, reviewStatus: 'matched', ...overrides })
+    batch.update(ref(db, 'handover', 'main'), { revision: 2, countReservation: null, counterSession: { status: 'open', date, openingReconciliationId: id, openedByUid: uid }, lastOperation: 'reconciliation', lastOperationId: id, updatedByUid: uid, checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: id, ...checkpointOverrides } })
+    batch.set(ref(db, 'cashierStates', uid), { uid, authTime, needsLogoutCheck: false, closed: false, joinedCounterId: id, joinedAt: serverTimestamp(), lastBillId: previousCashier.lastBillId, lastReconciliationId: id, updatedAt: timestamp })
     return batch
   }
   function billingBatch(time = authTime, includeLedger = true, cash = 11000, revision = 2, lastReconciliationId = '') {
@@ -335,7 +338,7 @@ describe('POS shared cashier handover integrity', () => {
     batch.set(ref(db, 'sequences', '2026-27'), { financialYear: '2026-27', lastNumber: 1, updatedByUid: 'billing-user' })
     batch.set(ref(db, 'billStates', 'new-bill'), { billId: 'new-bill', state: 'active', revision: 1, updatedByUid: 'billing-user' })
     batch.set(ref(db, 'bills', 'new-bill'), { id: 'new-bill', financialYear: '2026-27', sequenceNumber: 1, testOnly: true, status: 'finalized', createdByUid: 'billing-user', subtotalPaise: 1000, totalPaise: 1000, lines: [{ id: 'l1' }], payments: [{ method: 'cash', amountPaise: 1000 }], handoverDate: date, cashierAuthTime: time })
-    batch.set(ref(db, 'cashierStates', 'billing-user'), { uid: 'billing-user', authTime: time, needsLogoutCheck: true, lastBillId: 'new-bill', lastReconciliationId, updatedAt: timestamp })
+    batch.set(ref(db, 'cashierStates', 'billing-user'), { uid: 'billing-user', authTime: time, needsLogoutCheck: true, closed: false, joinedCounterId: previousCashier.joinedCounterId, joinedAt: previousCashier.joinedAt, lastBillId: 'new-bill', lastReconciliationId, updatedAt: timestamp })
     if (includeLedger) batch.update(ref(db, 'handover', 'main'), { revision, cashNetPaise: cash, lastOperation: 'bill', lastOperationId: 'new-bill', updatedByUid: 'billing-user' })
     return batch
   }
@@ -361,13 +364,13 @@ describe('POS shared cashier handover integrity', () => {
     batch.set(doc(db, 'cashMovementControl', 'main'), { revision: 1, lastOperation: 'daily-close', lastOperationId: id, updatedAt: timestamp })
     batch.set(ref(db, 'drawerClosures', id), closure)
     batch.update(ref(db, 'handover', 'main'), {
-      revision: 2, lastOperation: 'cashout-close', lastOperationId: id, updatedByUid: 'owner-user',
+      revision: 2, counterSession: { ...session, status: 'closed' }, lastOperation: 'cashout-close', lastOperationId: id, updatedByUid: 'owner-user',
       checkpoint: { ...checkpoint, cashActualPaise: 0 },
     })
     return batch
   }
   it('allows linked billing and denies missing ledger update or forged amounts', async () => {
-    await seedLedger()
+    await seedLedger(undefined, 'open')
     await assertFails(billingBatch(authTime, false).commit())
     await assertFails(billingBatch(authTime, true, 999999).commit())
     await assertSucceeds(billingBatch().commit())
@@ -377,10 +380,11 @@ describe('POS shared cashier handover integrity', () => {
     await assertFails(billingBatch().commit())
     await assertFails(updateDoc(ref(userDb('owner-user'), 'handover', 'main'), { revision: 2, cashNetPaise: 0, lastOperation: 'refund', lastOperationId: 'invented-refund', updatedByUid: 'owner-user' }))
   })
-  it('requires historical/previous-login cashiers to reconcile before fresh-login billing', async () => {
+  it('requires a real opening reservation before billing a closed counter', async () => {
     await seedLedger({ uid: 'billing-user', authTime: 0, needsLogoutCheck: true, lastBillId: 'historical', lastReconciliationId: '', updatedAt: timestamp })
     await assertFails(billingBatch().commit())
     await assertSucceeds(reconciliationBatch().commit())
+    previousCashier = (await getDoc(ref(cashierDb(), 'cashierStates', 'billing-user'))).data()!
     await assertFails(billingBatch(authTime + 1, true, 11000, 3, 'recon-1').commit())
     await assertSucceeds(billingBatch(authTime, true, 11000, 3, 'recon-1').commit())
   })
@@ -420,7 +424,7 @@ describe('POS shared cashier handover integrity', () => {
     await assertSucceeds(reconciliationBatch({ actual: amounts, expected: amounts, denominations: { '100': 1, '10': 1 } }, { cashActualPaise: 11000, upiActualPaise: 21000, cardActualPaise: 31000 }).commit())
   })
   it('closes the physical drawer atomically and keeps the closure immutable', async () => {
-    await seedLedger()
+    await seedLedger(undefined, 'open')
     await testEnvironment.withSecurityRulesDisabled(async context => {
       await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' } })
     })
@@ -431,7 +435,7 @@ describe('POS shared cashier handover integrity', () => {
     await assertFails(deleteDoc(ref(db, 'drawerClosures', 'daily-cashout-close-1')))
   })
   it('rejects a forged cashout removal amount', async () => {
-    await seedLedger()
+    await seedLedger(undefined, 'open')
     await testEnvironment.withSecurityRulesDisabled(async context => {
       await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' } })
     })
