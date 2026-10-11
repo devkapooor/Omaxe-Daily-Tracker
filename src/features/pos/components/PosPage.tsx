@@ -279,13 +279,13 @@ export function PosPage({ currentUser, showToast }: { currentUser: AppUser; show
       )} />
     )}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <PageCardStack className={tab === 'bills' || tab === 'grn' || tab === 'audit' ? 'min-h-full content-start pb-4' : 'h-full pb-4'}>
+        <PageCardStack className={tab === 'checkout' ? 'flex min-h-full flex-col pb-4 lg:h-full lg:min-h-0' : tab === 'dashboard' ? 'h-full pb-4' : 'min-h-full content-start pb-4'}>
       {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
       {handover.ledger?.initialized && !handover.counterOpen ? <StatusPanel variant="warning">The Shared Counter Needs An Opening Count. <Button size="sm" disabled={Boolean(handover.reservation)} onClick={handover.requestSetup}>Open Counter</Button></StatusPanel> : null}
       {handover.reservation ? <StatusPanel variant="warning" role="status">{handover.reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Cashout Are Paused.</StatusPanel> : handover.counterOpen ? <p className="text-xs text-muted-foreground" role="status">Shared Counter Open {handover.joined ? '· Your Billing Session Is Ready' : '· Joining Your Billing Session...'}</p> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
-      {tab === 'checkout' ? <div className="grid min-h-full items-start gap-card-gap lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)] lg:items-stretch">
+      {tab === 'checkout' ? <div className="grid items-start gap-card-gap lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)] lg:items-stretch">
         <div className="grid min-w-0 gap-card-gap lg:min-h-0 lg:grid-rows-[auto_minmax(0,1fr)]">
           <Card><CardContent className="grid gap-3 pt-4">
             <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}>
