@@ -35,6 +35,7 @@ The proposed filter-first catalogue loading and server-side stock pagination are
 - 9 focused source tests passed across price input/review mapping and existing Action Centre domains.
 - 8 existing POS repository regression tests passed for GRN, physical stock audit, and unknown-barcode workflows; 16 unrelated cases were intentionally skipped.
 - Desktop and phone-width UI checks used synthetic repository data: direct row Edit, invalid-price error, valid save with current values and last editor, owner before/after review, and movement listener start/stop on expand/collapse. All price-save/review test writes were synthetic or emulator-only. No production records were changed.
+- Follow-up visual fix: the price fieldset aligns children at the top so the MRP helper text cannot stretch and vertically displace the selling price input. Focused ESLint and a desktop browser check passed after this layout-only change.
 
 ## Release requirements
 
