@@ -3,11 +3,12 @@
 ## v1.3.1 - 2026-10-11
 
 - Tag: `v1.3.1`.
-- Status: release build verified after explicit user authorization to commit and deploy; Hosting deployment pending.
+- Status: committed, tagged, pushed and deployed on 2026-10-11 after explicit user authorization. Release commit: `9129c80`.
 - Target: Firebase Hosting, `alphahub-f137b`, `https://alphahub-f137b.web.app`.
 - Fix commit: `045fd78`. POS Billing now keeps the shared-counter status at its natural height, followed by the scanner with the normal 10px card gap. Checkout fills the remaining desktop height, preserving the cart/payment columns and bottom payment actions; phone layout follows content height.
 - Validation: focused POS ESLint and whitespace checks passed. A local CSS fixture checked the corrected spacing at desktop (1626px) and phone (390px) widths. Full production UI interaction and user visual acceptance remain pending; no business logic changed.
 - Production TypeScript/Vite build and local credential exclusion checks passed with auth bypass/emulators disabled. Released JS: `index-yGZJuwEW.js`; CSS: `index-Dm0SCzmE.css`. The existing bundle-size warning remains. Business-logic and Rules suites were not rerun for this layout-only fix.
+- Deployment proof: at `2026-10-11T14:51:41.642Z` (20:21 IST), live HTML, JavaScript and CSS returned HTTP 200 and matched the local SHA-256 hashes. Receipts are retained under ignored `output/release-v1.3.1/`.
 - Deployment is Hosting only; the installed-app cache repair remains deferred at the user's request.
 
 ## v1.3.0 - 2026-10-11
