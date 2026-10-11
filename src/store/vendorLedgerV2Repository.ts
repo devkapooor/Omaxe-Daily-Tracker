@@ -10,6 +10,7 @@ import {
   buildVendorReturnV2,
   buildVendorChequeV2,
   buildVendorV2,
+  buildVendorCreationV2,
   assertChequeTransition,
   assertExpectedRevision,
   deterministicEventId,
@@ -269,16 +270,37 @@ export async function createPurchaseV2(input: CreatePurchaseV2Input, database: F
 }
 
 export async function createVendorV2(input: CreateVendorV2Input, database: Firestore = db) {
-  const vendor = buildVendorV2(input)
-  return runVendorLedgerV2Transaction(async (transaction, refs) => {
+  const { vendor, ledgerEntry, accountState } = buildVendorCreationV2(input)
+  return runVendorLedgerV2Transaction(async (transaction, refs, config) => {
+    if (ledgerEntry && (!config.activationDate || !isV2BusinessDate(ledgerEntry.occurredOn, config.activationDate))) {
+      throw new Error('Opening date cannot be before the approved vendor ledger activation date.')
+    }
     const vendorRef = doc(refs.vendors, vendor.id)
     const snapshot = await transaction.get(vendorRef)
     if (snapshot.exists()) {
       const existing = snapshot.data() as VendorV2
       const exactRetry = existing.canonicalName === vendor.canonicalName &&
-        existing.createdByUserId === vendor.createdByUserId && existing.createdAt === vendor.createdAt
-      if (exactRetry) return { created: false, vendor: existing }
+        existing.createdByUserId === vendor.createdByUserId && existing.createdAt === vendor.createdAt &&
+        existing.openingBalancePaise === vendor.openingBalancePaise && existing.openingLedgerEntryId === vendor.openingLedgerEntryId
+      if (exactRetry) {
+        if (ledgerEntry) {
+          const savedOpening = (await transaction.get(doc(refs.ledgerEntries, ledgerEntry.id))).data() as VendorLedgerEntryV2 | undefined
+          if (!savedOpening || savedOpening.reason !== ledgerEntry.reason || savedOpening.occurredOn !== ledgerEntry.occurredOn) {
+            throw new Error('A V2 vendor already uses this ID with different opening evidence.')
+          }
+        }
+        return { created: false, vendor: existing }
+      }
       throw new Error('A V2 vendor already uses this ID.')
+    }
+    if (ledgerEntry && accountState) {
+      const [openingSnapshot, accountSnapshot] = await Promise.all([
+        transaction.get(doc(refs.ledgerEntries, ledgerEntry.id)),
+        transaction.get(doc(refs.vendorAccountStates, vendor.id)),
+      ])
+      if (openingSnapshot.exists() || accountSnapshot.exists()) throw new Error('Opening records already use this vendor ID.')
+      transaction.set(doc(refs.ledgerEntries, ledgerEntry.id), ledgerEntry)
+      transaction.set(doc(refs.vendorAccountStates, vendor.id), accountState)
     }
     transaction.set(vendorRef, vendor)
     return { created: true, vendor }

@@ -12,6 +12,7 @@ import {
   buildVendorReturnV2,
   buildVendorChequeV2,
   buildVendorV2,
+  buildVendorCreationV2,
   chequeVendorLedgerEffectPaise,
   deterministicEventId,
   financialLedgerAmountPaise,
@@ -90,6 +91,51 @@ describe('V2 money and deterministic identifiers', () => {
     expect(rupeesToPaise(0.1 + 0.2)).toBe(30)
     expect(paiseToRupees(714_130)).toBe(7141.3)
     expect(() => paiseToRupees(1.5)).toThrow(/integer/)
+  })
+
+  it('records an explicit opening payable with matching immutable evidence and account balance', () => {
+    const posting = buildVendorCreationV2({
+      id: 'vendor-opening', canonicalName: 'Opening Vendor', openingBalancePaise: 125050,
+      openingDate: '2026-10-11', openingReason: ' Verified vendor statement ',
+      actorUserId: 'owner-1', timestamp: '2026-10-11T00:00:00.000Z',
+    })
+    expect(posting.vendor.openingBalancePaise).toBe(125050)
+    expect(posting.ledgerEntry).toMatchObject({
+      id: posting.vendor.openingLedgerEntryId, vendorId: posting.vendor.id,
+      eventType: 'opening-balance', posting: 'financial', signedAmountPaise: 125050,
+      sourceType: 'vendor', sourceRecordId: posting.vendor.id, sourceRevision: 1,
+      reason: 'Verified vendor statement', occurredOn: '2026-10-11', createdByUserId: 'owner-1',
+    })
+    expect(posting.accountState).toMatchObject({
+      vendorId: posting.vendor.id, outstandingPaise: 125050, revision: 1,
+      lastLedgerEntryId: posting.ledgerEntry!.id,
+    })
+  })
+
+  it('creates no financial records when the opening is zero or omitted', () => {
+    const input = { id: 'vendor-zero', canonicalName: 'Zero Vendor', actorUserId: 'owner-1', timestamp: '2026-10-11T00:00:00.000Z' }
+    for (const draft of [input, { ...input, openingBalancePaise: 0 }]) {
+      const posting = buildVendorCreationV2(draft)
+      expect(posting.vendor.openingBalancePaise).toBe(0)
+      expect(posting.vendor.openingLedgerEntryId).toBeUndefined()
+      expect(posting.ledgerEntry).toBeUndefined()
+      expect(posting.accountState).toBeUndefined()
+    }
+  })
+
+  it('rejects invalid opening amounts and missing or invalid audit evidence', () => {
+    const input = {
+      id: 'vendor-invalid', canonicalName: 'Invalid Vendor', openingBalancePaise: 10000,
+      openingDate: '2026-10-11', openingReason: 'Verified statement',
+      actorUserId: 'owner-1', timestamp: '2026-10-11T00:00:00.000Z',
+    }
+    for (const amount of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => buildVendorCreationV2({ ...input, openingBalancePaise: amount })).toThrow(/Opening balance/)
+    }
+    expect(() => buildVendorCreationV2({ ...input, openingReason: '  ' })).toThrow(/audit reason/)
+    for (const date of ['', '11/10/2026', '2026-02-30', '2026-13-01']) {
+      expect(() => buildVendorCreationV2({ ...input, openingDate: date })).toThrow(/Opening date/)
+    }
   })
 
   it('creates stable event and per-vendor invoice reservation IDs', () => {

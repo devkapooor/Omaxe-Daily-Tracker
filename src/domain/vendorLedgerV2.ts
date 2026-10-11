@@ -28,6 +28,9 @@ export type CreateVendorV2Input = {
   address?: string
   suppliedBrands?: string[]
   notes?: string
+  openingBalancePaise?: AmountPaise
+  openingDate?: string
+  openingReason?: string
   actorUserId: string
   timestamp: string
 }
@@ -304,6 +307,16 @@ export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
   const canonicalName = input.canonicalName.trim()
   const actorUserId = input.actorUserId.trim()
   if (!id || !canonicalName || !actorUserId) throw new Error('Vendor ID, name, and actor are required.')
+  const openingBalancePaise = input.openingBalancePaise ?? 0
+  assertIntegerPaise(openingBalancePaise, 'Opening balance')
+  if (openingBalancePaise < 0) throw new Error('Opening balance must be zero or a positive payable amount.')
+  if (openingBalancePaise > 0) {
+    if (!input.openingReason?.trim()) throw new Error('An audit reason is required for an opening balance.')
+    const date = input.openingDate ?? ''
+    if (!businessDatePattern.test(date) || !Number.isFinite(Date.parse(`${date}T00:00:00.000Z`)) || new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date) {
+      throw new Error('Opening date must be a valid date in YYYY-MM-DD format.')
+    }
+  }
 
   const canonicalKey = canonicalName.toLocaleUpperCase('en-IN')
   const aliases = uniqueTrimmedValues(input.aliases ?? [])
@@ -319,13 +332,36 @@ export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
     suppliedBrands: uniqueTrimmedValues(input.suppliedBrands ?? []),
     notes: input.notes?.trim() ?? '',
     active: true,
-    openingBalancePaise: 0,
+    openingBalancePaise,
+    ...(openingBalancePaise > 0 ? { openingLedgerEntryId: deterministicEventId('vendor', id, 1, 'opening-balance') } : {}),
     revision: 1,
     createdAt: input.timestamp,
     createdByUserId: actorUserId,
     updatedAt: input.timestamp,
     updatedByUserId: actorUserId,
   }
+}
+
+export function buildVendorCreationV2(input: CreateVendorV2Input): {
+  vendor: VendorV2
+  ledgerEntry?: VendorLedgerEntryV2
+  accountState?: VendorAccountStateV2
+} {
+  const vendor = buildVendorV2(input)
+  if (!vendor.openingLedgerEntryId) return { vendor }
+  const ledgerEntry: VendorLedgerEntryV2 = {
+    id: vendor.openingLedgerEntryId, vendorId: vendor.id,
+    eventType: 'opening-balance', posting: 'financial', signedAmountPaise: vendor.openingBalancePaise,
+    sourceType: 'vendor', sourceRecordId: vendor.id, sourceRevision: 1,
+    reason: input.openingReason!.trim(), occurredOn: input.openingDate!,
+    createdAt: vendor.createdAt, createdByUserId: vendor.createdByUserId,
+  }
+  const accountState: VendorAccountStateV2 = {
+    id: vendor.id, vendorId: vendor.id, outstandingPaise: vendor.openingBalancePaise,
+    revision: 1, lastLedgerEntryId: ledgerEntry.id,
+    updatedAt: vendor.createdAt, updatedByUserId: vendor.createdByUserId,
+  }
+  return { vendor, ledgerEntry, accountState }
 }
 
 function assertIntegerPaise(value: number, label: string) {

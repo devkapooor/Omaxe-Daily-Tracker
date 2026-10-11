@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { normalizeName, today } from '@/app/uiHelpers'
 import { serverNowIso } from '@/shared/lib/serverClock'
@@ -135,18 +135,20 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           onClose={() => setVendorFormOpen(false)}
           onRun={run}
           vendors={ledger.vendors}
+          activationDate={ledger.config.activationDate}
         />
       ) : null}
     </Tabs>
   )
 }
 
-function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
+function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activationDate }: {
   busy: boolean
   currentUser: AppUser
   onClose: () => void
   onRun: (action: () => Promise<unknown>, success: string) => Promise<void>
   vendors: VendorLedgerV2Data['vendors']
+  activationDate?: string
 }) {
   const [name, setName] = useState('')
   const [ownerName, setOwnerName] = useState('')
@@ -155,9 +157,17 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
   const [companiesProvided, setCompaniesProvided] = useState('')
   const [notes, setNotes] = useState('')
   const [formError, setFormError] = useState('')
+  const [openingAmount, setOpeningAmount] = useState('0')
+  const [openingDate, setOpeningDate] = useState(today)
+  const [openingReason, setOpeningReason] = useState('')
+  const [vendorId] = useState(() => `vendor-${crypto.randomUUID()}`)
+  const [creationTimestamp] = useState(serverNowIso)
+  const submissionPending = useRef(false)
+  const canSetOpening = currentUser.role === 'owner'
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy || submissionPending.current) return
     const savedName = normalizeName(name)
     const savedOwnerName = normalizeName(ownerName)
     const savedContact = contact.trim()
@@ -167,23 +177,37 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
       setFormError('Vendor name, owner, contact, address, and at least one company are required.')
       return
     }
-    if (vendors.some((vendor) => vendor.active && normalizeName(vendor.canonicalName).toLocaleLowerCase('en-IN') === savedName.toLocaleLowerCase('en-IN'))) {
+    if (vendors.some((vendor) => vendor.id !== vendorId && vendor.active && normalizeName(vendor.canonicalName).toLocaleLowerCase('en-IN') === savedName.toLocaleLowerCase('en-IN'))) {
       setFormError('An active vendor with this name already exists.')
       return
     }
+    if (canSetOpening && !/^\d+(?:\.\d{1,2})?$/.test(openingAmount.trim())) {
+      setFormError('Enter an opening payable of zero or more, with at most two decimal places.')
+      return
+    }
     setFormError('')
-    await onRun(() => createVendorV2({
-      id: `vendor-${crypto.randomUUID()}`,
-      canonicalName: savedName,
-      ownerName: savedOwnerName,
-      contact: savedContact,
-      address: savedAddress,
-      suppliedBrands,
-      notes: notes.trim(),
-      actorUserId: currentUser.id,
-      timestamp: serverNowIso(),
-    }), `Vendor ${savedName} created at zero opening.`)
-    onClose()
+    submissionPending.current = true
+    try {
+      const openingBalancePaise = canSetOpening ? rupeesToPaise(Number(openingAmount)) : 0
+      await onRun(() => createVendorV2({
+        id: vendorId,
+        canonicalName: savedName,
+        ownerName: savedOwnerName,
+        contact: savedContact,
+        address: savedAddress,
+        suppliedBrands,
+        notes: notes.trim(),
+        openingBalancePaise,
+        ...(openingBalancePaise > 0 ? { openingDate, openingReason } : {}),
+        actorUserId: currentUser.id,
+        timestamp: creationTimestamp,
+      }), `Vendor ${savedName} created with opening payable INR ${(openingBalancePaise / 100).toLocaleString('en-IN')}.`)
+      onClose()
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Unable to save the vendor.')
+    } finally {
+      submissionPending.current = false
+    }
   }
 
   return (
@@ -221,9 +245,18 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors }: {
             <FieldLabel className="md:col-span-2" label="Notes / Comments">
               <Textarea className="min-h-24" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment terms, service quality, or stock rhythm" />
             </FieldLabel>
-            <div className="md:col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3.5 py-3 text-sm text-muted-foreground">
-              <strong className="text-foreground">Opening outstanding: INR 0.</strong> New vendors begin at zero so no legacy balance is copied into the V2 ledger.
-            </div>
+            {canSetOpening ? <>
+              <FieldLabel label="Opening Balance (₹)">
+                <Input type="number" min="0" step="0.01" required disabled={busy} value={openingAmount} onChange={(event) => setOpeningAmount(event.target.value)} aria-describedby="vendor-opening-help" />
+              </FieldLabel>
+              {Number(openingAmount) > 0 ? <FieldLabel label="Opening Date">
+                <Input type="date" min={activationDate} required disabled={busy} value={openingDate} onChange={(event) => setOpeningDate(event.target.value)} />
+              </FieldLabel> : null}
+              <p id="vendor-opening-help" className="md:col-span-2 text-xs text-muted-foreground">Amount already owed to this vendor. Adds to the vendor payable; no cash payment is recorded. Leave at 0 when nothing is owed.</p>
+              {Number(openingAmount) > 0 ? <FieldLabel className="md:col-span-2" label="Opening Balance Reason">
+                <Textarea required disabled={busy} value={openingReason} onChange={(event) => setOpeningReason(event.target.value)} placeholder="Example: Verified balance from the vendor statement" />
+              </FieldLabel> : null}
+            </> : <p className="md:col-span-2 text-xs text-muted-foreground">Opening balance: INR 0. Only the owner can enter an opening payable.</p>}
             <div className="flex flex-col-reverse gap-2 md:col-span-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
               <Button disabled={busy}>{busy ? 'Saving...' : 'Save Vendor'}</Button>

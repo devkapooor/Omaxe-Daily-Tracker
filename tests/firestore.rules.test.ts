@@ -742,6 +742,62 @@ describe('V2 vendor ledger capability enforcement', () => {
       .rejects.toThrow(/already uses this ID/)
   })
 
+  it('creates an audited vendor opening atomically, keeps retries idempotent and allows payment against it', async () => {
+    await enableV2()
+    const ownerDb = userDb('owner-user')
+    const input = {
+      id: 'vendor-opening-1', canonicalName: 'Vendor With Opening', openingBalancePaise: 125050,
+      openingDate: '2026-10-11', openingReason: 'Verified statement', actorUserId: 'owner-user', timestamp,
+    }
+    const result = await createVendorV2(input, ownerDb)
+    expect(result.created).toBe(true)
+    const openingRef = doc(ownerDb, 'vendorLedgerEntriesV2', result.vendor.openingLedgerEntryId!)
+    const accountRef = doc(ownerDb, 'vendorAccountStatesV2', input.id)
+    expect((await getDoc(openingRef)).data()).toMatchObject({
+      eventType: 'opening-balance', signedAmountPaise: 125050, reason: input.openingReason, occurredOn: input.openingDate,
+    })
+    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 125050, revision: 1 })
+    await expect(createVendorV2(input, ownerDb)).resolves.toMatchObject({ created: false })
+    await expect(createVendorV2({ ...input, openingBalancePaise: 125051 }, ownerDb)).rejects.toThrow(/already uses this ID/)
+    await expect(createVendorV2({ ...input, openingReason: 'Different statement' }, ownerDb)).rejects.toThrow(/different opening evidence/)
+    await expect(createVendorV2({ ...input, openingDate: '2026-10-12' }, ownerDb)).rejects.toThrow(/different opening evidence/)
+    await createSettlementV2({
+      id: 'opening-payment', vendorId: input.id, date: '2026-10-11', amountPaise: 25050,
+      mode: 'bank-transfer', actorUserId: 'owner-user', timestamp,
+    }, ownerDb)
+    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 100000, revision: 2 })
+    await expect(createVendorV2(input, ownerDb)).resolves.toMatchObject({ created: false })
+    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 100000, revision: 2 })
+    expect((await getDoc(openingRef)).data()?.signedAmountPaise).toBe(125050)
+  })
+
+  it('rejects non-owner opening payables without leaving a partial vendor or balance', async () => {
+    await enableV2()
+    const input = {
+      id: 'staff-opening', canonicalName: 'Staff Opening', openingBalancePaise: 10000,
+      openingDate: '2026-10-11', openingReason: 'Statement', actorUserId: 'purchasing-user', timestamp,
+    }
+    await expect(createVendorV2(input, userDb('purchasing-user'))).rejects.toThrow()
+    const ownerDb = userDb('owner-user')
+    expect((await getDoc(doc(ownerDb, 'vendorsV2', input.id))).exists()).toBe(false)
+    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', input.id))).exists()).toBe(false)
+    expect((await getDoc(doc(ownerDb, 'vendorLedgerEntriesV2', 'vendor:staff-opening:1:opening-balance'))).exists()).toBe(false)
+    await expect(createVendorV2({ ...input, openingBalancePaise: 0 }, userDb('purchasing-user'))).resolves.toMatchObject({ created: true })
+  })
+
+  it('rejects unaudited and pre-activation vendor openings without financial writes', async () => {
+    await enableV2()
+    const ownerDb = userDb('owner-user')
+    const input = {
+      id: 'invalid-opening', canonicalName: 'Invalid Opening', openingBalancePaise: 10000,
+      openingDate: '2026-10-11', openingReason: 'Statement', actorUserId: 'owner-user', timestamp,
+    }
+    await expect(createVendorV2({ ...input, openingReason: '' }, ownerDb)).rejects.toThrow(/audit reason/)
+    await expect(createVendorV2({ ...input, openingDate: '2026-09-30' }, ownerDb)).rejects.toThrow(/activation date/)
+    expect((await getDoc(doc(ownerDb, 'vendorsV2', input.id))).exists()).toBe(false)
+    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', input.id))).exists()).toBe(false)
+  })
+
   it('blocks legacy vendor posting after V2 activation while preserving owner loan payments', async () => {
     const legacyPurchase = {
       id: 'legacy-before-cutover', storeId: 'single-store', date: '2026-09-30', supplierName: 'Legacy Vendor',
