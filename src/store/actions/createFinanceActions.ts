@@ -19,7 +19,7 @@ import {
   sortByCreatedAtDesc,
 } from '@/store/storeShared'
 import { createCashoutCorrectionActions } from '@/store/actions/createCashoutCorrectionActions'
-import { handoverRef } from '@/features/pos/data/cashierHandoverRepository'
+import { assertDrawerAvailable, handoverRef } from '@/features/pos/data/cashierHandoverRepository'
 import type { HandoverLedger } from '@/features/pos/domain/cashierHandover'
 import { buildDailyCashoutClosure } from '@/features/pos/domain/drawerClosure'
 import { rupeesToPaise } from '@/features/pos/domain/posDomain'
@@ -433,6 +433,8 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       if (cashControlRevision !== holderClose.revision) throw new Error('Cash activity changed while the closing count was being prepared. Refresh and submit again.')
       if (!ledger?.initialized) throw new Error('The shared POS drawer must be initialized before completing Cashout.')
       if (!ledger.checkpoint) throw new Error('Complete a cashier handover count before closing the shared POS drawer.')
+      assertDrawerAvailable(ledger)
+      if (ledger.counterSession?.status !== 'open') throw new Error('Open the shared counter before completing its daily Cashout.')
 
       const closure = buildDailyCashoutClosure({
         cashoutId: id,
@@ -481,6 +483,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
         lastOperation: 'cashout-close',
         lastOperationId: id,
         updatedByUid: recordedByUserId,
+        counterSession: { ...ledger.counterSession!, status: 'closed' },
         checkpoint: { ...ledger.checkpoint, cashActualPaise: 0, cashNetPaise: ledger.cashNetPaise },
       })
     })

@@ -1237,10 +1237,42 @@ service cloud.firestore {
           timestamp.date(int(date.split('-')[0]), int(date.split('-')[1]), int(date.split('-')[2])) ==
           (request.time + duration.value(19800, 's')).date();
       }
+      function counterOpen(data) {
+        let counter = data.get('counterSession', {});
+        return data.initialized == true && counter.get('status', '') == 'open' && validHandoverDate(data.get('checkpoint', {}).get('date', ''));
+      }
+      function countReserved(data) {
+        let reservation = data.get('countReservation', null);
+        return reservation != null && request.time < reservation.startedAt + duration.value(300, 's');
+      }
+      function callerJoined(data) {
+        let state = get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid)).data;
+        return state.authTime == request.auth.token.auth_time && state.get('closed', true) == false &&
+          state.get('joinedCounterId', '') == data.counterSession.openingReconciliationId;
+      }
+      function validCountReservation(before, after) {
+        let reservation = after.countReservation;
+        let cashierPath = /databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid);
+        let previousAuthTime = exists(cashierPath) ? get(cashierPath).data.authTime : 0;
+        return !countReserved(before) && reservation is map &&
+          reservation.keys().hasOnly(['id', 'uid', 'name', 'authTime', 'kind', 'date', 'revision', 'startedAt']) &&
+          reservation.id is string && reservation.id.size() > 0 && reservation.uid == request.auth.uid &&
+          reservation.name == userDoc().data.name && reservation.authTime == request.auth.token.auth_time && reservation.authTime >= previousAuthTime &&
+          reservation.startedAt == request.time && validHandoverDate(reservation.date) && reservation.revision == after.revision &&
+          reservation.id == after.lastOperationId &&
+          ((reservation.kind == 'login' && !counterOpen(before)) || (reservation.kind == 'logout' && callerJoined(before))) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'countReservation', 'lastOperation', 'lastOperationId', 'updatedByUid']);
+      }
+      function validCountRelease(before, after) {
+        let reservation = before.countReservation;
+        return reservation != null && after.countReservation == null && after.lastOperationId == reservation.id &&
+          (!countReserved(before) || isOwner() || (reservation.uid == request.auth.uid && reservation.authTime == request.auth.token.auth_time)) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'countReservation', 'lastOperation', 'lastOperationId', 'updatedByUid']);
+      }
       function validHandoverBill(bill, billId) {
         let after = getAfter(handoverPath()).data;
         let state = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid)).data;
-        return after.initialized == true && validHandoverDate(bill.handoverDate) && bill.cashierAuthTime == request.auth.token.auth_time &&
+        return counterOpen(after) && !countReserved(get(handoverPath()).data) && validHandoverDate(bill.handoverDate) && bill.cashierAuthTime == request.auth.token.auth_time &&
           bill.payments.size() > 0 && bill.payments.size() <= 4 && validPaymentAt(bill.payments, 0) && validPaymentAt(bill.payments, 1) &&
           validPaymentAt(bill.payments, 2) && validPaymentAt(bill.payments, 3) &&
           paymentTotal(bill.payments, 'cash') + paymentTotal(bill.payments, 'upi') + paymentTotal(bill.payments, 'card') == bill.totalPaise &&
@@ -1251,7 +1283,7 @@ service cloud.firestore {
         let bill = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(after.lastOperationId)).data;
         let previous = dayTotals(before, bill.handoverDate);
         let next = dayTotals(after, bill.handoverDate);
-        return !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(after.lastOperationId)) &&
+        return counterOpen(before) && !countReserved(before) && callerJoined(before) && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(after.lastOperationId)) &&
           bill.createdByUid == request.auth.uid && bill.payments.size() <= 4 &&
           after.cashNetPaise == before.cashNetPaise + paymentTotal(bill.payments, 'cash') &&
           next.upi == previous.upi + paymentTotal(bill.payments, 'upi') &&
@@ -1267,7 +1299,7 @@ service cloud.firestore {
         let payments = approval.type == 'void' ? (bill.createdAt >= '2026-10-03T18:30:00.000Z' ? bill.payments : []) : [{'method': approval.refundMethod, 'amountPaise': approval.refundAmountPaise}];
         let previous = dayTotals(before, approval.handoverDate);
         let next = dayTotals(after, approval.handoverDate);
-        return get(path).data.status == 'pending' && approval.status == 'approved' && approval.reviewedByUid == request.auth.uid &&
+        return !countReserved(before) && get(path).data.status == 'pending' && approval.status == 'approved' && approval.reviewedByUid == request.auth.uid &&
           validHandoverDate(approval.handoverDate) && approval.type in ['void', 'return'] &&
           get(statePath).data.revision == approval.sourceBillRevision && getAfter(statePath).data.revision == approval.sourceBillRevision + 1 &&
           getAfter(statePath).data.state == (approval.type == 'void' ? 'voided' : 'partially-returned') &&
@@ -1301,12 +1333,17 @@ service cloud.firestore {
         let before = get(handoverPath()).data;
         let after = getAfter(handoverPath()).data;
         let state = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(request.auth.uid)).data;
-        return before.initialized == true && record.uid == request.auth.uid && record.authTime == request.auth.token.auth_time &&
-          record.keys().hasOnly(['id', 'uid', 'name', 'authTime', 'kind', 'date', 'denominations', 'coinPaise', 'actual', 'expected', 'delta', 'hasDiscrepancy', 'createdAt', 'note', 'reviewStatus']) &&
+        let reservation = before.countReservation;
+        return before.initialized == true && countReserved(before) && reservation.uid == request.auth.uid && reservation.authTime == request.auth.token.auth_time &&
+          record.reservationId == reservation.id && record.kind == reservation.kind && record.date == reservation.date && before.revision == reservation.revision &&
+          record.recordedAt == request.time && record.name == userDoc().data.name && record.uid == request.auth.uid && record.authTime == request.auth.token.auth_time &&
+          record.keys().hasOnly(['id', 'uid', 'name', 'authTime', 'kind', 'date', 'denominations', 'coinPaise', 'actual', 'expected', 'delta', 'hasDiscrepancy', 'createdAt', 'note', 'reviewStatus', 'recordedAt', 'reservationId']) &&
           record.get('id', id) == id && record.get('note', '') is string && record.get('note', '').size() <= 1000 &&
           record.kind in ['login', 'logout'] && validHandoverDate(record.date) && record.createdAt is string && record.name is string &&
           validDenominations(record.denominations, record.coinPaise, record.actual.cash) &&
-          record.actual.upi is int && record.actual.upi >= 0 && record.actual.card is int && record.actual.card >= 0 &&
+          record.actual.cash <= 9007199254740991 && record.coinPaise <= 9007199254740991 &&
+          record.actual.upi is int && record.actual.upi >= 0 && record.actual.upi <= 9007199254740991 &&
+          record.actual.card is int && record.actual.card >= 0 && record.actual.card <= 9007199254740991 &&
           record.expected.cash == expectedCash(before) && record.expected.upi == expectedTerminal(before, record.date, 'upi') &&
           record.expected.card == expectedTerminal(before, record.date, 'card') &&
           record.delta.cash == record.actual.cash - record.expected.cash &&
@@ -1314,7 +1351,8 @@ service cloud.firestore {
           record.hasDiscrepancy == (record.delta.cash != 0 || record.delta.upi != 0 || record.delta.card != 0) &&
           record.reviewStatus == (record.hasDiscrepancy ? 'pending' : 'matched') &&
           after.lastOperation == 'reconciliation' && after.lastOperationId == id &&
-          state.authTime == request.auth.token.auth_time && state.lastReconciliationId == id && state.needsLogoutCheck == false;
+          state.authTime == request.auth.token.auth_time && state.lastReconciliationId == id && state.needsLogoutCheck == false &&
+          state.closed == (record.kind == 'logout');
       }
       function validCheckpoint(before, after) {
         let record = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(after.lastOperationId)).data;
@@ -1322,7 +1360,11 @@ service cloud.firestore {
         let totals = dayTotals(before, record.date);
         return !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(after.lastOperationId)) &&
           record.uid == request.auth.uid &&
-          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
+          after.countReservation == null &&
+          ((record.kind == 'login' && !counterOpen(before) &&
+              after.counterSession == {'status': 'open', 'date': record.date, 'openingReconciliationId': record.id, 'openedByUid': request.auth.uid}) ||
+            (record.kind == 'logout' && callerJoined(before) && after.counterSession == before.counterSession)) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'counterSession', 'countReservation', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
           checkpoint.keys().hasOnly(['cashActualPaise', 'cashNetPaise', 'date', 'upiActualPaise', 'cardActualPaise', 'upiNetPaise', 'cardNetPaise', 'reconciliationId']) &&
           checkpoint.cashActualPaise == record.actual.cash && checkpoint.cashNetPaise == before.cashNetPaise &&
           checkpoint.date == record.date && checkpoint.upiActualPaise == record.actual.upi && checkpoint.cardActualPaise == record.actual.card &&
@@ -1333,7 +1375,7 @@ service cloud.firestore {
         let closure = getAfter(path).data;
         let cashout = getAfter(/databases/$(database)/documents/dailyCashouts/$(after.lastOperationId)).data;
         let historical = closure.kind == 'historical-repair';
-        return !exists(path) && closure.id == after.lastOperationId && closure.cashoutId == after.lastOperationId &&
+        return !countReserved(before) && !exists(path) && closure.id == after.lastOperationId && closure.cashoutId == after.lastOperationId &&
           closure.keys().hasOnly(['id', 'cashoutId', 'businessDate', 'kind', 'expectedBeforePaise', 'countedPaise', 'differencePaise', 'removedPaise', 'closingBalancePaise', 'subsequentNetCashPaise', 'resultingBalancePaise', 'ledgerRevisionBefore', 'recordedByUid', 'recordedByName', 'createdAt']) &&
           closure.kind in ['daily-cashout', 'historical-repair'] && closure.recordedByUid == request.auth.uid &&
           closure.businessDate == cashout.date && closure.countedPaise == cashout.drawerTotal * 100 &&
@@ -1346,7 +1388,9 @@ service cloud.firestore {
           ((!historical && closure.expectedBeforePaise == expectedCash(before) && closure.subsequentNetCashPaise == 0) || (historical && isOwner())) &&
           before.keys().hasAny(['checkpoint']) &&
           after.cashNetPaise == before.cashNetPaise && after.dailyTotals == before.dailyTotals &&
-          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
+          (historical ? after.get('counterSession', {}) == before.get('counterSession', {}) :
+            (before.counterSession.status == 'open' && after.counterSession == {'status': 'closed', 'date': before.counterSession.date, 'openingReconciliationId': before.counterSession.openingReconciliationId, 'openedByUid': before.counterSession.openedByUid})) &&
+          after.diff(before).affectedKeys().hasOnly(['revision', 'checkpoint', 'counterSession', 'lastOperation', 'lastOperationId', 'updatedByUid']) &&
           after.checkpoint.keys().hasOnly(['cashActualPaise', 'cashNetPaise', 'date', 'upiActualPaise', 'cardActualPaise', 'upiNetPaise', 'cardNetPaise', 'reconciliationId']) &&
           after.checkpoint.cashActualPaise == closure.resultingBalancePaise && after.checkpoint.cashNetPaise == before.cashNetPaise &&
           after.checkpoint.date == before.checkpoint.date && after.checkpoint.upiActualPaise == before.checkpoint.upiActualPaise &&
@@ -1356,16 +1400,23 @@ service cloud.firestore {
       function validCashierState(uid) {
         let data = request.resource.data;
         let handover = getAfter(handoverPath()).data;
+        let before = get(handoverPath()).data;
+        let previous = exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)) ? get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)).data : {};
         return uid == request.auth.uid && data.uid == uid && data.authTime == request.auth.token.auth_time && data.updatedAt is string &&
-          data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt', 'closed']) &&
-          ((handover.lastOperation == 'bill' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(handover.lastOperationId)) && data.needsLogoutCheck == true && data.lastBillId == handover.lastOperationId &&
+          data.authTime >= previous.get('authTime', 0) &&
+          data.closed is bool && data.needsLogoutCheck is bool && data.joinedAt is timestamp &&
+          data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt', 'closed', 'joinedCounterId', 'joinedAt']) &&
+          data.joinedCounterId == handover.counterSession.openingReconciliationId &&
+          ((handover == before && counterOpen(before) && !countReserved(before) && data.closed == false && data.joinedAt == request.time &&
+            data.needsLogoutCheck == previous.get('needsLogoutCheck', false) && data.lastBillId == previous.get('lastBillId', '') && data.lastReconciliationId == previous.get('lastReconciliationId', '')) ||
+           (handover.lastOperation == 'bill' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(handover.lastOperationId)) && data.needsLogoutCheck == true && data.lastBillId == handover.lastOperationId &&
             data.get('closed', false) == false &&
-            (!exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)) || (resource.data.authTime == data.authTime && resource.data.get('closed', false) == false)) &&
-            data.lastReconciliationId == (exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/cashierStates/$(uid)) ? resource.data.lastReconciliationId : '')) ||
+            callerJoined(before) && data.joinedAt == previous.joinedAt && data.lastReconciliationId == previous.lastReconciliationId) ||
            (handover.lastOperation == 'reconciliation' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)) &&
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.uid == uid &&
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.authTime == data.authTime &&
-            data.needsLogoutCheck == false && data.lastReconciliationId == handover.lastOperationId &&
+            data.needsLogoutCheck == false && data.lastReconciliationId == handover.lastOperationId && data.lastBillId == previous.get('lastBillId', '') &&
+            data.joinedAt == (data.closed ? previous.joinedAt : request.time) &&
             data.get('closed', false) == (getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.kind == 'logout')));
       }
       match /handover/{handoverId} {
@@ -1374,23 +1425,26 @@ service cloud.firestore {
           request.resource.data.initialized == false && request.resource.data.revision == 0 &&
           request.resource.data.cashNetPaise is int && request.resource.data.dailyTotals is map &&
           request.resource.data.lastOperation == 'initialize' && request.resource.data.updatedByUid == request.auth.uid &&
-          !('checkpoint' in request.resource.data);
+          !request.resource.data.keys().hasAny(['checkpoint', 'counterSession', 'countReservation']);
         allow update: if sandboxId == 'test' && handoverId == 'main' && isStaff() &&
           request.resource.data.initialized == true && request.resource.data.revision == resource.data.revision + 1 &&
           request.resource.data.updatedByUid == request.auth.uid &&
-          ((isOwner() && resource.data.initialized == false && request.resource.data.lastOperation == 'initialize' && !('checkpoint' in request.resource.data)) ||
+          ((isOwner() && resource.data.initialized == false && request.resource.data.lastOperation == 'initialize' && !request.resource.data.keys().hasAny(['checkpoint', 'counterSession', 'countReservation'])) ||
            (resource.data.initialized == true && request.resource.data.lastOperation == 'bill' && validBillLedger(resource.data, request.resource.data)) ||
            (request.resource.data.lastOperation == 'reconciliation' && validCheckpoint(resource.data, request.resource.data)) ||
+           (resource.data.initialized == true && request.resource.data.lastOperation == 'count-reserve' && validCountReservation(resource.data, request.resource.data)) ||
+           (resource.data.initialized == true && request.resource.data.lastOperation == 'count-release' && validCountRelease(resource.data, request.resource.data)) ||
            (resource.data.initialized == true && request.resource.data.lastOperation == 'cashout-close' && validDrawerClosureLedger(resource.data, request.resource.data)) ||
            (isOwner() && resource.data.initialized == true && request.resource.data.lastOperation == 'refund' && validRefundLedger(resource.data, request.resource.data)));
         allow delete: if false;
       }
       match /cashierStates/{uid} {
         allow read: if sandboxId == 'test' && (isOwner() || (isStaff() && uid == request.auth.uid));
-        allow create: if sandboxId == 'test' && isStaff() && (validCashierState(uid) ||
+        allow create: if sandboxId == 'test' && isStaff() && (
           (isOwner() && get(handoverPath()).data.initialized == false && request.resource.data.uid == uid &&
+           request.resource.data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt']) &&
            request.resource.data.authTime == 0 && request.resource.data.needsLogoutCheck == true && request.resource.data.lastReconciliationId == '' &&
-           get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(request.resource.data.lastBillId)).data.createdByUid == uid));
+           get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(request.resource.data.lastBillId)).data.createdByUid == uid) || validCashierState(uid));
         allow update: if sandboxId == 'test' && isStaff() && validCashierState(uid);
         allow delete: if false;
       }

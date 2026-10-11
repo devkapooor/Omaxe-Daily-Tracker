@@ -1,4 +1,5 @@
 import type { PosBill, PosBillState, PosRefundEvent } from './types'
+import type { Timestamp } from 'firebase/firestore'
 import { serverNowIso } from '@/shared/lib/serverClock'
 
 export const HANDOVER_START = '2026-10-03T18:30:00.000Z'
@@ -12,13 +13,22 @@ export type HandoverCheckpoint = {
 export type HandoverLedger = {
   initialized: boolean; revision: number; cashNetPaise: number
   dailyTotals: Record<string, { upi: number; card: number }>
-  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close'
+  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close' | 'count-reserve' | 'count-release'
   lastOperationId: string; updatedByUid: string; checkpoint?: HandoverCheckpoint
+  counterSession?: { status: 'open' | 'closed'; date: string; openingReconciliationId: string; openedByUid: string }
+  countReservation?: CountReservation | null
+}
+export const COUNT_RESERVATION_MS = 5 * 60 * 1000
+export type CountReservation = {
+  id: string; uid: string; name: string; authTime: number; kind: 'login' | 'logout'
+  date: string; revision: number; startedAt: Timestamp
 }
 export type CashierState = {
   uid: string; authTime: number; needsLogoutCheck: boolean
   lastBillId: string; lastReconciliationId: string; updatedAt: string
   closed?: boolean
+  joinedCounterId?: string
+  joinedAt?: Timestamp
 }
 export type CashierReconciliation = {
   id: string; uid: string; name: string; authTime: number; kind: 'login' | 'logout'
@@ -26,8 +36,20 @@ export type CashierReconciliation = {
   actual: CountTotals; expected: CountTotals; delta: CountTotals
   hasDiscrepancy: boolean; createdAt: string; note: string
   reviewStatus: 'pending' | 'matched' | 'reviewed'; reviewedByUid?: string; reviewedAt?: string
+  recordedAt?: Timestamp
+  reservationId?: string
 }
 
+export function isCounterOpen(ledger: HandoverLedger | null | undefined, date = handoverDate()) {
+  return ledger?.initialized === true && ledger.counterSession?.status === 'open' && ledger.checkpoint?.date === date
+}
+
+export function activeCountReservation(ledger: HandoverLedger | null | undefined, nowMs: number): CountReservation | null {
+  const reservation = ledger?.countReservation
+  return reservation?.startedAt && nowMs < reservation.startedAt.toMillis() + COUNT_RESERVATION_MS ? reservation : null
+}
+
+/** Legacy policy retained for historical fixtures; the app now joins the server counter session. */
 export function requiresLoginHandover(cashier: CashierState | null, historical: boolean, authTime: number | null, sessionAuthTime: number | null) {
   if (!historical && !cashier) return false
   return !cashier || cashier.authTime !== authTime || cashier.closed === true ||

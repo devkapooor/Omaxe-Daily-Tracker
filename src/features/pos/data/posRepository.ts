@@ -28,8 +28,8 @@ import { serverNowIso } from '@/shared/lib/serverClock'
 import type { AppUser } from '@/domain/financeTypes'
 import { buildPurchasePostingV2, isV2BusinessDate, type VendorAccountStateV2, type VendorLedgerEntryV2, type InvoiceStateV2, type PurchaseV2 } from '@/domain/vendorLedgerV2'
 import { vendorLedgerV2Refs } from '@/store/vendorLedgerV2Repository'
-import { cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepository'
-import { HANDOVER_START, applyPayments, handoverDate, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
+import { assertDrawerAvailable, cashierAuthTime, cashierRef, handoverRef } from './cashierHandoverRepository'
+import { HANDOVER_START, applyPayments, handoverDate, isCounterOpen, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
 import {
   financialYearForDate,
   formatPosReceiptNumber,
@@ -934,8 +934,10 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     ])
     const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
     if (!ledger?.initialized) throw new Error('The owner must initialize the shared drawer before billing. Use Set up drawer in POS.')
+    if (!isCounterOpen(ledger)) throw new Error('Open the shared counter with one count before billing.')
+    assertDrawerAvailable(ledger)
     const cashier = cashierSnapshot.data() as CashierState | undefined
-    if (cashier && (cashier.authTime !== authTime || cashier.closed)) throw new Error('Complete your mandatory login cash count before billing.')
+    if (!cashier || cashier.authTime !== authTime || cashier.closed || cashier.joinedCounterId !== ledger.counterSession!.openingReconciliationId) throw new Error('Join the open shared counter before billing. Reconnect or retry your session.')
     const configData = configSnapshot.data() as Partial<PosCheckoutConfig> | undefined
     const discountLimit = typeof configData?.billingMaxDiscountPercentage === 'number' ? configData.billingMaxDiscountPercentage : null
     validateDiscount(actor, subtotalPaise, input.discount, discountLimit)
@@ -986,7 +988,7 @@ export async function finalizePosBill(input: FinalizeInput, actor: AppUser) {
     transaction.set(billRef, bill)
     applyPayments(ledger, input.payments, countDate, 1)
     transaction.set(handoverRef(), { ...ledger, revision: ledger.revision + 1, lastOperation: 'bill', lastOperationId: billId, updatedByUid: actor.id })
-    transaction.set(cashierRef(actor.id), { uid: actor.id, authTime, needsLogoutCheck: true, lastBillId: billId, lastReconciliationId: cashier?.lastReconciliationId ?? '', updatedAt: timestamp } satisfies CashierState)
+    transaction.set(cashierRef(actor.id), { ...cashier, uid: actor.id, authTime, needsLogoutCheck: true, lastBillId: billId, lastReconciliationId: cashier.lastReconciliationId, updatedAt: timestamp } satisfies CashierState)
     transaction.set(billStateRef, { billId, state: 'active', revision: 1, returnedQuantities: {}, updatedAt: timestamp, updatedByUid: actor.id })
     productSnapshots.forEach((snapshot, index) => {
       const line = productLines[index]
@@ -1128,6 +1130,7 @@ export async function approvePosRequest(requestId: string, actor: AppUser): Prom
       transaction.update(requestRef, { status: 'stale', reviewedAt: nowIso(), reviewedByUid: actor.id, reviewedByName: actor.name, reviewReason: 'Bill state changed after this request was submitted.' })
       return 'stale' as const
     }
+    if (ledgerSnapshot.data()?.initialized) assertDrawerAvailable(ledgerSnapshot.data() as HandoverLedger)
     const requestedByLine = request.type === 'void'
       ? Object.fromEntries(bill.lines.map((line) => [line.id, line.quantity]))
       : Object.fromEntries((request.returnLines ?? []).map((line) => [line.lineId, line.quantity]))

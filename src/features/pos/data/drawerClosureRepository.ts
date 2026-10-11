@@ -7,7 +7,7 @@ import { expectedHandover, type HandoverLedger } from '../domain/cashierHandover
 import type { PosBill, PosRefundEvent } from '../domain/types'
 import type { PosDrawerClosure } from '../domain/drawerClosure'
 import { rupeesToPaise } from '../domain/posDomain'
-import { handoverRef } from './cashierHandoverRepository'
+import { assertDrawerAvailable, handoverRef } from './cashierHandoverRepository'
 
 export type HistoricalDrawerClosurePreview = {
   cashoutId: string
@@ -104,6 +104,7 @@ export async function applyHistoricalDrawerClosure(preview: HistoricalDrawerClos
     const cashout = cashoutSnapshot.data() as DailyCashoutEntry
     const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
     if (!ledger?.initialized || !ledger.checkpoint) throw new Error('The shared POS drawer has no completed handover checkpoint.')
+    assertDrawerAvailable(ledger)
     if (cashout.createdAt !== preview.cashoutCreatedAt || ledger.revision !== preview.ledgerRevision) {
       throw new Error('Cashout or POS activity changed after preview. Refresh the repair preview before applying it.')
     }

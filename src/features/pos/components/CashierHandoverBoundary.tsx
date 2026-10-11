@@ -1,81 +1,138 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AppUser } from '@/domain/financeTypes'
+import { serverNowMs, synchronizeServerClock } from '@/shared/lib/serverClock'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { FieldLabel } from '@/shared/ui/field-label'
-import { cashierAuthTime, hasHistoricalBills, initializeHandover, submitHandover, subscribeCashier, subscribeHandover } from '../data/cashierHandoverRepository'
-import { countCash, denominations, expectedHandover, handoverDate, requiresLoginHandover, type CashierState, type HandoverLedger } from '../domain/cashierHandover'
+import { DrawerCountInProgressError, cashierAuthTime, initializeHandover, joinCounter, releaseCount, reserveCount, submitHandover, subscribeCashier, subscribeHandover } from '../data/cashierHandoverRepository'
+import { COUNT_RESERVATION_MS, activeCountReservation, countCash, denominations, expectedHandover, handoverDate, isCounterOpen, type CashierState, type CountReservation, type HandoverLedger } from '../domain/cashierHandover'
 import { HandoverContext } from '../hooks/useCashierHandover'
 
-const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+const money = (paise: number) => `\u20b9${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+function trustedNow() { try { return serverNowMs() } catch { return null } }
 
 export function CashierHandoverBoundary({ currentUser, onSignOut, children }: { currentUser: AppUser; onSignOut: () => Promise<void>; children: (onLogout: () => void) => ReactNode }) {
   const [ledger, setLedger] = useState<HandoverLedger | null>(null)
   const [cashier, setCashier] = useState<CashierState | null>(null)
   const [authTime, setAuthTime] = useState<number | null>(null)
-  const [historical, setHistorical] = useState<boolean | null>(null)
   const [loaded, setLoaded] = useState({ ledger: false, cashier: false })
   const [error, setError] = useState('')
+  const [joinError, setJoinError] = useState('')
   const [logout, setLogout] = useState(false)
+  const [logoutSaved, setLogoutSaved] = useState(false)
   const [setup, setSetup] = useState(false)
   const [retry, setRetry] = useState(0)
   const [busy, setBusy] = useState(false)
   const [confirmation, setConfirmation] = useState('')
-  const sessionKey = `pos-cashier-session:${currentUser.id}`
-  const [sessionAuthTime, setSessionAuthTime] = useState<number | null>(() => {
-    try { const value = sessionStorage.getItem(sessionKey); return value === null ? null : Number(value) } catch { return null }
-  })
-  function rememberSession(time: number) {
-    try { sessionStorage.setItem(sessionKey, String(time)) } catch { /* Persisted cashier state still enforces fresh authentication. */ }
-    setSessionAuthTime(time)
-  }
-  const ownerExempt = currentUser.role === 'owner'
-  const participates = !ownerExempt && (historical === true || cashier !== null)
-  const ready = loaded.ledger && loaded.cashier && authTime !== null && historical !== null
-  const loginRequired = !ownerExempt && requiresLoginHandover(cashier, historical === true, authTime, sessionAuthTime)
-  const open = setup || (!ownerExempt && (!ready || loginRequired || logout || !!error))
+  const [reservationId, setReservationId] = useState('')
+  const [now, setNow] = useState(trustedNow)
+  const joinPending = useRef<Promise<void> | null>(null)
+  const actionPending = useRef(false)
+  const owner = currentUser.role === 'owner'
+  const ready = loaded.ledger && loaded.cashier && authTime !== null && now !== null
+  const date = now === null ? '' : handoverDate(new Date(now).toISOString())
+  const counterOpen = ready && isCounterOpen(ledger, date)
+  const reservation = now === null ? null : activeCountReservation(ledger, now)
+  const ownReservation = reservation?.uid === currentUser.id && reservation.authTime === authTime && reservation.date === date ? reservation : null
+  const joined = counterOpen && cashier?.authTime === authTime && !cashier.closed && cashier.joinedCounterId === ledger?.counterSession?.openingReconciliationId
+  const open = setup || logout || Boolean(ownReservation) || (!owner && (!ready || Boolean(error || joinError)))
+  const kind = logout || ownReservation?.kind === 'logout' ? 'logout' : 'login'
+
+  useEffect(() => { const timer = setInterval(() => setNow(trustedNow()), 1000); return () => clearInterval(timer) }, [])
   useEffect(() => {
     let active = true
     const fail = (next: Error) => { if (active) setError(next.message) }
-    const stopLedger = subscribeHandover((next) => { setLedger(next); setLoaded((previous) => ({ ...previous, ledger: true })) }, fail)
-    const stopCashier = subscribeCashier(currentUser.id, (next) => { setCashier(next); setLoaded((previous) => ({ ...previous, cashier: true })) }, fail)
-    void Promise.all([cashierAuthTime(), hasHistoricalBills(currentUser.id)]).then(([time, hasBills]) => {
-      if (active) { setAuthTime(time); setHistorical(hasBills); if (!hasBills) rememberSession(time) }
-    }).catch(fail)
+    const stopLedger = subscribeHandover((next) => { setLedger(next); setLoaded((value) => ({ ...value, ledger: true })) }, fail)
+    const stopCashier = subscribeCashier(currentUser.id, (next) => { setCashier(next); setLoaded((value) => ({ ...value, cashier: true })) }, fail)
+    void cashierAuthTime().then((time) => { if (active) setAuthTime(time) }).catch(fail)
     return () => { active = false; stopLedger(); stopCashier() }
-  // The boundary is keyed by user; sessionKey remains fixed for this mount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.id, retry])
 
+  const openingId = ledger?.counterSession?.openingReconciliationId
+  const reservedId = reservation?.id
+  useEffect(() => {
+    if (!ready || !counterOpen || joined || reservedId || logout || setup || error || joinError) return
+    let active = true
+    if (!joinPending.current) joinPending.current = joinCounter(currentUser).finally(() => { joinPending.current = null })
+    void joinPending.current.then(() => { if (active) setJoinError('') }, (cause: unknown) => { if (active && !(cause instanceof DrawerCountInProgressError)) setJoinError(cause instanceof Error ? cause.message : 'Unable to join the shared counter.') })
+    return () => { active = false }
+  }, [ready, counterOpen, joined, reservedId, logout, setup, error, joinError, openingId, authTime, currentUser, retry])
+
   async function signOut() {
-    setBusy(true)
-    try { await onSignOut() } catch (next) { setError(next instanceof Error ? next.message : 'Unable to sign out.') }
-    finally { setBusy(false) }
+    if (actionPending.current) return
+    actionPending.current = true; setBusy(true)
+    try { const id = ownReservation?.id ?? reservationId; if (id) await releaseCount(currentUser, id); await onSignOut() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to sign out.') }
+    finally { actionPending.current = false; setBusy(false) }
   }
-  return <HandoverContext.Provider value={{ ledger, requestSetup: () => setSetup(true) }}>
+  async function startCount(nextKind: 'login' | 'logout') {
+    if (actionPending.current) return
+    actionPending.current = true; setBusy(true); setError(''); setJoinError('')
+    try {
+      if (ownReservation && ownReservation.kind !== nextKind) await releaseCount(currentUser, ownReservation.id)
+      const next = await reserveCount(currentUser, nextKind); setReservationId(next.id)
+    }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to reserve the drawer for counting.') }
+    finally { actionPending.current = false; setBusy(false) }
+  }
+  async function cancelCount(id = ownReservation?.id ?? reservationId) {
+    if (actionPending.current) return
+    actionPending.current = true; setBusy(true)
+    try {
+      if (id) await releaseCount(currentUser, id)
+      setReservationId(''); setLogout(false); setSetup(false); setError(''); setJoinError('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to cancel this count.') }
+    finally { actionPending.current = false; setBusy(false) }
+  }
+  function retryConnection() {
+    setError(''); setJoinError(''); setLoaded({ ledger: false, cashier: false }); setAuthTime(null); setRetry((value) => value + 1)
+    void synchronizeServerClock().then(() => setNow(trustedNow()), (cause: unknown) => setError(cause instanceof Error ? cause.message : 'Unable to synchronize server time.'))
+  }
+  function requestLogout() {
+    if (!ready || busy || error || joinError) return
+    if (cashier && !cashier.closed && cashier.authTime === authTime && (!owner || cashier.needsLogoutCheck)) { setLogout(true); setLogoutSaved(false); void startCount('logout') }
+    else void signOut()
+  }
+  function exitRequested() {
+    if (!logoutSaved && cashier && !cashier.closed && cashier.authTime === authTime && (!owner || cashier.needsLogoutCheck)) {
+      setLogout(true); void startCount('logout')
+    } else void signOut()
+  }
+
+  return <HandoverContext.Provider value={{ ledger, requestSetup: () => setSetup(true), counterOpen, joined, reservation }}>
     {confirmation && !open ? <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] mx-auto flex max-w-xl items-center gap-3 rounded border border-border bg-card p-3 text-sm shadow-lg"><p>{confirmation}</p><Button size="sm" variant="ghost" onClick={() => setConfirmation('')}>Dismiss</Button></div> : null}
-    {children(() => { if (!ready || error) return; if (participates) setLogout(true); else void signOut() })}
-    {open ? <HandoverDialog key={`${ready}:${!!ledger?.initialized}:${logout}`} currentUser={currentUser} ledger={ledger} ready={ready} kind={logout ? 'logout' : 'login'} setupOnly={setup && !loginRequired && !logout} error={error} busy={busy} onRetry={() => { setError(''); setLoaded({ ledger: false, cashier: false }); setHistorical(null); setAuthTime(null); setRetry((previous) => previous + 1) }} onExit={() => void signOut()} onInitialize={async () => {
-      setBusy(true); setError('')
-      try { await initializeHandover(currentUser); setSetup(false) }
-      catch (next) { setError(next instanceof Error ? next.message : 'Drawer setup failed. Retry to resume.') }
-      finally { setBusy(false) }
-    }} onSubmit={async (counts, coins, upi, card, revision, date, note) => {
-      setBusy(true); setError('')
+    {reservation && !open ? <div role="status" className="fixed bottom-4 left-4 right-4 z-[95] mx-auto flex max-w-xl items-center gap-3 rounded border border-amber-300 bg-card p-3 text-sm shadow-lg"><p>{reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Cashout Are Paused.</p>{owner ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void cancelCount(reservation.id)}>Cancel Count</Button> : null}</div> : null}
+    {!open && (error || joinError) ? <div role="alert" className="fixed bottom-4 left-4 right-4 z-[100] mx-auto flex max-w-xl items-center gap-3 rounded border border-destructive bg-card p-3 text-sm shadow-lg"><p>{error || joinError}</p><Button size="sm" variant="outline" onClick={retryConnection}>Retry Connection</Button></div> : null}
+    {/* App's render prop passes the handler to logout buttons; it never invokes it during render. */}
+    {/* eslint-disable-next-line react-hooks/refs */}
+    {children(requestLogout)}
+    {open ? <HandoverDialog key={`${ready}:${!!ledger?.initialized}:${kind}:${ownReservation?.id ?? 'waiting'}:${logoutSaved}`} currentUser={currentUser} ledger={ledger} ready={ready} date={date} kind={kind} setupOnly={setup && counterOpen && !logout} error={error || joinError} busy={busy} reservation={ownReservation} otherReservation={reservation && !ownReservation ? reservation : null} counterOpen={counterOpen} logoutSaved={logoutSaved} onReserve={() => startCount(kind)} onCancel={() => cancelCount()} onOwnerRelease={(id) => cancelCount(id)} onRetry={retryConnection} onExit={exitRequested} onInitialize={async () => {
+      if (actionPending.current) return
+      actionPending.current = true; setBusy(true); setError('')
+      try { await initializeHandover(currentUser) }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'Drawer setup failed. Retry to resume.') }
+      finally { actionPending.current = false; setBusy(false) }
+    }} onSubmit={async (counts, coins, upi, card, revision, countDate, note) => {
+      if (actionPending.current || !ownReservation) return
+      actionPending.current = true; setBusy(true); setError('')
       try {
-        const record = await submitHandover(currentUser, logout ? 'logout' : 'login', counts, coins, upi, card, revision, date, note)
-        if (!logout) rememberSession(record.authTime)
-        setConfirmation(record.hasDiscrepancy ? `Handover saved. Differences: cash ${money(record.delta.cash)}, UPI ${money(record.delta.upi)}, card ${money(record.delta.card)}. Recorded for owner review; you may continue billing.` : 'Handover saved. All amounts match; you may continue billing.')
-        setSetup(false)
-        if (logout) await onSignOut()
-      } catch (next) { setError(next instanceof Error ? next.message : 'Unable to save the count.') }
-      finally { setBusy(false) }
+        const record = await submitHandover(currentUser, kind, counts, coins, upi, card, revision, countDate, note, ownReservation.id)
+        setConfirmation(record.hasDiscrepancy ? `Count Saved. Differences: Cash ${money(record.delta.cash)}, UPI ${money(record.delta.upi)}, Card ${money(record.delta.card)}. Recorded For Owner Review.` : 'Count Saved. All Amounts Match.')
+        setReservationId(''); setSetup(false)
+        if (kind === 'logout') { setLogout(true); setLogoutSaved(true); await onSignOut() }
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save the count.') }
+      finally { actionPending.current = false; setBusy(false) }
     }} /> : null}
   </HandoverContext.Provider>
 }
 
 type CountSubmit = (counts: Record<string, number>, coins: number, upi: number, card: number, revision: number, date: string, note: string) => Promise<void>
-function HandoverDialog({ currentUser, ledger, ready, kind, setupOnly, error, busy, onRetry, onExit, onInitialize, onSubmit }: { currentUser: AppUser; ledger: HandoverLedger | null; ready: boolean; kind: 'login' | 'logout'; setupOnly: boolean; error: string; busy: boolean; onRetry: () => void; onExit: () => void; onInitialize: () => Promise<void>; onSubmit: CountSubmit }) {
+function HandoverDialog({ currentUser, ledger, ready, date, kind, setupOnly, error, busy, reservation, otherReservation, counterOpen, logoutSaved, onReserve, onCancel, onOwnerRelease, onRetry, onExit, onInitialize, onSubmit }: {
+  currentUser: AppUser; ledger: HandoverLedger | null; ready: boolean; kind: 'login' | 'logout'; setupOnly: boolean; error: string; busy: boolean
+  date: string
+  reservation: CountReservation | null; otherReservation: CountReservation | null; counterOpen: boolean; logoutSaved: boolean
+  onReserve: () => Promise<void>; onCancel: () => Promise<void>; onOwnerRelease: (id: string) => Promise<void>
+  onRetry: () => void; onExit: () => void; onInitialize: () => Promise<void>; onSubmit: CountSubmit
+}) {
   const ref = useRef<HTMLDialogElement>(null)
   const [counts, setCounts] = useState<Record<string, number>>(() => Object.fromEntries(denominations.map((value) => [String(value), 0])))
   const [coins, setCoins] = useState('')
@@ -83,11 +140,9 @@ function HandoverDialog({ currentUser, ledger, ready, kind, setupOnly, error, bu
   const [card, setCard] = useState('')
   const [note, setNote] = useState('')
   const [validation, setValidation] = useState('')
-  const [date, setDate] = useState(handoverDate)
-  const [countDate, setCountDate] = useState(date)
-  const [countRevision, setCountRevision] = useState(ledger?.revision)
+  const [countDate] = useState(reservation?.date ?? date)
+  const [countRevision] = useState(reservation?.revision)
   const stale = ledger?.revision !== countRevision || countDate !== date
-  useEffect(() => { const timer = setInterval(() => setDate(handoverDate()), 15000); return () => clearInterval(timer) }, [])
   const expected = ledger?.initialized ? expectedHandover(ledger, date) : null
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close() }, [])
   function amount(value: string) {
@@ -102,20 +157,21 @@ function HandoverDialog({ currentUser, ledger, ready, kind, setupOnly, error, bu
   try { readings.upi = amount(upi) } catch { /* Show a dash until the reading is valid. */ }
   try { readings.card = amount(card) } catch { /* Show a dash until the reading is valid. */ }
   return <dialog ref={ref} aria-labelledby="handover-title" onCancel={(event) => event.preventDefault()} className="fixed inset-0 z-[200] m-auto max-h-[92dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-lg border border-border bg-card p-5 text-card-foreground shadow-xl backdrop:bg-slate-950/50 backdrop:backdrop-blur-sm">
-    <h2 id="handover-title" className="text-lg font-semibold">{ledger?.initialized ? `${kind === 'logout' ? 'Closing' : 'Opening'} cashier handover` : 'Set up the shared cash drawer'}</h2>
+    <h2 id="handover-title" className="text-lg font-semibold">{ledger?.initialized ? kind === 'logout' ? 'Logout Count' : counterOpen ? 'Joining Shared Counter' : 'Open Shared Counter' : 'Set Up Shared Cash Drawer'}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{currentUser.name} · {date} · Shared counter / POS</p>
     {error || validation ? <p role="alert" className="my-3 text-sm text-destructive">{error || validation}</p> : null}
-    {!ready ? <p className="my-4 text-sm">Checking your billing participation and saved handover…</p> : !ledger?.initialized ? <div className="my-4 space-y-3 text-sm">
+    {!ready ? <p className="my-4 text-sm">Checking The Saved Counter And Your Authenticated Session...</p> : logoutSaved ? <div className="my-4 space-y-3 text-sm"><p>Your Logout Count Is Saved. Retry Sign Out To Finish Without Counting Again.</p><Button disabled={busy} onClick={onExit}>Retry Sign Out</Button></div> : !ledger?.initialized ? <div className="my-4 space-y-3 text-sm">
       <p>Opening cash: ₹0 at 00:00 IST on 4 October. Existing bills, refunds and stock will be preserved. Setup imports only the reconciliation baseline.</p>
       <p>Only the owner can finish setup. Keep billing paused while setup runs. An interrupted setup can be resumed.</p>
       {currentUser.role === 'owner' ? <Button disabled={busy} onClick={() => void onInitialize()}>{busy ? 'Setting up…' : ledger ? 'Resume drawer setup' : 'Initialize from existing bills'}</Button> : <p className="font-medium">Ask the owner to initialize the drawer in POS.</p>}
-    </div> : setupOnly ? null : <form className="mt-4 space-y-4" onSubmit={(event) => {
+    </div> : otherReservation ? <div className="my-4 space-y-3 text-sm"><p>{otherReservation.name} Is Counting The Shared Drawer. Wait Until The Count Is Saved Or Cancelled.</p><p>The Reservation Expires Five Minutes After Its Server-Recorded Start.</p>{currentUser.role === 'owner' || otherReservation.uid === currentUser.id ? <Button disabled={busy} variant="outline" onClick={() => void onOwnerRelease(otherReservation.id)}>Cancel Reserved Count</Button> : null}</div> : setupOnly ? <div className="my-4 space-y-3 text-sm"><p>The Shared Counter Is Already Open. No Additional Count Is Required.</p><Button disabled={busy} onClick={() => void onCancel()}>Continue To Billing</Button></div> : !reservation ? counterOpen && kind === 'login' ? <p role="status" className="my-4 text-sm">Joining The Open Counter. No Additional Count Is Required.</p> : <div className="my-4 space-y-3 text-sm"><p>{kind === 'logout' ? 'Save A Shared Drawer Count Before Signing Out. The Counter Will Stay Open For Other Staff.' : 'Complete One Opening Count For Both Billing Computers.'}</p><Button disabled={busy} onClick={() => void onReserve()}>{busy ? 'Reserving Drawer...' : kind === 'logout' ? 'Start Logout Count' : 'Start Opening Count'}</Button></div> : <form className="mt-4 space-y-4" onSubmit={(event) => {
       event.preventDefault(); setValidation('')
       try { if (stale) throw new Error('The totals changed. Restart the physical count.'); void onSubmit(counts, amount(coins), amount(upi), amount(card), countRevision!, countDate, note) }
       catch (next) { setValidation(next instanceof Error ? next.message : 'Invalid count.') }
     }}>
-      <p className="text-sm text-muted-foreground">Pause billing while counting. Count all physical cash in the shared drawer. Enter today's cumulative UPI/card collections from the shared machine—not just your own bills.</p>
-      {stale ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>Billing, another handover, or the day changed while you were counting. Restart the count against the updated totals.</p><Button type="button" variant="outline" disabled={busy} onClick={() => { setCountRevision(ledger.revision); setCountDate(date); setCounts(Object.fromEntries(denominations.map((value) => [String(value), 0]))); setCoins(''); setUpi(''); setCard(''); setValidation('') }}>Restart count</Button></div> : null}
+      <p className="text-sm text-muted-foreground">Billing, Refunds And Cashout Are Paused On Both Computers While You Count. Count All Physical Cash In The Shared Drawer. Enter Today's Cumulative UPI/Card Collections From The Shared Machine.</p>
+      <p className="text-xs text-muted-foreground">Count Reservation Ends At {new Date(reservation.startedAt.toMillis() + COUNT_RESERVATION_MS).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}.</p>
+      {stale ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>The Counter Or Day Changed. Cancel And Start A Fresh Count Before Saving.</p><Button type="button" variant="outline" disabled={busy} onClick={() => void onCancel()}>Cancel Count</Button></div> : null}
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{denominations.map((value) => <FieldLabel key={value} label={`₹${value} × count`}><Input required disabled={busy} type="number" min="0" max="1000000" step="1" value={counts[String(value)]} onChange={(event) => setCounts((previous) => ({ ...previous, [String(value)]: Number(event.target.value) }))} /></FieldLabel>)}</div>
       <div className="grid gap-2 sm:grid-cols-3">
         <FieldLabel label="Other loose coins (₹)"><Input required inputMode="decimal" placeholder="0" value={coins} onChange={(event) => setCoins(event.target.value)} /></FieldLabel>
@@ -132,6 +188,6 @@ function HandoverDialog({ currentUser, ledger, ready, kind, setupOnly, error, bu
       <p className="text-xs text-muted-foreground">Differences are recorded for the owner in Action Centre. Submission lets you continue without waiting for approval. It does not alter bills or finance balances.</p>
       <Button type="submit" className="w-full" disabled={busy || stale || !!error}>{busy ? 'Saving…' : kind === 'logout' ? 'Save count and log out' : 'Save count and continue'}</Button>
     </form>}
-    <div className="mt-3 flex gap-2">{error ? <Button disabled={busy} variant="outline" onClick={onRetry}>Retry connection</Button> : null}{kind === 'login' ? <Button disabled={busy} variant="ghost" onClick={onExit}>Sign out instead</Button> : null}</div>
+    <div className="mt-3 flex flex-wrap gap-2">{error ? <Button disabled={busy} variant="outline" onClick={onRetry}>Retry Connection</Button> : null}{!logoutSaved && (kind === 'logout' || reservation || setupOnly) ? <Button disabled={busy} variant="outline" onClick={() => void onCancel()}>{kind === 'logout' ? 'Cancel Logout' : 'Cancel Count'}</Button> : null}{kind === 'login' ? <Button disabled={busy} variant="ghost" onClick={onExit}>Sign Out Instead</Button> : null}</div>
   </dialog>
 }
