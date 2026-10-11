@@ -1,6 +1,6 @@
 # Current Stock price edits — 2026-10-12
 
-Status: implemented and validated locally; not deployed. This checkpoint covers the user's stock editing, attribution, owner review, direct row Edit, lazy movement history, and selling-price ceiling requests.
+Status: implemented, validated, committed and deployed in v1.4.0 on 2026-10-12 after the user's explicit Deploy request; owner/staff workflow acceptance remains pending. This checkpoint covers the user's stock editing, attribution, owner review, direct row Edit, lazy movement history, and selling-price ceiling requests.
 
 ## Behavior
 
@@ -41,4 +41,6 @@ The proposed filter-first catalogue loading and server-side stock pagination are
 
 Deployment requires the new `functions:changeStockPrices` and `functions:reviewStockPriceChange` in `asia-south1`, followed by Firestore Rules and Hosting. Deploy the server functions before exposing the editor and the tighter Rules before the dependent Hosting build. No new composite index or Firebase service is required. The project already uses Cloud Functions on Blaze.
 
-The local app can display the editor before release, but real saves depend on deploying the new callable functions. Production callable integration and owner/staff acceptance remain due after release; local handler tests do not assert production deployment. Installed-app caching repair remains deferred at the user's request.
+The new callable functions, Firestore Rules and Hosting were deployed in that order. Both callable endpoints rejected unauthenticated requests with HTTP 401 / UNAUTHENTICATED. At `2026-10-11T21:03:14.622Z` (2026-10-12 02:33 IST), live HTML/JS/CSS returned HTTP 200 and matched the release build hashes. Release commit: `511937b`; tag: `v1.4.0`. See [Version Log](./VERSION_LOG.md).
+
+Production owner/staff workflow acceptance remains due; no real stock edits or owner reviews were performed as automated verification. Installed-app caching repair remains deferred at the user's request. Firebase reported the existing Node.js 20 runtime deprecation; a separately validated runtime upgrade is due before 2026-10-30.

@@ -2,13 +2,16 @@
 
 ## v1.4.0 - 2026-10-12
 
-- Status: release prepared after the user's explicit Deploy request; deployment verification pending.
+- Status: committed, tagged, pushed and deployed on 2026-10-12 after the user's explicit Deploy request. Release commit: `511937b`; tag: `v1.4.0`.
 - Target: new Cloud Functions `changeStockPrices` and `reviewStockPriceChange` in `asia-south1`, Firestore Rules, then Firebase Hosting at `https://alphahub-f137b.web.app`.
 - Feature commit: `7b795bc`; input alignment fix: `4f10d1d`. Current Stock has a direct row Edit button for all staff to correct MRP and selling price. MRP is required and selling price cannot exceed it, enforced in the editor and server. Saves apply immediately, record before/after evidence and last editor, and notify the owner through Action Centre for acknowledgement.
 - Recorded Movement History is collapsed by default and starts its listener only when expanded; collapsing stops the listener. Filter-first catalogue loading and server-side stock pagination remain outstanding.
 - Validation from the feature checkpoint: 11 isolated server tests, 4 Rules tests, 9 source tests and 8 existing GRN/stock repository regression tests passed (32 total). Build, focused lint, whitespace checks, synthetic desktop/phone editor and owner review checks passed; the alignment follow-up passed focused lint and desktop visual verification.
 - Data safety: no migrations, backfills, catalogue repairs or production mutation tests. Quantity, historical bills, GRNs, vendor payables, costs and financial history are preserved. Installed-app caching repair remains deferred.
 - Final release build passed with local credentials empty and auth bypass/emulators disabled; asset inspection confirmed local credentials were excluded. JS: `index-BnG4VAUf.js`; CSS: `index-Dm0SCzmE.css`. Firestore Rules dry-run compilation passed. Existing large-bundle and unused Rules declaration warnings remain.
+- Deployment proof: both new functions created successfully, then Firestore Rules released, then Hosting released. Both callable endpoints returned HTTP 401 / UNAUTHENTICATED to unauthenticated verification requests. At `2026-10-11T21:03:14.622Z` (2026-10-12 02:33 IST), live HTML, JavaScript and CSS returned HTTP 200 and matched local SHA-256 hashes. Receipts are retained under ignored `output/release-v1.4.0/`.
+- Owner/staff workflow acceptance remains pending; production stock saves and owner reviews were not used as mutation tests. The suggested combined Stock workspace was not implemented in this release.
+- Firebase deployment reported the existing Node.js 20 runtime deprecation. A separate runtime upgrade is due before its 2026-10-30 decommission date, confirmed against the [official runtime schedule](https://docs.cloud.google.com/functions/docs/runtime-support). The SDK upgrade warning is also retained for separate maintenance.
 - Details: [stock price editing checkpoint](./STOCK_PRICE_EDITS_2026-10-12.md).
 
 ## v1.3.1 - 2026-10-11
