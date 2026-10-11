@@ -15,7 +15,7 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current execution queue
 
-- [ ] Review and release [opening balance entry in Add Vendor](./VENDOR_OPENING_BALANCE_2026-10-11.md). Owner-entered amount/date/reason and atomic payable posting are implemented locally; 33 domain and 17 vendor-ledger emulator tests, build and focused lint passed. Existing Rules support the workflow; Hosting deployment and visual acceptance remain pending.
+- [ ] Complete user visual acceptance of [opening balance entry in Add Vendor](./VENDOR_OPENING_BALANCE_2026-10-11.md). Owner-entered amount/date/reason and atomic payable posting were committed and deployed in v1.3.0 on 2026-10-11; 33 domain and 17 vendor-ledger emulator tests, build and focused lint passed. Hosting asset hashes were verified; existing Rules support the workflow.
 
 - [ ] Complete isolated two-computer runtime acceptance for the [shared POS counter and mandatory logout-count upgrade](./POS_SHARED_COUNTER_2026-10-11.md), approved on 2026-10-11. Server-enforced counter joins, counting reservations, logout checkpoints and Cashout closure were committed and deployed in v1.2.0 on 2026-10-11. Build/lint/Rules compilation and live asset checks passed; runtime acceptance remains pending.
 

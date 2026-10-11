@@ -1,6 +1,6 @@
 # Opening balance when adding a vendor
 
-Status: Implemented and verified as `3466ccd` on 2026-10-11. The user explicitly authorized commit, push and deployment; prepared for the v1.3.0 Hosting release. User visual acceptance remains pending.
+Status: Implemented and verified as `3466ccd`; committed, tagged, pushed and deployed in v1.3.0 (`f3c77c2`) on 2026-10-11 after explicit user authorization. Live HTML/JS/CSS returned HTTP 200 and matched the local release hashes at 17:33 IST. User visual acceptance remains pending.
 
 ## Behavior
 
