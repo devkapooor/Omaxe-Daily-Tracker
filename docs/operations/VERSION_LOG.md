@@ -1,5 +1,20 @@
 # Version Log
 
+## v1.2.0 - 2026-10-11
+
+- Tag: `v1.2.0`.
+- Status: release preparation; deployment authorized by the user on 2026-10-11 after requesting a summary of all changes.
+- Target: Firestore Rules followed by Firebase Hosting, `alphahub-f137b`, `https://alphahub-f137b.web.app`.
+- Shared counter: one opening count for both billing computers, authenticated staff join/resume, mandatory app logout counts, and Daily Cashout closes the counter. Dashboard-only owners retain their exemption.
+- Count protection: server-recorded five-minute reservations block billing, financial refund approvals, Cashout and historical drawer repair while counting; new reconciliation evidence includes a server save timestamp.
+- Current Stock: barcode-only search, all product statuses, stock/vendor filters, fixed filter bar and sortable scrolling table, seven compact columns and derived current gross margin (%). All recorded fields remain available in product details.
+- Action Centre: unified pending/history, request filters, source details and decision confirmation, complete pending feeds/counts, paginated history and scoped subscriptions/caching. Staff Notifications editing is in owner Settings. Includes commits `0d4ece4`, `851603a` and `e225cde`.
+- Documentation also records the previously approved and completed 2,744-product search-token repair. Deployment does not rerun that repair.
+- Validation: TypeScript/Vite production build, focused source ESLint, Git whitespace checks, local credential exclusion and Firebase Rules compilation (`deploy --dry-run`) passed. The existing large-bundle and unused Rules declaration warnings remain.
+- Review gap: automated suites and browser interactions were deferred by the saved phase instructions. Shared-counter repository fixtures still use the previous API. Two-computer runtime authorization, date-boundary flows and user visual acceptance remain pending; static checks do not prove those workflows.
+- First use: hard-refresh both billing computers and deliberately use Open Counter for the initial opening count. Existing drawer balances/count records are retained; the new counter session is created by that authorized workflow.
+- Data protection: no production financial/inventory records are initialized, migrated, backfilled or deleted by the release. Cloud Functions and indexes are unchanged.
+
 ## v1.1.0 - 2026-10-11
 
 - Tag: `v1.1.0`
