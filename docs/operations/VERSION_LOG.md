@@ -1,5 +1,16 @@
 # Version Log
 
+## v1.4.0 - 2026-10-12
+
+- Status: release prepared after the user's explicit Deploy request; deployment verification pending.
+- Target: new Cloud Functions `changeStockPrices` and `reviewStockPriceChange` in `asia-south1`, Firestore Rules, then Firebase Hosting at `https://alphahub-f137b.web.app`.
+- Feature commit: `7b795bc`; input alignment fix: `4f10d1d`. Current Stock has a direct row Edit button for all staff to correct MRP and selling price. MRP is required and selling price cannot exceed it, enforced in the editor and server. Saves apply immediately, record before/after evidence and last editor, and notify the owner through Action Centre for acknowledgement.
+- Recorded Movement History is collapsed by default and starts its listener only when expanded; collapsing stops the listener. Filter-first catalogue loading and server-side stock pagination remain outstanding.
+- Validation from the feature checkpoint: 11 isolated server tests, 4 Rules tests, 9 source tests and 8 existing GRN/stock repository regression tests passed (32 total). Build, focused lint, whitespace checks, synthetic desktop/phone editor and owner review checks passed; the alignment follow-up passed focused lint and desktop visual verification.
+- Data safety: no migrations, backfills, catalogue repairs or production mutation tests. Quantity, historical bills, GRNs, vendor payables, costs and financial history are preserved. Installed-app caching repair remains deferred.
+- Final release build passed with local credentials empty and auth bypass/emulators disabled; asset inspection confirmed local credentials were excluded. JS: `index-BnG4VAUf.js`; CSS: `index-Dm0SCzmE.css`. Firestore Rules dry-run compilation passed. Existing large-bundle and unused Rules declaration warnings remain.
+- Details: [stock price editing checkpoint](./STOCK_PRICE_EDITS_2026-10-12.md).
+
 ## v1.3.1 - 2026-10-11
 
 - Tag: `v1.3.1`.
