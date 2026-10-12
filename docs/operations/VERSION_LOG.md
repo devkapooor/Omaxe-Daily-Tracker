@@ -2,13 +2,15 @@
 
 ## v1.5.0 - 2026-10-12
 
-- Status: release prepared after the user's local visual acceptance and explicit deploy/commit authorization on 2026-10-12. Implementation checkpoint: `cae5b00`; deployment proof will be recorded after publishing.
+- Status: committed, tagged, pushed and deployed on 2026-10-12 after the user's local visual acceptance and explicit deploy/commit authorization. Implementation checkpoint: `cae5b00`; release commit: `bd0f1bb`; tag: `v1.5.0`.
 - Target: Firestore Rules and composite indexes, then Firebase Hosting at `https://alphahub-f137b.web.app`. Existing price/server-time Functions are reused and are not being redeployed.
 - Stock contains Current Stock, Receive Stock, Stock Audit and Stock History. POS contains Billing, Dashboard and Bills. GRN MRP correction is retired; historical evidence and reversal remain available. Vendor financial work and owner price review retain their existing locations.
 - Filter-first server stock pages replace catalogue/cost listeners and simulated paging. Receipts, audit details and combined history use bounded cursor queries; closed tabs/details stop readers. Dashboard financial totals remain complete through bounded date-range listeners and matching bill-state queries. Billing drafts survive Stock navigation.
 - Search uses exact barcode/name prefix and exact recorded vendors. MRP/cost/margin sorting is page-only. Damaged returns are bill-level zero-stock-change history and excluded under product filters; missing historical fields are not invented. Required indexes increase from 3 to 65.
 - Release validation: `npx eslint src tests`, 137 source tests, 85 emulator Rules/repository tests and 11 server price tests passed. Isolated desktop/mobile browser review and user acceptance passed. Production mutations, imports, migrations, backfills and financial posting migrations are not part of this release.
 - Known limits: existing browser GRN/audit/checkout/return transactions remain Rules-protected; server-authority migration is separately scoped. GRN reversal can clear its own current cost. Installed-app caching repair and physical printer acceptance remain separate. Existing bundle-size warning is retained.
+- Deployment proof: Rules dry-run compilation and release succeeded; published Rules match the source SHA-256. All 65 indexes are READY, including the 62 added indexes. Thirteen production read-only query shapes succeeded with limit 1 and document-ID-only projection; these use CLI IAM, while role Rules were checked separately in the emulator. Hosting deployment succeeded; at `2026-10-12T12:18:23.582Z`, live HTML, JS and CSS returned HTTP 200 and matched local release SHA-256 hashes. JS: `index-iDzwCzOI.js`; CSS: `index-D-DjiN0v.css`.
+- Release assets were built with auth bypass/emulators disabled and local credentials excluded; credential inspection passed. Evidence is under ignored `output/release-v1.5.0/`. No business record was changed by production verification. Existing Rules unused-declaration warnings remain.
 - Details: [Stock workspace implementation and query design](./STOCK_WORKSPACE_2026-10-12.md).
 
 ## v1.4.0 - 2026-10-12

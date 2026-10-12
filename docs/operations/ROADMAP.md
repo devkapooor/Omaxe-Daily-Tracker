@@ -6,12 +6,12 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 - [x] Implement the approved four-tab Stock workspace, simplify POS, add bounded filtered queries, lazy details/history, scoped listeners and preserve role/posting boundaries. See [implementation and validation checkpoint](./STOCK_WORKSPACE_2026-10-12.md).
 - [x] User accepted the local desktop/mobile Stock preview on 2026-10-12.
-- [ ] Deploy the explicitly authorized v1.5.0 release and verify Rules/indexes/hosting. See [release record](./VERSION_LOG.md).
+- [x] Deploy the explicitly authorized v1.5.0 release: Rules match source, all 65 indexes are READY, read-only query probes and live hosting asset hashes passed. See [release record](./VERSION_LOG.md).
 
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
-- Owner-created staff accounts; role-based POS (Billing, Dashboard and Bills) and a Stock workspace (Current Stock, Receive Stock, Stock Audit and Stock History; implemented locally, deployment pending), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
+- Owner-created staff accounts; role-based POS (Billing, Dashboard and Bills) and a Stock workspace (Current Stock, Receive Stock, Stock Audit and Stock History; deployed in v1.5.0), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses. The owner-only Loans page contains loan totals, details, creation and repayment history. All staff can view Current Stock including costs and recorded movements.
 - Maintain financial write reliability, POS stock/payable consistency, loan allocation correctness, user-ID cash ownership, compatibility with historical planner records, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.

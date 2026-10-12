@@ -21,7 +21,7 @@ The approved source files are:
 
 Bills, stock movements, and events are append-only. Bill status and returned quantities live in separate revisioned `billStates` documents, so finalized receipt evidence is never edited. Costs are stored separately and remain readable by active staff under the existing Stock permissions. No sandbox-reset operation is available in the POS Admin UI or repository API.
 
-## Stock workspace (local implementation, deployment pending)
+## Stock workspace (deployed in v1.5.0)
 
 POS now contains Billing, Dashboard and Bills. Receive Stock and Stock Audit reuse the existing workflows in the separate four-tab Stock workspace. Collection paths and existing financial posting algorithms remain unchanged. Checkout-only listeners stop outside Billing; dashboard bills/refunds use complete date ranges through bounded realtime pages, and state queries use only selected bill IDs. The active billing draft survives navigation to Stock in memory and is discarded on logout/user change.
 

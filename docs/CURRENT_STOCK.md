@@ -2,7 +2,7 @@
 
 Current Stock is the first of four Stock tabs, alongside Receive Stock, Stock Audit and Stock History. All active owner, manager and billing accounts can view recorded quantities/prices/costs and use the direct row Edit action. MRP and selling price edits require a reason, update current stock through the existing authenticated server function, record the last editor and create an owner Action Centre review record. Selling price must not exceed MRP. Quantity is read-only here; physical changes use Stock Audit.
 
-The workspace is implemented locally after `APPROVE IMPLEMENTATION`; this change has not been deployed. See [scope, role matrix, queries, history, indexes and validation](operations/STOCK_WORKSPACE_2026-10-12.md). Earlier v1.1–v1.4 releases remain historical entries in [Version Log](operations/VERSION_LOG.md).
+The workspace was implemented after `APPROVE IMPLEMENTATION`, visually accepted by the user, and deployed in v1.5.0 on 2026-10-12 after separate explicit authorization. See [scope, role matrix, queries, history, indexes and validation](operations/STOCK_WORKSPACE_2026-10-12.md). Earlier v1.1–v1.4 releases remain historical entries in [Version Log](operations/VERSION_LOG.md).
 
 ## Loading and filtering
 
