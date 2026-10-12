@@ -14,6 +14,11 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [x] User explicitly authorized deployment after the follow-up local preview was opened.
 - [x] Deploy and verify v1.5.1: Hosting release succeeded; live HTML/JS/CSS match the production build. See [Version Log](./VERSION_LOG.md).
 
+## Current Stock barcode-only filters
+
+- [x] Implement and validate the approved Barcode / Stock Status / Clear Filters layout; remove name/vendor filtering from the Current Stock query path. See [local checkpoint](./CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
+- [ ] User visual review and separate deployment authorization. This change is local; v1.5.1 remains deployed.
+
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.

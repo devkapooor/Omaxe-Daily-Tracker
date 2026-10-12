@@ -1,15 +1,17 @@
 # Current Stock in the Stock workspace
 
-Current Stock is the first of four Stock tabs, alongside Receive Stock, Stock Audit and Stock History. All active owner, manager and billing accounts can view recorded quantities/prices/costs and use the direct row Edit action. MRP and selling price edits require a reason, update current stock through the existing authenticated server function, record the last editor and create an owner Action Centre review record. Selling price must not exceed MRP. Quantity is read-only here; physical changes use Stock Audit.
+Current Stock is the first of five Stock tabs, alongside Receive Stock, GRN History, Stock Audit and Stock History. All active owner, manager and billing accounts can view recorded quantities/prices/costs and use the direct row Edit action. MRP and selling price edits require a reason, update current stock through the existing authenticated server function, record the last editor and create an owner Action Centre review record. Selling price must not exceed MRP. Quantity is read-only here; physical changes use Stock Audit.
 
 The workspace was implemented after `APPROVE IMPLEMENTATION`, visually accepted by the user, and deployed in v1.5.0 on 2026-10-12 after separate explicit authorization. See [scope, role matrix, queries, history, indexes and validation](operations/STOCK_WORKSPACE_2026-10-12.md). Earlier v1.1–v1.4 releases remain historical entries in [Version Log](operations/VERSION_LOG.md).
 
+The barcode-only filter simplification described below is implemented locally after user approval on 2026-10-12; it is not deployed yet. Live v1.5.1 still includes name/vendor filters. See [local implementation checkpoint](operations/CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
+
 ## Loading and filtering
 
-- Opening Current Stock without a filter sends no product/cost catalogue request. Choose an exact barcode, name prefix, exact recorded vendor or stock status.
+- Opening Current Stock without a filter sends no product/cost catalogue request. Enter an exact barcode or select In Stock, Zero Stock or Negative Stock. Blank barcode plus All stock status remains idle; the repository also guards this case.
 - Matching products use Firestore cursor pages of 50 with explicit order and document-ID tie-breaker. Latest costs are fetched for only the returned IDs, in groups of at most 30. No complete catalogue download or local slice simulates server pagination.
-- Barcode preserves leading zeros. Name prefix uses existing normalized `searchName`; unrestricted substring search is not supported. Vendor matching is exact and case sensitive; aliases are not grouped by downloading the catalogue.
-- Product name, barcode, quantity and selling price orders use supported server queries. Name-prefix and nonzero quantity-range filters constrain the effective server order, which is displayed. MRP, cost and margin sorts explicitly apply only to the loaded page.
+- Barcode search matches the complete saved barcode after trimming surrounding whitespace, preserving leading zeros and alphanumeric values. Product-name search, the search-mode selector and the exact vendor filter are removed from Current Stock. Recorded vendor details remain available in the product popup.
+- Product name, barcode, quantity and selling price orders use supported server queries. Nonzero quantity-range filters constrain the effective server order, which is displayed. The existing normalized `searchName` remains an ordering key for product-name sorting; it is not used for search filtering. MRP, cost and margin sorts explicitly apply only to the loaded page.
 - All active/inactive products remain eligible, as in the existing Current Stock view. Status in details still controls existing billing/receipt behavior.
 - Filters reset pagination. Pending inputs hide stale rows. Loading, empty, error and Retry states are explicit. Refresh resets to the first page and reads from the server; returning to the tab also fetches afresh. Snapshot time explains freshness between refreshes.
 

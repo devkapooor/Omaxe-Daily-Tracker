@@ -2,21 +2,17 @@ import { doc, documentId, getDocsFromServer, limit, onSnapshot, orderBy, query, 
 import { db } from '@/shared/lib/firebase'
 import { POS_SANDBOX_ID, type PosProduct, type PosProductCost } from '@/features/pos/domain/types'
 import { deriveStockRows, type StockSort } from '../domain/currentStock'
-import { stockQueryPlan, type StockQueryFilters } from '../domain/stockQueryPlan'
+import { stockQueryEnabled, stockQueryPlan, type StockQueryFilters } from '../domain/stockQueryPlan'
 import { readPage, singleFlight, stockCollection, type Cursor } from './stockQueries'
 
 export async function loadStockPage(filters: StockQueryFilters, sort: StockSort, descending: boolean, cursor: Cursor) {
+  if (!stockQueryEnabled(filters)) return { items: [], cursor: null, hasMore: false }
   const identity = JSON.stringify([filters, sort, descending])
   const constraints: QueryConstraint[] = []
-  if (filters.vendor.trim()) constraints.push(where('vendor', '==', filters.vendor.trim()))
   if (filters.stockStatus) constraints.push(where('currentQuantity', filters.stockStatus === 'zero' ? '==' : filters.stockStatus === 'positive' ? '>' : '<', 0))
-  if (filters.search.trim()) {
-    if (filters.searchMode === 'barcode') constraints.push(where('barcode', '==', filters.search.trim()))
-    else { const prefix = filters.search.trim().toLowerCase(); constraints.push(where('searchName', '>=', prefix), where('searchName', '<=', `${prefix}\uf8ff`)) }
-  }
+  if (filters.search.trim()) constraints.push(where('barcode', '==', filters.search.trim()))
   const plan = stockQueryPlan(filters, sort, descending)
-  const secondary = filters.searchMode === 'name' && filters.search.trim() && ['positive', 'negative'].includes(filters.stockStatus) ? ['currentQuantity'] : []
-  const page = await readPage<PosProduct>('products', constraints, cursor, 50, identity, plan.field, plan.direction, secondary)
+  const page = await readPage<PosProduct>('products', constraints, cursor, 50, identity, plan.field, plan.direction)
   const ids = page.items.map((item) => item.id)
   const costs: PosProductCost[] = []
   for (let offset = 0; offset < ids.length; offset += 30) {

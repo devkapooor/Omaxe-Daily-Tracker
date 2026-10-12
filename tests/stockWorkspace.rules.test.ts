@@ -73,7 +73,7 @@ beforeEach(() => { setServerClockSample(Date.now(), performance.now(), performan
 afterAll(async () => { await environment.cleanup() })
 describe('Stock workspace bounded queries and permissions', () => {
   it('pages matching products and reads only their costs', async () => {
-    const query = { search: '', searchMode: 'barcode' as const, vendor: 'Supplier', stockStatus: 'positive' }
+    const query = { search: '', stockStatus: 'positive' }
     const first = await loadStockPage(query, 'name', false, null)
     expect(first.items).toHaveLength(50)
     expect(state.reads.filter((read) => read.path.endsWith('/products')).map((read) => read.size)).toEqual([50])
@@ -83,12 +83,25 @@ describe('Stock workspace bounded queries and permissions', () => {
     expect(new Set([...first.items, ...second.items, ...third.items].map((item) => item.id)).size).toBe(110)
     expect(third.hasMore).toBe(false)
   })
-  it('preserves leading zeros and combines prefix and quantity filters', async () => {
-    const exact = await loadStockPage({ search: '00010', searchMode: 'barcode', vendor: '', stockStatus: '' }, 'name', false, null)
+  it('preserves leading zeros and combines exact barcode and quantity filters', async () => {
+    const exact = await loadStockPage({ search: ' 00010 ', stockStatus: '' }, 'name', false, null)
     expect(exact.items.map((item) => item.id)).toEqual(['p-010'])
-    const prefix = await loadStockPage({ search: 'product p-', searchMode: 'name', vendor: 'Supplier', stockStatus: 'negative' }, 'name', false, null)
-    expect(prefix.items).toHaveLength(3)
-    expect(prefix.items.every((item) => item.currentQuantity < 0)).toBe(true)
+    for (const [search, stockStatus, id] of [['00000', 'negative', 'p-000'], ['00003', 'zero', 'p-003'], ['00010', 'positive', 'p-010']]) {
+      const page = await loadStockPage({ search, stockStatus }, 'name', false, null)
+      expect(page.items.map((item) => item.id)).toEqual([id])
+    }
+    for (const search of ['10', 'Product p-', 'Supplier']) {
+      const page = await loadStockPage({ search, stockStatus: '' }, 'name', false, null)
+      expect(page.items).toEqual([])
+    }
+    expect((await loadStockPage({ search: '00010', stockStatus: 'negative' }, 'name', false, null)).items).toEqual([])
+    expect(state.reads.every((read) => read.size <= 50)).toBe(true)
+  })
+  it('performs no product or cost query for blank barcode and All stock status', async () => {
+    const page = await loadStockPage({ search: '   ', stockStatus: '' }, 'name', false, null)
+    expect(page).toEqual({ items: [], cursor: null, hasMore: false })
+    expect(state.reads).toEqual([])
+    expect(state.listeners).toBe(0)
   })
   it('merges paged movement and damaged-return history without duplicate source events', async () => {
     const pager = createStockHistoryPager(filters)
