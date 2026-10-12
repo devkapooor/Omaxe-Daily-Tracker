@@ -1,6 +1,6 @@
 # Receive Stock vendor picker and top-bar GRN History ? 2026-10-12
 
-Status: user approved implementation after read-only diagnosis. Implemented locally; user visual review and separate deployment authorization are pending. No production mutations, data migrations, Rules changes, index changes, or posting changes are included.
+Status: user approved implementation after read-only diagnosis. Implemented and committed locally as `3220d6b`. The user explicitly authorized deployment after the local preview was opened; v1.5.1 release preparation is underway. No production mutations, data migrations, Rules changes, index changes, or posting changes are included.
 
 ## Diagnosis
 
@@ -30,4 +30,4 @@ The receipt form passed `onFocus` to `NativeSelect`, which discarded that prop. 
 
 Local preview: http://127.0.0.1:5174/output/stock-workspace/preview.html. Its records are synthetic and isolated from production. Check the natural Vendor dropdown, prefix search and Load more, then enter an invoice and switch between Receive Stock and GRN History. Returning from other Stock sections still requires saving/continuing a draft; no new app-wide form persistence is introduced.
 
-Deployment is pending separate user authorization. Existing browser-transaction financial/stock authority gaps, installed-app caching repair, and physical printer acceptance remain outside this fix. No new Firebase service or plan dependency is required.
+Deployment is explicitly authorized; successful completion and live verification will be recorded after publishing. Existing browser-transaction financial/stock authority gaps, installed-app caching repair, and physical printer acceptance remain outside this fix. No new Firebase service or plan dependency is required.

@@ -1,5 +1,15 @@
 # Version Log
 
+## v1.5.1 - 2026-10-12
+
+- Status: release prepared after the user explicitly authorized deployment following the local preview. Feature checkpoint: `3220d6b`; deployment proof will be recorded after publishing.
+- Target: Firebase Hosting only, `alphahub-f137b`, https://alphahub-f137b.web.app. Rules, indexes, Cloud Functions and posting algorithms are unchanged.
+- Receive Stock now loads active vendors directly when the Vendor dropdown opens. Find vendors and its separate panel are removed. Search uses a labelled case-sensitive name prefix; Load more requests bounded 25-row cursor pages. Selected vendors remain visible after closing, searching, paging and resuming drafts.
+- GRN History moves into the Stock top bar beside Receive Stock. Switching between those two tabs preserves the receipt form; history and vendor catalogue reads remain scoped to the visible view. POS remains Billing, Dashboard and Bills.
+- Validation: source/test lint, TypeScript/Vite build, 137 source tests, 86 isolated emulator Rules/repository tests, Git whitespace checks and isolated desktop/390px mobile browser review passed. Natural dropdown opening, multi-page selection/search, retry and stale-response handling, draft continuation, receipt posting/view/reversal, vendor invoice reference and staff restrictions were checked without production mutations.
+- No production data migrations, rewrites or mutation tests. Existing bundle-size warning and installed-app caching repair remain separate. Search remains case sensitive and prefix-only.
+- Details: [Receive Stock fix checkpoint](./STOCK_RECEIVE_VENDOR_FIX_2026-10-12.md).
+
 ## v1.5.0 - 2026-10-12
 
 - Status: committed, tagged, pushed and deployed on 2026-10-12 after the user's local visual acceptance and explicit deploy/commit authorization. Implementation checkpoint: `cae5b00`; release commit: `bd0f1bb`; tag: `v1.5.0`.

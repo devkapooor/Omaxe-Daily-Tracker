@@ -11,7 +11,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Receive Stock follow-up
 
 - [x] Implement the approved vendor dropdown fix and move GRN History into the Stock top bar. See [fix and validation checkpoint](./STOCK_RECEIVE_VENDOR_FIX_2026-10-12.md).
-- [ ] User visual acceptance of this follow-up, then separate explicit deployment authorization. v1.5.0 remains the deployed release until that gate is completed.
+- [x] User explicitly authorized deployment after the follow-up local preview was opened.
+- [ ] Deploy and verify the authorized v1.5.1 Hosting-only release. v1.5.0 remains live until publishing succeeds.
 
 ## Current product and priorities
 
