@@ -17,7 +17,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Current Stock barcode-only filters
 
 - [x] Implement and validate the approved Barcode / Stock Status / Clear Filters layout; remove name/vendor filtering from the Current Stock query path. See [local checkpoint](./CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
-- [ ] User visual review and separate deployment authorization. This change is local; v1.5.1 remains deployed.
+- [x] User explicitly authorized deploy, commit and push after the local preview was opened.
+- [ ] Deploy and verify the authorized v1.5.2 Hosting-only release. v1.5.1 remains live until publishing succeeds.
 
 ## Current product and priorities
 

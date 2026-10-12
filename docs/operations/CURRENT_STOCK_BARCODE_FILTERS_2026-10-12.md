@@ -1,6 +1,6 @@
 # Current Stock barcode-only filters - 2026-10-12
 
-Status: implementation approved by the user. Implemented and validated locally; user visual review and separate deployment authorization are pending. Live production remains v1.5.1.
+Status: implementation approved by the user. Implemented and validated locally as `f469cb0`. The user explicitly authorized deploy, commit and push following the local preview. v1.5.2 release preparation is underway; production remains v1.5.1 until publishing succeeds.
 
 ## Changes
 
@@ -28,4 +28,4 @@ Status: implementation approved by the user. Implemented and validated locally; 
 - `src/features/stock/domain/stockQueryPlan.test.ts` and `tests/stockWorkspace.rules.test.ts`: focused regressions.
 - `docs/CURRENT_STOCK.md`, this checkpoint and `docs/operations/ROADMAP.md`: current behavior and release gate.
 
-Local review: http://127.0.0.1:5174/output/stock-workspace/preview.html. Use barcode `00000`, then Clear Filters and each stock status. Data is synthetic and isolated; deployment requires separate explicit authorization.
+Local review: http://127.0.0.1:5174/output/stock-workspace/preview.html. Use barcode `00000`, then Clear Filters and each stock status. Data is synthetic and isolated; deployment is explicitly authorized and completion will be recorded after live verification.

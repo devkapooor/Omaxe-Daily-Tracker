@@ -1,5 +1,15 @@
 # Version Log
 
+## v1.5.2 - 2026-10-12
+
+- Status: release prepared after the user explicitly authorized deploy, commit and push following the local preview. Feature checkpoint: `f469cb0`; deployment proof will be recorded after publishing.
+- Target: Firebase Hosting only, `alphahub-f137b`, https://alphahub-f137b.web.app. Firestore Rules/indexes, Cloud Functions, permissions and posting algorithms are unchanged.
+- Current Stock filter bar now contains Barcode, Stock Status and Clear Filters. Search matches the full saved barcode, preserving leading zeros. The search-mode selector, name search and exact vendor filter are removed from the Current Stock UI and query model.
+- Blank barcode with All stock status sends no catalogue query, enforced by both hook and repository. Bounded cursor pages, matching product-cost reads, pagination resets, page-only MRP/cost/margin sorting, refresh, direct Edit and lazy product/movement details are retained.
+- Implementation validation: source/test lint, TypeScript/Vite build, 138 source tests, 16 focused Stock workspace emulator tests, Git whitespace checks and isolated desktop/390px phone browser review passed. No application code changed during release preparation; unrelated posting suites were not rerun for this filter change.
+- No data migrations, historical rewrites or production mutation tests. Existing bundle-size warning remains. POS search, other Stock workspaces, price posting and owner Action Centre review retain their existing behavior.
+- Details: [Current Stock barcode filter checkpoint](./CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
+
 ## v1.5.1 - 2026-10-12
 
 - Status: committed, tagged, pushed and deployed after the user explicitly authorized deployment following the local preview. Feature checkpoint: `3220d6b`; release commit: `b08f849`; tag: `v1.5.1`.
