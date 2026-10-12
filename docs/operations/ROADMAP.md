@@ -16,14 +16,14 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 
 ## Current Stock barcode-only filters
 
-- [x] Implement and validate the approved Barcode / Stock Status / Clear Filters layout; remove name/vendor filtering from the Current Stock query path. See [local checkpoint](./CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
+- [x] Implement and validate the approved Barcode / Stock Status / Clear Filters layout; remove name/vendor filtering from the Current Stock query path. See [implementation checkpoint](./CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
 - [x] User explicitly authorized deploy, commit and push after the local preview was opened.
-- [ ] Deploy and verify the authorized v1.5.2 Hosting-only release. v1.5.1 remains live until publishing succeeds.
+- [x] Deploy and verify v1.5.2: Hosting release succeeded; live HTML/JS/CSS match the production build. See [Version Log](./VERSION_LOG.md).
 
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
-- Owner-created staff accounts; role-based POS (Billing, Dashboard and Bills) and a Stock workspace (Current Stock, Receive Stock, GRN History, Stock Audit and Stock History; deployed in v1.5.1), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
+- Owner-created staff accounts; role-based POS (Billing, Dashboard and Bills) and a Stock workspace (Current Stock, Receive Stock, GRN History, Stock Audit and Stock History; deployed in v1.5.2), owner Dashboard, Action Centre and Logs; role-appropriate Settings.
 - Vendor Workspace owns vendors, purchases, separate payments, invoices, returns, corrections, cheques and balances. Party Directory manages people; Register contains expenses. The owner-only Loans page contains loan totals, details, creation and repayment history. All staff can view Current Stock including costs and recorded movements.
 - Maintain financial write reliability, POS stock/payable consistency, loan allocation correctness, user-ID cash ownership, compatibility with historical planner records, and dependable Firebase sync.
 - Keep main releasable with focused commits, reviewed deployments, version history, and rollback by redeploying a compatible known-good commit.

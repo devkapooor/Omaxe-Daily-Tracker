@@ -1,6 +1,6 @@
 # Current Stock barcode-only filters - 2026-10-12
 
-Status: implementation approved by the user. Implemented and validated locally as `f469cb0`. The user explicitly authorized deploy, commit and push following the local preview. v1.5.2 release preparation is underway; production remains v1.5.1 until publishing succeeds.
+Status: implementation approved by the user. Implemented and validated as `f469cb0`. The user explicitly authorized deploy, commit and push following the local preview. Release `eee3381`, tagged `v1.5.2`, is pushed and deployed to Firebase Hosting. Live HTML/JS/CSS hashes match the production build; see [Version Log](./VERSION_LOG.md).
 
 ## Changes
 
@@ -28,4 +28,4 @@ Status: implementation approved by the user. Implemented and validated locally a
 - `src/features/stock/domain/stockQueryPlan.test.ts` and `tests/stockWorkspace.rules.test.ts`: focused regressions.
 - `docs/CURRENT_STOCK.md`, this checkpoint and `docs/operations/ROADMAP.md`: current behavior and release gate.
 
-Local review: http://127.0.0.1:5174/output/stock-workspace/preview.html. Use barcode `00000`, then Clear Filters and each stock status. Data is synthetic and isolated; deployment is explicitly authorized and completion will be recorded after live verification.
+Local review: http://127.0.0.1:5174/output/stock-workspace/preview.html. Use barcode `00000`, then Clear Filters and each stock status. Data is synthetic and isolated; Hosting deployment and read-only live asset verification completed on 2026-10-12. Rules, indexes and Cloud Functions were not redeployed.

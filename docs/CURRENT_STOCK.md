@@ -4,7 +4,7 @@ Current Stock is the first of five Stock tabs, alongside Receive Stock, GRN Hist
 
 The workspace was implemented after `APPROVE IMPLEMENTATION`, visually accepted by the user, and deployed in v1.5.0 on 2026-10-12 after separate explicit authorization. See [scope, role matrix, queries, history, indexes and validation](operations/STOCK_WORKSPACE_2026-10-12.md). Earlier v1.1–v1.4 releases remain historical entries in [Version Log](operations/VERSION_LOG.md).
 
-The barcode-only filter simplification described below is implemented locally after user approval on 2026-10-12; it is not deployed yet. Live v1.5.1 still includes name/vendor filters. See [local implementation checkpoint](operations/CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
+The barcode-only filter simplification described below was approved, committed, pushed and deployed in v1.5.2 on 2026-10-12 after separate explicit deployment authorization. Live HTML/JS/CSS hashes match the production build. See [implementation and validation checkpoint](operations/CURRENT_STOCK_BARCODE_FILTERS_2026-10-12.md).
 
 ## Loading and filtering
 
