@@ -1,5 +1,16 @@
 # Version Log
 
+## v1.5.0 - 2026-10-12
+
+- Status: release prepared after the user's local visual acceptance and explicit deploy/commit authorization on 2026-10-12. Implementation checkpoint: `cae5b00`; deployment proof will be recorded after publishing.
+- Target: Firestore Rules and composite indexes, then Firebase Hosting at `https://alphahub-f137b.web.app`. Existing price/server-time Functions are reused and are not being redeployed.
+- Stock contains Current Stock, Receive Stock, Stock Audit and Stock History. POS contains Billing, Dashboard and Bills. GRN MRP correction is retired; historical evidence and reversal remain available. Vendor financial work and owner price review retain their existing locations.
+- Filter-first server stock pages replace catalogue/cost listeners and simulated paging. Receipts, audit details and combined history use bounded cursor queries; closed tabs/details stop readers. Dashboard financial totals remain complete through bounded date-range listeners and matching bill-state queries. Billing drafts survive Stock navigation.
+- Search uses exact barcode/name prefix and exact recorded vendors. MRP/cost/margin sorting is page-only. Damaged returns are bill-level zero-stock-change history and excluded under product filters; missing historical fields are not invented. Required indexes increase from 3 to 65.
+- Release validation: `npx eslint src tests`, 137 source tests, 85 emulator Rules/repository tests and 11 server price tests passed. Isolated desktop/mobile browser review and user acceptance passed. Production mutations, imports, migrations, backfills and financial posting migrations are not part of this release.
+- Known limits: existing browser GRN/audit/checkout/return transactions remain Rules-protected; server-authority migration is separately scoped. GRN reversal can clear its own current cost. Installed-app caching repair and physical printer acceptance remain separate. Existing bundle-size warning is retained.
+- Details: [Stock workspace implementation and query design](./STOCK_WORKSPACE_2026-10-12.md).
+
 ## v1.4.0 - 2026-10-12
 
 - Status: committed, tagged, pushed and deployed on 2026-10-12 after the user's explicit Deploy request. Release commit: `511937b`; tag: `v1.4.0`.

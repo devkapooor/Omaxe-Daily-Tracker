@@ -1,6 +1,6 @@
 # Stock workspace implementation checkpoint — 2026-10-12
 
-Status: implementation authorized by the user's exact `APPROVE IMPLEMENTATION`; integrated navigation, query, history and validation stages implemented locally. User visual acceptance and separately authorized deployment remain outstanding. Production records have not been migrated, deleted or rewritten. The live compatibility path remains `posSandboxes/test`.
+Status: implementation authorized by the user's exact `APPROVE IMPLEMENTATION`; integrated navigation, query, history and validation stages implemented locally. The user accepted the local preview and explicitly authorized deployment and commit on 2026-10-12. Release preparation is underway; deployment completion will be recorded after verification. Production records have not been migrated, deleted or rewritten. The live compatibility path remains `posSandboxes/test`.
 
 ## Scope and access
 

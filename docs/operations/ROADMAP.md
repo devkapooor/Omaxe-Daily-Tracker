@@ -5,7 +5,8 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 ## Approved Stock workspace checkpoint
 
 - [x] Implement the approved four-tab Stock workspace, simplify POS, add bounded filtered queries, lazy details/history, scoped listeners and preserve role/posting boundaries. See [implementation and validation checkpoint](./STOCK_WORKSPACE_2026-10-12.md).
-- [ ] Obtain user visual acceptance of the local desktop/mobile interface; deploy only after separate explicit authorization. Rules, composite indexes and hosting for this workspace are not deployed.
+- [x] User accepted the local desktop/mobile Stock preview on 2026-10-12.
+- [ ] Deploy the explicitly authorized v1.5.0 release and verify Rules/indexes/hosting. See [release record](./VERSION_LOG.md).
 
 ## Current product and priorities
 
