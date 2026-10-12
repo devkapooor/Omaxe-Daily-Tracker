@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
@@ -33,13 +33,15 @@ function productMrpPaise(product: PosProduct) {
 
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVendorChange, onFindVendors }: {
+export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVendorChange, renderVendorPicker, view, onViewChange }: {
   currentUser: AppUser
   vendors: VendorV2[]
   enabled: boolean
   showToast: (message: string) => void
   onVendorChange: (id: string) => void
-  onFindVendors: () => void
+  renderVendorPicker: (value: string, onValueChange: (id: string) => void) => ReactNode
+  view: 'receipt' | 'history'
+  onViewChange: (view: 'receipt' | 'history') => void
 }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -58,7 +60,6 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const [newCompanies, setNewCompanies] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [showVendorForm, setShowVendorForm] = useState(false)
-  const [view, setView] = useState<'receipt' | 'history'>('receipt')
   const [invoiceTotal, setInvoiceTotal] = useState('')
   const [historyInvoice, setHistoryInvoice] = useState('')
   const [historyFrom, setHistoryFrom] = useState(recentStockDate)
@@ -85,13 +86,13 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const linesReady = lines.length > 0 && lines.every((line) => Number.isInteger(line.quantity) && line.quantity > 0 && Number.isSafeInteger(line.unitCostPaise) && line.unitCostPaise > 0 && Number.isSafeInteger(line.sellingPricePaise) && (line.sellingPricePaise ?? -1) >= 0 && Number.isSafeInteger(line.mrpPaise) && (line.mrpPaise ?? -1) >= 0 && (line.sellingPricePaise ?? Infinity) <= (line.mrpPaise ?? -1))
   useEffect(() => { onVendorChange(vendorId) }, [vendorId, onVendorChange])
   useEffect(() => {
-    if (!vendorId || !invoiceNumber.trim() || !enabled) return
+    if (view !== 'receipt' || !vendorId || !invoiceNumber.trim() || !enabled) return
     let active = true
     const timer = window.setTimeout(() => {
       void lookupReceiptInvoice(vendorId, invoiceNumber).then((value) => { if (active) setInvoiceResult({ key: invoiceKey, value, error: '' }) }).catch((cause: unknown) => { if (active) setInvoiceResult({ key: invoiceKey, value: null, error: cause instanceof Error ? cause.message : 'Invoice lookup failed.' }) })
     }, 300)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [vendorId, invoiceNumber, enabled, invoiceKey, invoiceAttempt])
+  }, [vendorId, invoiceNumber, enabled, invoiceKey, invoiceAttempt, view])
 
   function resetForm() {
     setVendorId(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); setNewProduct(null); setInvoiceTotal('')
@@ -200,7 +201,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     const receipt = await readSource<PosGoodsReceipt>('goodsReceipts', cached.id).catch((cause: unknown) => { setError(cause instanceof Error ? cause.message : 'Unable to open draft.'); return null })
     if (!receipt || receipt.status !== 'draft') { if (receipt) setError('This receipt is no longer a draft. Refresh history.'); return }
     setDraftId(receipt.id); setVendorId(receipt.vendorId); setInvoiceNumber(receipt.invoiceNumber)
-    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); setView('receipt'); setError('')
+    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); onViewChange('receipt'); setError('')
   }
 
   async function openReceipt(cached: PosGoodsReceipt, action: 'view' | 'reverse') {
@@ -227,17 +228,13 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   }
 
   return <div className="grid gap-3">
-    <div role="tablist" aria-label="Goods receipt sections" className="flex w-fit items-center gap-1 rounded-lg border bg-muted p-1">
-      <Button type="button" role="tab" aria-selected={view === 'receipt'} variant={view === 'receipt' ? 'default' : 'ghost'} onClick={() => setView('receipt')}>Goods Receipt</Button>
-      <Button type="button" role="tab" aria-selected={view === 'history'} variant={view === 'history' ? 'default' : 'ghost'} onClick={() => setView('history')}>History</Button>
-    </div>
     {error ? <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">{error}</p> : null}
-    {vendorId && invoiceNumber.trim() && enabled && invoiceResult.key !== invoiceKey ? <StatusPanel>Checking invoice reference…</StatusPanel> : null}
-    {invoiceResult.key === invoiceKey && invoiceResult.error ? <StatusPanel variant="destructive">{invoiceResult.error}<Button variant="outline" size="sm" onClick={() => setInvoiceAttempt((value) => value + 1)}>Retry invoice lookup</Button></StatusPanel> : null}
+    {view === 'receipt' && vendorId && invoiceNumber.trim() && enabled && invoiceResult.key !== invoiceKey ? <StatusPanel>Checking invoice reference…</StatusPanel> : null}
+    {view === 'receipt' && invoiceResult.key === invoiceKey && invoiceResult.error ? <StatusPanel variant="destructive">{invoiceResult.error}<Button variant="outline" size="sm" onClick={() => setInvoiceAttempt((value) => value + 1)}>Retry invoice lookup</Button></StatusPanel> : null}
     {view === 'receipt' ? <Card><CardHeader className="pb-2"><h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Goods Receipt Note (GRN)</h2></CardHeader><CardContent className="grid gap-3">
       {!enabled ? <p role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">The vendor ledger is not active. A GRN cannot be submitted until it is enabled.</p> : null}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <FieldLabel label="Vendor"><div className="flex gap-2"><NativeSelect className="min-w-0 flex-1" value={vendorId} onFocus={onFindVendors} onChange={(event) => setVendorId(event.target.value)}><option value="">Choose vendor</option>{activeVendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.canonicalName}</option>)}</NativeSelect><Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
+        <FieldLabel label="Vendor"><div className="flex gap-2">{renderVendorPicker(vendorId, setVendorId)}<Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
         <FieldLabel label="Vendor invoice number"><Input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Invoice date"><Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Receipt date"><Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} required /></FieldLabel>
@@ -268,7 +265,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_13rem_auto] sm:items-end">
         <div className="text-sm"><span className="block text-muted-foreground">Received stock value</span><strong>{money(receivedValuePaise)}</strong></div>
         <FieldLabel label="Full invoice payable"><Input type="number" min="0.01" step="0.01" value={invoiceTotal} onChange={(event) => setInvoiceTotal(event.target.value)} placeholder="Invoice total" required /></FieldLabel>
-        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error)} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !selectedVendor || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error)} onClick={() => void submitDraft()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
       </div>
       <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. The payable is the full invoice amount; stock increases only by the quantities received above.</p>
     </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recorded activity" title="GRN History" description="Filtered server pages. Blank dates include older receipts." /></CardHeader><CardContent className="grid gap-3">

@@ -1,38 +1,58 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import type { AppUser } from '@/domain/financeTypes'
 import type { VendorV2 } from '@/domain/vendorLedgerV2'
 import { PosGoodsReceipt } from '@/features/pos/components/PosGoodsReceipt'
-import { FieldLabel } from '@/shared/ui/field-label'
-import { Input } from '@/shared/ui/input'
 import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
-import { loadVendor, loadVendors } from '../data/receiveStockRepository'
-import { useServerPage } from '../hooks/useServerPage'
-import { StockPageControls } from './StockPageControls'
-export function ReceiveStockPage({ currentUser, showToast, ownerEnabled }: { currentUser: AppUser; showToast: (message: string) => void; ownerEnabled?: boolean }) {
-  const [prefix, setPrefix] = useState('')
-  const [search, setSearch] = useState('')
-  const [pickerOpen, setPickerOpen] = useState(false)
+import { loadVendor } from '../data/receiveStockRepository'
+import { StockVendorPicker } from './StockVendorPicker'
+
+export function ReceiveStockPage({ currentUser, showToast, ownerEnabled, view, onViewChange }: {
+  currentUser: AppUser
+  showToast: (message: string) => void
+  ownerEnabled?: boolean
+  view: 'receipt' | 'history'
+  onViewChange: (view: 'receipt' | 'history') => void
+}) {
   const [selectedId, setSelectedId] = useState('')
   const [selected, setSelected] = useState<VendorV2 | null>(null)
   const [enabled, setEnabled] = useState(false)
-  const [error, setError] = useState('')
-  useEffect(() => { const timer = window.setTimeout(() => setPrefix(search), 300); return () => window.clearTimeout(timer) }, [search])
-  const vendors = useServerPage(prefix, (cursor) => loadVendors(prefix, cursor), pickerOpen)
-  useEffect(() => { if (ownerEnabled !== undefined) return; let active = true; const stop = onSnapshot(doc(db, 'appMetadata', 'vendorLedgerV2Config'), (snapshot) => { if (active) { setEnabled(snapshot.data()?.enabled === true); setError('') } }, (cause) => { if (active) setError(cause.message) }); return () => { active = false; stop() } }, [ownerEnabled])
+  const [configError, setConfigError] = useState('')
+  const [vendorError, setVendorError] = useState({ id: '', message: '' })
+  const selectedRef = useRef(selected)
+  useEffect(() => { selectedRef.current = selected }, [selected])
+  const [vendorAttempt, setVendorAttempt] = useState(0)
   useEffect(() => {
-    if (!selectedId) return
+    if (ownerEnabled !== undefined) return
+    const stop = onSnapshot(doc(db, 'appMetadata', 'vendorLedgerV2Config'), (snapshot) => {
+      setEnabled(snapshot.data()?.enabled === true); setConfigError('')
+    }, (cause) => setConfigError(cause.message))
+    return stop
+  }, [ownerEnabled])
+  useEffect(() => {
+    if (!selectedId || selectedRef.current?.id === selectedId || view !== 'receipt') return
     let active = true
-    void loadVendor(selectedId).then((value) => { if (active) setSelected(value) }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load selected vendor.') })
+    void loadVendor(selectedId).then((vendor) => {
+      if (!active) return
+      setSelected(vendor)
+      setVendorError({ id: selectedId, message: vendor ? '' : 'The selected vendor no longer exists. Choose another vendor.' })
+    }).catch((cause: unknown) => {
+      if (active) setVendorError({ id: selectedId, message: cause instanceof Error ? cause.message : 'Unable to load selected vendor.' })
+    })
     return () => { active = false }
-  }, [selectedId])
-  const options = useMemo(() => [...new Map([...vendors.items, ...(selected?.id === selectedId ? [selected] : [])].map((vendor) => [vendor.id, vendor])).values()], [vendors.items, selected, selectedId])
+  }, [selectedId, vendorAttempt, view])
+  const selectedVendor = selected?.id === selectedId ? selected : null
   return <div className="grid gap-3">
-    <div className="flex flex-wrap items-end gap-2"><Button size="sm" variant="outline" onClick={() => setPickerOpen((value) => !value)}>{pickerOpen ? 'Close vendor catalogue' : 'Find vendors'}</Button>{selected?.id === selectedId ? <span className="text-sm text-muted-foreground">Selected: {selected.canonicalName}</span> : null}</div>
-    {pickerOpen ? <div className="space-y-2 rounded-md border p-3"><FieldLabel label="Vendor name starts with (case sensitive)"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Optional name prefix" /></FieldLabel>{vendors.error ? <StatusPanel variant="destructive">{vendors.error}<Button size="sm" variant="outline" onClick={vendors.retry}>Retry</Button></StatusPanel> : vendors.loading ? <StatusPanel>Loading vendors…</StatusPanel> : <p className="text-xs text-muted-foreground">{vendors.items.length} vendors available in the form's selector on this catalogue page.</p>}<StockPageControls {...vendors} /></div> : null}
-    {error ? <StatusPanel variant="destructive">{error}</StatusPanel> : null}
-    <PosGoodsReceipt currentUser={currentUser} vendors={options} enabled={(ownerEnabled ?? enabled) && !error} showToast={showToast} onVendorChange={setSelectedId} onFindVendors={() => setPickerOpen(true)} />
+    {configError ? <StatusPanel variant="destructive">{configError}</StatusPanel> : null}
+    {view === 'receipt' && vendorError.id === selectedId && vendorError.message ? <StatusPanel variant="destructive">{vendorError.message}<Button type="button" size="sm" variant="outline" onClick={() => setVendorAttempt((value) => value + 1)}>Retry selected vendor</Button></StatusPanel> : null}
+    <PosGoodsReceipt currentUser={currentUser} vendors={selectedVendor ? [selectedVendor] : []}
+      enabled={(ownerEnabled ?? enabled) && !configError} showToast={showToast}
+      view={view} onViewChange={onViewChange} onVendorChange={setSelectedId}
+      renderVendorPicker={(value, onValueChange) => <StockVendorPicker value={value} selected={selected} onSelect={(vendor) => {
+        setSelected(vendor); setSelectedId(vendor.id); setVendorError({ id: '', message: '' }); onValueChange(vendor.id)
+      }} />}
+    />
   </div>
 }

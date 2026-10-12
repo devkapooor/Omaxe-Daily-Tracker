@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -14,6 +14,10 @@ type SelectFieldProps = {
   className?: string
   disabled?: boolean
   emptyMessage?: string
+  filterLocally?: boolean
+  panelFooter?: ReactNode
+  onOpenChange?: (open: boolean) => void
+  onSearchChange?: (query: string) => void
   name?: string
   onValueChange?: (value: string) => void
   options: SelectOption[]
@@ -42,6 +46,10 @@ export function SelectField({
   className,
   disabled = false,
   emptyMessage = 'No matching options.',
+  filterLocally = true,
+  panelFooter,
+  onOpenChange,
+  onSearchChange,
   name,
   onValueChange,
   options,
@@ -55,6 +63,10 @@ export function SelectField({
   const triggerRef = useRef<HTMLButtonElement | HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
+  const suppressFocusOpen = useRef(false)
+  const openRef = useRef(false)
+  const openChangeRef = useRef(onOpenChange)
+  openChangeRef.current = onOpenChange
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -67,7 +79,20 @@ export function SelectField({
   })
   const selectedValue = isControlled ? value ?? '' : uncontrolledValue
 
-  const filteredOptions = useMemo(() => filterOptions(options, query), [options, query])
+  const filteredOptions = useMemo(() => filterLocally ? filterOptions(options, query) : options, [options, query, filterLocally])
+
+  function setDropdownOpen(nextOpen: boolean) {
+    if (openRef.current === nextOpen) return
+    openRef.current = nextOpen
+    setIsOpen(nextOpen)
+    openChangeRef.current?.(nextOpen)
+  }
+
+  function restoreTriggerFocus() {
+    suppressFocusOpen.current = true
+    triggerRef.current?.focus()
+    suppressFocusOpen.current = false
+  }
 
   const selectedOption = useMemo(
     () => options.find((option) => option.value === selectedValue),
@@ -95,15 +120,15 @@ export function SelectField({
       if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) {
         return
       }
-      setIsOpen(false)
+      setDropdownOpen(false)
       setQuery('')
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
-      setIsOpen(false)
+      setDropdownOpen(false)
       setQuery('')
-      triggerRef.current?.focus()
+      restoreTriggerFocus()
     }
 
     window.addEventListener('resize', updatePanelPosition)
@@ -138,18 +163,19 @@ export function SelectField({
       setUncontrolledValue(nextValue)
     }
     onValueChange?.(nextValue)
-    setIsOpen(false)
+    setDropdownOpen(false)
     setQuery('')
-    triggerRef.current?.focus()
+    restoreTriggerFocus()
   }
 
   function openDropdown(nextQuery = '') {
     if (disabled) return
-    const nextFilteredOptions = filterOptions(options, nextQuery)
+    const nextFilteredOptions = filterLocally ? filterOptions(options, nextQuery) : options
     const selectedIndex = nextFilteredOptions.findIndex((option) => option.value === selectedValue && !option.disabled)
     setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : findFirstEnabledIndex(nextFilteredOptions))
     setQuery(nextQuery)
-    setIsOpen(true)
+    onSearchChange?.(nextQuery)
+    setDropdownOpen(true)
   }
 
   function moveHighlight(direction: 1 | -1) {
@@ -167,6 +193,11 @@ export function SelectField({
 
   function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLInputElement | HTMLButtonElement>) {
     if (disabled) return
+    if (isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter')) {
+      handleListKeyDown(event)
+      return
+    }
+    if (searchable && event.key === ' ') return
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       openDropdown()
@@ -174,7 +205,7 @@ export function SelectField({
     }
     if (searchable && event.key === 'Escape') {
       event.preventDefault()
-      setIsOpen(false)
+      setDropdownOpen(false)
       setQuery('')
     }
   }
@@ -252,6 +283,7 @@ export function SelectField({
               })
             )}
           </div>
+          {panelFooter}
         </div>,
         document.body,
       )
@@ -281,8 +313,9 @@ export function SelectField({
                 openDropdown(nextQuery)
                 return
               }
-              const nextFilteredOptions = filterOptions(options, nextQuery)
+              const nextFilteredOptions = filterLocally ? filterOptions(options, nextQuery) : options
               setQuery(nextQuery)
+              onSearchChange?.(nextQuery)
               setHighlightedIndex(findFirstEnabledIndex(nextFilteredOptions))
             }}
             onClick={() => {
@@ -291,7 +324,7 @@ export function SelectField({
               }
             }}
             onFocus={() => {
-              if (!isOpen) {
+              if (!isOpen && !suppressFocusOpen.current) {
                 openDropdown()
               }
             }}
@@ -304,13 +337,13 @@ export function SelectField({
             type="button"
             onClick={() => {
               if (isOpen) {
-                setIsOpen(false)
+                setDropdownOpen(false)
                 setQuery('')
-                triggerRef.current?.focus()
+                restoreTriggerFocus()
                 return
               }
               openDropdown()
-              triggerRef.current?.focus()
+              restoreTriggerFocus()
             }}
           >
             <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180 text-primary')} />
@@ -330,7 +363,7 @@ export function SelectField({
           type="button"
           onClick={() => {
             if (isOpen) {
-              setIsOpen(false)
+              setDropdownOpen(false)
               setQuery('')
               return
             }

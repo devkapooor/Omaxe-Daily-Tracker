@@ -24,7 +24,7 @@ import { loadStockPage } from '../src/features/stock/data/stockRepository'
 import { createStockHistoryPager, historyCompare, type HistoryFilters, type StockHistoryEntry } from '../src/features/stock/data/stockHistoryRepository'
 import { dateConstraints, readPage, readSource } from '../src/features/stock/data/stockQueries'
 import { subscribeDashboardBills, subscribeDashboardStates, loadStockAttention } from '../src/features/pos/data/posDashboardRepository'
-import { lookupReceiptInvoice } from '../src/features/stock/data/receiveStockRepository'
+import { loadVendor, loadVendors, lookupReceiptInvoice } from '../src/features/stock/data/receiveStockRepository'
 import { setServerClockSample } from '../src/shared/lib/serverClock'
 import type { PosBill } from '../src/features/pos/domain/types'
 
@@ -60,6 +60,8 @@ beforeAll(async () => {
     records.push([`${base}/billStates/outside`, { billId: 'outside', state: 'voided', revision: 1 }])
     records.push([`${base}/stockPriceChanges/private`, { id: 'private', productId: 'p-010', reviewStatus: 'pending' }])
     records.push([`${base}/approvals/private`, { requestedByUid: 'manager', status: 'approved' }])
+    for (let index = 0; index < 61; index++) { const id = `vendor-${String(index).padStart(3, '0')}`; records.push([`vendorsV2/${id}`, { id, canonicalName: `Supplier ${String(index).padStart(3, '0')}`, active: true, aliases: [] }]) }
+    records.push(['vendorsV2/inactive', { id: 'inactive', canonicalName: 'Supplier inactive', active: false }])
     records.push(['appMetadata/vendorLedgerV2Config', { enabled: true, activationDate: '2026-10-01' }])
     records.push(['invoiceReservationsV2/vendor:INV-OLD', { purchaseId: 'purchase-old' }])
     records.push(['purchasesV2/purchase-old', { grnId: 'receipt-old' }])
@@ -112,6 +114,22 @@ describe('Stock workspace bounded queries and permissions', () => {
     expect(page.items.map((item) => item.id)).toEqual(['undated'])
     expect(state.reads.every((read) => read.size <= 25)).toBe(true)
     expect(() => createStockHistoryPager({ ...filters, undated: true })).toThrow(/exact product ID/)
+  })
+  it('pages active vendors and searches beyond the first page without a catalogue download', async () => {
+    const first = await loadVendors('', null)
+    const second = await loadVendors('', first.cursor)
+    const third = await loadVendors('', second.cursor)
+    expect([first.items.length, second.items.length, third.items.length]).toEqual([25, 25, 11])
+    const ids = [...first.items, ...second.items, ...third.items].map((vendor) => vendor.id)
+    expect(new Set(ids).size).toBe(61)
+    expect(third.hasMore).toBe(false)
+    expect(ids).not.toContain('inactive')
+    const search = await loadVendors('Supplier 050', null)
+    expect(search.items.map((vendor) => vendor.id)).toEqual(['vendor-050'])
+    expect((await loadVendor('vendor-050'))?.canonicalName).toBe('Supplier 050')
+    expect((await loadVendors('supplier', null)).items).toEqual([])
+    expect(state.reads.map((read) => read.size)).toEqual([25, 25, 11, 1, 0])
+    expect(state.listeners).toBe(0)
   })
   it('looks up an invoice older than the selected history window without loading history', async () => {
     expect((await lookupReceiptInvoice('vendor', ' inv-old '))?.id).toBe('receipt-old')

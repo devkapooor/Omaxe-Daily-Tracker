@@ -8,6 +8,11 @@ This is the single current plan and task queue for approved AlphaHub work, conso
 - [x] User accepted the local desktop/mobile Stock preview on 2026-10-12.
 - [x] Deploy the explicitly authorized v1.5.0 release: Rules match source, all 65 indexes are READY, read-only query probes and live hosting asset hashes passed. See [release record](./VERSION_LOG.md).
 
+## Receive Stock follow-up
+
+- [x] Implement the approved vendor dropdown fix and move GRN History into the Stock top bar. See [fix and validation checkpoint](./STOCK_RECEIVE_VENDOR_FIX_2026-10-12.md).
+- [ ] User visual acceptance of this follow-up, then separate explicit deployment authorization. v1.5.0 remains the deployed release until that gate is completed.
+
 ## Current product and priorities
 
 - Single-store React/TypeScript PWA using Firebase Authentication, Firestore, and Cloud Functions on the paid Blaze plan; installed launches still require internet for business data.
