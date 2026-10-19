@@ -1,4 +1,4 @@
-import { publishWorkspaceMetrics } from './sharedViewsRepository'
+import { ensureStaffViewsPublished, publishWorkspaceMetrics } from './sharedViewsRepository'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -61,6 +61,7 @@ export function useAppStore() {
   const localBypassAttemptedRef = useRef(false)
   const vendorFallbackLoadedRef = useRef(false)
   const metricsSyncInFlightRef = useRef(false)
+  const staffViewsBootstrappedForOwnerRef = useRef<string | null>(null)
 
   useEffect(() => {
     function handleNetworkChange() {
@@ -97,6 +98,7 @@ export function useAppStore() {
       setSettingsAuditLog([])
       setWorkspaceMetrics(emptyWorkspaceMetrics)
       setVerifiedRole(null)
+      staffViewsBootstrappedForOwnerRef.current = null
       setCanStartSubscriptions(!nextUser)
     })
   }, [])
@@ -306,6 +308,7 @@ export function useAppStore() {
     async function syncWorkspaceMetrics() {
       if (!authUser || verifiedRole !== 'owner' || !canStartSubscriptions) return
       if (!Object.entries(loadedCollections).every(([key, value]) => key === 'workspaceMetrics' || value)) return
+      if (staffViewsBootstrappedForOwnerRef.current === authUser.uid) return
       if (metricsSyncInFlightRef.current) return
 
       const nextMetrics = deriveWorkspaceMetrics({
@@ -321,15 +324,18 @@ export function useAppStore() {
       })
       const currentComparable = JSON.stringify({ ...workspaceMetrics, updatedAt: null })
       const nextComparable = JSON.stringify({ ...nextMetrics, updatedAt: null })
-      if (currentComparable === nextComparable) return
 
       metricsSyncInFlightRef.current = true
       try {
-        await publishWorkspaceMetrics(nextMetrics, workspaceMetrics.updatedAt)
+        if (currentComparable !== nextComparable) {
+          await publishWorkspaceMetrics(nextMetrics, workspaceMetrics.updatedAt)
+        }
+        await ensureStaffViewsPublished()
+        staffViewsBootstrappedForOwnerRef.current = authUser.uid
       } catch (cause) {
         // Conflicting owners refresh from the canonical snapshot before recomputing.
         const code = cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : ''
-        if (!code.includes('aborted')) setAuthError('Shared reports could not be updated. Reconnect and reload to retry.')
+        if (!code.includes('aborted')) setAuthError('Staff workspace views could not be refreshed. Reconnect and reload to retry.')
       } finally {
         metricsSyncInFlightRef.current = false
       }
