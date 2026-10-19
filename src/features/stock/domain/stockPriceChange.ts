@@ -5,10 +5,14 @@ export function validateStockPrices({ mrpPaise, sellingPricePaise }: StockPrices
 }
 export type StockPriceChange = {
   id: string; productId: string; barcode: string; productName: string
-  before: StockPrices; after: StockPrices; beforeRevision: number; afterRevision: number
+  before: { mrpPaise: number | null; sellingPricePaise: number | null }; after: StockPrices; beforeRevision: number; afterRevision: number
   reason: string; actorUid: string; actorName: string; createdAt: string
   reviewStatus: 'pending' | 'reviewed'; reviewedAt?: string; reviewedByUid?: string; reviewedByName?: string
   reviewReason?: string
+  sourceKind?: 'goods-receipt' | 'goods-receipt-reversal'
+  sourceRecordId?: string
+  movementId?: string
+  beforeRecordedValues?: { mrp: string | null; selling: string | null }
 }
 
 export function stockPricePaise(value: string, optional = false): number | null {

@@ -47,8 +47,9 @@ export type PlannerScheduleItemSnapshot = {
   source: 'expense-cheque' | 'vendor-cheque' | 'vendor-cheque-v2' | 'manual-plan'
   title: string
   chequeNumber?: string
-  runningBalanceAfter: number
-  status: 'available' | 'deficit'
+  /** Owner-only derived funding fields; absent from staff projections. */
+  runningBalanceAfter?: number
+  status?: 'available' | 'deficit'
 }
 
 export type PlannerScheduleGroupSnapshot = {

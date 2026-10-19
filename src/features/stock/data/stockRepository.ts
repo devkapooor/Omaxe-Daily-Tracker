@@ -42,5 +42,7 @@ export type StockMovement = {
   id: string; productId?: string; barcode?: string; productName?: string; type: string; quantityDelta: number; beforeQuantity?: number; afterQuantity?: number
   createdAt?: string; businessDate?: string; actorName?: string; actorUid?: string; reason?: string; sourceReference?: string
   goodsReceiptId?: string; billId?: string; stockAuditId?: string; approvalId?: string; correctionId?: string
-  beforeMrpPaise?: number | null; afterMrpPaise?: number | null; beforeSellingPricePaise?: number; afterSellingPricePaise?: number
+  returnCondition?: 'sellable' | 'damaged'; nonStockReturn?: boolean
+  beforeMrpPaise?: number | null; afterMrpPaise?: number | null; beforeSellingPricePaise?: number | null; afterSellingPricePaise?: number
+  priceChanged?: boolean; priceBefore?: { mrpPaise: number | null; sellingPricePaise: number }; priceAfter?: { mrpPaise: number | null; sellingPricePaise: number }
 }

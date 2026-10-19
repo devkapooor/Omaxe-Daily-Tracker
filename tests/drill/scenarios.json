@@ -1,0 +1,1525 @@
+[
+  {
+    "id": "ENV-01",
+    "title": "Isolation and outbound-denial proof",
+    "role": "all",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Start exact demo emulators and separate Vite config. Before login assert project/Auth/Firestore/Functions SDK identities.",
+      "Sign in using Open Workspace and observe actual local Auth, Firestore and getServerTime requests. Attempt a nonlocal probe; require an abort.",
+      "Assert guarded Admin hosts and empty Loans. Abort dependent mutations if any service or isolation proof is missing."
+    ],
+    "expected": "Auth requests target 127.0.0.1:9099; Firestore targets 127.0.0.1:8080/projects/demo-alphahub-drill; Functions target 127.0.0.1:5001/demo-alphahub-drill/asia-south1. Nonlocal requests are blocked; no bypass/mock gates.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/smoke.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-01",
+    "title": "Real sign-in and role navigation",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/missing/unauthenticated; open real sign-in/profile/remembered/password screens and capture its canonical baseline.",
+      "Exercise \"Real sign-in and role navigation\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Owner sees twelve pages including Loans; staff see eight operational pages, or seven when Cashout is hidden outside its permitted IST window. Only permitted profiles enter workspace.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/smoke.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-02",
+    "title": "Disabled and missing-profile gates",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/missing/unauthenticated; open real sign-in/profile/remembered/password screens and capture its canonical baseline.",
+      "Exercise \"Disabled and missing-profile gates\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Neither profile can reach business UI or read/write business records.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/smoke.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-03",
+    "title": "Wrong password and unauthenticated access",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/missing/unauthenticated; open real sign-in/profile/remembered/password screens and capture its canonical baseline.",
+      "Exercise \"Wrong password and unauthenticated access\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "No workspace or financial write; actionable login error.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/smoke.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-04",
+    "title": "Remembered accounts, switching, refresh and logout",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "With a closed counter, sign in owner, refresh and log out. Separately test mandatory count when an open counter requires it.",
+      "Select remembered owner; assert password focus and no password in localStorage. Go Back, Use another account, then sign in manager.",
+      "Refresh the manager session and verify UID/role restrictions and owner-only navigation."
+    ],
+    "expected": "Only email/name are remembered; password is focused on choosing an account; session survives refresh; staff logout requires count.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-05",
+    "title": "Password reset and own password change",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/missing/unauthenticated; open real sign-in/profile/remembered/password screens and capture its canonical baseline.",
+      "Exercise \"Password reset and own password change\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Reset stays in Auth emulator out-of-band codes; updated password works and old password fails.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-06",
+    "title": "Owner creates staff without losing session",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Owner fills a synthetic Staff creation form and clicks Create User.",
+      "Inspect secondary Auth traffic; abort immediately if it is nonlocal. Never monkeypatch the application to mask a missing emulator connection.",
+      "On a safe local path verify Auth/profile/role/audit and retained owner login; otherwise record Blocked with the aborted request."
+    ],
+    "expected": "Secondary Auth also uses emulator; one Auth account, matching profile/audit; owner remains signed in.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-07",
+    "title": "Restricted saved-page/direct access attempts",
+    "role": "owner/manager/billing/disabled/missing/unauthenticated",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/missing/unauthenticated; open real sign-in/profile/remembered/password screens and capture its canonical baseline.",
+      "Exercise \"Restricted saved-page/direct access attempts\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Staff cannot render owner Dashboard, Action Centre, Loans or Logs even with forged local navigation; backend enforces ownership.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-01",
+    "title": "One opening count, two staff join",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Start with closed initialized counter. BillingA clicks Open Counter > Start Opening Count.",
+      "Enter two Rs500 notes, zero coins and machine values; save. BillingB joins independently.",
+      "Assert one opening reconciliation and both cashier states joined to the same opening ID. A second opening must be rejected."
+    ],
+    "expected": "One opening reconciliation; both staff join the same counter ID without second counts.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-02",
+    "title": "Concurrent reservations and checkout blocking",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Join two real independent staff contexts; request simultaneous logout reservations.",
+      "Require one winner. Send a direct valid-shaped bill batch during the live count, with a matching no-reservation control.",
+      "Require server Rules denial and unchanged bill/sequence/stock/cash; do not accept a malformed-payload error as lock proof."
+    ],
+    "expected": "Only one live reservation; server rejects prohibited bill/refund/Cashout writes; rejected records unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-03",
+    "title": "Count cancellation and recovery",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner and two independent staff sessions; open POS/shared-counter count dialogs and capture its canonical baseline.",
+      "Exercise \"Count cancellation and recovery\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Counting user/owner can cancel; unrelated staff cannot; counter resumes.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-04",
+    "title": "Reservation expiry",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Reserve logout count and save ID/revision.",
+      "Age only the isolated synthetic startedAt beyond300000ms; attempt stale submit, then reserve again.",
+      "Assert stale rejection and new identity. Label the aged-fixture test separately from a real five-minute timed expiry."
+    ],
+    "expected": "Expired server-start reservation no longer blocks; stale submit fails; no count is posted twice.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-05",
+    "title": "Refresh while counting",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner and two independent staff sessions; open POS/shared-counter count dialogs and capture its canonical baseline.",
+      "Exercise \"Refresh while counting\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Same reservation resumes or explicit restart; no duplicate join/count.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-06",
+    "title": "Mandatory logout and discrepancy review",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Joined billing staff click Log out; require Logout Count dialog.",
+      "Enter two Rs500 notes and Rs5 coins, zero UPI/card; Save Count.",
+      "Read actual100500, expected100000, delta500 paise/pending review; cashier closes and shared counter stays open."
+    ],
+    "expected": "Logout records physical totals once; discrepancy reaches owner; open counter survives for other staff.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-07",
+    "title": "Cashout closes counter",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner and two independent staff sessions; open POS/shared-counter count dialogs and capture its canonical baseline.",
+      "Exercise \"Cashout closes counter\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "One closure links daily cashout/sales, clears machine totals as designed and requires a new opening.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "COUNTER-08",
+    "title": "IST date boundaries",
+    "role": "owner and two independent staff sessions",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Evaluate explicit times23:54:59,23:55,00:00,00:20:59 and00:21 IST.",
+      "Compare app date/window functions with independent expectations. Schedule separate local acceptance across real midnight for request.time.",
+      "Do not mock trusted server time or count domain checks as full-stack server acceptance."
+    ],
+    "expected": "2026-10-11T18:29:59Z is Oct 11 IST; 18:30:00Z is Oct 12. Server rejects unsupported dates; actual midnight behavior requires manual observation if no controllable server clock.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-01",
+    "title": "Barcode scan, duplicate scan and name search",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Barcode scan, duplicate scan and name search\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Two A scans plus one B: quantities 2/1, subtotal 22500 paise, leading-zero barcode exact; name search still supported in POS.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-02",
+    "title": "Unknown barcode resolution",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Unknown barcode resolution\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Unresolved cart cannot finalize; creation starts at zero stock and records actor; duplicate creation does not duplicate barcode.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-03",
+    "title": "Cart quantity/remove and stock warnings",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Cart quantity/remove and stock warnings\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Removing B leaves A subtotal 18000; zero/negative stock warnings remain usable; explicit supported negative-stock policy recorded.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-04",
+    "title": "Billing discount limit and owner override reason",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Billing discount limit and owner override reason\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "5% of 22500 is 1125, total 21375; billing >5% fails; owner/manager require override reason above limit.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-05",
+    "title": "Cash tender/change checkout",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Cash tender/change checkout\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "A x2 totals 18000; tender 20000, change 2000; cash ledger adds only 18000; stock A 20 ->18; one bill/source/movement per line.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-06",
+    "title": "UPI/card/split allocations",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"UPI/card/split allocations\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Payments sum exactly to bill total; split 9000 cash+4500 UPI for A+B totals 13500; no over/under allocation.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-07",
+    "title": "Concurrent checkout and stale product revision",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Concurrent checkout and stale product revision\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Independent sessions serialize product revisions; stale cart requires refresh; no lost stock or duplicate sequence.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-08",
+    "title": "Hold/resume ownership and refresh",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Hold/resume ownership and refresh\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Held lines/cart totals persist; permitted resume deletes/consumes once; cross-user access behavior recorded.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-09",
+    "title": "Partial sellable returns and refund caps",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Finalize two A at9000 paise each; capture bill, state, stock18 and cashNet18000.",
+      "Request one sellable unit with18000 refund and current IST refund date; owner attempts approval.",
+      "Require cap9000, no oversized refund and unchanged rejected sources; capture any accepted full refund as a financial failure."
+    ],
+    "expected": "Returning one A refunds at most that line net after recorded discount/prior returns, stock +1; never defaults to whole unrelated bill value.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-10",
+    "title": "Damaged returns",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Damaged returns\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "No stock increase; bounded refund/source approval; history honestly labels bill-level no stock change.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-11",
+    "title": "Void and stale approval decision",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Void and stale approval decision\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Owner-only decision exactly once; full reversal deltas correct; stale source does not post.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-12",
+    "title": "Bill history pagination/source/printing",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Create eight real bills, open Bills and assert the first seven.",
+      "Load more; verify eight distinct rows. Open Reprint and inspect generated HTML with only native print/close suppressed for content capture.",
+      "Check item/quantity/total/operator. Native print dialog and physical printer remain manual, not acceptance passes."
+    ],
+    "expected": "Newest seven initial records; Load more has unique stable refs; details trace source; physical printer requires manual check.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-13",
+    "title": "Price changed after scan/rescan",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Scan A at9000/revision1. A second session changes selling to9500 through the real price callable.",
+      "Finalize stale cart; require updated-product warning and no bill. Review retained quantity and finalize again.",
+      "Read one9500 bill, stock19 and exactly one movement; older prices must not post silently."
+    ],
+    "expected": "New current price/revision cannot be paired with stale cart price at checkout.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "POS-14",
+    "title": "Double-click/interrupted checkout",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open POS > Billing/Bills/Dashboard and capture its canonical baseline.",
+      "Exercise \"Double-click/interrupted checkout\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "At most one finalized bill and stock decrement for one intended operation; interrupted retry reconciles saved result.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-01",
+    "title": "Barcode-only filter and idle state",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Barcode-only filter and idle state\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Blank +All makes no catalogue reads; exact 00001 returns A, partial/name/vendor strings do not fallback.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-02",
+    "title": "Statuses and cursor pagination",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Statuses and cursor pagination\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Zero/negative shown honestly; products limited to 50 and costs to matching ID groups <=30; reset filters resets cursor.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-03",
+    "title": "Sorting and totals honesty",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Sorting and totals honesty\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Supported ordering stable; MRP/cost/margin labelled page-only; no catalogue total inferred from loaded page.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-04",
+    "title": "Details, direct Edit and listener lifecycle",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Open Stock with blank barcode/All; inspect actual Firestore Listen traffic and idle state.",
+      "Filter00001 and open direct Edit. Keep Recorded movement history collapsed; then close details or leave workspace.",
+      "Verify only scoped product/cost detail targets start and detach through removeTarget; distinguish truly shared global dependencies."
+    ],
+    "expected": "Two detail listeners only while open; movement history loads only expanded; inactive Stock tabs release unnecessary reads.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-05",
+    "title": "Price validation for every staff role",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Price validation for every staff role\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "MRP required; selling<=MRP, integer paise, reason 5..1000; invalid requests leave stock and evidence unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-06",
+    "title": "Zero/equal price and before/after attribution",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Zero/equal price and before/after attribution\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "MRP=0/selling=0 and equal values follow validation; accepted change stores exact before/after, actor and last editor.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-07",
+    "title": "Stale revision and operation retry",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Stale revision and operation retry\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "One price operation id has one stock revision/evidence; stale new intent rejected.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-08",
+    "title": "Owner review does not reapply old price",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Stock > Current Stock/Stock History and capture its canonical baseline.",
+      "Exercise \"Owner review does not reapply old price\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Review marks evidence reviewed; a later product price remains unchanged; staff cannot review.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "STK-09",
+    "title": "Unified history trace/filter/duplicates",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Create real sale, price change and damaged-return sources in independent signed-in sessions.",
+      "Open Stock History: assert order, distinct source events, lazy details, barcode/event/date filtering and damaged bill-level exclusion label.",
+      "Use explicit28 tied-date synthetic history pairs for25+3 cursor pages. Label synthetic history-query testing separately from source posting."
+    ],
+    "expected": "Receipts/sales/returns/audits/reversals/prices ordered by time+ID, no dual-source duplicates; damaged product-filter limitation explicit.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-01",
+    "title": "Draft save/continue/delete and top-bar form retention",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Draft save/continue/delete and top-bar form retention\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Draft changes no stock/payable; Receive/GRN History switch retains form; source reload gives same vendor outside first catalogue page.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-02",
+    "title": "Existing-product partial receipt/invoice link",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Existing-product partial receipt/invoice link\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Receive A x3 at cost6000, MRP10000,sell9000: stock20->23; full invoice18000 paise payable once, linked reservation/source/ledger.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-03",
+    "title": "New product receive and price/quantity validation",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"New product receive and price/quantity validation\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "New SKU starts at received quantity; whole positive quantities, cost>0 and selling<=MRP; rejected writes unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-04",
+    "title": "Duplicate and concurrent submissions",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Duplicate and concurrent submissions\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Same draft/invoice does not add stock or payable twice; partial receipts share one full invoice payable.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-05",
+    "title": "Owner reversal and concurrent downstream changes",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Owner reversal and concurrent downstream changes\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Reversal qty -3 and payable -18000 once; staff prohibited; cost/price restoration limitations recorded rather than invented.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-06",
+    "title": "Historical correction view and retired MRP correction",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Historical correction view and retired MRP correction\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "No new GRN MRP correction action/writer; historical evidence readable; current price editor used instead.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "GRN-07",
+    "title": "Vendor picker pages/search/new vendor",
+    "role": "billing/manager/owner",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
+      "Exercise \"Vendor picker pages/search/new vendor\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Dropdown automatically loads bounded pages; selected vendor retained, case-sensitive prefix labelled, retry/stale responses safe.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUD-01",
+    "title": "Physical count and evidence",
+    "role": "billing/manager/owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Stock Audit and capture its canonical baseline.",
+      "Exercise \"Physical count and evidence\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "A physical17 from20 changes -3, independent cost impact -18000 paise; reason/audit/movement/actor consistent.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUD-02",
+    "title": "Missing cost and invalid counts",
+    "role": "billing/manager/owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Stock Audit and capture its canonical baseline.",
+      "Exercise \"Missing cost and invalid counts\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Explicit cost required where implemented; invalid fractional/negative quantity does not post.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUD-03",
+    "title": "Concurrent count and sale",
+    "role": "billing/manager/owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Scan A into audit at revision1 and enter physical17 before a competing sale.",
+      "A second staff session sells two A. Review & save, then Confirm and reconcile stale audit.",
+      "Require changed-stock rejection, quantity18 and zero audits; re-scan before a new count."
+    ],
+    "expected": "Revisions prevent silent overwrite; accepted final quantity matches ordered source deltas.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUD-04",
+    "title": "Audit history role and paging",
+    "role": "billing/manager/owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as billing/manager/owner; open Stock > Stock Audit and capture its canonical baseline.",
+      "Exercise \"Audit history role and paging\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Staff can count; owner-only batch history UI retained; details/items bounded and lazy.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-01",
+    "title": "Zero opening vendor",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Zero opening vendor\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "One vendor with opening0, no unintended payable.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-02",
+    "title": "Owner nonzero opening payable",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Owner nonzero opening payable\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Opening100000 paise stores immutable reason/date source+ledger+account exactly once.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-03",
+    "title": "Staff opening restrictions",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Staff opening restrictions\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Nonzero opening prohibited in UI and Rules for manager/billing.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-04",
+    "title": "Purchase uniqueness and dates",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Purchase uniqueness and dates\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Purchase18000 paise creates one invoice/reservation/ledger/account delta; duplicate conflict/date before activation rejected.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-05",
+    "title": "Partial/full payments and balances",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Partial/full payments and balances\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "100000 payable minus50000 payment =50000; final50000 ->0; allocations sum payment, separate invoice/vendor totals consistent.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-06",
+    "title": "Overpayment and concurrent settlement",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Overpayment and concurrent settlement\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "No overpay/lost balance across two independent requests; rejected sources unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-07",
+    "title": "Corrections approve/reject/withdraw/stale",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Create invoice100000 and partial payment50000. Request payment correction to40000.",
+      "Use separate request IDs for withdrawal, owner rejection, unauthorized staff approval and owner approval; retry approved request.",
+      "Require60000 invoice/account outstanding only after approval; immutable original payment stays50000 with10000 correction evidence."
+    ],
+    "expected": "Original source immutable; revision and allocation deltas reconcile; own pending withdrawal only, owner approval only.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-08",
+    "title": "Vendor return credit and unsupported outcomes",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Vendor return credit and unsupported outcomes\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Accepted credit10000 reduces payable by10000; partial/reject reasons correct; no cash refund/loan effects.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-09",
+    "title": "Cheque lifecycle, duplicate number and retry",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Cheque lifecycle, duplicate number and retry\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "1120..1199 normalization/reservation; prepare/issue/present/debit/cancel/bounce authorized; one debit only; no fictitious invoice reservation claim.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "VEN-10",
+    "title": "Balances/source history and legacy/activation limits",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Vendor Workspace and its named tab and capture its canonical baseline.",
+      "Exercise \"Balances/source history and legacy/activation limits\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Balances match ledger sums; active configuration not reinitialized; legacy records remain read-only; purchase-entry location/gaps explicitly reported.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-01",
+    "title": "Expense entry and source/logs",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Expense entry and source/logs\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Cash expense2500 paise (Rs25) stored with correct type/date/actor; totals reconcile.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-02",
+    "title": "Expense cheque modal cancellation",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Expense cheque modal cancellation\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Cancel records no expense/payment/cheque source.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-03",
+    "title": "Cash transfer permissions and idempotency",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Cash transfer permissions and idempotency\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Fixture holder100000 paise, transfer30000 ->70000; billing sender=self; repeated operation one record; bank/person identity preserved.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-04",
+    "title": "Overlimit/concurrent transfer",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Overlimit/concurrent transfer\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Total transfers cannot exceed100000; no orphan controls or balances after rejection.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-05",
+    "title": "Cashout denomination and discrepancy",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Cashout denomination and discrepancy\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "2xRs500+1xRs100+Rs5 loose =110500 paise; compare independent expected drawer; canonical sales/closure/actor/revision correct.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-06",
+    "title": "Cashout confirm cancellation/window enforcement",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Cashout confirm cancellation/window enforcement\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Cancel changes nothing; staff outside 23:55..00:20 IST blocked by UI and Rules; owner permitted.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-07",
+    "title": "Eligible correction/approve/reject/withdraw",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Seed explicit own Cashout: cash sales600rupees, drawer1000, revision1. Open Corrections.",
+      "Request sales650/drawer1050 with reason, withdraw first request. Resubmit; owner opens Action Centre, Approve and confirms.",
+      "Read revision2/source1050/linked sales650. Record staff-window, rejection and stale-approval subcases separately."
+    ],
+    "expected": "Source identity/date fixed; eligible seven-calendar-day request scoped to own; adjusted holder/sales delta and audit exact.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "FIN-08",
+    "title": "Loan read-only navigation",
+    "role": "owner/manager/billing",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing; open Register/Cash Movement/Cashout and capture its canonical baseline.",
+      "Exercise \"Loan read-only navigation\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Owner sees empty/read-only loan view; staff cannot read; no loan fixture, mutation, deletion, repayment or behavior changes.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "ACT-01",
+    "title": "Pending feeds/badges/source details",
+    "role": "owner/staff own permitted sources",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/staff own permitted sources; open owner Action Centre > Pending/History and capture its canonical baseline.",
+      "Exercise \"Pending feeds/badges/source details\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Counts agree with independently queried pending sources; correct actors and oldest ordering.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "ACT-02",
+    "title": "Stale decision and source restrictions",
+    "role": "owner/staff own permitted sources",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/staff own permitted sources; open owner Action Centre > Pending/History and capture its canonical baseline.",
+      "Exercise \"Stale decision and source restrictions\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Unauthorized/stale action posts no financial change; missing fields honestly unavailable.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "ACT-03",
+    "title": "History filters/pagination",
+    "role": "owner/staff own permitted sources",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/staff own permitted sources; open owner Action Centre > Pending/History and capture its canonical baseline.",
+      "Exercise \"History filters/pagination\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "25-row cursor history/source joins lazy; stable unique ordering, badges update across sessions.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "DASH-01",
+    "title": "Month totals/date selectors",
+    "role": "owner and POS staff",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner and POS staff; open owner Dashboard or POS > Dashboard and capture its canonical baseline.",
+      "Exercise \"Month totals/date selectors\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Synthetic Oct cash sales10000+UPI20000+card30000=60000 paise; expense2500; net57500; previous months explicitly seeded and selectors independent.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "DASH-02",
+    "title": "POS payment mix and stock attention",
+    "role": "owner and POS staff",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner and POS staff; open owner Dashboard or POS > Dashboard and capture its canonical baseline.",
+      "Exercise \"POS payment mix and stock attention\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Totals include all dated bills/states; stock attention bounds/labels honest; refunds and voids not double counted.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "id": "LOG-01",
+    "title": "Every active Logs tab and source navigation",
+    "role": "owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner; open owner Logs and each named source tab and capture its canonical baseline.",
+      "Exercise \"Every active Logs tab and source navigation\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Sales/Expenses/Purchases/Payments/Daily Cashouts/Cash Transfers/Settings Audit/Stock Audits usable; no loan mutation.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "LOG-02",
+    "title": "Date/name filters, sorting, columns and pagination",
+    "role": "owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner; open owner Logs and each named source tab and capture its canonical baseline.",
+      "Exercise \"Date/name filters, sorting, columns and pagination\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "7/15/30/90/custom IST boundaries and unique pages, no browser financial recalculation from truncated records.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "SET-01",
+    "title": "Role settings, operations and audit",
+    "role": "owner/staff",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/staff; open Settings and its named role-restricted tab and capture its canonical baseline.",
+      "Exercise \"Role settings, operations and audit\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Only owner can edit projection/POS/notice settings; staff password/staff-directory limits enforced in Rules.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/closure.spec.cjs",
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "SET-02",
+    "title": "Synthetic announcement and notifications",
+    "role": "owner/staff",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/staff; open Settings and its named role-restricted tab and capture its canonical baseline.",
+      "Exercise \"Synthetic announcement and notifications\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Owner publish audit, active staff notices, dismissal/expiry/window behavior; only emulator records.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "UX-01",
+    "title": "Desktop/phone/long labels/overflow",
+    "role": "all permitted roles",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as all permitted roles; open affected app tab/modal at1440x1000 and390x844 and capture its canonical baseline.",
+      "Exercise \"Desktop/phone/long labels/overflow\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "1440x1000 and390x844 layouts usable, horizontal table scroll contained, navigation reachable.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "UX-02",
+    "title": "Keyboard/focus/modal dismissal/loading/errors",
+    "role": "all permitted roles",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as all permitted roles; open affected app tab/modal at1440x1000 and390x844 and capture its canonical baseline.",
+      "Exercise \"Keyboard/focus/modal dismissal/loading/errors\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Accessible focus/Enter/Escape, explicit loading/empty/error/retry; mandatory count cannot silently dismiss.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "UX-03",
+    "title": "Offline/reconnect/interruption and subscriptions",
+    "role": "all permitted roles",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as all permitted roles; open affected app tab/modal at1440x1000 and390x844 and capture its canonical baseline.",
+      "Exercise \"Offline/reconnect/interruption and subscriptions\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "No offline financial posting; reconnect real session/data; second context receives updates; stale responses/listeners do not multiply.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "PWA-01",
+    "title": "Manifest/service worker inspection",
+    "role": "all",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as all; open local manifest/SW and native hardware (manual) and capture its canonical baseline.",
+      "Exercise \"Manifest/service worker inspection\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Manifest/icons/SW caching semantics inspected; dev mode no install acceptance claim.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "PWA-02",
+    "title": "Native install/scanner/printer manual checks",
+    "role": "all",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as all; open local manifest/SW and native hardware (manual) and capture its canonical baseline.",
+      "Exercise \"Native install/scanner/printer manual checks\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Not automated: Android installed app, physical scanner and printer require manual verification; not counted Pass.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "SEC-01",
+    "title": "Forged checkout total/discount/no stock deduction",
+    "role": "owner/manager/billing/disabled/unauthenticated",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Authenticate billingA and join counter; UID stays billingA throughout.",
+      "Use actual checkout with catalogue9000 replaced by1; separately forge actor.role owner with99% discount. Probe direct bill/no stock source too.",
+      "Require server rejection and unchanged canonical state. Capture any accepted bill/price/discount/stock/cash/revision as original failure evidence."
+    ],
+    "expected": "Rules reject catalogue-price mismatch,99.99% discount/no paired stock delta; no created bill or sequence.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/advanced.spec.cjs",
+      "tests/drill/concurrency.spec.cjs"
+    ]
+  },
+  {
+    "id": "SEC-02",
+    "title": "Orphan refund event",
+    "role": "owner/manager/billing/disabled/unauthenticated",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Assert chosen synthetic bill/approval references do not exist.",
+      "Billing directly writes bill-return-approved event with refund500000 and those absent references.",
+      "Require Rules denial and no event; independently read saved event and impacted summaries."
+    ],
+    "expected": "No refund allowed without valid approved bill/source; cashout/dashboard unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "SEC-03",
+    "title": "Fabricated stock movement/quantity",
+    "role": "owner/manager/billing/disabled/unauthenticated",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Capture A qty20/price9000/revision1 and empty price-change evidence.",
+      "Billing directly batches movement20->120 and product qty120/selling100/revision2 without GRN/bill/audit source.",
+      "Require rejection; preserve persisted product/movement and missing owner-review/last-editor evidence on failure."
+    ],
+    "expected": "No arbitrary stock source or misleading actor accepted; quantity and source invariants enforced.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financial.spec.cjs"
+    ]
+  },
+  {
+    "id": "SEC-04",
+    "title": "Callable authorization and count locks",
+    "role": "owner/manager/billing/disabled/unauthenticated",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Obtain real local Auth tokens for disabled/missing/anonymous and active staff.",
+      "Call actual Functions with syntactically valid price/review/transfer payloads; probe owner-only decisions and count locks.",
+      "Require authorization/lock errors and unchanged sources. Payload validation before authorization is not itself a permission failure."
+    ],
+    "expected": "Anonymous/disabled rejected; staff owner-only review denied; live reservation blocks prohibited server operations.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/concurrency.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "SEC-05",
+    "title": "Direct permission matrix",
+    "role": "owner/manager/billing/disabled/unauthenticated",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
+    "actions": [
+      "Sign in as owner/manager/billing/disabled/unauthenticated; open real SDK/HTTP permission probes and capture its canonical baseline.",
+      "Exercise \"Direct permission matrix\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
+    ],
+    "expected": "Owner-only metadata/review/loans guarded; users cannot escalate role; own-source restrictions and rejected-state immutability verified.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs",
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "DIR-01",
+    "title": "Party Directory add/search/rename and read-only references",
+    "role": "owner/manager/billing",
+    "priority": "P1",
+    "preconditions": "Guarded demo fixture; real profile; ENV-01 local endpoint proof; no loan mutations.",
+    "expected": "Saved party can be renamed; record-derived references remain view-only. Directory changes do not rewrite financial history.",
+    "status": "Not Run",
+    "actions": [
+      "Open Party Directory > Add Party and save Drill Synthetic Party.",
+      "View Parties; search Synthetic, open saved party and rename to Drill Renamed Party. Inspect record-derived references.",
+      "Read nameDirectory and verify financial history/empty Loans unchanged; distinguish saved editable names from view-only references."
+    ],
+    "automation": [
+      "tests/drill/advanced.spec.cjs"
+    ]
+  }
+]

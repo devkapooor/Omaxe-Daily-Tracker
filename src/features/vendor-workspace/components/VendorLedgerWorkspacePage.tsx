@@ -1,3 +1,4 @@
+import { FinanceOperationBoundary } from '@/features/register/components/FinanceOperationBoundary'
 import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { normalizeName, today } from '@/app/uiHelpers'
@@ -7,14 +8,11 @@ import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
   openInvoiceBalancesV2,
   rupeesToPaise,
-  type ChequeStatus,
   type VendorSettlementMode,
 } from '@/domain/vendorLedgerV2'
 import { VendorDirectoryV2 } from '@/features/directory/components/VendorDirectoryV2'
 import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
-import { VendorSettlementFormV2, type VendorSettlementV2Draft } from '@/features/register/components/VendorSettlementFormV2'
 import type { VendorLedgerV2Data } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
-import { VendorLedgerPreActivationPage } from '@/features/vendor-workspace/components/VendorLedgerCutoverPlanner'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -30,33 +28,18 @@ import { Textarea } from '@/shared/ui/textarea'
 import {
   applyOwnerSettlementCorrectionV2,
   createSettlementCorrectionRequestV2,
-  createSettlementV2,
-  createVendorChequeV2,
   createVendorReturnV2,
   createVendorV2,
-  transitionVendorChequeV2,
   withdrawSettlementCorrectionRequestV2,
 } from '@/store/vendorLedgerV2Repository'
 
-type Props = { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[] }
+type Props = { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[]; onOpenRegister:(vendorId?:string,invoiceId?:string)=>void }
 
-const chequeActions: Record<ChequeStatus, { label: string; status: Exclude<ChequeStatus, 'draft'> }[]> = {
-  draft: [{ label: 'Issue', status: 'issued' }],
-  issued: [{ label: 'Present', status: 'presented' }, { label: 'Cancel', status: 'cancelled' }],
-  presented: [
-    { label: 'Mark Debited', status: 'debited' },
-    { label: 'Bounce', status: 'bounced' },
-    { label: 'Cancel', status: 'cancelled' },
-  ],
-  debited: [], cancelled: [], bounced: [],
-}
-
-export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeItems }: Props) {
+export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister }: Props) {
   const [tab, setTab] = useState('directory')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [vendorFormOpen, setVendorFormOpen] = useState(false)
-  const [paymentTarget, setPaymentTarget] = useState({ vendorId: '', invoiceId: '' })
   const balances = useMemo(
     () => openInvoiceBalancesV2(ledger.purchases, ledger.allocations),
     [ledger.allocations, ledger.purchases],
@@ -65,8 +48,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
 
   if (ledger.loading && !ledger.config) return <PageLayout header={<PageHeader title="Vendor Workspace" />}><p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p></PageLayout>
   if (ledger.config?.enabled !== true) {
-    if (currentUser.role === 'owner') return <VendorLedgerPreActivationPage currentUser={currentUser} />
-    return <PageLayout header={<PageHeader title="Vendor Workspace" />}><Card><CardContent className="py-5 text-sm text-muted-foreground">The owner must activate the V2 vendor ledger before staff can enter vendor records.</CardContent></Card></PageLayout>
+    return <PageLayout header={<PageHeader title="Vendor Workspace" />}><Card><CardHeader><SectionHeading eyebrow="Vendor setup" title="Vendor ledger setup required" /></CardHeader><CardContent className="space-y-2 text-sm text-muted-foreground"><p>The vendor ledger is not enabled. Payment and opening-balance entry are unavailable.</p><p>{currentUser.role === 'owner' ? 'The former browser activation flow has been retired. A reviewed server-based setup is required before enabling this ledger. Existing financial records have not been changed.' : 'Ask the owner to arrange the reviewed ledger setup.'}</p>{ledger.error ? <p role="alert" className="text-destructive">{ledger.error}</p> : null}</CardContent></Card></PageLayout>
   }
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -82,29 +64,18 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
     }
   }
 
-  function openPayment(invoiceId: string, vendorId: string) {
-    setPaymentTarget({ invoiceId, vendorId })
-    setTab('payments')
-  }
-
-  async function saveSettlement(draft: VendorSettlementV2Draft) {
-    await run(() => createSettlementV2({
-      id: crypto.randomUUID(), ...draft, actorUserId: currentUser.id, timestamp: serverNowIso(),
-    }), 'Vendor payment saved.')
-  }
+  function openPayment(invoiceId:string,vendorId:string){onOpenRegister(vendorId,invoiceId)}
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+    <FinanceOperationBoundary uid={currentUser.id}><Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
       <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
         <PageHeader title="Vendor Workspace" tools={(
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="Vendor workspace sections" className={`${currentUser.role === 'owner' ? 'grid-cols-7' : 'grid-cols-6'} grid min-w-max`}>
+            <PageHeaderTabsList aria-label="Vendor workspace sections" className="grid min-w-max grid-cols-5">
               <PageHeaderTab value="directory">Vendors</PageHeaderTab>
-              <PageHeaderTab value="payments">Payments</PageHeaderTab>
               <PageHeaderTab value="invoices">Invoices</PageHeaderTab>
               <PageHeaderTab value="returns">Returns</PageHeaderTab>
               <PageHeaderTab value="corrections">Corrections</PageHeaderTab>
-              {currentUser.role === 'owner' ? <PageHeaderTab value="cheques">Cheques</PageHeaderTab> : null}
               <PageHeaderTab value="balances">Balances</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
@@ -117,11 +88,9 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           <TabsContent value="directory" className="grid gap-2.5 pt-2">
             <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} />
           </TabsContent>
-          <TabsContent value="payments" className="pt-2"><VendorSettlementFormV2 key={`${paymentTarget.vendorId}:${paymentTarget.invoiceId}`} balances={balances} initialInvoiceId={paymentTarget.invoiceId} initialVendorId={paymentTarget.vendorId} isBusy={busy} vendors={ledger.vendors} onSave={saveSettlement} /></TabsContent>
           <TabsContent value="invoices" className="pt-2"><OpenInvoicesV2 balances={balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} /></TabsContent>
           <TabsContent value="returns" className="pt-2"><ReturnsPanel busy={busy} currentUser={currentUser} ledger={ledger} onRun={run} /></TabsContent>
           <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} ledger={ledger} vendors={vendorNameById} onRun={run} /></TabsContent>
-          {currentUser.role === 'owner' ? <TabsContent value="cheques" className="pt-2"><ChequeRegister busy={busy} cheques={ledger.cheques} currentUser={currentUser} legacyChequeItems={legacyChequeItems} vendors={ledger.vendors} onRun={run} /></TabsContent> : null}
           <TabsContent value="balances" className="grid gap-2 pt-2">
             {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between gap-3 py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><span className="text-right"><strong className="block">Payable INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong>{state.vendorCreditPaise ? <small className="text-muted-foreground">Unapplied vendor credit INR {(state.vendorCreditPaise / 100).toLocaleString('en-IN')}</small> : null}</span></CardContent></Card>)}
           </TabsContent>
@@ -138,7 +107,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, legacyChequeIte
           activationDate={ledger.config.activationDate}
         />
       ) : null}
-    </Tabs>
+    </Tabs></FinanceOperationBoundary>
   )
 }
 
@@ -302,15 +271,4 @@ function CorrectionForm({ busy, currentUser, ledger, onRun, vendors }: { busy: b
   const selectState = (value: string) => { const state = states.find((item) => item.id === value); setSelectedId(value); setAmount(state ? String(state.amountPaise / 100) : ''); setDate(state?.date ?? ''); setMode(state?.mode ?? 'bank-transfer'); setNotes(state?.notes ?? '') }
   const pending = ledger.correctionRequests.filter((request) => request.status === 'pending')
   return <div className="grid gap-2.5"><Card><CardHeader><SectionHeading eyebrow={currentUser.role === 'owner' ? 'Owner audit' : 'Approval workflow'} title={currentUser.role === 'owner' ? 'Correct Vendor Payment' : 'Request Payment Correction'} /><p className="text-sm text-muted-foreground">The original payment remains unchanged. {currentUser.role === 'owner' ? 'A compensating audit entry is posted immediately.' : 'The owner must approve your request before any balance changes.'}</p></CardHeader><CardContent><form className="grid gap-3 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!selected) return; const action = currentUser.role === 'owner' ? applyOwnerSettlementCorrectionV2({ id: crypto.randomUUID(), sourceRecordId: selected.id, proposed: { date, amountPaise: rupeesToPaise(Number(amount)), mode, notes }, reason, actor: { id: currentUser.id, name: currentUser.name }, timestamp: serverNowIso() }) : createSettlementCorrectionRequestV2({ id: crypto.randomUUID(), sourceRecordId: selected.id, proposed: { date, amountPaise: rupeesToPaise(Number(amount)), mode, notes }, reason, actor: { id: currentUser.id, name: currentUser.name }, timestamp: serverNowIso() }); void onRun(() => action, currentUser.role === 'owner' ? 'Audited payment correction applied.' : 'Correction request sent to the Action Centre.').then(() => { setSelectedId(''); setAmount(''); setReason('') }).catch(() => undefined) }}><FieldLabel label="Saved Payment"><SelectField searchable options={options} value={selectedId} onValueChange={selectState} /></FieldLabel><FieldLabel label="Correct Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><FieldLabel label="Correct Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Correct Mode"><SelectField options={[{ label: 'Cash', value: 'cash' }, { label: 'UPI', value: 'upi' }, { label: 'Card', value: 'card' }, { label: 'Bank Transfer', value: 'bank-transfer' }]} value={mode} onValueChange={(value) => setMode(value as VendorSettlementMode)} /></FieldLabel><FieldLabel className="md:col-span-2" label="Correct Notes"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></FieldLabel><FieldLabel className="md:col-span-2" label="Mandatory Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></FieldLabel><Button className="md:col-span-2" disabled={busy || !selected || pending.some((request) => request.sourceRecordId === selected.id)}>{currentUser.role === 'owner' ? 'Apply Audited Correction' : 'Send Correction Request'}</Button></form></CardContent></Card>{ledger.correctionRequests.length ? <Card><CardHeader><SectionHeading eyebrow="Audit trail" title="Correction Requests" /></CardHeader><CardContent className="grid gap-2">{[...ledger.correctionRequests].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"><div><strong>{vendors[request.vendorId] ?? request.vendorId}</strong><p className="text-muted-foreground">INR {(request.before.amountPaise / 100).toLocaleString('en-IN')} to INR {(request.proposed.amountPaise / 100).toLocaleString('en-IN')} | {request.reason}</p></div><div className="flex items-center gap-2"><Badge variant={request.status === 'approved' ? 'success' : request.status === 'rejected' ? 'destructive' : request.status === 'pending' ? 'warning' : 'secondary'}>{request.status}</Badge>{request.status === 'pending' && request.requestedByUserId === currentUser.id && currentUser.role !== 'owner' ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void onRun(() => withdrawSettlementCorrectionRequestV2(request.id, { id: currentUser.id, name: currentUser.name }, serverNowIso()), 'Correction request withdrawn.').catch(() => undefined)}>Withdraw</Button> : null}</div></div>)}</CardContent></Card> : null}</div>
-}
-
-function ChequeRegister({ busy, cheques, currentUser, legacyChequeItems, onRun, vendors }: { busy: boolean; cheques: VendorLedgerV2Data['cheques']; currentUser: AppUser; legacyChequeItems: PlannerScheduleItemSnapshot[]; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; vendors: VendorLedgerV2Data['vendors'] }) {
-  const [vendorId, setVendorId] = useState('')
-  const [number, setNumber] = useState('')
-  const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(today())
-  const vendorOptions = vendors.filter((vendor) => vendor.active).map((vendor) => ({ label: vendor.canonicalName, value: vendor.id }))
-  const v2Numbers = new Set(cheques.map((cheque) => cheque.chequeNumber.replace(/^0+/, '')))
-  const readOnlyLegacy = legacyChequeItems.filter((item) => item.chequeNumber && !v2Numbers.has(item.chequeNumber.replace(/^0+/, '')))
-  return <div className="grid gap-2.5"><Card><CardHeader><SectionHeading eyebrow="Leaves 1120-1199" title="Unified Cheque Register" description="V2 cheques are managed here. Existing scheduled legacy cheques remain visible and read-only." /></CardHeader><CardContent><form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" onSubmit={(event) => { event.preventDefault(); void onRun(() => createVendorChequeV2({ chequeBookId: 'book-1120-1199', chequeNumber: number, vendorId, date, amountPaise: rupeesToPaise(Number(amount)), actorUserId: currentUser.id, timestamp: serverNowIso() }), `Cheque ${number} registered.`).then(() => { setNumber(''); setAmount('') }).catch(() => undefined) }}><FieldLabel label="Vendor"><SelectField searchable options={vendorOptions} value={vendorId} onValueChange={setVendorId} /></FieldLabel><FieldLabel label="Cheque Number"><Input value={number} onChange={(event) => setNumber(event.target.value)} required /></FieldLabel><FieldLabel label="Cheque Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Amount"><Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldLabel><Button className="self-end" disabled={busy}>Register</Button></form></CardContent></Card>{[...cheques].sort((a, b) => a.chequeNumberValue - b.chequeNumberValue).map((cheque) => <Card key={cheque.id}><CardContent className="grid gap-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"><div><strong>Cheque {cheque.chequeNumber}</strong><p className="text-sm text-muted-foreground">{vendors.find((vendor) => vendor.id === cheque.vendorId)?.canonicalName ?? cheque.vendorId} | INR {(cheque.amountPaise / 100).toLocaleString('en-IN')} | {cheque.date}</p></div><div className="flex flex-wrap items-center gap-2"><Badge variant={cheque.status === 'debited' ? 'success' : cheque.status === 'bounced' || cheque.status === 'cancelled' ? 'destructive' : 'warning'}>{cheque.status}</Badge>{chequeActions[cheque.status].map((action) => <Button key={action.status} size="sm" variant={action.status === 'debited' ? 'default' : 'outline'} disabled={busy} onClick={() => void onRun(() => transitionVendorChequeV2({ chequeNumber: cheque.chequeNumber, expectedRevision: cheque.revision, toStatus: action.status, actorUserId: currentUser.id, timestamp: serverNowIso() }), `Cheque ${cheque.chequeNumber} marked ${action.status}.`).catch(() => undefined)}>{action.label}</Button>)}</div></CardContent></Card>)}{readOnlyLegacy.map((item) => <Card key={`legacy-${item.id}`}><CardContent className="flex flex-wrap items-center justify-between gap-2 py-3"><div><strong>Cheque {item.chequeNumber}</strong><p className="text-sm text-muted-foreground">{item.title} | INR {item.amount.toLocaleString('en-IN')} | {item.date}</p></div><Badge variant="secondary">Legacy read-only</Badge></CardContent></Card>)}</div>
 }

@@ -1,0 +1,82 @@
+{
+  "updatedAt": null,
+  "generatedForDate": "",
+  "dashboardRanges": {
+    "yesterday": {
+      "from": "",
+      "to": "",
+      "sales": 0,
+      "expenses": 0,
+      "salesLastUpdated": null,
+      "expensesLastUpdated": null
+    },
+    "mtd": {
+      "from": "",
+      "to": "",
+      "sales": 0,
+      "expenses": 0,
+      "salesLastUpdated": null,
+      "expensesLastUpdated": null
+    }
+  },
+  "registerToday": {
+    "cashout": 0,
+    "cashExpenses": 0,
+    "paymentPaid": 0,
+    "paymentReceived": 0,
+    "paymentNet": 0
+  },
+  "projections": {
+    "averageDailySales": 0,
+    "projectedMonthlySales": 0,
+    "monthlyOperationalExpense": 0,
+    "marginPercentage": 25,
+    "projectedMarginValue": 0,
+    "projectedProfit": 0,
+    "projectedLoss": 0
+  },
+  "latestClosedDaySummary": {
+    "date": null,
+    "totalSales": 0,
+    "cashSales": 0,
+    "upiSales": 0,
+    "cardSales": 0,
+    "creditSales": 0,
+    "returns": 0,
+    "cashExpenses": 0,
+    "cashToHand": 0,
+    "transfersToday": 0
+  },
+  "liabilities": {
+    "totalLoans": 0,
+    "totalVendorOutstanding": 0,
+    "openLoanCount": 0
+  },
+  "vendorOutstandingByName": {},
+  "pendingCash": {
+    "bankTotal": 0,
+    "legacyBalances": [],
+    "legacyCashoutEntries": [],
+    "legacyTransferEntries": [],
+    "migratedCashoutEntries": [],
+    "userBalances": [],
+    "totalCounterCash": 0
+  },
+  "dashboardTables": {
+    "month": "",
+    "expenseByCategory": [],
+    "monthlyPurchaseTotal": 0,
+    "vendorPaymentTotal": 0,
+    "paymentByMode": []
+  },
+  "planner": {
+    "totalCounterCash": 0,
+    "groupedSchedule": []
+  },
+  "monthlyReports": {
+    "months": [],
+    "defaultSelectedMonth": null,
+    "summaries": [],
+    "detailsByMonth": {}
+  }
+}

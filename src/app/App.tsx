@@ -107,6 +107,7 @@ export default function App() {
     totalLoans,
   } = useDashboardMetrics({
     dashboardMonthOffset,
+    cashTransfers,
     dailyCashouts,
     data,
     loans,
@@ -181,7 +182,7 @@ export default function App() {
   if (!authReady || (currentUser && !collectionsReady)) {
     return (
       <AppBackground>
-        <LoadingScreen message="Syncing Firebase workspace..." />
+        {authError ? <div role="alert" className="m-auto max-w-md space-y-4 rounded border border-border bg-card p-6 text-card-foreground"><p>{authError}</p><button className="rounded border px-4 py-2" onClick={() => window.location.reload()}>Retry workspace</button></div> : <LoadingScreen message="Syncing Firebase workspace..." />}
       </AppBackground>
     )
   }
@@ -235,6 +236,7 @@ export default function App() {
 
   return (
     <AppBackground>
+      {authError ? <div role="alert" className="fixed left-4 right-4 top-4 z-[150] mx-auto flex max-w-xl flex-wrap items-center gap-3 rounded border border-destructive bg-card p-3 text-sm text-card-foreground shadow-lg"><p>{authError}</p><button className="rounded border px-3 py-2" onClick={() => window.location.reload()}>Reload workspace</button></div> : null}
       <CashierHandoverBoundary key={currentUser.id} currentUser={currentUser} onSignOut={signOutCurrentUser}>{(onLogout) =>
       <AppWorkspace
         activePage={resolvedActivePage}

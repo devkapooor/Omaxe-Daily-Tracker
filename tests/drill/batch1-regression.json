@@ -1,0 +1,64 @@
+{
+  "baseline": "2026-10-13-checkout-batch1",
+  "expectedDistinct": 45,
+  "checkoutCases": 16,
+  "batches": {
+    "smoke": [
+      "ENV-01 real emulator isolation and outbound denial",
+      "AUTH-01 owner and staff navigation with real profile gates",
+      "AUTH-02 disabled and missing profiles never enter business UI",
+      "AUTH-03 wrong password and anonymous callable denied"
+    ],
+    "advanced": [
+      "SEC-01 actual checkout must reject catalogue price manipulation",
+      "SEC-01 actual billing identity must not gain owner discount by payload role",
+      "SEC-01 direct valid source-shaped bill without stock must be rejected",
+      "COUNTER-02 exact direct bill control is blocked by live count Rules",
+      "AUD-03 real UI stale physical count rejects a sale after scanning",
+      "POS-10 POS-11 ACT-02 damaged return, void and stale decisions exactly once",
+      "POS-13 POS-14 stale price after scan and double-click UI exactly once",
+      "POS-12 bill history bounded pages unique source and reprint popup",
+      "DASH-02 POS independent cash/UPI/card net dashboard and selectors"
+    ],
+    "concurrency": [
+      "SEC-01 forged bill discount/price without stock source must be rejected",
+      "COUNTER-01 first opening once and independent staff joins",
+      "COUNTER-02 COUNTER-03 SEC-04 simultaneous reservations and server bill prohibition",
+      "COUNTER-04 COUNTER-05 expiry rejects stale count and refresh retains reservation",
+      "COUNTER-06 mandatory UI logout count with discrepancy, counter stays open",
+      "POS-07 AUD-03 concurrent sale revisions prevent silent stock overwrite"
+    ],
+    "financial": [
+      "POS-01 POS-03 POS-05 scan duplicates, edits, cash/change and saved bill",
+      "STK-05 STK-06 staff price UI validation and attribution",
+      "STK-07 STK-08 price server zero/equal, retry, stale revision and owner review",
+      "GRN-01 GRN-02 GRN-04 GRN-05 connected draft/post/idempotency/reversal",
+      "AUD-01 physical count with independent value impact",
+      "VEN-04 VEN-05 VEN-06 purchase/payment caps and allocations"
+    ],
+    "remaining": [
+      "GRN-03 GRN-06 GRN-07 new product, retired correction and vendor paging",
+      "POS-02 POS-08 unknown barcode, hold/resume and refresh",
+      "POS-06 UPI/card and split payment totals",
+      "FIN-05 FIN-06 COUNTER-07 Cashout cancel, denominations and closure"
+    ]
+  },
+  "checkoutTitles": [
+    "B1-01 trusted normal totals, actor, cash change and atomic sources",
+    "B1-02 concurrent terminals serialize sequences and reconcile stock/cash",
+    "B1-03 same intent races and replays once; changed payload and actor reject",
+    "B1-04 direct callable rejects forged quote, discount, payments and change",
+    "B1-05 role discount policies from profile and configuration",
+    "B1-06 upi settlement and ledger allocations",
+    "B1-06 card settlement and ledger allocations",
+    "B1-06 split settlement and ledger allocations",
+    "B1-07 counter count locks, cancelled lock, membership and committed recovery",
+    "B1-08 zero price, negative stock policy and repeated SKU aggregation",
+    "B1-09 actual 200 distinct lines post atomically; 201 reject unchanged",
+    "B1-10 lost response after commit; refresh restores intent and original bill",
+    "B1-11 legacy direct checkout fails unchanged and retained held cart remains usable",
+    "B1-12 anonymous, disabled and missing profile callable rejection",
+    "B1-13 phone checkout controls and saved cash/change remain usable",
+    "B1-14 canonical repeated-SKU bill stays compatible with existing owner void"
+  ]
+}

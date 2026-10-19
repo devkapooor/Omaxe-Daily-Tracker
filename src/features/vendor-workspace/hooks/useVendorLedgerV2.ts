@@ -68,7 +68,7 @@ export function useVendorLedgerV2(currentUser: AppUser, activePage: Page): Vendo
     if (!enabled || !namesNeeded) return
     const stops: Unsubscribe[] = []
     const ready = new Set<keyof Records>()
-    const required = workspaceOpen ? 9 : 1
+    const required = workspaceOpen ? 8 : 1
     const base = (state: typeof scoped) => state.key === scopedKey ? state : { key: scopedKey, records: emptyRecords, ready: false, error: null }
     const fail = (cause: unknown) => setScoped((state) => ({ ...base(state), ready: true, error: errorMessage(cause) }))
     const subscribe = (name: keyof typeof vendorLedgerV2Collections, key: keyof Records, filters: QueryConstraint[] = []) => {
@@ -84,7 +84,6 @@ export function useVendorLedgerV2(currentUser: AppUser, activePage: Page): Vendo
       subscribe('allocations', 'allocations')
       subscribe('settlementStates', 'settlementStates')
       subscribe('vendorAccountStates', 'accountStates')
-      subscribe('cheques', 'cheques')
       subscribe('correctionRequests', 'correctionRequests', [owner ? where('status', 'in', ['approved', 'rejected', 'withdrawn']) : where('requestedByUserId', '==', currentUser.id)])
       subscribe('returns', 'returns', owner ? [where('outcome', 'in', ['vendor-credit', 'replacement', 'rejected'])] : [])
     }

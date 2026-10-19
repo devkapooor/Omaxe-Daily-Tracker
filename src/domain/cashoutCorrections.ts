@@ -14,7 +14,7 @@ function nonNegative(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(Math.round(value), 0) : 0
 }
 
-export function drawerTotalFromDenominations(denominations: DrawerDenominations) {
+export function drawerTotalFromDenominations(denominations: DrawerDenominations, preciseChange = false) {
   return (
     nonNegative(denominations.denom500) * 500 +
     nonNegative(denominations.denom200) * 200 +
@@ -22,7 +22,7 @@ export function drawerTotalFromDenominations(denominations: DrawerDenominations)
     nonNegative(denominations.denom50) * 50 +
     nonNegative(denominations.denom20) * 20 +
     nonNegative(denominations.denom10) * 10 +
-    nonNegative(denominations.change)
+    (preciseChange ? moneyValue(denominations.change) : nonNegative(denominations.change))
   )
 }
 
@@ -37,8 +37,8 @@ export function calculateCashoutAudit(cashAudit: number, drawerTotal: number) {
   return { auditDifference, auditMessage, auditStatus }
 }
 
-export function formatDrawerParticulars(denominations: DrawerDenominations) {
-  const drawerTotal = drawerTotalFromDenominations(denominations)
+export function formatDrawerParticulars(denominations: DrawerDenominations, preciseChange = false) {
+  const drawerTotal = drawerTotalFromDenominations(denominations, preciseChange)
   return [
     `500 x ${denominations.denom500} = ${denominations.denom500 * 500}`,
     `200 x ${denominations.denom200} = ${denominations.denom200 * 200}`,
@@ -51,15 +51,17 @@ export function formatDrawerParticulars(denominations: DrawerDenominations) {
   ].join('\n')
 }
 
-export function normalizeCorrectionValues(values: CashoutCorrectionValues): CashoutCorrectionValues {
+function moneyValue(value: unknown) { return typeof value === 'number' && Number.isFinite(value) ? Math.max(Math.round(value * 100) / 100, 0) : 0 }
+export function normalizeCorrectionValues(values: CashoutCorrectionValues, precise = false): CashoutCorrectionValues {
+  const money = precise ? moneyValue : nonNegative
   return {
-    cashSales: nonNegative(values.cashSales),
-    upiSales: nonNegative(values.upiSales),
-    cardSales: nonNegative(values.cardSales ?? 0),
-    creditSales: nonNegative(values.creditSales),
-    returns: nonNegative(values.returns),
-    cashExpense: nonNegative(values.cashExpense),
-    cashAudit: nonNegative(values.cashAudit),
+    cashSales: money(values.cashSales),
+    upiSales: money(values.upiSales),
+    cardSales: money(values.cardSales ?? 0),
+    creditSales: money(values.creditSales),
+    returns: money(values.returns),
+    cashExpense: money(values.cashExpense),
+    cashAudit: money(values.cashAudit),
     drawerDenominations: {
       denom500: nonNegative(values.drawerDenominations.denom500),
       denom200: nonNegative(values.drawerDenominations.denom200),
@@ -67,14 +69,14 @@ export function normalizeCorrectionValues(values: CashoutCorrectionValues): Cash
       denom50: nonNegative(values.drawerDenominations.denom50),
       denom20: nonNegative(values.drawerDenominations.denom20),
       denom10: nonNegative(values.drawerDenominations.denom10),
-      change: nonNegative(values.drawerDenominations.change),
+      change: money(values.drawerDenominations.change),
     },
   }
 }
 
-export function cashoutCorrectionValuesEqual(left: CashoutCorrectionValues, right: CashoutCorrectionValues) {
-  const a = normalizeCorrectionValues(left)
-  const b = normalizeCorrectionValues(right)
+export function cashoutCorrectionValuesEqual(left: CashoutCorrectionValues, right: CashoutCorrectionValues, precise = false) {
+  const a = normalizeCorrectionValues(left, precise)
+  const b = normalizeCorrectionValues(right, precise)
   return a.cashSales === b.cashSales &&
     a.upiSales === b.upiSales &&
     a.cardSales === b.cardSales &&
@@ -105,7 +107,7 @@ export function denominationsFromEntry(entry: DailyCashoutEntry): DrawerDenomina
     cashExpense: 0,
     cashAudit: 0,
     drawerDenominations: entry.drawerDenominations,
-  }).drawerDenominations
+  }, entry.refundAccountingVersion === 1).drawerDenominations
 
   const text = entry.actualCashParticulars ?? ''
   return {
@@ -120,7 +122,7 @@ export function denominationsFromEntry(entry: DailyCashoutEntry): DrawerDenomina
 }
 
 function cashExpenseFromEntry(entry: DailyCashoutEntry) {
-  if (typeof entry.cashExpense === 'number') return nonNegative(entry.cashExpense)
+  if (typeof entry.cashExpense === 'number') return entry.refundAccountingVersion === 1 ? moneyValue(entry.cashExpense) : nonNegative(entry.cashExpense)
   const expectedCash = entry.pendingCashParticulars?.match(/Expected Cash:\s*(-?\d+)/i)
   if (!expectedCash) return 0
   return Math.max(entry.cashSales - Number(expectedCash[1]), 0)
@@ -136,7 +138,7 @@ export function correctionValuesFromEntry(entry: DailyCashoutEntry): CashoutCorr
     cashExpense: cashExpenseFromEntry(entry),
     cashAudit: entry.cashAudit,
     drawerDenominations: denominationsFromEntry(entry),
-  })
+  }, entry.refundAccountingVersion === 1)
 }
 
 export function cashoutEntryFromCorrection(
@@ -145,13 +147,14 @@ export function cashoutEntryFromCorrection(
   updatedBy: string,
   updatedAt: string,
 ): DailyCashoutEntry {
-  const values = normalizeCorrectionValues(rawValues)
+  const values = normalizeCorrectionValues(rawValues, entry.refundAccountingVersion === 1)
+  if (entry.refundAccountingVersion === 1 && (values.returns !== entry.returns || Math.round(values.cashExpense * 100) < (entry.posCashRefundPaise ?? 0))) throw new Error('Linked POS refund totals cannot be changed or omitted through a Cashout correction.');
   const persistedValues = { ...values }
   if (entry.cardSales === undefined && values.cardSales === 0) delete persistedValues.cardSales
-  const drawerTotal = drawerTotalFromDenominations(values.drawerDenominations)
+  const drawerTotal = drawerTotalFromDenominations(values.drawerDenominations, entry.refundAccountingVersion === 1)
   const { auditDifference, auditMessage, auditStatus } = calculateCashoutAudit(values.cashAudit, drawerTotal)
   const denominations = values.drawerDenominations
-  const actualCashParticulars = formatDrawerParticulars(denominations)
+  const actualCashParticulars = formatDrawerParticulars(denominations, entry.refundAccountingVersion === 1)
 
   return {
     ...entry,
@@ -161,7 +164,7 @@ export function cashoutEntryFromCorrection(
     auditStatus,
     auditMessage,
     actualCashParticulars,
-    pendingCashParticulars: `By: ${entry.recordedBy}\nExpected Cash: ${values.cashSales - values.cashExpense}\nDrawer Total: ${drawerTotal}\nSystem Audit: ${values.cashAudit}\nAudit Check: ${auditMessage}`,
+    pendingCashParticulars: `By: ${entry.recordedBy}\nExpected Cash: ${entry.refundAccountingVersion === 1 ? values.cashAudit : values.cashSales - values.cashExpense}\nDrawer Total: ${drawerTotal}\nSystem Audit: ${values.cashAudit}\nAudit Check: ${auditMessage}`,
     remainingBalance: drawerTotal,
     revision: (entry.revision ?? 1) + 1,
     updatedAt,

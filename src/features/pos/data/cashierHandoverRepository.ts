@@ -43,6 +43,7 @@ export async function joinCounter(actor: AppUser) {
     transaction.set(cashierRef(actor.id), {
       uid: actor.id, authTime, needsLogoutCheck: previous?.needsLogoutCheck ?? false, closed: false,
       lastBillId: previous?.lastBillId ?? '', lastReconciliationId: previous?.lastReconciliationId ?? '',
+      ...(previous?.lastFinancialOperationId ? { lastFinancialOperationId: previous.lastFinancialOperationId } : {}),
       updatedAt: serverNowIso(), joinedCounterId, joinedAt: serverTimestamp(),
     })
   })
@@ -131,7 +132,7 @@ export async function submitHandover(actor: AppUser, kind: 'login' | 'logout', c
     const record: CashierReconciliation = { id, uid: actor.id, name: actor.name, authTime, kind, date, denominations: counts, coinPaise, actual, expected, delta, hasDiscrepancy, createdAt, note: note.trim(), reviewStatus: hasDiscrepancy ? 'pending' : 'matched', reservationId }
     transaction.set(doc(records(), id), { ...record, recordedAt: serverTimestamp() })
     const previous = cashierSnapshot.data() as CashierState | undefined
-    transaction.set(cashierRef(actor.id), { uid: actor.id, authTime, needsLogoutCheck: false, closed: kind === 'logout', lastBillId: previous?.lastBillId ?? '', lastReconciliationId: id, updatedAt: createdAt, joinedCounterId: kind === 'login' ? id : ledger.counterSession!.openingReconciliationId, joinedAt: kind === 'login' ? serverTimestamp() : previous!.joinedAt })
+    transaction.set(cashierRef(actor.id), { uid: actor.id, authTime, needsLogoutCheck: false, closed: kind === 'logout', lastBillId: previous?.lastBillId ?? '', lastReconciliationId: id, updatedAt: createdAt, joinedCounterId: kind === 'login' ? id : ledger.counterSession!.openingReconciliationId, joinedAt: kind === 'login' ? serverTimestamp() : previous!.joinedAt, ...(previous?.lastFinancialOperationId ? { lastFinancialOperationId: previous.lastFinancialOperationId } : {}) })
     const day = ledger.dailyTotals[date] ?? { upi: 0, card: 0 }
     transaction.set(handoverRef(), {
       ...ledger,

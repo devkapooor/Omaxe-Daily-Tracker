@@ -4,620 +4,1713 @@
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "category", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"}
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "brand", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"}
+        {
+          "fieldPath": "brand",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "category", "order": "ASCENDING"},
-        {"fieldPath": "brand", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"}
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "brand",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "currentQuantity", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "sellingPricePaise", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sellingPricePaise",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendor", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "DESCENDING"},
-        {"fieldPath": "currentQuantity", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "active", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "active", "order": "ASCENDING"},
-        {"fieldPath": "currentQuantity", "order": "ASCENDING"},
-        {"fieldPath": "searchName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentQuantity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendorsV2",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "active", "order": "ASCENDING"},
-        {"fieldPath": "canonicalName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "canonicalName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "type", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "productId", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "productId", "order": "ASCENDING"},
-        {"fieldPath": "type", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "barcode", "order": "ASCENDING"},
-        {"fieldPath": "type", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockMovements",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "productId", "order": "ASCENDING"},
-        {"fieldPath": "type", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "invoiceNumber", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "invoiceNumber",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendorId", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "vendorId", "order": "ASCENDING"},
-        {"fieldPath": "invoiceNumber", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "invoiceNumber",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "invoiceNumber", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "invoiceNumber",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "vendorId", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "goodsReceipts",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "status", "order": "ASCENDING"},
-        {"fieldPath": "vendorId", "order": "ASCENDING"},
-        {"fieldPath": "invoiceNumber", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "invoiceNumber",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "stockAudits",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "batchId", "order": "ASCENDING"},
-        {"fieldPath": "productName", "order": "ASCENDING"},
-        {"fieldPath": "__name__", "order": "ASCENDING"}
+        {
+          "fieldPath": "batchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "productName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "type", "order": "ASCENDING"},
-        {"fieldPath": "returnCondition", "order": "ASCENDING"},
-        {"fieldPath": "createdAt", "order": "DESCENDING"},
-        {"fieldPath": "__name__", "order": "DESCENDING"}
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "returnCondition",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "stockMovements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "priceChanged",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "stockMovements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "barcode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priceChanged",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "stockMovements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priceChanged",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "stockMovements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priceChanged",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "approvals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "approvals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerReviewStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requestedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "businessDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "refundDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "billId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "dailyCashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "paymentMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nonStockReturn",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vendorsV2",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "canonicalName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoiceStatesV2",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "openAmountPaise",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reviewStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "dailyCashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reviewStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paymentMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sourceKind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paymentMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sourceKind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "businessDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "refundDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reviewStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "dailyCashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reviewStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "stockOperations",
+      "fieldPath": "result",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "stockAuditManifests",
+      "fieldPath": "counts",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "refundOperations",
+      "fieldPath": "result",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "refundStates",
+      "fieldPath": "returnedQuantities",
+      "indexes": []
+    }
+  ]
 }

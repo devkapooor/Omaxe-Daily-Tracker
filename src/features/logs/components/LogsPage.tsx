@@ -9,7 +9,11 @@ import { db } from '@/shared/lib/firebase'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { DailyCashoutLogTab } from '@/features/logs/components/DailyCashoutLogTab'
 import { StockAuditLogTable } from '@/features/logs/components/StockAuditLogTable'
-import { AuditLogTable, ExpenseLogTable, PaymentLogTable, PurchaseLogTable, SalesLogTable, TransferLogTable } from '@/features/logs/components/LogDataTables'
+import { AuditLogTable, ExpenseLogTable, SalesLogTable, TransferLogTable } from '@/features/logs/components/LogDataTables'
+import { VendorFinancialLogTable } from './VendorFinancialLogTable'
+import { useVendorLogRecords } from '../hooks/useVendorLogRecords'
+import { legacyPurchaseLogRow, mergeVendorPaymentLogs } from '../domain/vendorLogRows'
+import { Button } from '@/shared/ui/button'
 import { FieldLabel } from '@/shared/ui/field-label'
 import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
@@ -117,6 +121,7 @@ export function LogsPage({
   const canApplyRangeToNonLoanTab = !isCustomRangeIncomplete
   const correctionRangeKey = `${validRangeStart}:${validRangeEnd}`
   const correctionHistoryLoading = activeTab === 'dailyCashouts' && !isCustomRangeIncomplete && correctionHistoryRange !== correctionRangeKey
+  const vendorLogs = useVendorLogRecords(isCustomRangeIncomplete ? null : activeTab === 'purchases' ? 'purchase' : activeTab === 'payments' ? 'payment' : null, validRangeStart, validRangeEnd)
 
   function resetResults() {
     setVisibleCount(50)
@@ -193,6 +198,8 @@ export function LogsPage({
       .filter((entry) => canApplyRangeToNonLoanTab && entry.entryType !== 'loan-payment' && isDateWithinRange(entry.date, validRangeStart, validRangeEnd))
       .sort((left, right) => compareDateDesc(left.date, right.date) || compareTimestampDesc(left.createdAt, right.createdAt))
   }, [canApplyRangeToNonLoanTab, payments, validRangeEnd, validRangeStart])
+  const purchaseLogRows = useMemo(() => [...filteredPurchases.map(legacyPurchaseLogRow), ...(activeTab === 'purchases' ? vendorLogs.rows : [])], [filteredPurchases, activeTab, vendorLogs.rows])
+  const paymentLogRows = useMemo(() => mergeVendorPaymentLogs(filteredPayments, filteredExpenses, activeTab === 'payments' ? vendorLogs.rows : []), [filteredPayments, filteredExpenses, activeTab, vendorLogs.rows])
 
   const filteredTransfers = useMemo(() => {
     return cashTransfers
@@ -224,8 +231,8 @@ export function LogsPage({
   const activeResultCount = {
     sales: filteredSales.length,
     expenses: filteredExpenses.length,
-    purchases: filteredPurchases.length,
-    payments: filteredPayments.length,
+    purchases: purchaseLogRows.length,
+    payments: paymentLogRows.length,
     dailyCashouts: filteredDailyCashouts.length,
     cashTransfers: filteredTransfers.length,
     settingsAudit: filteredAudit.length,
@@ -283,6 +290,7 @@ export function LogsPage({
 
         <TabsContent value="sales" className="min-h-0">
           <LogCard eyebrow="Logs" title="Sales">
+            {!filteredSales.length ? <p className="text-xs text-muted-foreground">Daily sales appear here after Cashout. Before closing, view receipts in POS → Bills.</p> : null}
             <SalesLogTable entries={filteredSales} />
           </LogCard>
         </TabsContent>
@@ -295,13 +303,19 @@ export function LogsPage({
 
         <TabsContent value="purchases" className="min-h-0">
           <LogCard eyebrow="Logs" title="Purchases">
-            <PurchaseLogTable entries={filteredPurchases} />
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Search and sorting apply to loaded records. Refresh for the latest invoice balances.</p><Button type="button" variant="outline" disabled={vendorLogs.loading || vendorLogs.loadingMore} onClick={vendorLogs.refresh}>Refresh records</Button></div>
+            {vendorLogs.loading || vendorLogs.loadingMore ? <p role="status">Loading vendor records…</p> : null}
+            {vendorLogs.error ? <StatusPanel variant="destructive" role="alert">{vendorLogs.error}</StatusPanel> : null}
+            <VendorFinancialLogTable rows={purchaseLogRows} kind="purchase" users={userNames} more={vendorLogs.more} loadMore={vendorLogs.loadMore} />
           </LogCard>
         </TabsContent>
 
         <TabsContent value="payments" className="min-h-0">
           <LogCard eyebrow="Logs" title="Payments">
-            <PaymentLogTable entries={filteredPayments} />
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-muted-foreground">Includes vendor payments and cheque debits. Search and sorting apply to loaded records.</p><Button type="button" variant="outline" disabled={vendorLogs.loading || vendorLogs.loadingMore} onClick={vendorLogs.refresh}>Refresh records</Button></div>
+            {vendorLogs.loading || vendorLogs.loadingMore ? <p role="status">Loading vendor records…</p> : null}
+            {vendorLogs.error ? <StatusPanel variant="destructive" role="alert">{vendorLogs.error}</StatusPanel> : null}
+            <VendorFinancialLogTable rows={paymentLogRows} kind="payment" users={userNames} more={vendorLogs.more} loadMore={vendorLogs.loadMore} />
           </LogCard>
         </TabsContent>
 
@@ -317,6 +331,7 @@ export function LogsPage({
         </TabsContent>
         <TabsContent value="cashTransfers" className="min-h-0">
           <LogCard eyebrow="Logs" title="Cash Transfers">
+            {!filteredTransfers.length ? <p className="text-xs text-muted-foreground">After Cashout, record a transfer or bank deposit in Cash Movement to see it here.</p> : null}
             <TransferLogTable entries={filteredTransfers} partyName={transferPartyName} />
           </LogCard>
         </TabsContent>

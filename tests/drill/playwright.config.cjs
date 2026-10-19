@@ -1,0 +1,3 @@
+const path=require('node:path')
+const {defineConfig}=require(path.join(process.env.DRILL_PLAYWRIGHT_ROOT,'test'))
+module.exports=defineConfig({testDir:__dirname,testMatch:'*.spec.cjs',timeout:90000,expect:{timeout:15000},workers:1,retries:0,fullyParallel:false,reporter:[['list'],[path.join(__dirname,'reporter.cjs')]],outputDir:path.resolve('output/playwright',process.env.DRILL_RUN_ID,'batches',process.env.DRILL_BATCH+'-'+process.env.DRILL_ATTEMPT),use:{actionTimeout:15000,baseURL:'http://127.0.0.1:5178',headless:true,viewport:{width:1440,height:1000},serviceWorkers:'block',trace:'retain-on-failure',screenshot:'only-on-failure',launchOptions:{executablePath:process.env.DRILL_BROWSER_EXECUTABLE,args:['--disable-background-networking']}}})

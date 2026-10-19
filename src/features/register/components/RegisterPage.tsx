@@ -1,42 +1,24 @@
-import type { AppUser, CashoutDraft } from '@/domain/financeTypes'
-import { money } from '@/app/uiHelpers'
-import { ExpenseForm } from '@/features/register/components/ExpenseForm'
-import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
-import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header'
-import { PageLayout } from '@/shared/ui/page-layout'
-import { Tabs, TabsContent } from '@/shared/ui/tabs'
-
-type RegisterPageProps = {
-  currentUser: AppUser
-  todayExpense: number
-  todayPaymentNet: number
-  saveExpense: (draft: CashoutDraft) => Promise<void>
-  showToast: (message: string) => void
-}
-
-export function RegisterPage(props: RegisterPageProps) {
-  const { currentUser, saveExpense, showToast, todayExpense, todayPaymentNet } = props
-
-  return (
-    <Tabs defaultValue="expenses" className="flex min-h-0 flex-1 flex-col gap-card-gap">
-      <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
-        <PageHeader title="Register" tools={(
-          <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="Register sections" className="grid min-w-max grid-cols-1">
-              <PageHeaderTab value="expenses">Expenses</PageHeaderTab>
-            </PageHeaderTabsList>
-          </div>
-        )} />
-      )}>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <TabsContent value="expenses" className="mt-0 min-h-0">
-            <div className="grid min-h-0 gap-2.5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-              <ExpenseForm currentUser={currentUser} onSave={async (draft) => { await saveExpense(draft); showToast(`Expense saved: ${draft.category} - ${money(draft.amount)}`) }} />
-              <aside className="grid content-start gap-2.5"><section className="grid gap-2.5 sm:grid-cols-2"><SummaryCard label="Today Expense" value={money(todayExpense)} /><SummaryCard label="Today Payments (Net)" value={money(todayPaymentNet)} /></section></aside>
-            </div>
-          </TabsContent>
-        </div>
-      </PageLayout>
-    </Tabs>
-  )
+import { useState } from 'react';
+import type { AppUser, CashoutDraft } from '@/domain/financeTypes';
+import { RegisterPaymentForm } from '@/features/register/components/RegisterPaymentForm';
+import { RegisterPaymentHistory } from '@/features/register/components/RegisterPaymentHistory';
+import { RegisterCheques } from '@/features/register/components/RegisterCheques';
+import { RegisterDrawerStatus } from '@/features/register/components/RegisterDrawerStatus';
+import { FinanceOperationBoundary } from '@/features/register/components/FinanceOperationBoundary';
+import { PageHeader, PageHeaderTab, PageHeaderTabsList } from '@/shared/ui/page-header';
+import { PageLayout } from '@/shared/ui/page-layout';
+import { Tabs, TabsContent } from '@/shared/ui/tabs';
+type Props = {
+  currentUser: AppUser;
+  todayExpense: number;
+  todayPaymentNet: number;
+  saveExpense: (draft: CashoutDraft) => Promise<void>;
+  showToast: (message: string) => void;
+};
+export function RegisterPage({
+  currentUser,
+  showToast
+}: Props) {
+  const [tab, setTab] = useState('new');
+  return <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col"><PageLayout className="min-h-0 flex-1 overflow-hidden" header={<PageHeader title="Register" tools={<PageHeaderTabsList aria-label="Register sections"><PageHeaderTab value="new">New Payment</PageHeaderTab><PageHeaderTab value="history">Payment History</PageHeaderTab>{currentUser.role === 'owner' ? <PageHeaderTab value="cheques">Cheques</PageHeaderTab> : null}</PageHeaderTabsList>} />}><div className="min-h-0 flex-1 overflow-y-auto pr-1"><FinanceOperationBoundary uid={currentUser.id}><RegisterDrawerStatus /><TabsContent value="new"><RegisterPaymentForm currentUser={currentUser} onSaved={() => showToast('Payment recorded. Linked balances updated.')} /></TabsContent><TabsContent value="history"><RegisterPaymentHistory /></TabsContent>{currentUser.role === 'owner' ? <TabsContent value="cheques"><RegisterCheques /></TabsContent> : null}</FinanceOperationBoundary></div></PageLayout></Tabs>;
 }

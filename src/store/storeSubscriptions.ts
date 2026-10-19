@@ -196,7 +196,12 @@ export function setupAppStoreSubscriptions({
       })
       markLoaded('nameDirectory')
     }, onSubscriptionError),
-    onSnapshot(doc(db, 'appMetadata', 'appSettings'), (snapshot) => {
+    onSnapshot(doc(db, 'appMetadata', currentUserRole === 'owner' ? 'appSettings' : 'staffSettings'), (snapshot) => {
+      if (currentUserRole !== 'owner' && (!snapshot.exists() || snapshot.get('schemaVersion') !== 1)) {
+        setLoadedCollections(value => ({ ...value, appSettings: false }))
+        onSubscriptionError(Object.assign(new Error('Shared settings are unavailable or need an update. Ask the owner to publish them, then retry.'), { code: 'shared-view-unavailable' }))
+        return
+      }
       const data = snapshot.data() as Partial<{
         currentBankBalance: unknown
         marginPercentage: unknown
@@ -206,7 +211,7 @@ export function setupAppStoreSubscriptions({
         upgradeAnnouncement: unknown
       }> | undefined
       const currentBankBalance =
-        typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
+        currentUserRole === 'owner' && typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
           ? data.currentBankBalance
           : defaultAppSettings.currentBankBalance
       const monthlyOperationalExpense =
@@ -233,13 +238,23 @@ export function setupAppStoreSubscriptions({
       setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
       markLoaded('appSettings')
     }, onSubscriptionError),
-    onSnapshot(doc(db, 'appMetadata', 'workspaceMetrics'), (snapshot) => {
+    onSnapshot(doc(db, 'appMetadata', currentUserRole === 'owner' ? 'workspaceMetrics' : 'staffWorkspaceMetrics'), (snapshot) => {
+      if (currentUserRole !== 'owner' && (!snapshot.exists() || snapshot.get('schemaVersion') !== 1)) {
+        setLoadedCollections(value => ({ ...value, workspaceMetrics: false }))
+        onSubscriptionError(Object.assign(new Error('Shared reporting data is unavailable or needs an update. Ask the owner to publish it, then retry.'), { code: 'shared-view-unavailable' }))
+        return
+      }
       const data = snapshot.data()
       if (!data || typeof data !== 'object') {
         markLoaded('workspaceMetrics')
         return
       }
-      setWorkspaceMetrics(data as WorkspaceMetrics)
+      if (currentUserRole === 'owner') setWorkspaceMetrics(data as WorkspaceMetrics)
+      else {
+        // This role never ingests bank-only state, even if a malformed cached view appears.
+        const shared = data as WorkspaceMetrics
+        setWorkspaceMetrics({ ...shared, planner: { totalCounterCash: shared.planner.totalCounterCash, groupedSchedule: shared.planner.groupedSchedule.map(group => ({ ...group, items: group.items.map(item => ({ id: item.id, amount: item.amount, date: item.date, note: item.note, source: item.source, title: item.title, ...(item.chequeNumber ? { chequeNumber: item.chequeNumber } : {}) })) })) } })
+      }
       markLoaded('workspaceMetrics')
     }, onSubscriptionError),
   ]

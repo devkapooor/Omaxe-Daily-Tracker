@@ -13,19 +13,20 @@ export type HandoverCheckpoint = {
 export type HandoverLedger = {
   initialized: boolean; revision: number; cashNetPaise: number
   dailyTotals: Record<string, { upi: number; card: number }>
-  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close' | 'count-reserve' | 'count-release'
+  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close' | 'count-reserve' | 'count-release' | 'payment'
   lastOperationId: string; updatedByUid: string; checkpoint?: HandoverCheckpoint
   counterSession?: { status: 'open' | 'closed'; date: string; openingReconciliationId: string; openedByUid: string }
   countReservation?: CountReservation | null
 }
 export const COUNT_RESERVATION_MS = 5 * 60 * 1000
 export type CountReservation = {
-  id: string; uid: string; name: string; authTime: number; kind: 'login' | 'logout'
+  id: string; uid: string; name: string; authTime: number; kind: 'login' | 'logout' | 'cashout'
   date: string; revision: number; startedAt: Timestamp
 }
 export type CashierState = {
   uid: string; authTime: number; needsLogoutCheck: boolean
   lastBillId: string; lastReconciliationId: string; updatedAt: string
+  lastFinancialOperationId?: string
   closed?: boolean
   joinedCounterId?: string
   joinedAt?: Timestamp

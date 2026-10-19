@@ -72,6 +72,12 @@ export type LoanEntry = {
 }
 
 export type DailyCashoutEntry = {
+  financeQuoteId?: string
+  financePostingVersion?: 1
+  discrepancyReason?: string
+  reviewStatus?: string
+  sourceTotals?: Record<string, unknown>
+  bankTransferSales?: number
   id: string
   date: string
   recordedBy: string
@@ -85,6 +91,12 @@ export type DailyCashoutEntry = {
   creditSales: number
   cashAudit: number
   cashExpense?: number
+  refundAccountingVersion?: 1
+  posCashRefundPaise?: number
+  posRefundDayRevision?: number
+  posRefundDayTotalPaise?: number
+  posSourceHandoverRevision?: number
+  posRefundQuoteId?: string
   drawerDenominations?: DrawerDenominations
   drawerTotal?: number
   /** Immutable POS drawer closure created with this cashout. */

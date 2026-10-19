@@ -1,3 +1,4 @@
+import { publishWorkspaceMetrics } from './sharedViewsRepository'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -192,6 +193,11 @@ export function useAppStore() {
     function handleSubscriptionError(error: unknown) {
       const code = error instanceof Error && 'code' in error ? String(error.code) : ''
 
+      if (code === 'shared-view-unavailable') {
+        setAuthError(error instanceof Error ? error.message : 'Shared workspace data unavailable. Retry after the owner publishes it.')
+        return
+      }
+
       if (
         (typeof navigator !== 'undefined' && !navigator.onLine) ||
         code.includes('unavailable') ||
@@ -319,10 +325,11 @@ export function useAppStore() {
 
       metricsSyncInFlightRef.current = true
       try {
-        await setDoc(doc(db, 'appMetadata', 'workspaceMetrics'), {
-          ...nextMetrics,
-          updatedAt: nowIso(),
-        })
+        await publishWorkspaceMetrics(nextMetrics, workspaceMetrics.updatedAt)
+      } catch (cause) {
+        // Conflicting owners refresh from the canonical snapshot before recomputing.
+        const code = cause && typeof cause === 'object' && 'code' in cause ? String(cause.code) : ''
+        if (!code.includes('aborted')) setAuthError('Shared reports could not be updated. Reconnect and reload to retry.')
       } finally {
         metricsSyncInFlightRef.current = false
       }

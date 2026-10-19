@@ -33,6 +33,7 @@ export type PosProduct = {
   updatedByName: string
   lastMovementId?: string
   lastPriceEdit?: { changeId: string; at: string; byUid: string; byName: string }
+  priceProvenance?: { mrp?: string | null; selling?: string | null }
 }
 
 export type PosProductCost = {
@@ -65,6 +66,9 @@ export type PosGoodsReceiptLine = {
   mrpPaise?: number | null
   mrpInput?: string
   mrpChanged?: boolean
+  expectedRevision?: number
+  quoteRevision?: number
+  priceProvenanceBefore?: { mrp?: string | null; selling?: string | null }
 }
 
 export type PosGoodsReceipt = {
@@ -167,6 +171,7 @@ export type PosDiscount = {
 
 export type PosBill = {
   id: string
+  checkout?: { version: 1; operationId: string; intentHash: string }
   handoverDate?: string
   cashierAuthTime?: number
   receiptNumber: string
@@ -215,12 +220,22 @@ export type PosApprovalRequest = {
   sourceBillRevision: number
   reason: string
   returnCondition?: PosReturnCondition
-  returnLines?: Array<{ lineId: string; quantity: number }>
+  returnLines?: Array<{ lineId: string; quantity: number; refundPaise?: number }>
   refundDate?: string
   refundAmountPaise?: number
   refundMethod?: PosPaymentMethod
   refundReference?: string
-  status: 'pending' | 'approved' | 'rejected' | 'stale'
+  status: 'pending' | 'approved' | 'rejected' | 'stale' | 'posted'
+  postingMode?: 'staff-immediate'
+  ownerReviewStatus?: 'pending' | 'reviewed'
+  postedAt?: string
+  postedByUid?: string
+  postedByName?: string
+  postedByRole?: AppUser['role']
+  postedBillRevision?: number
+  eventId?: string
+  expenseId?: string | null
+  handoverDate?: string
   requestedAt: string
   requestedByUid: string
   requestedByName: string

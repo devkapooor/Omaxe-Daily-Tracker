@@ -64,6 +64,7 @@ type ResponsiveLogTableProps<TData extends RowData> = {
   onLoadMore?: () => void
   showFooter?: boolean
   showToolbar?: boolean
+  onRowActivate?: (entry: TData) => void
 }
 
 const logTableFeatures = tableFeatures({
@@ -99,6 +100,7 @@ export function ResponsiveLogTable<TData extends RowData>({
   searchText,
   showFooter = true,
   showToolbar = true,
+  onRowActivate,
 }: ResponsiveLogTableProps<TData>) {
   const [searchInput, setSearchInput] = useState('')
   const columnHelper = useMemo(() => createColumnHelper<typeof logTableFeatures, TData>(), [])
@@ -207,7 +209,7 @@ export function ResponsiveLogTable<TData extends RowData>({
               </TableHeader>
               <TableBody>
                 {pageRows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} data-source-row={onRowActivate ? row.id : undefined} tabIndex={onRowActivate ? 0 : undefined} className={onRowActivate ? 'cursor-pointer' : undefined} onClick={event => { if (onRowActivate && !(event.target instanceof Element && event.target.closest('button,a,input,select,textarea'))) onRowActivate(row.original) }} onKeyDown={event => { if (onRowActivate && event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); onRowActivate(row.original) } }}>
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className={columns.find((definition) => definition.id === cell.column.id)?.align === 'right' ? 'text-right' : undefined}>
                         <table.FlexRender cell={cell} />

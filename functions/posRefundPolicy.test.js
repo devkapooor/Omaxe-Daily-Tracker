@@ -1,0 +1,33 @@
+const { it } = require('node:test'), assert = require('node:assert/strict')
+const p = require('./posRefundPolicy')
+const bill = (lines, discount = 0) => { const subtotalPaise = lines.reduce((n, l) => n + l.quantity * l.unitPricePaise, 0); return { lines: lines.map(l => ({ kind: 'temporary', description: l.id, ...l })), subtotalPaise, discount: { amountPaise: discount }, totalPaise: subtotalPaise - discount, payments: [{ method: 'cash', amountPaise: subtotalPaise - discount }] } }
+it('caps original quantities and independently quotes9000 not18000 for one unit', () => {
+  const lines = p.allocateBill(bill([{ id: 'A', quantity: 2, unitPricePaise: 9000 }]))
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines), [{ lineId: 'A', quantity: 1 }]).refundPaise, 9000)
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines, { A: 1 }), [{ lineId: 'A', quantity: 1 }]).refundPaise, 9000)
+  assert.throws(() => p.quoteSelection(lines, p.returnedMap(lines, { A: 1 }), [{ lineId: 'A', quantity: 2 }]), /remaining billed/)
+  assert.throws(() => p.quoteSelection(lines, p.returnedMap(lines, { A: 2 }), [{ lineId: 'A', quantity: 1 }]), /remaining billed/)
+})
+it('independent1-paise discount fixture gives A199/B100 and successive A99/100', () => {
+  const lines = p.allocateBill(bill([{ id: 'A', quantity: 2, unitPricePaise: 100 }, { id: 'B', quantity: 1, unitPricePaise: 100 }], 1))
+  assert.deepEqual(lines.map(l => l.netPaise), [199, 100])
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines), [{ lineId: 'A', quantity: 1 }]).refundPaise, 99)
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines, { A: 1 }), [{ lineId: 'A', quantity: 1 }]).refundPaise, 100)
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines), [{ lineId: 'B', quantity: 1 }]).refundPaise, 100)
+  assert.equal(p.quoteSelection(lines, p.returnedMap(lines), []).refundPaise, 0)
+})
+it('rejects noninteger/negative/duplicate/foreign quantities and inconsistent original history', () => {
+  const source = bill([{ id: 'A', quantity: 2, unitPricePaise: 100 }]), lines = p.allocateBill(source), returned = p.returnedMap(lines)
+  for (const quantity of [-1, 0, 1.1, NaN, Infinity]) assert.throws(() => p.quoteSelection(lines, returned, [{ lineId: 'A', quantity }]))
+  for (const selection of [[{ lineId: 'foreign', quantity: 1 }], [{ lineId: 'A', quantity: 1 }, { lineId: 'A', quantity: 1 }]]) assert.throws(() => p.quoteSelection(lines, returned, selection))
+  assert.throws(() => p.allocateBill({ ...source, totalPaise: 1 }), /reconcile/)
+  assert.throws(() => p.allocateBill({ ...source, payments: [{ method: 'cash', amountPaise: 1 }] }), /payment evidence/)
+  assert.throws(() => p.returnedMap(lines, { foreign: 1 }), /unknown/)
+})
+it('supports zero/full discount and deterministic original-line remainder ties', () => {
+  const source = bill([{ id: 'B', quantity: 1, unitPricePaise: 1 }, { id: 'A', quantity: 1, unitPricePaise: 1 }], 1)
+  assert.deepEqual(p.allocateBill(source).map(l => l.netPaise), [0, 1])
+  const zero = p.allocateBill(bill([{ id: 'Z', quantity: 3, unitPricePaise: 0 }]))
+  assert.equal(p.quoteSelection(zero, p.returnedMap(zero), [{ lineId: 'Z', quantity: 3 }]).refundPaise, 0)
+  assert.equal(p.allocateBill(bill([{ id: 'A', quantity: 2, unitPricePaise: 100 }], 200))[0].netPaise, 0)
+})

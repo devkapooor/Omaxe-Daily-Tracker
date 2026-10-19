@@ -25,7 +25,7 @@ export type ActionCentreEntry = EntrySummary & (
 
 const statusLabels: Record<string, string> = {
   pending: 'Pending', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', stale: 'Outdated',
-  reviewed: 'Reviewed', matched: 'Matched', 'vendor-credit': 'Vendor Credit', replacement: 'Replacement Received',
+  reviewed: 'Reviewed', posted: 'Completed', 'posted-pending-review': 'Completed · Awaiting Review', matched: 'Matched', 'vendor-credit': 'Vendor Credit', replacement: 'Replacement Received',
 }
 export const actionStatusLabel = (status: string) => statusLabels[status] ?? status
 
@@ -41,7 +41,7 @@ export function actionCentreEntries(queue: ApprovalQueue, pos: PosApprovalReques
   const posEntries: ActionCentreEntry[] = pos.map((item) => ({
     key: `pos:${item.id}`, type: item.type === 'void' ? 'pos-void' : 'pos-return', source: 'pos', item,
     requester: item.requestedByName, submittedAt: item.requestedAt, historyAt: item.reviewedAt ?? item.requestedAt,
-    pending: item.status === 'pending', searchText: [item.receiptNumber, item.requestedByName, item.reason, item.reviewReason].join(' '),
+    pending: item.status === 'pending' || (item.status === 'posted' && item.ownerReviewStatus === 'pending'), searchText: [item.receiptNumber, item.requestedByName, item.reason, item.reviewReason].join(' '),
   }))
   const handoverEntries: ActionCentreEntry[] = handovers.map((item) => ({
     key: `handover:${item.id}`, type: 'handover', source: 'handover', item,

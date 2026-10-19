@@ -11,6 +11,7 @@ export function paymentLabel(method?: string) {
 }
 
 export function entryStatus(entry: ActionCentreEntry) {
+  if (entry.source === 'pos' && entry.item.status === 'posted') return entry.item.ownerReviewStatus === 'reviewed' ? 'reviewed' : 'posted-pending-review'
   if (entry.source === 'approval' && entry.item.status === 'rejected' && (entry.item.reviewReason === OUTDATED_CORRECTION_REASON || entry.item.reviewReason === OUTDATED_VENDOR_CORRECTION_REASON)) return 'stale'
   return entry.source === 'handover' || entry.source === 'stock-price' ? entry.item.reviewStatus : entry.item.status
 }

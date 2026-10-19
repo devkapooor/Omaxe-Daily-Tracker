@@ -1,379 +1,275 @@
-import { useEffect, useState } from 'react'
-import type { DailyCashoutEntry } from '@/domain/appTypes'
-import { formatDisplayDate, numberValue, today } from '@/app/uiHelpers'
-import { Button } from '@/shared/ui/button'
-import { Card, CardContent, CardHeader } from '@/shared/ui/card'
-import { FieldLabel } from '@/shared/ui/field-label'
-import { Input } from '@/shared/ui/input'
-import { SectionHeading } from '@/shared/ui/section-heading'
-import { calculateCashoutAudit, drawerTotalFromDenominations, formatDrawerParticulars } from '@/domain/cashoutCorrections'
-import { getPosCashoutPaymentMix } from '@/features/pos/data/posRepository'
-import type { PosPaymentMethod } from '@/features/pos/domain/types'
-
-type DailyCashoutFormProps = {
-  currentUserId: string
-  currentUserName: string
-  todayCashExpenses: number
-  onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void> | void
-}
-
-type DailyDetailsDraft = {
-  cashExpense: number
-  cashSales: number
-  cardSales: number
-  creditSales: number
-  date: string
-  expectedCash: number
-  systemAudit: number
-  upiSales: number
-}
-
-type DrawerFormState = {
-  change: string
-  denom10: string
-  denom100: string
-  denom20: string
-  denom200: string
-  denom50: string
-  denom500: string
-}
-
-type PosMixState = { date: string; error: string; billCount: number; refundPaise: number; methods: Record<PosPaymentMethod, number> }
-const emptyPosMix: PosMixState = { date: '', error: '', billCount: 0, refundPaise: 0, methods: { cash: 0, upi: 0, card: 0, 'bank-transfer': 0 } }
-const rupeesFromPaise = (paise: number) => String(paise / 100)
-const formatRupees = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-const emptyDrawerFormState: DrawerFormState = {
-  change: '0',
-  denom10: '0',
-  denom100: '0',
-  denom20: '0',
-  denom200: '0',
-  denom50: '0',
-  denom500: '0',
-}
-
-export function DailyCashoutForm({ currentUserId, currentUserName, todayCashExpenses, onSave }: DailyCashoutFormProps) {
-  const [entryDate, setEntryDate] = useState(today())
-  const [posMix, setPosMix] = useState<PosMixState>(emptyPosMix)
-  const [cashSale, setCashSale] = useState('0')
-  const [upiSale, setUpiSale] = useState('0')
-  const [cardSale, setCardSale] = useState('0')
-  const [creditSale, setCreditSale] = useState('0')
-  const [cashExpense, setCashExpense] = useState(() => String(todayCashExpenses))
-  const [cashExpenseEdited, setCashExpenseEdited] = useState(false)
-  const [drawerState, setDrawerState] = useState<DrawerFormState>(emptyDrawerFormState)
-  const [pendingDraft, setPendingDraft] = useState<DailyDetailsDraft | null>(null)
-  const [isDrawerModalOpen, setIsDrawerModalOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState('')
-
+import { useEffect, useRef, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/shared/lib/firebase';
+import type { DailyCashoutEntry, DrawerDenominations } from '@/domain/appTypes';
+import { formatDisplayDate, money, today } from '@/app/uiHelpers';
+import { drawerTotalFromDenominations } from '@/domain/cashoutCorrections';
+import { getFinanceCashoutSummary, postFinanceOperation, type FinanceCashoutQuote } from '@/features/register/data/financeRepository';
+import { FinanceOperationBoundary } from '@/features/register/components/FinanceOperationBoundary';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent, CardHeader } from '@/shared/ui/card';
+import { FieldLabel } from '@/shared/ui/field-label';
+import { Input } from '@/shared/ui/input';
+import { SectionHeading } from '@/shared/ui/section-heading';
+import { Textarea } from '@/shared/ui/textarea';
+type Props = {
+  currentUserId: string;
+  currentUserName: string;
+  todayCashExpenses: number;
+  onSave: (draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) => Promise<void> | void;
+};
+const empty: DrawerDenominations = {
+  denom500: 0,
+  denom200: 0,
+  denom100: 0,
+  denom50: 0,
+  denom20: 0,
+  denom10: 0,
+  change: 0
+};
+const cash = (value: number) => money(value / 100);
+export function DailyCashoutForm({
+  currentUserId,
+  currentUserName,
+  onSave
+}: Props) {
+  const storageKey = 'alphahub:cashout-count:' + currentUserId,
+    [quote, setQuote] = useState<FinanceCashoutQuote | null>(() => {
+      const raw = localStorage.getItem(storageKey);
+      try {
+        return raw ? JSON.parse(raw) as FinanceCashoutQuote : null;
+      } catch {
+        return null;
+      }
+    }),
+    [entryDate, setEntryDate] = useState(quote?.date || today()),
+    [summary, setSummary] = useState<FinanceCashoutQuote | null>(null),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [credit, setCredit] = useState('0'),
+    [reason, setReason] = useState(''),
+    [counts, setCounts] = useState<DrawerDenominations>(empty),
+    [refresh, setRefresh] = useState(0);
+  const submitting = useRef(false);
   useEffect(() => {
-    let active = true
-    getPosCashoutPaymentMix(entryDate).then((summary) => {
-      if (!active) return
-      setPosMix({ date: entryDate, error: '', ...summary })
-      setCashSale(rupeesFromPaise(summary.methods.cash))
-      setUpiSale(rupeesFromPaise(summary.methods.upi))
-      setCardSale(rupeesFromPaise(summary.methods.card))
-    }).catch((cause: unknown) => {
-      if (!active) return
-      setPosMix({ ...emptyPosMix, date: entryDate, error: cause instanceof Error ? cause.message : 'Unable to load POS totals.' })
-      setCashSale('0')
-      setUpiSale('0')
-      setCardSale('0')
-    })
-    return () => { active = false }
-  }, [entryDate])
-
-  const posMixForDate = posMix.date === entryDate
-  const posMixLoading = !posMixForDate
-  const displayPosMix = posMixForDate ? posMix : emptyPosMix
-  const cashSaleValue = numberValue(posMixForDate ? cashSale : '0')
-  const upiSaleValue = numberValue(posMixForDate ? upiSale : '0')
-  const cardSaleValue = numberValue(posMixForDate ? cardSale : '0')
-  const creditSaleValue = numberValue(creditSale)
-  const cashExpenseInputValue = !cashExpenseEdited && entryDate === today() ? String(todayCashExpenses) : cashExpense
-  const cashExpenseValue = numberValue(cashExpenseInputValue)
-  const systemAuditValue = cashSaleValue
-  const machineCardTotal = upiSaleValue + cardSaleValue
-  const expectedCash = cashSaleValue - cashExpenseValue
-  const drawerDenominations = {
-    denom500: numberValue(drawerState.denom500),
-    denom200: numberValue(drawerState.denom200),
-    denom100: numberValue(drawerState.denom100),
-    denom50: numberValue(drawerState.denom50),
-    denom20: numberValue(drawerState.denom20),
-    denom10: numberValue(drawerState.denom10),
-    change: numberValue(drawerState.change),
-  }
-  const drawerTotal = drawerTotalFromDenominations(drawerDenominations)
-
-  function resetForm() {
-    setEntryDate(today())
-    setCashSale(rupeesFromPaise(posMix.methods.cash))
-    setUpiSale(rupeesFromPaise(posMix.methods.upi))
-    setCardSale(rupeesFromPaise(posMix.methods.card))
-    setCreditSale('0')
-    setCashExpense(String(todayCashExpenses))
-    setCashExpenseEdited(false)
-    setDrawerState(emptyDrawerFormState)
-    setPendingDraft(null)
-    setIsDrawerModalOpen(false)
-  }
-
-  function openDrawerStep(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!entryDate) {
-      setError('Cashout date is required.')
-      return
+    let active = true,
+      running = false,
+      queued = false;
+    async function load() {
+      if (running) {
+        queued = true;
+        return;
+      }
+      running = true;
+      setLoading(true);
+      try {
+        const data = await getFinanceCashoutSummary(entryDate);
+        if (active) {
+          setSummary(data);
+          setError('');
+        }
+      } catch (e) {
+        if (active) {
+          setSummary(null);
+          setError(e instanceof Error ? e.message : 'Unable to load trusted totals.');
+        }
+      } finally {
+        running = false;
+        if (active) setLoading(false);
+        if (queued && active) {
+          queued = false;
+          void load();
+        }
+      }
     }
-
-    setPendingDraft({
-      date: entryDate,
-      cashSales: cashSaleValue,
-      upiSales: upiSaleValue,
-      cardSales: cardSaleValue,
-      creditSales: creditSaleValue,
-      cashExpense: cashExpenseValue,
-      systemAudit: systemAuditValue,
-      expectedCash,
-    })
-    setError('')
-    setIsDrawerModalOpen(true)
+    let lastRevision: number | undefined;
+    const stop = onSnapshot(doc(db, 'posSandboxes', 'test', 'handover', 'main'), {
+      includeMetadataChanges: true
+    }, s => {
+      if (s.metadata.fromCache) return;
+      const revision = s.get('revision') as number;
+      if (lastRevision === revision) return;
+      lastRevision = revision;
+      void load();
+    }, e => {
+      if (active) {
+        setError(e.message);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [entryDate, refresh]);
+  useEffect(() => {
+    if (!quote) return;
+    return onSnapshot(doc(db, 'financeCashoutQuotes', quote.id), s => {
+      if (s.exists() && (s.get('closedAt') || s.get('cancelledAt'))) {
+        localStorage.removeItem(storageKey);
+        setQuote(null);
+        setCounts(empty);
+        setRefresh(n => n + 1);
+      }
+    }, e => setError(e.message));
+  }, [quote, storageKey]);
+  const view = quote || summary,
+    drawerTotal = drawerTotalFromDenominations(counts, true),
+    difference = view ? drawerTotal - view.expectedDrawerPaise / 100 : 0;
+  async function begin(event: React.FormEvent) {
+    event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      const result = await postFinanceOperation<FinanceCashoutQuote>('cashout-count-start', {
+        date: entryDate
+      });
+      localStorage.setItem(storageKey, JSON.stringify(result));
+      setQuote(result);
+      setCounts(empty);
+      setReason('');
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to start count.');
+    } finally {
+      submitting.current = false;
+      setBusy(false);
+    }
   }
-
-  async function saveFinalCashout(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!pendingDraft) return
-
-    const { auditDifference, auditMessage, auditStatus } = calculateCashoutAudit(pendingDraft.systemAudit, drawerTotal)
-    const drawerParticulars = formatDrawerParticulars(drawerDenominations)
-
-    setIsSaving(true)
+  async function cancel() {
+    if (submitting.current || !quote) return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      await postFinanceOperation('cashout-count-cancel', {
+        quoteId: quote.id
+      });
+      localStorage.removeItem(storageKey);
+      setQuote(null);
+      setCounts(empty);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to cancel count.');
+    } finally {
+      submitting.current = false;
+      setBusy(false);
+    }
+  }
+  async function close(event: React.FormEvent) {
+    event.preventDefault();
+    if (submitting.current || !quote) return;
+    if (difference !== 0 && !reason.trim()) {
+      setError('Enter the discrepancy reason.');
+      return;
+    }
+    submitting.current = true;
+    setBusy(true);
     try {
       await onSave({
-        date: pendingDraft.date,
+        financeQuoteId: quote.id,
+        date: quote.date,
         recordedBy: currentUserName,
         recordedByUserId: currentUserId,
-        upiSales: pendingDraft.upiSales,
-        cardSales: pendingDraft.cardSales,
-        cashSales: pendingDraft.cashSales,
-        returns: 0,
-        creditSales: pendingDraft.creditSales,
-        cashExpense: pendingDraft.cashExpense,
-        cashAudit: pendingDraft.systemAudit,
-        drawerDenominations,
+        cashSales: quote.grossMethods.cash / 100,
+        upiSales: quote.grossMethods.upi / 100,
+        cardSales: quote.grossMethods.card / 100,
+        creditSales: Number(credit),
+        returns: quote.windowRefundPaise / 100,
+        cashExpense: quote.cashPaidOutPaise / 100,
+        cashAudit: quote.expectedDrawerPaise / 100,
+        drawerDenominations: counts,
         drawerTotal,
-        auditDifference,
-        auditStatus,
-        auditMessage,
-        actualCashParticulars: drawerParticulars,
-        pendingCashParticulars: `By: ${currentUserName}\nExpected Cash: ${pendingDraft.expectedCash}\nDrawer Total: ${drawerTotal}\nSystem Audit: ${pendingDraft.systemAudit}\nAudit Check: ${auditMessage}`,
         remainingBalance: drawerTotal,
-      })
-      setError('')
-      resetForm()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save the cashout.')
+        actualCashParticulars: 'Server derives denomination evidence.',
+        pendingCashParticulars: 'Server derives source totals.',
+        discrepancyReason: reason
+      });
+      localStorage.removeItem(storageKey);
+      setQuote(null);
+      setCounts(empty);
+      setCredit('0');
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to confirm closing. Recover the original result before posting another closing.');
     } finally {
-      setIsSaving(false)
+      submitting.current = false;
+      setBusy(false);
     }
   }
-
   return (
-    <>
-      <Card className="flex h-full min-h-0 flex-col">
-        <CardHeader>
-          <SectionHeading eyebrow="Daily Details" title="Cashout Register" />
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto">
-          <form className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" onSubmit={openDrawerStep}>
-            <FieldLabel label="Cashout For Date">
-              <Input
-                type="date"
-                value={entryDate}
-                onChange={(event) => {
-                  const nextDate = event.target.value
-                  setEntryDate(nextDate)
-                  setCashExpense(nextDate === today() ? String(todayCashExpenses) : '0')
-                  setCashExpenseEdited(false)
-                  setError('')
-                }}
-                required
-              />
-            </FieldLabel>
-
-            <FieldLabel label="Cash Sale Recorded">
-              <Input type="number" step="0.01" value={posMixForDate ? cashSale : '0'} onChange={(event) => setCashSale(event.target.value)} />
-            </FieldLabel>
-
-            <FieldLabel label="Machine Total (UPI + Card)">
-              <Input type="number" step="0.01" value={machineCardTotal} readOnly />
-            </FieldLabel>
-
-            <FieldLabel label="Credit Sale Recorded">
-              <Input type="number" min="0" step="1" value={creditSale} onChange={(event) => setCreditSale(event.target.value)} />
-            </FieldLabel>
-
-            <FieldLabel label="Cash Expense">
-              <Input type="number" min="0" step="1" value={cashExpenseInputValue} onChange={(event) => { setCashExpense(event.target.value); setCashExpenseEdited(true) }} />
-            </FieldLabel>
-
-            <FieldLabel label="Expected Cash (Cash Sales - Cash Expense)">
-              <Input type="number" value={expectedCash} readOnly />
-            </FieldLabel>
-
-            <FieldLabel label="System Audit (Cash Sales Recorded)">
-              <Input type="number" value={cashSaleValue} readOnly />
-            </FieldLabel>
-
-            <FieldLabel label="By">
-              <Input value={currentUserName} readOnly />
-            </FieldLabel>
-
-            <div className="rounded-lg border border-border/70 bg-secondary/35 p-3 text-sm xl:col-span-3" aria-live="polite">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <strong>POS totals for {formatDisplayDate(entryDate)}</strong>
-                <span className="text-xs text-muted-foreground">{posMixLoading ? 'Loading…' : displayPosMix.error ? 'Unavailable' : `${displayPosMix.billCount} active bills`}</span>
-              </div>
-              {displayPosMix.error ? <p className="mt-1 text-xs text-destructive">{displayPosMix.error} POS totals could not be loaded. Enter Cash and Credit manually; UPI/Card will be saved as zero unless the POS connection is restored.</p> : <>
-                <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
-                  <span>Cash (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.cash)}</strong></span>
-                  <span>UPI (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.upi)}</strong></span>
-                  <span>Card (net): <strong className="text-foreground">{formatRupees(displayPosMix.methods.card)}</strong></span>
-                  {displayPosMix.methods['bank-transfer'] !== 0 ? <span>Legacy Bank Transfer (existing POS bills only): <strong className="text-foreground">{formatRupees(displayPosMix.methods['bank-transfer'])}</strong></span> : null}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">The combined machine total is shown above; POS UPI and Card amounts are saved separately. Approved refunds are already deducted by tender mode; total approved refunds: <strong className="text-foreground">{formatRupees(displayPosMix.refundPaise)}</strong>. Cash and Credit remain editable.</p>
-              </>}
-            </div>
-
-            {error && <p className="text-sm font-semibold text-destructive xl:col-span-3">{error}</p>}
-
-            <Button className="xl:col-span-3" type="submit" disabled={posMixLoading}>
-              Continue To Cash Drawer
-            </Button>
+    <FinanceOperationBoundary uid={currentUserId}>
+      <Card className="flex min-h-0 flex-col">
+        <CardHeader><SectionHeading eyebrow="Daily Details" title="Cashout Register" /></CardHeader>
+        <CardContent>
+          <form onSubmit={event => void begin(event)}>
+            <fieldset disabled={!!quote} aria-hidden={quote ? true : undefined} className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <FieldLabel label="Cashout For Date"><Input type="date" required disabled={busy} value={entryDate} onChange={e => { setEntryDate(e.target.value); setSummary(null); }} /></FieldLabel>
+              <FieldLabel label="Cash Sale Recorded"><Input aria-label="Gross cash collections (before refunds)" readOnly value={view ? view.grossMethods.cash / 100 : '—'} /></FieldLabel>
+              <FieldLabel label="Machine Total (UPI + Card)"><Input aria-label="Gross UPI + Card collections" readOnly value={view ? (view.grossMethods.upi + view.grossMethods.card) / 100 : '—'} /></FieldLabel>
+              <FieldLabel label="Credit Sale Recorded"><Input aria-label="Declared non-POS credit sales" type="number" min="0" step="0.01" value={credit} onChange={e => setCredit(e.target.value)} /></FieldLabel>
+              <FieldLabel label="Cash Paid Out"><Input aria-label="Cash Paid Out (source-linked)" readOnly value={view ? view.cashPaidOutPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label="Expected Cash (Including Opening Balance)"><Input aria-label="Expected cash including opening balance" readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label="System Audit (Expected Drawer)"><Input aria-label="Expected drawer / System Audit" readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label="By"><Input readOnly value={currentUserName} /></FieldLabel>
+              <FieldLabel label="Cash Refunds"><Input readOnly value={view ? view.cashRefundPaise / 100 : '—'} /></FieldLabel>
+              <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3">Cash Sale Recorded is before refunds. Cash Paid Out includes refunds, expenses and vendor cash payments; Cash Refunds is part of that total. Expected cash includes the opening/count balance.</p>
+              {view ? <details className="rounded-lg border border-border/70 bg-secondary/35 p-3 text-sm md:col-span-2 lg:col-span-3">
+                <summary className="cursor-pointer font-semibold">Reconciliation details · {formatDisplayDate(view.date)}</summary>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><p>Gross cash sales: <strong>{cash(view.grossMethods.cash)}</strong></p><p>Cash refunds: <strong>{cash(view.cashRefundPaise)}</strong></p><p>Net cash sales: <strong>{cash(view.netCashCollectionsPaise)}</strong></p><p>Vendor cash payments: <strong>{cash(view.vendorCashPaymentPaise)}</strong></p><p>Other cash expenses: <strong>{cash(view.ordinaryCashExpensePaise)}</strong></p><p>Expected drawer: <strong>{cash(view.expectedDrawerPaise)}</strong></p></div>
+                <p className="mt-3 text-xs text-muted-foreground">Latest counted balance {cash(view.openingCheckpointPaise)} + cash movement since that count {cash(view.subsequentNetCashPaise)} = expected drawer {cash(view.expectedDrawerPaise)}. Earlier activity may already be included in the latest count.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Receipt amounts remain gross. Refunds and payouts affect cash once. Add missing payments in Register.</p>
+              </details> : null}
+              {view && view.legacyUntrackedCashOutflowPaise > 0 ? <p className="text-xs text-warning md:col-span-2 lg:col-span-3">Legacy cash entries {cash(view.legacyUntrackedCashOutflowPaise)} lack trusted drawer posting evidence. They are not deducted again automatically. Preserve any manual deduction already made during Cashout.</p> : null}
+              {loading ? <p role="status" className="md:col-span-2 lg:col-span-3">Loading trusted totals…</p> : null}
+              {error && !quote ? <div role="alert" className="text-sm text-destructive md:col-span-2 lg:col-span-3"><p>{error}</p><Button type="button" variant="outline" onClick={() => setRefresh(n => n + 1)}>Retry totals</Button></div> : null}
+              <Button disabled={busy || loading || !summary} type="submit" className="md:col-span-2 lg:col-span-3">{busy ? 'Starting count…' : 'Continue To Cash Drawer'}</Button>
+            </fieldset>
           </form>
         </CardContent>
       </Card>
-
-      {isDrawerModalOpen && pendingDraft ? (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm">
-          <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto">
-            <CardHeader className="gap-3">
-              <SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" />
-              <p className="text-sm font-medium text-muted-foreground">
-                Review the drawer count and submit the final daily cashout for {formatDisplayDate(pendingDraft.date)}.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <form className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" onSubmit={saveFinalCashout}>
-                <FieldLabel label="500">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom500}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom500: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="200">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom200}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom200: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="100">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom100}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom100: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="50">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom50}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom50: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="20">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom20}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom20: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="10">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.denom10}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, denom10: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="Change">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={drawerState.change}
-                    onChange={(event) => setDrawerState((current) => ({ ...current, change: event.target.value }))}
-                  />
-                </FieldLabel>
-                <FieldLabel label="Drawer Total">
-                  <Input type="number" value={drawerTotal} readOnly />
-                </FieldLabel>
-                <FieldLabel label="Cash Difference">
-                  <Input type="number" value={pendingDraft.expectedCash} readOnly />
-                </FieldLabel>
-
-                <div className="rounded-[18px] border border-border/70 bg-secondary/55 p-4 text-sm font-medium text-foreground md:col-span-2 xl:col-span-3">
-                  {pendingDraft.systemAudit > drawerTotal
-                    ? `WARNING: Cash is less by ${pendingDraft.systemAudit - drawerTotal}.`
-                    : pendingDraft.systemAudit < drawerTotal
-                      ? `Cash is more by ${drawerTotal - pendingDraft.systemAudit}, probably wrong billings.`
-                      : 'Cash matches the system audit.'}
-                </div>
-
-                <div className="grid gap-2 rounded-[18px] border border-primary/25 bg-primary/5 p-4 text-sm md:col-span-2 xl:col-span-3 sm:grid-cols-3">
-                  <span><span className="block text-xs text-muted-foreground">Cash counted</span><strong>₹{drawerTotal.toLocaleString('en-IN')}</strong></span>
-                  <span><span className="block text-xs text-muted-foreground">Cash being removed</span><strong>₹{drawerTotal.toLocaleString('en-IN')}</strong></span>
-                  <span><span className="block text-xs text-muted-foreground">Drawer after Cashout</span><strong>₹0.00</strong></span>
-                  <p className="text-xs text-muted-foreground sm:col-span-3">Completing Cashout removes all counted cash from the shared POS drawer. New cash bills will accumulate from zero.</p>
-                </div>
-
-                <div className="flex flex-col gap-3 md:col-span-2 xl:col-span-3 sm:flex-row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setIsDrawerModalOpen(false)
-                      setPendingDraft(null)
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button disabled={isSaving} type="submit">
-                    {isSaving ? 'Saving...' : 'Save Cashout and Close Drawer'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-    </>
-  )
+      {quote ? <CashDrawerDialog quoteId={quote.id} busy={busy} onCancel={() => void cancel()}>
+        <CardHeader><SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" /><p className="text-sm text-muted-foreground">Count the drawer for {formatDisplayDate(quote.date)}. Expected cash: <strong>{cash(quote.expectedDrawerPaise)}</strong>.</p></CardHeader>
+        <CardContent role="region" aria-label="Complete Daily Cashout">
+          <p className="mb-4 text-xs text-muted-foreground">Drawer activity pauses during this five-minute count. Refresh preserves the count reference; recount if it expires.</p>
+          <form className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" onSubmit={event => void close(event)}>
+            {(Object.keys(empty) as Array<keyof DrawerDenominations>).map(key => <FieldLabel key={key} label={key === 'change' ? 'Loose change (₹)' : key.replace('denom', '')}><Input type="number" min="0" step={key === 'change' ? '0.01' : '1'} required value={counts[key]} onChange={e => setCounts(old => ({ ...old, [key]: Number(e.target.value) }))} /></FieldLabel>)}
+            <FieldLabel label="Drawer Total"><Input readOnly value={drawerTotal} /></FieldLabel>
+            <FieldLabel label="Difference (count − expected)"><Input readOnly value={difference} /></FieldLabel>
+            <FieldLabel className="md:col-span-2 lg:col-span-3" label="Discrepancy reason / closing note"><Textarea required={difference !== 0} value={reason} onChange={e => setReason(e.target.value)} /></FieldLabel>
+            <p className="text-xs md:col-span-2 lg:col-span-3">Counted cash goes to {currentUserName}. Drawer closes at ₹0.00; use Cash Movement for later transfers and deposits.</p>
+            {error ? <p role="alert" className="text-sm text-destructive md:col-span-2 lg:col-span-3">{error}</p> : null}
+            <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-3 sm:flex-row"><Button type="button" variant="outline" disabled={busy} onClick={() => void cancel()}>Cancel count</Button><Button disabled={busy} type="submit">{busy ? 'Saving…' : 'Save Cashout and Close Drawer'}</Button></div>
+          </form>
+        </CardContent>
+      </CashDrawerDialog> : null}
+    </FinanceOperationBoundary>
+  );
 }
 
+function CashDrawerDialog({ quoteId, busy, onCancel, children }: { quoteId: string; busy: boolean; onCancel: () => void; children: React.ReactNode }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef(onCancel);
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    cancelRef.current = onCancel;
+    busyRef.current = busy;
+  }, [onCancel, busy]);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>('input:not(:disabled),textarea:not(:disabled),button:not(:disabled)') || [])];
+    focusable()[0]?.focus();
+    function handle(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !busyRef.current) { event.preventDefault(); cancelRef.current(); }
+      if (event.key !== 'Tab') return;
+      const nodes = focusable(), first = nodes[0], last = nodes.at(-1);
+      if (!first || !last) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener('keydown', handle);
+    return () => { document.removeEventListener('keydown', handle); previous?.focus(); };
+  }, [quoteId]);
+  return <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm"><Card ref={dialogRef} role="dialog" aria-modal="true" aria-label="Complete Daily Cashout" className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">{children}</Card></div>;
+}

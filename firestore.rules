@@ -67,13 +67,31 @@ service cloud.firestore {
         data.recordedByUserId == request.auth.uid && validCashoutClosureDate(data.date) &&
         data.drawerTotal is number && data.drawerTotal >= 0 &&
         data.holderBalancesAtClose is list && data.holderBalancesRevision is int &&
-        data.cashRemovedPaise is int && data.cashRemovedPaise == data.drawerTotal * 100 &&
+        data.cashRemovedPaise is int && data.cashRemovedPaise == (data.get('refundAccountingVersion', 0) == 1 ? math.round(data.drawerTotal * 100) : data.drawerTotal * 100) &&
         data.closingDrawerPaise == 0 && closure.cashoutId == documentId &&
         closure.recordedByUid == request.auth.uid && closure.countedPaise == data.cashRemovedPaise &&
         closure.removedPaise == data.cashRemovedPaise && closure.closingBalancePaise == 0 &&
         cashMovementControlAfter('daily-close', documentId) &&
         getAfter(cashMovementControlPath()).data.revision == data.holderBalancesRevision &&
-        handover.lastOperation == 'cashout-close' && handover.lastOperationId == documentId;
+        handover.lastOperation == 'cashout-close' && handover.lastOperationId == documentId && validRefundCashoutSnapshot(data);
+    }
+
+    function validRefundCashoutSnapshot(data) {
+      let dayPath = /databases/$(database)/documents/posSandboxes/test/refundDays/$(data.date);
+      let proofPath = /databases/$(database)/documents/posSandboxes/test/refundCashoutQuotes/$(data.get('posRefundQuoteId', 'not-refund-aware'));
+      return !exists(dayPath) || (data.get('refundAccountingVersion', 0) == 1 && exists(proofPath) &&
+        get(proofPath).data.actorUid == request.auth.uid && get(proofPath).data.date == data.date &&
+        data.posCashRefundPaise == get(proofPath).data.posCashRefundPaise &&
+        math.round(data.returns * 100) == get(proofPath).data.windowRefundPaise &&
+        data.posRefundDayRevision == get(dayPath).data.revision && data.posRefundDayRevision == get(proofPath).data.posRefundDayRevision &&
+        data.posRefundDayTotalPaise == get(dayPath).data.cashRefundPaise && data.posRefundDayTotalPaise == get(proofPath).data.posRefundDayTotalPaise &&
+        data.posSourceHandoverRevision == get(posHandoverPath()).data.revision && data.posSourceHandoverRevision == get(proofPath).data.posSourceHandoverRevision &&
+        math.round(data.cashExpense * 100) >= data.posCashRefundPaise);
+    }
+    function preservesRefundCashoutSnapshot() {
+      return resource.data.get('refundAccountingVersion', 0) != 1 ||
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['refundAccountingVersion', 'posCashRefundPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise', 'posSourceHandoverRevision', 'posRefundQuoteId', 'returns']) &&
+         math.round(request.resource.data.cashExpense * 100) >= resource.data.posCashRefundPaise);
     }
 
     function preservesDrawerClosureLink() {
@@ -366,12 +384,14 @@ service cloud.firestore {
     }
 
     function canCreateLedgerEntry(data) {
-      return isOwner() ||
+      return data.get('goodsReceiptId', '') == '' && data.sourceType != 'goods-receipt' &&
+        (data.eventType != 'purchase' || (!data.sourceRecordId.matches('^grn-.+$') &&
+          getAfter(/databases/$(database)/documents/purchasesV2/$(data.sourceRecordId)).data.get('grnId', '') == '')) && (isOwner() ||
         (data.eventType == 'purchase' && hasPurchasingCapability('purchase.create')) ||
         (data.eventType == 'settlement' && hasPurchasingCapability('settlement.create')) ||
         (data.eventType == 'vendor-credit' && hasPurchasingCapability('return.resolve')) ||
         (data.eventType == 'pending-cheque' && hasPurchasingCapability('cheque.issue')) ||
-        (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit'));
+        (data.eventType == 'cheque-debit' && hasPurchasingCapability('cheque.debit')));
     }
 
     function validPurchaseLedgerEntry(data, documentId) {
@@ -504,18 +524,6 @@ service cloud.firestore {
         data.revision == resource.data.revision + 1 &&
         data.updatedByUserId == request.auth.uid &&
         (
-          (isOwner() && getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.get('grnId', '') is string &&
-            getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.get('grnId', '') != '' &&
-            data.openAmountPaise == 0 && data.reservedAmountPaise == resource.data.reservedAmountPaise &&
-            data.get('lastAllocationId', '') == resource.data.get('lastAllocationId', '') &&
-            data.reversalLedgerEntryId is string &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.eventType == 'reversal' &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.sourceType == 'goods-receipt' &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.sourceRecordId == documentId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.goodsReceiptId == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.grnId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.vendorId == resource.data.vendorId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.reversalOfEntryId == getAfter(/databases/$(database)/documents/purchasesV2/$(documentId)).data.ledgerEntryId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(data.reversalLedgerEntryId)).data.signedAmountPaise == -resource.data.openAmountPaise) ||
           (
             data.lastAllocationId is string &&
             getAfter(/databases/$(database)/documents/invoiceAllocationsV2/$(data.lastAllocationId)).data.invoiceId == documentId &&
@@ -857,7 +865,7 @@ service cloud.firestore {
 
     match /appMetadata/vendorCatalog {
       allow read: if isStaff();
-      allow write: if isOwner();
+      allow write: if false;
     }
 
     match /appMetadata/vendorLedgerV2Config {
@@ -874,23 +882,22 @@ service cloud.firestore {
     }
 
     match /appMetadata/appSettings {
-      allow read: if isStaff();
-      allow create: if isOwner();
-      allow update: if isOwner() || (
-        isManagerOrOwner() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentBankBalance']) &&
-        isNonNegativeNumber(request.resource.data.currentBankBalance)
-      );
-      allow delete: if false;
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     match /appMetadata/workspaceMetrics {
-      allow read: if isStaff();
-      allow write: if isOwner();
+      allow read: if isOwner();
+      allow write: if false;
     }
 
+    match /appMetadata/{sharedDocument} {
+      allow get: if isStaff() && sharedDocument in ['staffSettings', 'staffWorkspaceMetrics'];
+    }
+    match /sharedViewOperations/{operationId} { allow read, write: if false; }
+
     match /appMetadata/{documentId} {
-      allow read, write: if isOwner();
+      allow read, write: if isOwner() && !(documentId in ['appSettings', 'workspaceMetrics', 'staffSettings', 'staffWorkspaceMetrics', 'vendorLedgerV2Config', 'vendorCatalog']);
     }
 
     match /stores/{documentId} {
@@ -900,55 +907,35 @@ service cloud.firestore {
 
     match /sales/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff() && validSales(request.resource.data, documentId);
-      allow update: if isStaff() &&
-        validSales(request.resource.data, documentId) &&
-        request.resource.data.storeId == resource.data.storeId &&
-        request.resource.data.date == resource.data.date &&
-        request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isOwner();
+      allow write: if false;
     }
 
     match /purchases/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff() && isVendorLedgerV2Inactive() && validPurchaseCreate(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Inactive() && (isOwner() || (isStaff() && isVendorPaymentAllocation()));
-      allow delete: if isOwner();
+      allow write: if false;
     }
 
     match /vendors/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff();
-      allow update: if isOwner() || (isStaff() && (isOpeningBalanceAllocation() || isVendorDirectoryUpdate()));
-      allow delete: if isOwner();
+      allow write: if false;
     }
 
+    function isLinkedPosRefund(data) {
+      return data.get('sourceKind', '') == 'pos-return' ||
+        data.get('category', '') == 'POS Refund' ||
+        data.keys().hasAny(['approvalId', 'billId', 'eventId', 'amountPaise', 'postedByUid']);
+    }
     match /cashouts/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff();
-      allow update, delete: if isOwner();
+      allow write: if false;
     }
 
     match /payments/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff() && (
-        (
-          request.resource.data.keys().hasAny(['entryType']) &&
-          request.resource.data.entryType == 'loan-payment' &&
-          request.resource.data.keys().hasAny(['loanId']) &&
-          request.resource.data.loanId is string &&
-          request.resource.data.loanId != '' &&
-          isOwner()
-        ) ||
-        (
-          isVendorLedgerV2Inactive() &&
-          (
-            !request.resource.data.keys().hasAny(['entryType']) ||
-            request.resource.data.entryType == 'vendor-payment'
-          )
-        )
-      );
-      allow update, delete: if isOwner();
+      // Loan behavior is deliberately retained; legacy vendor payment posting is retired.
+      allow create: if isOwner() && request.resource.data.get('entryType', '') == 'loan-payment' && request.resource.data.get('loanId', '') is string && request.resource.data.loanId != '';
+      allow update: if isOwner() && resource.data.get('entryType', '') == 'loan-payment' && request.resource.data.get('entryType', '') == 'loan-payment';
+      allow delete: if isOwner() && resource.data.get('entryType', '') == 'loan-payment';
     }
 
     match /loans/{documentId} {
@@ -958,58 +945,17 @@ service cloud.firestore {
 
     match /dailyCashouts/{documentId} {
       allow read: if isStaff();
-      allow create: if isStaff() && (isOwner() || isCashoutWindowOpen()) && validLinkedDailyCashout(request.resource.data, documentId);
-      allow update: if isOwner() && cashMovementControlAfter('cashout-correction', documentId) &&
-        ((resource.data.keys().hasAny(['drawerClosureId']) && preservesDrawerClosureLink()) ||
-          (!resource.data.keys().hasAny(['drawerClosureId']) &&
-            (!request.resource.data.keys().hasAny(['drawerClosureId']) || validHistoricalDrawerClosureLink(request.resource.data, documentId))));
-      allow delete: if isOwner() && !resource.data.keys().hasAny(['drawerClosureId']) &&
-        cashMovementControlAfter('cashout-delete', documentId);
+      allow write: if false;
     }
 
     match /cashMovementControl/{controlId} {
       allow read: if isStaff() && controlId == 'main';
-      allow create: if isStaff() && controlId == 'main' && request.resource.data.revision == 1 &&
-        ((request.resource.data.lastOperation == 'daily-close' &&
-          getAfter(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.lastOperationId)).data.recordedByUserId == request.auth.uid) ||
-         (isOwner() && request.resource.data.lastOperation in ['cashout-correction', 'cashout-delete']));
-      allow update: if isStaff() && controlId == 'main' &&
-        request.resource.data.revision == resource.data.revision + 1 &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'lastOperation', 'lastOperationId', 'updatedAt']) &&
-        ((request.resource.data.lastOperation == 'daily-close' &&
-          getAfter(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.lastOperationId)).data.recordedByUserId == request.auth.uid) ||
-         (isOwner() && request.resource.data.lastOperation in ['cashout-correction', 'cashout-delete']));
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /cashoutCorrectionRequests/{documentId} {
-      allow read: if isOwner() || (
-        isStaff() &&
-        resource.data.requestedByUserId == request.auth.uid
-      );
-      allow create: if isOwner() || (
-        isStaff() &&
-        isCashoutWindowOpen() &&
-        request.resource.data.requestedByUserId == request.auth.uid &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.requestType == 'staff-request' &&
-        get(/databases/$(database)/documents/dailyCashouts/$(request.resource.data.cashoutId)).data.recordedByUserId == request.auth.uid
-      );
-      allow update: if isOwner() || (
-        isStaff() &&
-        isCashoutWindowOpen() &&
-        resource.data.requestedByUserId == request.auth.uid &&
-        resource.data.status == 'pending' &&
-        request.resource.data.status == 'withdrawn' &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status',
-          'reviewedAt',
-          'reviewedByUserId',
-          'reviewedBy',
-          'reviewReason'
-        ])
-      );
-      allow delete: if false;
+      allow read: if isOwner() || (isStaff() && resource.data.requestedByUserId == request.auth.uid);
+      allow write: if false;
     }
 
     match /cashTransfers/{documentId} {
@@ -1039,152 +985,67 @@ service cloud.firestore {
 
     match /vendorsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
-        hasPurchasingCapability('vendor.manage') && validVendorV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && isOwner() && immutableV2Identity();
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /purchasesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validPurchaseV2(request.resource.data, documentId);
-      allow update: if false;
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /invoiceReservationsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() &&
-        hasPurchasingCapability('purchase.create') &&
-        validInvoiceReservationV2(request.resource.data, documentId);
-      allow update, delete: if false;
+      allow write: if false;
     }
 
     match /vendorSettlementsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') && validSettlementV2(request.resource.data, documentId);
-      allow update: if false;
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /vendorSettlementStatesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.create') &&
-        validSettlementStateCreate(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && validSettlementStateCorrection(request.resource.data, documentId);
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /vendorAccountStatesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
-        validVendorAccountStateCreate(request.resource.data, documentId) &&
-        canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
-      allow update: if isVendorLedgerV2Enabled() && validVendorAccountStateUpdate(request.resource.data, documentId) &&
-        canCreateLedgerEntry(getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.lastLedgerEntryId)).data);
-      allow delete: if false;
+      allow write: if false;
     }
 
       match /invoiceStatesV2/{documentId} {
-        allow read: if isVendorLedgerV2Enabled() && isStaff();
-        allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('purchase.create') && validInvoiceStateCreate(request.resource.data, documentId);
-        allow update: if isVendorLedgerV2Enabled() &&
-          (hasPurchasingCapability('settlement.create') || isOwner()) && validInvoiceStateUpdate(request.resource.data, documentId);
-      allow delete: if false;
+      allow read: if isVendorLedgerV2Enabled() && isStaff();
+      allow write: if false;
     }
 
     match /vendorReturnsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('return.create') && validReturnV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && canResolveVendorReturn();
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /chequeBooksV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if (isVendorLedgerV2Enabled() || isVendorLedgerV2EnabledAfter()) && isOwner();
-      allow update: if isVendorLedgerV2Enabled() && isOwner();
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /chequesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('cheque.prepare') && validChequeV2(request.resource.data, documentId);
-      allow update: if isVendorLedgerV2Enabled() && canUpdateChequeStatus();
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /vendorLedgerEntriesV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && hasPurchasingCapability('vendorLedger.view');
-      allow create: if (isVendorLedgerV2Enabled() || (isOwner() && isVendorLedgerV2EnabledAfter())) &&
-        request.resource.data.id == documentId &&
-        request.resource.data.vendorId is string &&
-        request.resource.data.posting in ['financial', 'informational'] &&
-        request.resource.data.signedAmountPaise is int &&
-        request.resource.data.sourceRecordId is string &&
-        request.resource.data.sourceRevision is int &&
-        request.resource.data.sourceRevision >= 1 &&
-        request.resource.data.createdAt is string &&
-        request.resource.data.createdByUserId == request.auth.uid &&
-        (request.resource.data.eventType == 'reversal' ? isOwner() :
-          (canCreateLedgerEntry(request.resource.data) &&
-            validOpeningLedgerEntry(request.resource.data, documentId) &&
-            validPurchaseLedgerEntry(request.resource.data, documentId) &&
-            validSettlementLedgerEntry(request.resource.data, documentId) &&
-            validCorrectionLedgerEntry(request.resource.data, documentId) &&
-            validReturnLedgerEntry(request.resource.data, documentId) &&
-            validChequeLedgerEntry(request.resource.data, documentId)));
-      allow update, delete: if false;
+      allow write: if false;
     }
 
     match /invoiceAllocationsV2/{documentId} {
       allow read: if isVendorLedgerV2Enabled() && isStaff();
-      allow create: if isVendorLedgerV2Enabled() && isPositivePaise(request.resource.data.amountPaise) && (
-        (hasPurchasingCapability('settlement.create') && validSettlementAllocation(request.resource.data, documentId)) ||
-        (isOwner() && validCorrectionAllocation(request.resource.data, documentId))
-      );
-      allow update: if false;
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /vendorLedgerCorrectionRequestsV2/{documentId} {
-      allow read: if isVendorLedgerV2Enabled() && (isOwner() || (
-        isStaff() && resource.data.requestedByUserId == request.auth.uid
-      ));
-      allow create: if isVendorLedgerV2Enabled() && hasPurchasingCapability('settlement.correct') &&
-        request.resource.data.kind == 'settlement-correction' &&
-        request.resource.data.requestedByUserId == request.auth.uid &&
-        request.resource.data.status == 'pending' &&
-        request.resource.data.reason is string &&
-        request.resource.data.reason.size() > 0 &&
-        request.resource.data.sourceRevision == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.revision &&
-        request.resource.data.before.amountPaise == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.amountPaise &&
-        request.resource.data.before.date == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.date &&
-        request.resource.data.before.mode == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.mode &&
-        request.resource.data.before.notes == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.notes &&
-        request.resource.data.vendorId == get(/databases/$(database)/documents/vendorSettlementStatesV2/$(request.resource.data.sourceRecordId)).data.vendorId &&
-        (
-          (isOwner() && request.resource.data.requestType in ['staff-request', 'owner-edit']) ||
-          (
-            request.resource.data.requestType == 'staff-request' &&
-            get(/databases/$(database)/documents/vendorSettlementsV2/$(request.resource.data.sourceRecordId)).data.createdByUserId == request.auth.uid
-          )
-        );
-      allow update: if isVendorLedgerV2Enabled() && resource.data.status == 'pending' &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'reviewedAt', 'reviewedByUserId', 'reviewedBy', 'reviewReason'
-        ]) && (
-          (
-            isOwner() && request.resource.data.status in ['approved', 'rejected'] &&
-            request.resource.data.reviewedByUserId == request.auth.uid
-          ) ||
-          (
-            isStaff() && resource.data.requestedByUserId == request.auth.uid &&
-            request.resource.data.status == 'withdrawn' &&
-            request.resource.data.reviewedByUserId == request.auth.uid
-          )
-        );
-      allow delete: if false;
+      allow read: if isVendorLedgerV2Enabled() && (isOwner() || (isStaff() && resource.data.requestedByUserId == request.auth.uid));
+      allow write: if false;
     }
 
     // POS (Test) is deliberately isolated below this single sandbox document.
@@ -1194,17 +1055,6 @@ service cloud.firestore {
         return /databases/$(database)/documents/posSandboxes/$(sandboxId)/handover/main;
       }
       function handoverEnabled() { return exists(handoverPath()); }
-
-      function validProductStockMovement(productId) {
-        let movement = getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data;
-        return movement.productId == productId &&
-          movement.actorUid == request.auth.uid &&
-          movement.productRevisionBefore == resource.data.revision &&
-          movement.productRevisionAfter == request.resource.data.revision &&
-          movement.beforeQuantity == resource.data.currentQuantity &&
-          movement.afterQuantity == request.resource.data.currentQuantity &&
-          movement.type != 'goods-receipt-mrp-correction';
-      }
 
       function validSubmittedGoodsReceipt(receiptId) {
         let purchase = getAfter(/databases/$(database)/documents/purchasesV2/$(request.resource.data.payablePurchaseId)).data;
@@ -1287,23 +1137,6 @@ service cloud.firestore {
           after.dailyTotals.diff(before.dailyTotals).affectedKeys().hasOnly([bill.handoverDate]) &&
           after.diff(before).affectedKeys().hasOnly(['revision', 'cashNetPaise', 'dailyTotals', 'lastOperation', 'lastOperationId', 'updatedByUid']);
       }
-      function validRefundLedger(before, after) {
-        let path = /databases/$(database)/documents/posSandboxes/$(sandboxId)/approvals/$(after.lastOperationId);
-        let approval = getAfter(path).data;
-        let bill = get(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(approval.billId)).data;
-        let statePath = /databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(approval.billId);
-        let payments = approval.type == 'void' ? (bill.createdAt >= '2026-10-03T18:30:00.000Z' ? bill.payments : []) : [{'method': approval.refundMethod, 'amountPaise': approval.refundAmountPaise}];
-        let previous = dayTotals(before, approval.handoverDate);
-        let next = dayTotals(after, approval.handoverDate);
-        return !countReserved(before) && get(path).data.status == 'pending' && approval.status == 'approved' && approval.reviewedByUid == request.auth.uid &&
-          validHandoverDate(approval.handoverDate) && approval.type in ['void', 'return'] &&
-          get(statePath).data.revision == approval.sourceBillRevision && getAfter(statePath).data.revision == approval.sourceBillRevision + 1 &&
-          getAfter(statePath).data.state == (approval.type == 'void' ? 'voided' : 'partially-returned') &&
-          after.cashNetPaise == before.cashNetPaise - paymentTotal(payments, 'cash') &&
-          next.upi == previous.upi - paymentTotal(payments, 'upi') && next.card == previous.card - paymentTotal(payments, 'card') &&
-          after.dailyTotals.diff(before.dailyTotals).affectedKeys().hasOnly([approval.handoverDate]) &&
-          after.diff(before).affectedKeys().hasOnly(['revision', 'cashNetPaise', 'dailyTotals', 'lastOperation', 'lastOperationId', 'updatedByUid']);
-      }
       function noteCount(notes, key) { return notes.get(key, 0); }
       function validCount(value) { return value is int && value >= 0 && value <= 1000000; }
       function validDenominations(notes, coins, cash) {
@@ -1374,7 +1207,7 @@ service cloud.firestore {
         return !countReserved(before) && !exists(path) && closure.id == after.lastOperationId && closure.cashoutId == after.lastOperationId &&
           closure.keys().hasOnly(['id', 'cashoutId', 'businessDate', 'kind', 'expectedBeforePaise', 'countedPaise', 'differencePaise', 'removedPaise', 'closingBalancePaise', 'subsequentNetCashPaise', 'resultingBalancePaise', 'ledgerRevisionBefore', 'recordedByUid', 'recordedByName', 'createdAt']) &&
           closure.kind in ['daily-cashout', 'historical-repair'] && closure.recordedByUid == request.auth.uid &&
-          closure.businessDate == cashout.date && closure.countedPaise == cashout.drawerTotal * 100 &&
+          closure.businessDate == cashout.date && closure.countedPaise == (cashout.get('refundAccountingVersion', 0) == 1 ? math.round(cashout.drawerTotal * 100) : cashout.drawerTotal * 100) &&
           closure.removedPaise == closure.countedPaise && closure.closingBalancePaise == 0 &&
           closure.differencePaise == closure.countedPaise - closure.expectedBeforePaise &&
           closure.ledgerRevisionBefore == before.revision && closure.createdAt is string && closure.recordedByName is string &&
@@ -1401,13 +1234,11 @@ service cloud.firestore {
         return uid == request.auth.uid && data.uid == uid && data.authTime == request.auth.token.auth_time && data.updatedAt is string &&
           data.authTime >= previous.get('authTime', 0) &&
           data.closed is bool && data.needsLogoutCheck is bool && data.joinedAt is timestamp &&
-          data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt', 'closed', 'joinedCounterId', 'joinedAt']) &&
+          data.keys().hasOnly(['uid', 'authTime', 'needsLogoutCheck', 'lastBillId', 'lastReconciliationId', 'updatedAt', 'closed', 'joinedCounterId', 'joinedAt', 'lastFinancialOperationId']) &&
+          data.get('lastFinancialOperationId', '') == previous.get('lastFinancialOperationId', '') &&
           data.joinedCounterId == handover.counterSession.openingReconciliationId &&
           ((handover == before && counterOpen(before) && !countReserved(before) && data.closed == false && data.joinedAt == request.time &&
             data.needsLogoutCheck == previous.get('needsLogoutCheck', false) && data.lastBillId == previous.get('lastBillId', '') && data.lastReconciliationId == previous.get('lastReconciliationId', '')) ||
-           (handover.lastOperation == 'bill' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/bills/$(handover.lastOperationId)) && data.needsLogoutCheck == true && data.lastBillId == handover.lastOperationId &&
-            data.get('closed', false) == false &&
-            callerJoined(before) && data.joinedAt == previous.joinedAt && data.lastReconciliationId == previous.lastReconciliationId) ||
            (handover.lastOperation == 'reconciliation' && !exists(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)) &&
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.uid == uid &&
             getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/reconciliations/$(handover.lastOperationId)).data.authTime == data.authTime &&
@@ -1423,15 +1254,13 @@ service cloud.firestore {
           request.resource.data.lastOperation == 'initialize' && request.resource.data.updatedByUid == request.auth.uid &&
           !request.resource.data.keys().hasAny(['checkpoint', 'counterSession', 'countReservation']);
         allow update: if sandboxId == 'test' && handoverId == 'main' && isStaff() &&
+          !(resource.data.get('countReservation', {}) is map && resource.data.get('countReservation', {}).get('kind', '') == 'cashout' && countReserved(resource.data)) &&
           request.resource.data.initialized == true && request.resource.data.revision == resource.data.revision + 1 &&
           request.resource.data.updatedByUid == request.auth.uid &&
           ((isOwner() && resource.data.initialized == false && request.resource.data.lastOperation == 'initialize' && !request.resource.data.keys().hasAny(['checkpoint', 'counterSession', 'countReservation'])) ||
-           (resource.data.initialized == true && request.resource.data.lastOperation == 'bill' && validBillLedger(resource.data, request.resource.data)) ||
            (request.resource.data.lastOperation == 'reconciliation' && validCheckpoint(resource.data, request.resource.data)) ||
            (resource.data.initialized == true && request.resource.data.lastOperation == 'count-reserve' && validCountReservation(resource.data, request.resource.data)) ||
-           (resource.data.initialized == true && request.resource.data.lastOperation == 'count-release' && validCountRelease(resource.data, request.resource.data)) ||
-           (resource.data.initialized == true && request.resource.data.lastOperation == 'cashout-close' && validDrawerClosureLedger(resource.data, request.resource.data)) ||
-           (isOwner() && resource.data.initialized == true && request.resource.data.lastOperation == 'refund' && validRefundLedger(resource.data, request.resource.data)));
+           (resource.data.initialized == true && request.resource.data.lastOperation == 'count-release' && validCountRelease(resource.data, request.resource.data)));
         allow delete: if false;
       }
       match /cashierStates/{uid} {
@@ -1454,212 +1283,60 @@ service cloud.firestore {
       }
       match /drawerClosures/{id} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.id == id && request.resource.data.cashoutId == id &&
-          request.resource.data.recordedByUid == request.auth.uid &&
-          getAfter(handoverPath()).data.lastOperation == 'cashout-close' &&
-          getAfter(handoverPath()).data.lastOperationId == id;
-        allow update, delete: if false;
+        allow write: if false;
       }
-      allow read: if sandboxId == 'test' && isStaff();
-      allow create, update, delete: if sandboxId == 'test' && isOwner();
-
       match /products/{productId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && (
-          isOwner() ||
-          (isStaff() && request.resource.data.get('createdFromGoodsReceiptId', '') is string &&
-            request.resource.data.get('createdFromGoodsReceiptId', '') != '' &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.createdFromGoodsReceiptId)).data.status == 'submitted' &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.goodsReceiptId == request.resource.data.createdFromGoodsReceiptId &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.lastMovementId)).data.productId == productId) ||
-          (isStaff() && request.resource.data.get('createdFromPosBarcode', false) == true &&
-            request.resource.data.currentQuantity == 0 && request.resource.data.active == true &&
-            request.resource.data.category == 'Uncategorized')
-        ) &&
-          request.resource.data.barcode is string &&
-          request.resource.data.name is string && request.resource.data.name.size() > 0 &&
-          request.resource.data.category is string && request.resource.data.category.size() > 0 &&
-          request.resource.data.currentQuantity is int &&
-          request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
-          request.resource.data.revision == 1 &&
-          request.resource.data.createdByUid == request.auth.uid;
-        allow update: if sandboxId == 'test' && (
-          (isOwner() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['searchTokens']) &&
-            request.resource.data.searchTokens is list && request.resource.data.searchTokens.size() <= 500) ||
-          (isStaff() &&
-            request.resource.data.revision == resource.data.revision + 1 &&
-            request.resource.data.createdAt == resource.data.createdAt &&
-            request.resource.data.createdByUid == resource.data.createdByUid &&
-            (
-              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                'barcode', 'name', 'searchName', 'searchTokens', 'category', 'brand', 'vendor',
-                'active', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'
-              ]) ||
-              (
-                request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                  'currentQuantity', 'sourceValues', 'sellingPricePaise', 'revision', 'lastMovementId', 'updatedAt', 'updatedByUid', 'updatedByName'
-                ]) &&
-                request.resource.data.currentQuantity is int &&
-                request.resource.data.sellingPricePaise is int && request.resource.data.sellingPricePaise >= 0 &&
-                request.resource.data.updatedByUid == request.auth.uid &&
-                validProductStockMovement(productId)
-              )
-            )));
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
-
-      // Authenticated server functions apply prices and record immutable evidence.
       match /stockPriceChanges/{changeId} {
         allow read: if sandboxId == 'test' && isOwner();
         allow write: if false;
       }
-
       match /productCosts/{productId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create, update: if sandboxId == 'test' && (isManagerOrOwner() || (
-          isStaff() && (
-            (request.resource.data.get('importRunId', '').matches('^grn:.+$') &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/goodsReceipts/$(request.resource.data.importRunId.split(':')[1])).data.status == 'submitted') ||
-            (request.resource.data.get('importRunId', '').matches('^audit:.+$') &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.importRunId.split(':')[1])).data.status == 'saving' &&
-              getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.importRunId.split(':')[1])).data.actorUid == request.auth.uid)
-          )
-        )) &&
-          request.resource.data.productId == productId &&
-          request.resource.data.updatedByUid == request.auth.uid &&
-          (request.resource.data.costPaise == null || (request.resource.data.costPaise is int && request.resource.data.costPaise >= 0));
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
-
       match /stockMovements/{movementId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.type != 'goods-receipt-mrp-correction' &&
-          request.resource.data.id == movementId &&
-          request.resource.data.actorUid == request.auth.uid &&
-          request.resource.data.quantityDelta is int &&
-          request.resource.data.beforeQuantity is int &&
-          request.resource.data.afterQuantity is int &&
-          request.resource.data.afterQuantity == request.resource.data.beforeQuantity + request.resource.data.quantityDelta &&
-          request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore + 1;
-        allow update: if false;
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
-
       match /goodsReceipts/{receiptId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.id == receiptId &&
-          request.resource.data.status == 'draft' && request.resource.data.createdByUid == request.auth.uid &&
-          request.resource.data.revision == 1 && request.resource.data.lines is list && request.resource.data.lines.size() > 0;
-        allow update: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.id == resource.data.id && request.resource.data.createdAt == resource.data.createdAt &&
-          request.resource.data.createdByUid == resource.data.createdByUid && request.resource.data.revision == resource.data.revision + 1 &&
-          request.resource.data.updatedByUid == request.auth.uid &&
-          ((resource.data.status == 'draft' && request.resource.data.lines is list && request.resource.data.lines.size() > 0 &&
-            (request.resource.data.status == 'draft' || validSubmittedGoodsReceipt(receiptId))) ||
-           (resource.data.status == 'submitted' && request.resource.data.status == 'submitted' &&
-             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedReceiptIds', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName']) &&
-             request.resource.data.linkedReceiptIds is list) ||
-           (isOwner() && resource.data.status == 'submitted' && resource.data.payableOwner == false &&
-             request.resource.data.status == 'reversed' && request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
-             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reversalReason', 'revision', 'updatedAt', 'updatedByUid', 'updatedByName'])) ||
-           (isOwner() && resource.data.status == 'submitted' && request.resource.data.status == 'reversed' &&
-            request.resource.data.payablePurchaseId == resource.data.payablePurchaseId &&
-            request.resource.data.reversalLedgerEntryId is string &&
-            getAfter(/databases/$(database)/documents/invoiceStatesV2/$(resource.data.payablePurchaseId)).data.openAmountPaise == 0 &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.sourceRecordId == resource.data.payablePurchaseId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.goodsReceiptId == receiptId &&
-            getAfter(/databases/$(database)/documents/vendorLedgerEntriesV2/$(request.resource.data.reversalLedgerEntryId)).data.reversalOfEntryId == getAfter(/databases/$(database)/documents/purchasesV2/$(resource.data.payablePurchaseId)).data.ledgerEntryId));
-        allow delete: if sandboxId == 'test' && isStaff() && resource.data.status == 'draft' &&
-          (resource.data.createdByUid == request.auth.uid || isOwner());
+        allow write: if false;
       }
-
       match /stockAudits/{auditId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.id == auditId &&
-          request.resource.data.actorUid == request.auth.uid && request.resource.data.productId is string &&
-          request.resource.data.systemQuantityBefore is int && request.resource.data.physicalQuantity is int &&
-          request.resource.data.physicalQuantity >= 0 &&
-          request.resource.data.difference == request.resource.data.physicalQuantity - request.resource.data.systemQuantityBefore &&
-          request.resource.data.systemQuantityAfter == request.resource.data.physicalQuantity &&
-          request.resource.data.batchId is string &&
-          request.resource.data.unitCostPaise is int && request.resource.data.unitCostPaise >= 0 &&
-          request.resource.data.valueImpactPaise == request.resource.data.difference * request.resource.data.unitCostPaise &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.batchId)).data.status == 'saving' &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockAuditBatches/$(request.resource.data.batchId)).data.actorUid == request.auth.uid &&
-          request.resource.data.productRevisionAfter >= request.resource.data.productRevisionBefore &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/products/$(request.resource.data.productId)).data.currentQuantity == request.resource.data.physicalQuantity &&
-          ((request.resource.data.difference == 0 &&
-            request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore &&
-            !request.resource.data.keys().hasAny(['movementId'])) ||
-           (request.resource.data.difference != 0 && request.resource.data.productRevisionAfter == request.resource.data.productRevisionBefore + 1 &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.stockAuditId == auditId &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/stockMovements/$(request.resource.data.movementId)).data.quantityDelta == request.resource.data.difference));
-        allow update, delete: if false;
+        allow write: if false;
       }
-
       match /stockAuditBatches/{batchId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.id == batchId && request.resource.data.status == 'saving' &&
-          request.resource.data.note is string && request.resource.data.note.size() > 0 &&
-          request.resource.data.actorUid == request.auth.uid &&
-          request.resource.data.itemCount is int && request.resource.data.itemCount > 0 &&
-          request.resource.data.adjustedItemCount is int && request.resource.data.adjustedItemCount >= 0 &&
-          request.resource.data.matchedItemCount is int && request.resource.data.matchedItemCount >= 0 &&
-          request.resource.data.itemCount == request.resource.data.adjustedItemCount + request.resource.data.matchedItemCount &&
-          request.resource.data.increaseValuePaise is int && request.resource.data.increaseValuePaise >= 0 &&
-          request.resource.data.decreaseValuePaise is int && request.resource.data.decreaseValuePaise >= 0 &&
-          request.resource.data.netValuePaise == request.resource.data.increaseValuePaise - request.resource.data.decreaseValuePaise;
-        allow update: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.id == resource.data.id && request.resource.data.note == resource.data.note &&
-          request.resource.data.createdAt == resource.data.createdAt && request.resource.data.actorUid == resource.data.actorUid &&
-          request.resource.data.actorName == resource.data.actorName && request.resource.data.actorRole == resource.data.actorRole &&
-          resource.data.actorUid == request.auth.uid && resource.data.status == 'saving' &&
-          ((request.resource.data.status == 'saving' &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['itemCount', 'adjustedItemCount', 'matchedItemCount', 'increaseValuePaise', 'decreaseValuePaise', 'netValuePaise']) &&
-            request.resource.data.itemCount > resource.data.itemCount &&
-            request.resource.data.adjustedItemCount >= resource.data.adjustedItemCount &&
-            request.resource.data.matchedItemCount >= resource.data.matchedItemCount &&
-            request.resource.data.itemCount == request.resource.data.adjustedItemCount + request.resource.data.matchedItemCount &&
-            request.resource.data.increaseValuePaise >= resource.data.increaseValuePaise &&
-            request.resource.data.decreaseValuePaise >= resource.data.decreaseValuePaise &&
-            request.resource.data.netValuePaise == request.resource.data.increaseValuePaise - request.resource.data.decreaseValuePaise) ||
-           (request.resource.data.status == 'completed' &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'interrupted', 'completedAt', 'completedByUid']) &&
-            request.resource.data.completedByUid == request.auth.uid && request.resource.data.completedAt is string));
-        allow delete: if false;
+        allow write: if false;
       }
+      // Internal intent/result/identity controls are not independent ledgers.
+      match /stockOperations/{operationId} { allow read, write: if false; }
+      match /stockAuditManifests/{batchId} { allow read, write: if false; }
+      match /barcodeReservations/{barcodeId} { allow read, write: if false; }
 
       match /bills/{billId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.id == billId &&
-          request.resource.data.testOnly == true &&
-          request.resource.data.status == 'finalized' &&
-          request.resource.data.createdByUid == request.auth.uid &&
-          request.resource.data.subtotalPaise is int && request.resource.data.subtotalPaise >= 0 &&
-          request.resource.data.totalPaise is int && request.resource.data.totalPaise >= 0 &&
-          request.resource.data.lines is list && request.resource.data.lines.size() > 0 && request.resource.data.lines.size() <= 200 &&
-          request.resource.data.payments is list &&
-          (!handoverEnabled() || validHandoverBill(request.resource.data, billId)) &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/sequences/$(request.resource.data.financialYear)).data.lastNumber == request.resource.data.sequenceNumber &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.billId == billId &&
-          getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/billStates/$(billId)).data.revision == 1;
+        // Checkout is posted atomically by finalizePosCheckout (Admin SDK).
+        // Old clients must reload; never restore browser posting as fallback.
+        allow create: if false;
         allow update: if false;
-        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
+        allow delete: if false;
       }
 
       match /billStates/{billId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.billId == billId && request.resource.data.state == 'active' && request.resource.data.revision == 1 && request.resource.data.updatedByUid == request.auth.uid;
-        allow update: if sandboxId == 'test' && isOwner() && request.resource.data.billId == resource.data.billId && request.resource.data.revision == resource.data.revision + 1 &&
-          (!handoverEnabled() || (get(handoverPath()).data.initialized == true &&
-            getAfter(handoverPath()).data.revision == get(handoverPath()).data.revision + 1 &&
-            getAfter(handoverPath()).data.lastOperation == 'refund' && getAfter(handoverPath()).data.updatedByUid == request.auth.uid &&
-            getAfter(/databases/$(database)/documents/posSandboxes/$(sandboxId)/approvals/$(getAfter(handoverPath()).data.lastOperationId)).data.billId == billId));
-        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
+        allow write: if false;
+      }
+      match /refundOperations/{operationId} { allow read, write: if false; }
+      match /refundStates/{billId} { allow read, write: if false; }
+      match /refundCashoutQuotes/{quoteId} { allow read, write: if false; }
+      match /refundDays/{date} {
+        allow read: if sandboxId == 'test' && isStaff();
+        allow write: if false;
       }
 
       match /heldCarts/{cartId} {
@@ -1671,33 +1348,20 @@ service cloud.firestore {
 
       match /approvals/{approvalId} {
         allow read: if sandboxId == 'test' && (isOwner() || (isStaff() && resource.data.requestedByUid == request.auth.uid));
-        allow create: if sandboxId == 'test' && isStaff() &&
-          request.resource.data.requestedByUid == request.auth.uid &&
-          request.resource.data.status == 'pending' &&
-          request.resource.data.type in ['void', 'return'] &&
-          request.resource.data.reason is string && request.resource.data.reason.size() > 0;
-        allow update: if sandboxId == 'test' && isOwner() && resource.data.status == 'pending' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handoverDate', 'reviewedAt', 'reviewedByUid', 'reviewedByName', 'reviewReason']) &&
-          request.resource.data.status in ['approved', 'rejected', 'stale'] &&
-          request.resource.data.reviewedByUid == request.auth.uid &&
-          (request.resource.data.status != 'approved' || !handoverEnabled() ||
-            (getAfter(handoverPath()).data.lastOperation == 'refund' && getAfter(handoverPath()).data.lastOperationId == approvalId &&
-             getAfter(handoverPath()).data.revision == get(handoverPath()).data.revision + 1));
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
 
       match /events/{eventId} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.actorUid == request.auth.uid && request.resource.data.type is string && request.resource.data.type != 'goods-receipt-mrp-corrected';
+        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.actorUid == request.auth.uid && request.resource.data.type is string && request.resource.data.type != 'goods-receipt-mrp-corrected' && !(request.resource.data.type in ['bill-finalized', 'bill-return-approved', 'bill-voided', 'stock-audited', 'stock-adjusted', 'goods-receipt-submitted', 'goods-receipt-reversed', 'goods-receipt-mrp-corrected', 'stock-price-correction', 'product-created-from-barcode', 'product-details-updated', 'product-cost-updated', 'temporary-item-mapped']);
         allow update: if false;
-        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled();
+        allow delete: if sandboxId == 'test' && isOwner() && !handoverEnabled() && !(resource.data.type in ['bill-finalized', 'bill-return-approved', 'bill-voided', 'stock-audited', 'stock-adjusted', 'goods-receipt-submitted', 'goods-receipt-reversed', 'goods-receipt-mrp-corrected', 'stock-price-correction', 'product-created-from-barcode', 'product-details-updated', 'product-cost-updated', 'temporary-item-mapped']);
       }
 
       match /sequences/{financialYear} {
         allow read: if sandboxId == 'test' && isStaff();
-        allow create: if sandboxId == 'test' && isStaff() && request.resource.data.financialYear == financialYear && request.resource.data.lastNumber == 1 && request.resource.data.updatedByUid == request.auth.uid;
-        allow update: if sandboxId == 'test' && isStaff() && request.resource.data.financialYear == resource.data.financialYear && request.resource.data.lastNumber == resource.data.lastNumber + 1 && request.resource.data.updatedByUid == request.auth.uid;
-        allow delete: if sandboxId == 'test' && isOwner();
+        allow create, update: if false;
+        allow delete: if false;
       }
 
       match /configuration/{configId} {
@@ -1706,16 +1370,22 @@ service cloud.firestore {
       }
 
       match /importRuns/{runId} {
-        allow read, create, update, delete: if sandboxId == 'test' && isOwner();
+        allow read: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
 
       match /resetRuns/{runId} {
-        allow read, create, update, delete: if sandboxId == 'test' && isOwner();
+        allow read: if sandboxId == 'test' && isOwner();
+        allow write: if false;
       }
 
       match /{unknownCollection}/{documentId} {
         allow read, write: if false;
       }
     }
+    match /financeOperations/{operationId} { allow read, write: if false; }
+    match /bankBalanceControl/{documentId} { allow read: if isOwner() && documentId == 'main'; allow write: if false; }
+    match /financeCashoutQuotes/{quoteId} { allow read: if isOwner() || (isStaff() && resource.data.actorUid == request.auth.uid); allow write: if false; }
+
   }
 }

@@ -1,6 +1,6 @@
 import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
 import type { Page, UserAccount, UpgradeAnnouncement } from '@/domain/appTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
@@ -42,8 +42,6 @@ import type { OperationalExpenseBreakdown } from '@/store/storeShared'
 import { ToastHost } from '@/shared/ui/toast-host'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 import { serverNowIso } from '@/shared/lib/serverClock'
-import { serverNowMs } from '@/shared/lib/serverClock'
-import { isCashoutWindowOpen } from '@/features/cashout/domain/cashoutWindow'
 import { AppBlockingNotice } from '@/app/AppBlockingNotice'
 import { UpgradeAnnouncementNotice } from '@/app/UpgradeAnnouncementNotice'
 import {
@@ -188,11 +186,6 @@ export function AppWorkspace({
   totalVendorOutstanding,
   users,
 }: AppWorkspaceProps) {
-  const [, setClockPulse] = useState(0)
-  useEffect(() => { const timer = window.setInterval(() => setClockPulse((v) => v + 1), 15_000); return () => window.clearInterval(timer) }, [])
-  let trustedNow: number | null = null
-  try { trustedNow = serverNowMs() } catch { /* Closed until trusted time is synchronized. */ }
-  const cashoutAllowed = currentUser.role === 'owner' || (trustedNow !== null && isCashoutWindowOpen(trustedNow))
   const confirmation = useConfirmationDialog()
   const billingDraft = useMemo(() => createPosDraft(currentUser.id), [currentUser.id])
   const vendorLedger = useVendorLedgerV2(currentUser, activePage)
@@ -206,7 +199,7 @@ export function AppWorkspace({
     settlementStatesLoaded: activePage === 'vendor-preview',
   })
   const pendingEntries = useMemo(() => actionCentreEntries(approvalQueue, actionSources.posRequests, actionSources.handovers, users, actionSources.stockChanges).filter((entry) => entry.pending), [approvalQueue, actionSources.posRequests, actionSources.handovers, actionSources.stockChanges, users])
-  const pendingCount = !cashoutCorrectionsReady || cashoutCorrectionsError || vendorLedger.pendingLoading || vendorLedger.pendingError || actionSources.loading || actionSources.posError || actionSources.handoverError || actionSources.stockError ? null : pendingEntries.length
+  const pendingCount = !cashoutCorrectionsReady || cashoutCorrectionsError || vendorLedger.pendingLoading || vendorLedger.pendingError || actionSources.loading || actionSources.posError || actionSources.handoverError || actionSources.stockError || actionSources.financeError || actionSources.financeMore ? null : pendingEntries.length + actionSources.financialOutflows.length + actionSources.financialCashouts.length
 
   async function handleDeleteLoan(loan: LoanEntry) {
     if (!await confirmation.confirm({
@@ -234,7 +227,6 @@ export function AppWorkspace({
         currentUser={currentUser}
         activePage={activePage}
         pendingApprovalCount={pendingCount}
-        cashoutAllowed={cashoutAllowed}
         onPageChange={onPageChange}
         onLogout={onLogout}
       />
@@ -270,6 +262,7 @@ export function AppWorkspace({
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
           <DashboardPage
+            currentUser={currentUser}
             marginPercentage={marginPercentage}
             monthOffset={dashboardMonthOffset}
             performance={monthlyPerformance}
@@ -331,6 +324,10 @@ export function AppWorkspace({
 
         {activePage === 'vendor-preview' ? (
           <VendorLedgerWorkspacePage
+            onOpenRegister={(vendorId = '', invoiceId = '') => {
+              sessionStorage.setItem('alphahub:register-target:' + currentUser.id, JSON.stringify({ vendorId, invoiceId }))
+              onPageChange('expense')
+            }}
             currentUser={currentUser}
             ledger={vendorLedger}
             legacyChequeItems={legacyChequeItems}
@@ -375,7 +372,7 @@ export function AppWorkspace({
             showToast={showToast}
           />
         ) : null}
-        {activePage === 'cashout' && cashoutAllowed ? (
+        {activePage === 'cashout' ? (
           <CashoutPage
             correctionRequests={cashoutCorrectionRequests}
             currentUser={currentUser}
@@ -387,7 +384,6 @@ export function AppWorkspace({
             showToast={showToast}
           />
         ) : null}
-        {activePage === 'cashout' && !cashoutAllowed ? <div className="grid min-h-0 flex-1 place-items-center"><StatusPanel variant="warning" className="max-w-xl p-6 text-center"><strong className="block text-lg">Cashout is currently locked</strong><span className="mt-2 block text-sm">Staff and managers can access Cashout from 11:55 PM to 12:20 AM IST. Please wait for the window to open.</span></StatusPanel></div> : null}
         {activePage === 'movement' ? (
           <section className="min-h-0 flex-1 overflow-y-auto pr-1">
             <CashMovementForm

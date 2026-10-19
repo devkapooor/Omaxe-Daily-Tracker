@@ -41,7 +41,7 @@ export type OperationalExpenseBreakdown = {
 export type NameDirectoryType = keyof NameDirectory
 
 export type AppSettings = {
-  currentBankBalance: number
+  currentBankBalance: number | null
   marginPercentage: number
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
@@ -110,7 +110,7 @@ export const emptyNameDirectory: NameDirectory = {
 }
 
 export const defaultAppSettings: AppSettings = {
-  currentBankBalance: 0,
+  currentBankBalance: null,
   marginPercentage: defaultMarginPercentage,
   monthlyOperationalExpense: defaultMonthlyOperationalExpense,
   operationalExpenseBreakdown: {

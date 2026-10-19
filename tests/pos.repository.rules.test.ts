@@ -1,11 +1,25 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { collection, doc, getDoc, getDocs, query, where, setDoc, type Firestore } from 'firebase/firestore'
 import type { AppUser } from '../src/domain/financeTypes'
 
-const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTime: 123 }))
-vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, functions: {}, auth: { currentUser: { getIdTokenResult: async () => ({ claims: { auth_time: state.authTime } }) } } }))
+const state = vi.hoisted(() => ({ db: undefined as Firestore | undefined, authTime: 123, userId: 'pos-billing', checkout: undefined as undefined | ((data: unknown) => Promise<unknown>), stock: {} as Record<string, (data: unknown) => Promise<unknown>> }))
+vi.mock('@/shared/lib/firebase', () => ({ get db() { return state.db }, firebaseConfig: { projectId: 'demo-pos-repository' }, functions: {}, auth: { app: { options: { projectId: 'demo-pos-repository' } }, currentUser: { get uid() { return state.userId }, getIdTokenResult: async () => ({ claims: { auth_time: state.authTime } }) } } }))
+// Supporting repository/Rules integration only: synthetic request identity.
+// The real handler uses canonical emulator records; real Auth/callable transport
+// acceptance is independently exercised by tests/drill/checkout.spec.cjs.
+vi.mock('firebase/functions', () => ({ httpsCallable: (_functions: unknown, name: string) => async (data: unknown) => {
+  const handler = name === 'finalizePosCheckout' ? state.checkout : state.stock[name]
+  if (!handler) throw new Error('Unexpected callable in repository integration test.')
+  try { return { data: await handler(data) } } catch (error) { const e = error as { code?: string }; if (e.code) e.code = `functions/${e.code}`; throw error }
+} }))
+const serverRequire = createRequire(new URL('../functions/package.json', import.meta.url))
+const { initializeApp: initializeAdminApp, deleteApp: deleteAdminApp } = serverRequire('firebase-admin/app')
+const { getFirestore: getAdminFirestore } = serverRequire('firebase-admin/firestore')
+const { createCheckoutHandler } = serverRequire('./posCheckout.js')
+let checkoutAdminApp: ReturnType<typeof initializeAdminApp>
 
 import {
   approvePosRequest, createPosProductFromBarcode, deleteHeldCart, finalizePosBill, importPosProducts,
@@ -29,9 +43,17 @@ const line = { id: 'qa-line', kind: 'product' as const, productId: 'qa-product',
 beforeAll(async () => {
   vi.stubGlobal('navigator', { onLine: true })
   environment = await initializeTestEnvironment({ projectId: 'demo-pos-repository', firestore: { rules: readFileSync('firestore.rules', 'utf8') } })
+  if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local Firestore emulator is permitted.')
+  checkoutAdminApp = initializeAdminApp({ projectId: 'demo-pos-repository' }, 'repository-checkout-tests')
+  const handler = createCheckoutHandler(getAdminFirestore(checkoutAdminApp))
+  state.checkout = data => handler({ auth: { uid: state.userId, token: { auth_time: state.authTime } }, data })
 }, 30_000)
 
 beforeEach(async () => {
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
+  vi.stubGlobal('sessionStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) })
+  vi.stubGlobal('window', { dispatchEvent: () => true })
   const monotonicNow = performance.now()
   setServerClockSample(Date.now(), monotonicNow, monotonicNow)
   state.authTime = 123
@@ -39,21 +61,38 @@ beforeEach(async () => {
   await environment.withSecurityRulesDisabled(async (context) => {
     for (const actor of [owner, billing]) await setDoc(doc(context.firestore(), 'users', actor.id), { name: actor.name, role: actor.role, disabled: false, createdAt: timestamp })
   })
-  state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-  await setDoc(doc(state.db, ...productPath), {
+  state.userId = owner.id
+    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+  await environment.withSecurityRulesDisabled(async context => {
+  await setDoc(doc(context.firestore(), ...productPath), {
     barcode: '001', name: 'QA Product', searchName: 'qa product', category: 'QA', brand: 'QA', vendor: 'QA', sellingPricePaise: 1000,
     currentQuantity: 10, revision: 1, active: true, createdAt: timestamp, createdByUid: owner.id, createdByName: owner.name,
     updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
   })
-  await setDoc(doc(state.db, 'posSandboxes', 'test', 'productCosts', 'qa-product'), {
+  await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'productCosts', 'qa-product'), {
     productId: 'qa-product', costPaise: 500, sourceValue: '5.00', importRunId: 'qa-seed', updatedAt: timestamp, updatedByUid: owner.id, updatedByName: owner.name,
   })
+    await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01' })
+    await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), { id: 'qa-vendor', canonicalName: 'QA Vendor', active: true })
+  })
   await initializeHandover(owner)
-  state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
+  state.userId = billing.id
+    state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
   await count('login', {}, 0, 0, 0)
+  const ops = serverRequire('./financeOperations.js').createFinanceOperations(getAdminFirestore(checkoutAdminApp))
+  const register = serverRequire('./registerPayments.js').createRegisterHandlers(ops)
+  const cashout = serverRequire('./financeCashout.js').createCashoutHandlers(ops)
+  const handlers: Record<string, (request: unknown) => Promise<unknown>> = { 'vendor-payment': register.settlement, 'cashout-count-start': cashout.prepare, 'cashout-close': cashout.close }
+  state.stock.postFinanceOperation = (data: unknown) => { const d = data as { kind: string; intent: unknown }; if (!handlers[d.kind]) throw new Error('Unexpected finance kind'); return handlers[d.kind]({ auth: { uid: state.userId, token: { auth_time: state.authTime } }, data: d.intent }) }
+  const receiving = serverRequire('./stockReceiving.js').createStockReceivingHandlers(getAdminFirestore(checkoutAdminApp))
+  const audit = serverRequire('./stockAudit.js').createStockAuditHandlers(getAdminFirestore(checkoutAdminApp))
+  const refunds = serverRequire('./posRefunds.js').createPosRefundHandlers(getAdminFirestore(checkoutAdminApp))
+  for (const [name, handler] of Object.entries({ quotePosReturn: refunds.quote, postPosReturn: refunds.post, reviewPosReturn: refunds.review, closeLegacyPosRequest: refunds.closeLegacy, prepareRefundCashout: refunds.prepareCashout })) state.stock[name] = (data: unknown) => (handler as (request: unknown) => Promise<unknown>)({ auth: { uid: state.userId, token: { auth_time: state.authTime } }, data })
+  for (const [name, handler] of Object.entries({ createStockProduct: receiving.createProduct, saveStockReceiptDraft: receiving.saveDraft, deleteStockReceiptDraft: receiving.deleteDraft, submitStockReceipt: receiving.submit, previewStockReceiptReversal: receiving.previewReverse, reverseStockReceipt: receiving.reverse, beginStockAudit: audit.begin, postStockAuditGroup: audit.group, finishStockAudit: audit.finish })) state.stock[name] = (data: unknown) => (handler as (request: unknown) => Promise<unknown>)({ auth: { uid: state.userId }, data })
+
 })
 
-afterAll(async () => { vi.unstubAllGlobals(); await environment.cleanup() })
+afterAll(async () => { vi.unstubAllGlobals(); await environment.cleanup(); await deleteAdminApp(checkoutAdminApp) })
 
 async function count(kind: 'login' | 'logout', denominations: Record<string, number>, coins: number, upi: number, card: number, note = '') {
   const reservation = await reserveCount(billing, kind)
@@ -61,7 +100,7 @@ async function count(kind: 'login' | 'logout', denominations: Record<string, num
 }
 
 async function finalize() {
-  return finalizePosBill({ businessDate: '2026-10-03', lines: [line], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 1000 }, { method: 'upi', amountPaise: 1000 }], cashTenderedPaise: 1500 }, billing)
+  return finalizePosBill({ businessDate: handoverDate(), lines: [line], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 1000 }, { method: 'upi', amountPaise: 1000 }], cashTenderedPaise: 1500 }, billing)
 }
 
 describe('POS repository workflows against deployed rules', () => {
@@ -79,7 +118,7 @@ describe('POS repository workflows against deployed rules', () => {
 
   it('rejects unresolved temporary lines before creating any bill', async () => {
     await expect(finalizePosBill({
-      businessDate: '2026-10-03',
+      businessDate: handoverDate(),
       lines: [{ id: 'unresolved-line', kind: 'temporary', barcode: '999999', description: 'Unknown', quantity: 1, unitPricePaise: 100 }],
       discount: { mode: 'none', amountPaise: 0 },
       payments: [{ method: 'cash', amountPaise: 100 }],
@@ -102,7 +141,7 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-1', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, sellingPricePaise: 1300, mrpPaise: 1500, mrpChanged: true })),
+      lines: Array.from({ length: 6 }, (_, index) => ({ productId: index ? `qa-product-${index}` : 'qa-product', barcode: index ? `00${index + 1}` : '001', productName: index ? `QA Product ${index}` : 'QA Product', category: 'QA', expectedRevision: 1, quantity: 3, unitCostPaise: 750, lineTotalPaise: 2250, sellingPricePaise: 1300, mrpPaise: 1500, mrpChanged: true })),
       invoiceTotalPaise: 13500,
     }, billing)
     const result = await submitPosGoodsReceipt(receiptId, billing)
@@ -112,6 +151,7 @@ describe('POS repository workflows against deployed rules', () => {
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.sellingPricePaise).toBe(1300)
     expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(13500)
     expect((await getDoc(doc(state.db!, 'purchasesV2', `grn-${receiptId}`))).data()?.grnId).toBe(receiptId)
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     // Preserve and exercise a historical correction without re-enabling its retired write path.
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -142,17 +182,18 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptInput = {
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PARTIAL', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', expectedRevision: 1, quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
       invoiceTotalPaise: 2500,
     }
     const firstId = await savePosGoodsReceiptDraft(receiptInput, billing)
     const firstResult = await submitPosGoodsReceipt(firstId, billing)
-    const secondId = await savePosGoodsReceiptDraft(receiptInput, billing)
+    const secondId = await savePosGoodsReceiptDraft({ ...receiptInput, lines: receiptInput.lines.map(line => ({ ...line, expectedRevision: 2 })) }, billing)
     const secondResult = await submitPosGoodsReceipt(secondId, billing)
     expect(firstResult.payableCreated).toBe(true)
     expect(secondResult).toMatchObject({ payableCreated: false, purchaseId: `grn-${firstId}`, totalPaise: 2500 })
     expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(12)
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     await reversePosGoodsReceipt(secondId, 'Reverse later partial', owner)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
@@ -165,20 +206,20 @@ describe('POS repository workflows against deployed rules', () => {
   it('rejects GRN submission when a required product value is missing', async () => {
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-INCOMPLETE', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000, sellingPricePaise: 1200 }],
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', expectedRevision: 1, quantity: 1, unitCostPaise: 1000, lineTotalPaise: 1000, sellingPricePaise: 1200 }],
       invoiceTotalPaise: 1000,
     }, billing)
-    await expect(submitPosGoodsReceipt(receiptId, billing)).rejects.toThrow(/requires a positive whole quantity, unit cost, MRP, and selling price/)
+    await expect(submitPosGoodsReceipt(receiptId, billing)).rejects.toThrow(/MRP/)
   })
 
   it('records physical inventory counts and adjusts stock without creating a payable', async () => {
-    const changed = await reconcilePosStockCount('qa-product', 7, billing)
+    const changed = await reconcilePosStockCount('qa-product', 7, billing, 1)
     expect(changed).toMatchObject({ difference: -3, systemQuantityBefore: 10, physicalQuantity: 7 })
     const product = (await getDoc(doc(state.db!, ...productPath))).data()!
     expect(product.currentQuantity).toBe(7)
     const audit = (await getDoc(doc(state.db!, 'posSandboxes', 'test', 'stockAudits', changed.auditId))).data()!
     expect(audit).toMatchObject({ systemQuantityBefore: 10, physicalQuantity: 7, difference: -3, actorUid: billing.id })
-    const matched = await reconcilePosStockCount('qa-product', 7, billing)
+    const matched = await reconcilePosStockCount('qa-product', 7, billing, 2)
     expect(matched.difference).toBe(0)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.revision).toBe(product.revision)
   })
@@ -237,11 +278,12 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-NEW', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700, mrpPaise: 1000, mrpChanged: true }],
+      lines: [{ productId: 'qa-new-product', barcode: '002', productName: 'New QA Product', category: 'QA', expectedRevision: 1, quantity: 2, unitCostPaise: 500, lineTotalPaise: 1000, newProduct: true, sellingPricePaise: 700, mrpPaise: 1000, mrpChanged: true }],
       invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
     expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'products', 'qa-new-product'))).data()).toMatchObject({ currentQuantity: 2, category: 'QA', sellingPricePaise: 700 })
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'productCosts', 'qa-new-product'))).data()?.costPaise).toBe(500)
   })
@@ -256,15 +298,18 @@ describe('POS repository workflows against deployed rules', () => {
     })
     const receiptId = await savePosGoodsReceiptDraft({
       vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PAID', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
-      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
+      lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', expectedRevision: 1, quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
       invoiceTotalPaise: 1000,
     }, billing)
     await submitPosGoodsReceipt(receiptId, billing)
     const purchaseId = `grn-${receiptId}`
+    const savedLedger = await getAdminFirestore(checkoutAdminApp).doc('posSandboxes/test/handover/main').get()
+    await savedLedger.ref.update({ checkpoint: { ...savedLedger.data().checkpoint, cashActualPaise: 1000 } })
     await createSettlementV2({
-      id: 'qa-settlement', vendorId: 'qa-vendor', date: '2026-10-03', amountPaise: 1000, mode: 'cash', invoiceId: purchaseId,
+      id: 'qa-settlement', vendorId: 'qa-vendor', date: handoverDate(), amountPaise: 1000, mode: 'cash', invoiceId: purchaseId,
       actorUserId: billing.id, timestamp,
     })
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     await reversePosGoodsReceipt(receiptId, 'QA paid GRN reversal', owner)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()).toMatchObject({ outstandingPaise: 0, vendorCreditPaise: 1000 })
@@ -275,6 +320,7 @@ describe('POS repository workflows against deployed rules', () => {
     await finalize()
     const before = (await getDocs(query(collection(state.db!, 'posSandboxes', 'test', 'reconciliations'), where('uid', '==', billing.id)))).size
     state.authTime = 456
+    state.userId = billing.id
     state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
     await expect(finalize()).rejects.toThrow(/Join the open shared counter/)
     await joinCounter(billing)
@@ -323,14 +369,18 @@ describe('POS repository workflows against deployed rules', () => {
     await finalize()
     let ledger = (await getDoc(handoverRef())).data()!
     await count('logout', { '10': 1 }, 0, 1000, 0)
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
+    await joinCounter(owner)
+    const quote = await state.stock.postFinanceOperation({ kind: 'cashout-count-start', intent: { operationId: crypto.randomUUID(), date: handoverDate() } })
+    localStorage.setItem('alphahub:cashout-count:' + owner.id, JSON.stringify(quote))
     const actions = createFinanceActions({
       getState: () => ({ financeData: { sales: [] }, dailyCashouts: [] }) as never,
       setIsBusy: (() => undefined) as never,
       ensureNameInDirectory: async () => false,
     })
     await actions.saveDailyCashoutEntry({
-      date: handoverDate(), recordedBy: owner.name, recordedByUserId: owner.id,
+      financeQuoteId: (quote as { id: string }).id, date: handoverDate(), recordedBy: owner.name, recordedByUserId: owner.id,
       cashSales: 10, upiSales: 10, cardSales: 0, creditSales: 0, returns: 0, cashExpense: 0,
       cashAudit: 10, drawerTotal: 10, remainingBalance: 10,
       drawerDenominations: { denom500: 0, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 1, change: 0 },
@@ -348,6 +398,7 @@ describe('POS repository workflows against deployed rules', () => {
   })
 
   it('preserves dashboard-only accounts without a cashier participant record', async () => {
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     expect((await getDoc(cashierRef(owner.id))).exists()).toBe(false)
   })
@@ -365,43 +416,47 @@ describe('POS repository workflows against deployed rules', () => {
   it('rejects stale cart stock and mismatched settlements without selling stock', async () => {
     await finalize()
     await expect(finalize()).rejects.toThrow(/Stock changed/)
-    await expect(finalizePosBill({ businessDate: '2026-10-03', lines: [line], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 1999 }] }, billing)).rejects.toThrow(/exactly equal/)
+    await expect(finalizePosBill({ businessDate: handoverDate(), lines: [line], discount: { mode: 'none', amountPaise: 0 }, payments: [{ method: 'cash', amountPaise: 1999 }] }, billing)).rejects.toThrow(/exactly equal/)
     expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(8)
   })
 
-  it('requires owner approval to void a bill and restores sold stock', async () => {
+  it('B3 retires void creation/approval without changing bill, stock or cash', async () => {
     const bill = await finalize()
-    const requestId = await requestBillAction({ type: 'void', billId: bill.id, reason: 'QA void verification' }, billing)
-    await expect(approvePosRequest(requestId, billing)).rejects.toThrow()
+    await expect(requestBillAction({ type: 'void', billId: bill.id, reason: 'QA void verification' }, billing)).rejects.toThrow(/retired/)
+    await expect(approvePosRequest(bill.id, billing)).rejects.toThrow(/retired/)
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-    expect(await approvePosRequest(requestId, owner)).toBe('approved')
-    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
-    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'billStates', bill.id))).data()?.state).toBe('voided')
-    await expect(approvePosRequest(requestId, owner)).rejects.toThrow(/no longer pending/)
+    await expect(approvePosRequest(bill.id, owner)).rejects.toThrow(/retired/)
+    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(8)
+    expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'billStates', bill.id))).data()?.state).toBe('active')
+    expect((await getDoc(handoverRef())).data()?.cashNetPaise).toBe(1000)
   })
 
   it.each(['sellable', 'damaged'] as const)('processes a %s return with the correct stock outcome', async (returnCondition) => {
     const bill = await finalize()
-    const requestId = await requestBillAction({ type: 'return', billId: bill.id, reason: 'QA return verification', returnCondition, returnLines: [{ lineId: line.id, quantity: 1 }], refundDate: '2026-10-03', refundAmountPaise: 1000, refundMethod: 'cash' }, billing)
-    state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-    await approvePosRequest(requestId, owner)
+    const requestId = await requestBillAction({ type: 'return', billId: bill.id, reason: 'QA return verification', returnCondition, returnLines: [{ lineId: line.id, quantity: 1 }], refundDate: handoverDate(), refundAmountPaise: 1000, refundMethod: 'cash' }, billing)
+    expect((await getDoc(doc(state.db!, 'posSandboxes', 'test', 'approvals', requestId))).data()?.status).toBe('posted')
+    expect((await getDoc(handoverRef())).data()?.cashNetPaise).toBe(0)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(returnCondition === 'sellable' ? 9 : 8)
     expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'billStates', bill.id))).data()?.returnedQuantities).toEqual({ 'qa-line': 1 })
   })
 
   it('enforces owner configured billing discount limits', async () => {
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     await updateDiscountLimit(5, owner)
+    state.userId = billing.id
     state.db = environment.authenticatedContext(billing.id, { auth_time: state.authTime }).firestore()
-    await expect(finalizePosBill({ businessDate: '2026-10-03', lines: [line], discount: { mode: 'percentage', percentage: 10, amountPaise: 200 }, payments: [{ method: 'cash', amountPaise: 1800 }] }, billing)).rejects.toThrow(/exceeds/)
+    await expect(finalizePosBill({ businessDate: handoverDate(), lines: [line], discount: { mode: 'percentage', percentage: 10, amountPaise: 200 }, payments: [{ method: 'cash', amountPaise: 1800 }] }, billing)).rejects.toThrow(/exceeds/)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
   })
 
   it('preserves current stock when an already completed CSV is selected again', async () => {
+    state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-    await setDoc(doc(state.db, 'posSandboxes', 'test', 'importRuns', 'qa-checksum'), { status: 'completed', completedRows: 6069 })
+    await environment.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'importRuns', 'qa-checksum'), { status: 'completed', completedRows: 6069 }))
     const parsed = parseApprovedPosCsv(readFileSync('data/pos/omaxe-opening-stock-2026-10-02.approved.csv', 'utf8'))
-    await expect(importPosProducts({ rows: parsed.products, validation: parsed.validation, file: new File([''], 'approved.csv'), checksum: 'qa-checksum', sourceHeaders: parsed.sourceHeaders, actor: owner })).rejects.toThrow(/already been imported/)
+    await expect(importPosProducts({ rows: parsed.products, validation: parsed.validation, file: new File([''], 'approved.csv'), checksum: 'qa-checksum', sourceHeaders: parsed.sourceHeaders, actor: owner })).rejects.toThrow(/import is retired/)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
   })
 })

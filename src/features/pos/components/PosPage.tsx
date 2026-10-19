@@ -1,6 +1,11 @@
+import { RefundOperationBoundary } from './RefundOperationBoundary'
+import { PosReturnDialog } from './PosReturnDialog'
+import { PosBillView } from './PosBillView'
+import { StockOperationBoundary } from '@/features/stock/components/StockOperationBoundary'
+import { pendingStockOperation } from '@/features/stock/data/stockPostingRepository'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, ShoppingCart, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Barcode, ChartPie, FileClock, Pause, Plus, Printer, Eye, ShoppingCart, Trash2 } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
 import { formatDisplayDateTime, today } from '@/app/uiHelpers'
 import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/components/ResponsiveLogTable'
@@ -27,7 +32,6 @@ import {
   PosProductChangedSinceScanError,
   type PosBillPageCursor,
   searchPosProductsByName,
-  requestBillAction,
   saveHeldCart,
 } from '../data/posRepository'
 import { printPosReceipt } from './receipt'
@@ -38,11 +42,10 @@ import { serverNowDate } from '@/shared/lib/serverClock'
 import { expectedHandover, handoverDate } from '../domain/cashierHandover'
 import { useCashierHandover } from '../hooks/useCashierHandover'
 import { usePosDraftState, type PosDraft } from '../hooks/usePosDraftState'
+import { CheckoutRejectedError } from '../domain/checkoutErrors'
+import { clearPendingCheckout, loadPendingCheckout, savePendingCheckout } from '../data/checkoutRecovery'
 
 type Tab = 'checkout' | 'dashboard' | 'bills'
-const paymentMethods: Array<{ value: PosPaymentMethod; label: string }> = [
-  { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' },
-]
 const money = (paise: number) => `₹${paiseToRupees(paise).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 function productMrp(product: PosProduct) {
   const raw = Object.entries(product.sourceValues ?? {}).find(([key]) => key.trim().toLowerCase() === 'printed mrp')?.[1]
@@ -55,15 +58,17 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
   const handover = useCashierHandover()
   const [tab, setTab] = useState<Tab>('checkout')
   const sandbox = usePosSandbox(tab === 'checkout')
-  const [cart, setCart] = usePosDraftState<PosCartLine[]>(draft, currentUser.id, 'cart', [])
-  const [customerName, setCustomerName] = usePosDraftState(draft, currentUser.id, 'customerName', '')
-  const [customerMobile, setCustomerMobile] = usePosDraftState(draft, currentUser.id, 'customerMobile', '')
-  const [discountMode, setDiscountMode] = usePosDraftState<PosDiscount['mode']>(draft, currentUser.id, 'discountMode', 'none')
-  const [discountValue, setDiscountValue] = usePosDraftState(draft, currentUser.id, 'discountValue', '0')
-  const [discountReason, setDiscountReason] = usePosDraftState(draft, currentUser.id, 'discountReason', '')
-  const [paymentMode, setPaymentMode] = usePosDraftState<CheckoutPaymentMode>(draft, currentUser.id, 'paymentMode', 'cash')
-  const [splitPayments, setSplitPayments] = usePosDraftState<SplitPaymentAmounts>(draft, currentUser.id, 'splitPayments', emptySplitPayments)
-  const [cashReceived, setCashReceived] = usePosDraftState<string | null>(draft, currentUser.id, 'cashReceived', null)
+  const [recovery, setRecovery] = useState(() => loadPendingCheckout(currentUser.id))
+  const pendingCheckout = recovery.pending
+  const [cart, setCart] = usePosDraftState<PosCartLine[]>(draft, currentUser.id, 'cart', () => pendingCheckout?.input.lines ?? [])
+  const [customerName, setCustomerName] = usePosDraftState(draft, currentUser.id, 'customerName', pendingCheckout?.input.customerName ?? '')
+  const [customerMobile, setCustomerMobile] = usePosDraftState(draft, currentUser.id, 'customerMobile', pendingCheckout?.input.customerMobile ?? '')
+  const [discountMode, setDiscountMode] = usePosDraftState<PosDiscount['mode']>(draft, currentUser.id, 'discountMode', pendingCheckout?.input.discount.mode ?? 'none')
+  const [discountValue, setDiscountValue] = usePosDraftState(draft, currentUser.id, 'discountValue', pendingCheckout ? String(pendingCheckout.input.discount.mode === 'percentage' ? pendingCheckout.input.discount.percentage : pendingCheckout.input.discount.amountPaise / 100) : '0')
+  const [discountReason, setDiscountReason] = usePosDraftState(draft, currentUser.id, 'discountReason', pendingCheckout?.input.discount.overrideReason ?? '')
+  const [paymentMode, setPaymentMode] = usePosDraftState<CheckoutPaymentMode>(draft, currentUser.id, 'paymentMode', pendingCheckout ? pendingCheckout.input.payments.length > 1 ? 'split' : pendingCheckout.input.payments[0].method as CheckoutPaymentMode : 'cash')
+  const [splitPayments, setSplitPayments] = usePosDraftState<SplitPaymentAmounts>(draft, currentUser.id, 'splitPayments', () => pendingCheckout ? { ...emptySplitPayments(), ...Object.fromEntries(pendingCheckout.input.payments.map(payment => [payment.method, String(payment.amountPaise / 100)])) } : emptySplitPayments())
+  const [cashReceived, setCashReceived] = usePosDraftState<string | null>(draft, currentUser.id, 'cashReceived', pendingCheckout?.input.cashTenderedPaise === undefined ? null : String(pendingCheckout.input.cashTenderedPaise / 100))
   const [unknownBarcode, setUnknownBarcode] = usePosDraftState(draft, currentUser.id, 'unknownBarcode', '')
   const [unknownProductName, setUnknownProductName] = usePosDraftState(draft, currentUser.id, 'unknownProductName', '')
   const [unknownPrice, setUnknownPrice] = usePosDraftState(draft, currentUser.id, 'unknownPrice', '')
@@ -81,6 +86,10 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
   const scannerRef = useRef<HTMLInputElement>(null)
   const cartScrollRef = useRef<HTMLDivElement>(null)
   const highlightTimerRef = useRef<number | null>(null)
+  const checkoutInFlight = useRef(false)
+  const recoveryButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { setRecovery(loadPendingCheckout(currentUser.id)) }, [currentUser.id])
+  useEffect(() => { if (pendingCheckout && !busy) recoveryButtonRef.current?.focus() }, [pendingCheckout, busy])
   const cashDrawerPaise = handover.ledger?.initialized ? expectedHandover(handover.ledger, handoverDate()).cash : null
   useEffect(() => {
     const term = productSearch.trim()
@@ -195,6 +204,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
       focusScanner()
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Unable to add product to inventory.')
+      try { if (pendingStockOperation(currentUser.id)) setShowUnresolvedAlert(false) } catch { setShowUnresolvedAlert(false) }
     } finally {
       setCreatingProduct(false)
     }
@@ -212,21 +222,35 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
   }
 
   async function checkout() {
-    if (unknownBarcode || cart.some((line) => line.kind === 'temporary')) {
+    if (checkoutInFlight.current || recovery.error) return
+    if (!pendingCheckout && (unknownBarcode || cart.some((line) => line.kind === 'temporary'))) {
       setShowUnresolvedAlert(true)
       return
     }
-    if (!sandbox.ready || sandbox.error) { showToast('Wait for current checkout configuration.'); return }
+    if (!pendingCheckout && (!sandbox.ready || sandbox.error)) { showToast('Wait for current checkout configuration.'); return }
+    checkoutInFlight.current = true
     setBusy(true)
+    let pending = pendingCheckout
     try {
-      const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
-      const bill = await finalizePosBill({ businessDate: today(), lines: cart, discount, payments: settlement.payments, customerName, customerMobile, ...(settlement.cashTenderedPaise !== undefined ? { cashTenderedPaise: settlement.cashTenderedPaise } : {}) }, currentUser)
+      if (!pending) {
+        const settlement = buildCheckoutPayment(total, paymentMode, splitPayments, cashReceived ?? undefined)
+        pending = savePendingCheckout(currentUser.id, { businessDate: today(), lines: cart, discount, payments: settlement.payments, customerName, customerMobile, ...(settlement.cashTenderedPaise !== undefined ? { cashTenderedPaise: settlement.cashTenderedPaise } : {}) })
+        setRecovery({ pending, error: '' })
+      }
+      const bill = await finalizePosBill(pending.input, currentUser)
+      clearPendingCheckout(currentUser.id, pending.operationId)
+      setRecovery({ pending: null, error: '' })
       clearCart()
       setCheckoutWarning('')
       setShowCustomerDiscount(false)
       showToast(`Bill finalized: ${bill.receiptNumber}`)
       printPosReceipt(bill, 'thermal')
     } catch (error) {
+      const rejected = error instanceof PosProductChangedSinceScanError || (error instanceof CheckoutRejectedError && !['intent-conflict', 'profile', 'session'].includes(error.kind))
+      if (pending && rejected) {
+        clearPendingCheckout(currentUser.id, pending.operationId)
+        setRecovery({ pending: null, error: '' })
+      }
       if (error instanceof PosProductChangedSinceScanError) {
         setCart((current) => current.map((line) => line.kind === 'product' && line.productId === error.productId
           ? { ...line, description: error.latestProduct.name, unitPricePaise: error.latestProduct.sellingPricePaise, stockAtScan: error.latestProduct.currentQuantity, expectedProductRevision: error.latestProduct.revision }
@@ -234,13 +258,16 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
         const oldStock = error.previousStock === undefined ? 'unknown' : String(error.previousStock)
         setCheckoutWarning(`Product updated since scan (stock ${oldStock} → ${error.latestProduct.currentQuantity}). Cart details were refreshed and quantity was kept. Review the price and total, then finalize again; no bill was created.`)
       } else {
-        showToast(error instanceof Error ? error.message : 'Unable to finalize bill.')
+        if (pending && !rejected) {
+          showToast('Checkout result is unconfirmed. Recover the original checkout before taking another payment.')
+          setCheckoutWarning('')
+        } else showToast(error instanceof Error ? error.message : 'Unable to finalize bill.')
       }
     }
-    finally { setBusy(false); focusScanner() }
+    finally { checkoutInFlight.current = false; setBusy(false); focusScanner() }
   }
 
-  return <>
+  return <RefundOperationBoundary actor={currentUser}><StockOperationBoundary actor={currentUser} fill>
     <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="flex min-h-0 flex-1 flex-col">
     <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
       <PageHeader title="POS" tools={(
@@ -252,7 +279,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
               <PageHeaderTab value="bills"><FileClock />Bills</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less approved cash refunds since that count.">
+          <div className="flex shrink-0 items-center gap-2 rounded border border-border bg-secondary/35 px-3 py-1.5" title="Last physical count plus POS cash payments less posted cash refunds since that count.">
             <span className="text-xs text-muted-foreground">Cash Drawer</span>
             <strong className="font-mono text-sm font-semibold tabular-nums text-success">{cashDrawerPaise === null ? 'Set up drawer' : money(cashDrawerPaise)}</strong>
           </div>
@@ -266,7 +293,13 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
       {handover.reservation ? <StatusPanel variant="warning" role="status">{handover.reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Cashout Are Paused.</StatusPanel> : handover.counterOpen ? <p className="text-xs text-muted-foreground" role="status">Shared Counter Open {handover.joined ? '· Your Billing Session Is Ready' : '· Joining Your Billing Session...'}</p> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
-      {tab === 'checkout' ? <div className="grid items-start gap-card-gap lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)] lg:items-stretch">
+      {tab === 'checkout' && (pendingCheckout || recovery.error) ? <div role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+        <strong className="block">{busy ? 'Finalizing checkout' : 'Checkout needs recovery'}</strong>
+        <p>{recovery.error || 'Confirm the original result before editing this cart or taking another payment. Recovery uses the same checkout request.'}</p>
+        {pendingCheckout ? <><p className="mt-1 text-xs">{pendingCheckout.input.lines.reduce((sum, line) => sum + line.quantity, 0)} items · {pendingCheckout.input.businessDate} · Reference {pendingCheckout.operationId}</p><Button ref={recoveryButtonRef} className="mt-2" variant="outline" disabled={busy || !navigator.onLine} onClick={() => void checkout()}>{busy ? 'Checking checkout...' : 'Recover checkout'}</Button></> : null}
+        {checkoutWarning ? <p className="mt-2">{checkoutWarning}</p> : null}
+      </div> : null}
+      {tab === 'checkout' ? <div inert={busy || Boolean(pendingCheckout) || Boolean(recovery.error)} aria-busy={busy} aria-disabled={Boolean(pendingCheckout) || Boolean(recovery.error)} className={`grid items-start gap-card-gap lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)] lg:items-stretch ${pendingCheckout || recovery.error ? 'opacity-60' : ''}`}>
         <div className="grid min-w-0 gap-card-gap lg:min-h-0 lg:grid-rows-[auto_minmax(0,1fr)]">
           <Card><CardContent className="grid gap-3 pt-4">
             <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); void scanBarcode(scannerRef.current?.value ?? '') }}>
@@ -279,7 +312,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
               </div> : null}
             </form>
           </CardContent></Card>
-          <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="shrink-0 flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent ref={cartScrollRef} className="@container grid auto-rows-max content-start gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="shrink-0 flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy || Boolean(pendingCheckout) || Boolean(recovery.error)} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent ref={cartScrollRef} className="@container grid auto-rows-max content-start gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className={`grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors duration-500 @min-[32rem]:grid-cols-[minmax(0,1fr)_auto_auto_auto] ${highlightedCartKey === (line.kind === 'product' ? line.productId : line.id) ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : ''}`}>
             <span className="col-span-full min-w-0 @min-[32rem]:col-span-1" title={`${line.description} · ${line.barcode}`}>
               <strong className="block line-clamp-2 break-words leading-[18px]">{line.description}</strong>
@@ -300,7 +333,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
           <CheckoutPaymentPanel totalPaise={total} mode={paymentMode} split={splitPayments} cashReceived={cashReceived} disabled={busy} onMethod={(method) => { setPaymentMode(method); setCashReceived(null) }} onSplit={(amounts) => { setSplitPayments(amounts); setPaymentMode('split'); setCashReceived(null) }} onCashReceived={setCashReceived} />
           {sandbox.heldCarts.length > 0 ? <div><strong className="text-xs uppercase text-muted-foreground">Held carts (no stock reserved)</strong>{sandbox.heldCarts.map((held) => <div key={held.id} className="mt-2 flex items-center justify-between rounded-xl border p-2 text-sm"><span>{held.label} · {held.lines.length} lines</span><div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { setPaymentMode('cash'); setSplitPayments(emptySplitPayments()); setCashReceived(null); setDiscountReason(held.discount.overrideReason ?? ''); setCart(held.lines); setCustomerName(held.customerName ?? ''); setCustomerMobile(held.customerMobile ?? ''); setDiscountMode(held.discount.mode); setDiscountValue(held.discount.mode === 'percentage' ? String(held.discount.percentage ?? 0) : String(paiseToRupees(held.discount.amountPaise))); setShowCustomerDiscount(Boolean(held.customerName || held.customerMobile || held.discount.mode !== 'none')); void deleteHeldCart(held.id) }}>Resume</Button></div></div>)}</div> : null}
           </div>
-          <div className="grid shrink-0 gap-2 border-t border-border pt-3"><div className="grid gap-2 sm:grid-cols-2">{checkoutWarning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:col-span-2"><AlertTriangle className="mr-1 inline size-3.5" />{checkoutWarning}</p> : null}<Button variant="outline" disabled={cart.length === 0 || busy} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || !sandbox.ready || Boolean(sandbox.error) || !navigator.onLine || Boolean(paymentError) || !handover.counterOpen || !handover.joined || Boolean(handover.reservation)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div></div>
+          <div className="grid shrink-0 gap-2 border-t border-border pt-3"><div className="grid gap-2 sm:grid-cols-2">{checkoutWarning ? <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 sm:col-span-2"><AlertTriangle className="mr-1 inline size-3.5" />{checkoutWarning}</p> : null}<Button variant="outline" disabled={cart.length === 0 || busy || Boolean(pendingCheckout) || Boolean(recovery.error)} onClick={() => void saveHeldCart({ label: `Cart ${serverNowDate().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}`, lines: cart, customerName, customerMobile, discount }, currentUser).then(() => { clearCart(); showToast('Cart held.') }).catch((error: Error) => showToast(error.message))}><Pause />Hold cart</Button><Button disabled={cart.length === 0 || busy || Boolean(pendingCheckout) || Boolean(recovery.error) || !sandbox.ready || Boolean(sandbox.error) || !navigator.onLine || Boolean(paymentError) || !handover.counterOpen || !handover.joined || Boolean(handover.reservation)} onClick={() => void checkout()}>{busy ? 'Finalizing...' : 'Finalize Bill'}</Button></div></div>
         </CardContent></Card>
       </div> : null}
 
@@ -331,7 +364,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
       </div>,
       document.body,
     ) : null}
-  </>
+  </StockOperationBoundary></RefundOperationBoundary>
 }
 
 function billPaymentMode(bill: PosBill) {
@@ -348,9 +381,10 @@ function shortReceiptNumber(receiptNumber: string) {
 
 const BILL_HISTORY_BATCH_SIZE = 7
 
-function BillActions({ bill, onReturn }: { bill: PosBill; onReturn: (bill: PosBill) => void }) {
-  return <div className="flex flex-wrap justify-end gap-1.5">
-    <Button size="sm" variant="outline" onClick={() => onReturn(bill)}>Request return</Button>
+function BillActions({ bill, onReturn, onView }: { bill: PosBill; onReturn: (bill: PosBill) => void; onView: (bill: PosBill) => void }) {
+  return <div className="flex flex-wrap justify-end gap-1.5" onClick={event => event.stopPropagation()}>
+    <Button size="sm" variant="outline" aria-label={`View bill ${bill.receiptNumber}`} onClick={() => onView(bill)}><Eye />View</Button>
+    <Button size="sm" variant="outline" onClick={() => onReturn(bill)}>Return items</Button>
     <Button size="sm" variant="outline" onClick={() => printPosReceipt(bill, 'thermal')}><Printer />Reprint</Button>
   </div>
 }
@@ -362,6 +396,7 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
   const [loadError, setLoadError] = useState('')
   const [nextCursor, setNextCursor] = useState<PosBillPageCursor | null>(null)
   const [hasOlder, setHasOlder] = useState(false)
+  const [viewBill, setViewBill] = useState<PosBill | null>(null)
   const [returnBill, setReturnBill] = useState<PosBill | null>(null)
   useEffect(() => {
     let active = true
@@ -407,7 +442,7 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
     { id: 'total', label: 'Total amount', value: (bill) => bill.totalPaise, cell: (bill) => <strong className="tabular-nums">{money(bill.totalPaise)}</strong>, align: 'right', sortDescFirst: true },
     { id: 'operator', label: 'Punched by', value: (bill) => bill.createdByName, cell: (bill) => <span className="font-medium">{bill.createdByName}</span> },
     { id: 'payment', label: 'Payment mode', value: billPaymentMode, cell: (bill) => billPaymentMode(bill) },
-    { id: 'actions', label: 'Actions', value: () => '', cell: (bill) => <BillActions bill={bill} onReturn={setReturnBill} />, align: 'right', hideable: false, sortable: false },
+    { id: 'actions', label: 'Actions', value: () => '', cell: (bill) => <BillActions bill={bill} onReturn={setReturnBill} onView={setViewBill} />, align: 'right', hideable: false, sortable: false },
   ], [])
 
   return <>
@@ -422,6 +457,7 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
           data={bills}
           emptyTitle="No bills yet"
           getRowId={(bill) => bill.id}
+          onRowActivate={setViewBill}
           initialSortId="bill"
           noun="bill"
           pageSize={1000}
@@ -429,46 +465,15 @@ function BillsPanel({ currentUser, showToast }: { currentUser: AppUser; showToas
           searchText={(bill) => [bill.receiptNumber, bill.businessDate, formatDisplayDateTime(bill.createdAt), bill.createdByName, billPaymentMode(bill)].join(' ')}
           showFooter={false}
           showToolbar={false}
-          mobileCard={(bill) => <article className="rounded-2xl border border-border/90 bg-card p-3 shadow-sm">
+          mobileCard={(bill) => <article className="cursor-pointer rounded-2xl border border-border/90 bg-card p-3 shadow-sm" onClick={() => setViewBill(bill)}>
             <div className="flex items-start justify-between gap-3"><div title={bill.receiptNumber}><strong className="text-sm">{shortReceiptNumber(bill.receiptNumber)}</strong><p className="text-[10px] text-muted-foreground">{formatDisplayDateTime(bill.createdAt)}</p></div><strong className="tabular-nums">{money(bill.totalPaise)}</strong></div>
             <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border/60 pt-3 text-xs"><span><span className="block text-[10px] uppercase text-muted-foreground">Punched by</span>{bill.createdByName}</span><span><span className="block text-[10px] uppercase text-muted-foreground">Payment</span>{billPaymentMode(bill)}</span></div>
-            <div className="mt-3 border-t border-border/60 pt-3"><BillActions bill={bill} onReturn={setReturnBill} /></div>
+            <div className="mt-3 border-t border-border/60 pt-3"><BillActions bill={bill} onReturn={setReturnBill} onView={setViewBill} /></div>
           </article>}
         />}
       </CardContent>
     </Card>
-    {returnBill ? <ReturnDialog key={returnBill.id} bill={returnBill} currentUser={currentUser} showToast={showToast} onClose={() => setReturnBill(null)} /> : null}
+    {viewBill ? <PosBillView key={viewBill.id} bill={viewBill} onClose={() => setViewBill(null)} /> : null}
+    {returnBill ? <PosReturnDialog key={returnBill.id} bill={returnBill} actor={currentUser} showToast={showToast} onClose={() => setReturnBill(null)} /> : null}
   </>
-}
-
-function ReturnDialog({ bill, currentUser, showToast, onClose }: { bill: PosBill; currentUser: AppUser; showToast: (message: string) => void; onClose: () => void }) {
-  const [reason, setReason] = useState('')
-  const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({})
-  const [condition, setCondition] = useState<'sellable' | 'damaged'>('sellable')
-  const [refundDate, setRefundDate] = useState(today())
-  const [refundAmount, setRefundAmount] = useState('')
-  const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>('cash')
-  const [refundReference, setRefundReference] = useState('')
-  const [busy, setBusy] = useState(false)
-  async function submitReturn() {
-    const returnLines = bill.lines.map((line) => ({ lineId: line.id, quantity: Number(returnQuantities[line.id] ?? 0) })).filter((line) => line.quantity > 0)
-    if (returnLines.length === 0) return showToast('Enter at least one return quantity.')
-    setBusy(true)
-    try {
-      await requestBillAction({ type: 'return', billId: bill.id, reason, returnCondition: condition, returnLines, refundDate, refundAmountPaise: rupeesToPaise(Number(refundAmount || paiseToRupees(bill.totalPaise))), refundMethod, ...(refundReference.trim() ? { refundReference: refundReference.trim() } : {}) }, currentUser)
-      showToast(condition + ' return sent to Action Centre.')
-      onClose()
-    } catch (error) { showToast(error instanceof Error ? error.message : 'Unable to request return.') }
-    finally { setBusy(false) }
-  }
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onKeyDown={(event) => { if (event.key === 'Escape' && !busy) onClose() }}>
-    <Card role="dialog" aria-modal="true" aria-labelledby="return-dialog-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden shadow-xl">
-      <CardHeader className="flex-row items-start justify-between gap-3 border-b"><div id="return-dialog-title"><SectionHeading eyebrow="Return items" title={bill.receiptNumber} description="Choose quantities and enter the refund details." /></div><Button type="button" size="icon" variant="ghost" aria-label="Close return dialog" disabled={busy} onClick={onClose}><X /></Button></CardHeader>
-      <CardContent className="grid gap-3 overflow-y-auto pt-4">
-        <div className="grid gap-2">{bill.lines.map((line) => <div key={line.id} className="flex items-center justify-between gap-3 rounded-lg border p-2 text-sm"><span className="min-w-0"><strong className="block truncate">{line.description}</strong><span className="text-muted-foreground">Sold {line.quantity} · {money(line.unitPricePaise)} each</span></span><FieldLabel className="shrink-0" label="Return qty"><Input className="w-24" type="number" min="0" max={line.quantity} step="1" value={returnQuantities[line.id] ?? ''} onChange={(event) => setReturnQuantities((current) => ({ ...current, [line.id]: event.target.value }))} placeholder="0" /></FieldLabel></div>)}</div>
-        <div className="grid gap-2 rounded-xl bg-secondary/30 p-3 sm:grid-cols-2"><FieldLabel label="Return Condition"><NativeSelect value={condition} onChange={(event) => setCondition(event.target.value as 'sellable' | 'damaged')}><option value="sellable">Sellable (restore stock)</option><option value="damaged">Damaged (no stock)</option></NativeSelect></FieldLabel><FieldLabel label="Refund Date"><Input type="date" value={refundDate} onChange={(event) => setRefundDate(event.target.value)} /></FieldLabel><FieldLabel label="Refund Amount"><Input type="number" min="0" step="0.01" value={refundAmount} onChange={(event) => setRefundAmount(event.target.value)} placeholder={String(paiseToRupees(bill.totalPaise))} /></FieldLabel><FieldLabel label="Refund Method"><NativeSelect value={refundMethod} onChange={(event) => setRefundMethod(event.target.value as PosPaymentMethod)}>{paymentMethods.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}</NativeSelect></FieldLabel><FieldLabel className="sm:col-span-2" label="Refund Reference (Optional)"><Input value={refundReference} onChange={(event) => setRefundReference(event.target.value)} /></FieldLabel><FieldLabel className="sm:col-span-2" label="Mandatory request reason"><Input value={reason} onChange={(event) => setReason(event.target.value)} /></FieldLabel></div>
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="button" disabled={busy || !reason.trim()} onClick={() => void submitReturn()}>{busy ? 'Sending...' : 'Request return'}</Button></div>
-      </CardContent>
-    </Card>
-  </div>
 }

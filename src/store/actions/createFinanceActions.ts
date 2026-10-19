@@ -1,27 +1,16 @@
-import { collection, deleteDoc, deleteField, doc, getDocFromServer, getDocsFromServer, runTransaction, setDoc, writeBatch, type WriteBatch } from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/shared/lib/firebase'
-import { clearLegacyLocalData, readLegacyImportPayload } from '@/store/legacyLocalData'
-import type { CashoutDraft, DailySales, FinanceData, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
+import { postFinanceOperation } from '@/features/register/data/financeRepository'
+import { deleteDoc, deleteField, doc, getDocFromServer, setDoc, writeBatch } from 'firebase/firestore'
+import { db } from '@/shared/lib/firebase'
+import type { CashoutDraft, DailySales, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
-import type { UserAccount } from '@/domain/appTypes'
 import { allocateLoanRepayment, allocateLoanRepaymentToLoan, loanRupeesToPaise, normalizeLoanAmount } from '@/domain/loanMoney'
-import { cardSalesAfterCashoutChange } from '@/domain/cashoutSales'
-import { derivePendingCash } from '@/store/deriveCashMetrics'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
   normalizeLoanRecord,
   normalizeName,
-  normalizeVendorRecord,
   nowIso,
-  salesDocId,
-  singleStoreId,
-  sortByCreatedAtDesc,
 } from '@/store/storeShared'
 import { createCashoutCorrectionActions } from '@/store/actions/createCashoutCorrectionActions'
-import { assertDrawerAvailable, handoverRef } from '@/features/pos/data/cashierHandoverRepository'
-import type { HandoverLedger } from '@/features/pos/domain/cashierHandover'
-import { buildDailyCashoutClosure } from '@/features/pos/domain/drawerClosure'
 import { rupeesToPaise } from '@/features/pos/domain/posDomain'
 
 type FinanceActionArgs = {
@@ -38,107 +27,8 @@ function sortByBusinessOrder<T extends { date: string; createdAt: string }>(item
   return [...items].sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
 }
 
-export function createFinanceActions({ ensureNameInDirectory, getState, setIsBusy }: FinanceActionArgs) {
-  async function loadHolderBalancesForClose(closingEntry: DailyCashoutEntry) {
-    const controlRef = doc(db, 'cashMovementControl', 'main')
-    const before = await getDocFromServer(controlRef)
-    const revision = before.exists() ? Number(before.data().revision ?? 0) : 0
-    const [usersSnapshot, cashoutsSnapshot, transfersSnapshot, after] = await Promise.all([
-      getDocsFromServer(collection(db, 'users')),
-      getDocsFromServer(collection(db, 'dailyCashouts')),
-      getDocsFromServer(collection(db, 'cashTransfers')),
-      getDocFromServer(controlRef),
-    ])
-    const afterRevision = after.exists() ? Number(after.data().revision ?? 0) : 0
-    if (revision !== afterRevision) throw new Error('Cash activity changed while preparing the closing snapshot. Refresh and submit the count again.')
-
-    const users = usersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as UserAccount)
-    const cashouts = cashoutsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as DailyCashoutEntry)
-    const transfers = transfersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as CashTransfer)
-    const pending = derivePendingCash(users, [...cashouts, closingEntry], transfers)
-    return {
-      revision,
-      balances: pending.userBalances.map((balance) => ({
-        userId: balance.userId,
-        name: balance.name,
-        amountPaise: rupeesToPaise(balance.amount),
-      })),
-    }
-  }
-
-  function writeSalesSyncToBatch(batch: WriteBatch, date: string, nextDailyCashouts: DailyCashoutEntry[], financeData: FinanceData, previousDailyCashouts: DailyCashoutEntry[]) {
-    const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
-    const salesId = salesDocId(singleStoreId, date)
-    const existingSales = financeData.sales.find((sale) => sale.id === salesId)
-
-    if (remainingEntries.length === 0) {
-      if (existingSales) batch.delete(doc(db, 'sales', salesId))
-      return
-    }
-
-    const cashSales = remainingEntries.reduce((total, entry) => total + entry.cashSales, 0)
-    const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
-    const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
-    const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
-    const cardSales = cardSalesAfterCashoutChange(existingSales?.cardSales ?? 0, previousDailyCashouts, nextDailyCashouts, date)
-    const bankTransferSales = existingSales?.bankTransferSales ?? 0
-    const timestamp = nowIso()
-    batch.set(doc(db, 'sales', salesId), {
-      id: salesId,
-      storeId: singleStoreId,
-      date,
-      totalSales: cashSales + upiSales + cardSales + bankTransferSales + creditSales,
-      cashSales,
-      upiSales,
-      cardSales,
-      bankTransferSales,
-      creditSales,
-      returnsDiscounts,
-      notes: `Auto-synced from cashout register. ${remainingEntries.map((entry) => entry.actualCashParticulars.trim()).filter(Boolean).join(' | ')}`.trim(),
-      createdAt: existingSales?.createdAt ?? remainingEntries[0]?.createdAt ?? timestamp,
-      updatedAt: timestamp,
-    })
-  }
-
-  async function syncSalesForDate(date: string, nextDailyCashouts: DailyCashoutEntry[]) {
-    const { financeData, dailyCashouts } = getState()
-    const remainingEntries = nextDailyCashouts.filter((entry) => entry.date === date)
-    const salesId = salesDocId(singleStoreId, date)
-    const existingSales = financeData.sales.find((sale) => sale.id === salesId)
-
-    if (remainingEntries.length === 0) {
-      if (existingSales) {
-        await deleteDoc(doc(db, 'sales', salesId))
-      }
-      return
-    }
-
-    const cashSales = remainingEntries.reduce((total, entry) => total + entry.cashSales, 0)
-    const upiSales = remainingEntries.reduce((total, entry) => total + entry.upiSales, 0)
-    const creditSales = remainingEntries.reduce((total, entry) => total + entry.creditSales, 0)
-    const returnsDiscounts = remainingEntries.reduce((total, entry) => total + entry.returns, 0)
-    const cardSales = cardSalesAfterCashoutChange(existingSales?.cardSales ?? 0, dailyCashouts, nextDailyCashouts, date)
-    const bankTransferSales = existingSales?.bankTransferSales ?? 0
-    const timestamp = nowIso()
-
-    await setDoc(doc(db, 'sales', salesId), {
-      id: salesId,
-      storeId: singleStoreId,
-      date,
-      totalSales: cashSales + upiSales + cardSales + bankTransferSales + creditSales,
-      cashSales,
-      upiSales,
-      cardSales,
-      bankTransferSales,
-      creditSales,
-      returnsDiscounts,
-      notes: `Auto-synced from cashout register. ${remainingEntries.map((entry) => entry.actualCashParticulars.trim()).filter(Boolean).join(' | ')}`.trim(),
-      createdAt: existingSales?.createdAt ?? remainingEntries[0]?.createdAt ?? timestamp,
-      updatedAt: timestamp,
-    })
-  }
-
-  const cashoutCorrectionActions = createCashoutCorrectionActions({ getState, writeSalesSyncToBatch })
+export function createFinanceActions({ ensureNameInDirectory, getState }: FinanceActionArgs) {
+  const cashoutCorrectionActions = createCashoutCorrectionActions({ getState })
 
   function recomputeLoansForParty(loans: LoanEntry[], payments: Payment[], partyName: string) {
     const normalizedPartyName = normalizeName(partyName).toLowerCase()
@@ -193,68 +83,13 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     return loanState
   }
 
-  async function saveSales(draft: Omit<DailySales, 'id' | 'createdAt' | 'updatedAt'>) {
-    const { financeData } = getState()
-    const id = salesDocId(draft.storeId, draft.date)
-    const existing = financeData.sales.find((item) => item.id === id)
-    const timestamp = nowIso()
-    await setDoc(doc(db, 'sales', id), { ...draft, createdAt: existing?.createdAt ?? timestamp, updatedAt: timestamp }, { merge: true })
-  }
+  async function saveSales(_draft: Omit<DailySales, 'id' | 'createdAt' | 'updatedAt'>) { void _draft; throw new Error('Sales are posted from trusted Cashout. Manual browser sales posting is retired.') }
 
-  async function savePurchase(draft: PurchaseDraft) {
-    const id = `purchase-${crypto.randomUUID()}`
-    const timestamp = nowIso()
-    await setDoc(doc(db, 'purchases', id), {
-      ...draft,
-      unpaidAmount: Math.max(draft.purchaseAmount - draft.paidAmount, 0),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-  }
+  async function savePurchase(_draft: PurchaseDraft) { void _draft; throw new Error('Receive stock through the Stock workspace. Legacy manual purchase posting is retired.') }
 
-  async function saveVendor(input: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) {
-    const { vendors } = getState()
-    const normalizedName = normalizeName(input.name)
-    const existing = vendors.find((vendor) => vendor.name.toLowerCase() === normalizedName.toLowerCase())
-    const timestamp = nowIso()
-    const id = existing?.id ?? `vendor-${crypto.randomUUID()}`
-    const nextOpeningOutstanding = Math.max(input.openingOutstanding ?? 0, 0)
-    const openingPaidAlready = Math.max(
-      (existing?.openingOutstanding ?? 0) - (existing?.openingOutstandingRemaining ?? existing?.openingOutstanding ?? 0),
-      0,
-    )
-    const nextOpeningOutstandingRemaining = existing ? Math.max(nextOpeningOutstanding - openingPaidAlready, 0) : nextOpeningOutstanding
-    const record = normalizeVendorRecord({
-      id,
-      name: normalizedName,
-      ownerName: input.ownerName,
-      contact: input.contact,
-      address: input.address,
-      companiesProvided: input.companiesProvided,
-      notes: input.notes,
-      openingOutstanding: nextOpeningOutstanding,
-      openingOutstandingRemaining: nextOpeningOutstandingRemaining,
-      createdAt: existing?.createdAt ?? timestamp,
-      updatedAt: timestamp,
-    })
+  async function saveVendor(_input: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) { void _input; throw new Error('Create and manage vendors through Vendor Workspace.') }
 
-    try {
-      await setDoc(doc(db, 'vendors', id), record, { merge: true })
-    } catch (error) {
-      const code = error instanceof Error && 'code' in error ? String(error.code) : ''
-      if (!code.includes('permission-denied')) throw error
-
-      const nextCatalog = sortByCreatedAtDesc([...vendors.filter((vendor) => vendor.id !== id), record])
-      await setDoc(doc(db, 'appMetadata', 'vendorCatalog'), { vendors: nextCatalog }, { merge: true })
-    }
-    await ensureNameInDirectory('vendors', normalizedName)
-  }
-
-  async function saveCashout(draft: CashoutDraft) {
-    const id = `cashout-${crypto.randomUUID()}`
-    const timestamp = nowIso()
-    await setDoc(doc(db, 'cashouts', id), withoutUndefined({ ...draft, createdAt: timestamp, updatedAt: timestamp }))
-  }
+  async function saveCashout(draft: CashoutDraft) { const modes = { Cash:'cash', UPI:'upi', Card:'card', 'Bank Transfer':'bank-transfer', Cheque:'cheque' }; await postFinanceOperation('expense',{amountPaise:rupeesToPaise(draft.amount),category:draft.category,paidTo:draft.paidTo,mode:modes[draft.paymentMode],notes:draft.notes,...(draft.paymentMode==='Cheque'?{chequeNumber:draft.chequeNumber,chequeDate:draft.chequePayDate}: {})}) }
 
   async function savePayment(draft: PaymentDraft) {
     const id = `payment-${crypto.randomUUID()}`
@@ -290,50 +125,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
       return
     }
 
-    if (draft.type === 'Paid' && draft.entryType === 'vendor-payment') {
-      const { financeData, vendors } = getState()
-      const matchingVendor = vendors.find((vendor) => vendor.name.toLowerCase() === normalizedPartyName.toLowerCase())
-      const openingOutstandingRemaining = matchingVendor?.openingOutstandingRemaining ?? 0
-      const matchingPurchases = financeData.purchases
-        .filter((purchase) => purchase.supplierName.toLowerCase() === normalizedPartyName.toLowerCase() && purchase.unpaidAmount > 0)
-        .sort((a, b) => `${a.date}-${a.createdAt}`.localeCompare(`${b.date}-${b.createdAt}`))
-
-      if (matchingPurchases.length === 0 && openingOutstandingRemaining <= 0) {
-        throw new Error('No open vendor outstanding found for the selected vendor.')
-      }
-
-      const totalOpenBalance = openingOutstandingRemaining + matchingPurchases.reduce((total, purchase) => total + purchase.unpaidAmount, 0)
-      if (draft.amount > totalOpenBalance) throw new Error('Vendor payment exceeds the open outstanding for the selected vendor.')
-
-      const batch = writeBatch(db)
-      batch.set(doc(db, 'payments', id), paymentRecord)
-
-      let remainingPayment = draft.amount
-      if (matchingVendor && openingOutstandingRemaining > 0) {
-        const appliedToOpening = Math.min(openingOutstandingRemaining, remainingPayment)
-        batch.update(doc(db, 'vendors', matchingVendor.id), {
-          openingOutstandingRemaining: openingOutstandingRemaining - appliedToOpening,
-          updatedAt: timestamp,
-        })
-        remainingPayment -= appliedToOpening
-      }
-
-      matchingPurchases.forEach((purchase) => {
-        if (remainingPayment <= 0) return
-        const applied = Math.min(purchase.unpaidAmount, remainingPayment)
-        batch.update(doc(db, 'purchases', purchase.id), {
-          paidAmount: purchase.paidAmount + applied,
-          unpaidAmount: purchase.unpaidAmount - applied,
-          updatedAt: timestamp,
-        })
-        remainingPayment -= applied
-      })
-
-      await batch.commit()
-      return
-    }
-
-    await setDoc(doc(db, 'payments', id), paymentRecord)
+    throw new Error('Record vendor payments through Register. Legacy payment posting is retired.')
   }
 
   async function saveLoanEntry(draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) {
@@ -381,123 +173,11 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await batch.commit()
   }
 
-  async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) {
-    const parsedDrawerTotal = draft.drawerTotal ?? draft.remainingBalance
-    const recordedByUserId = draft.recordedByUserId?.trim()
-    if (!recordedByUserId) throw new Error('The signed-in user is required to close the shared cash drawer.')
-    const countedPaise = rupeesToPaise(parsedDrawerTotal)
-    if (!Number.isSafeInteger(countedPaise) || countedPaise < 0) throw new Error('The drawer total must be a non-negative money amount.')
-    const auditDifference = draft.cashAudit - parsedDrawerTotal
-    const auditStatus = auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched'
-    const auditMessage =
-      auditDifference > 0
-        ? `WARNING: Cash is less by ${auditDifference}.`
-        : auditDifference < 0
-          ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
-          : 'Cash matches the system audit.'
-    const id = `daily-cashout-${crypto.randomUUID()}`
-    const timestamp = nowIso()
-    const entry: DailyCashoutEntry = {
-      ...draft,
-      drawerTotal: parsedDrawerTotal,
-      drawerClosureId: id,
-      cashRemovedPaise: countedPaise,
-      closingDrawerPaise: 0,
-      auditDifference,
-      auditStatus,
-      auditMessage,
-      remainingBalance: parsedDrawerTotal,
-      id,
-      createdAt: timestamp,
-      revision: 1,
-    }
-    const holderClose = await loadHolderBalancesForClose(entry)
-    entry.holderBalancesAtClose = holderClose.balances
-    entry.holderBalancesRevision = holderClose.revision + 1
-    const salesId = salesDocId(singleStoreId, draft.date)
-    const cashoutRef = doc(db, 'dailyCashouts', id)
-    const salesRef = doc(db, 'sales', salesId)
-    const closureRef = doc(db, 'posSandboxes', 'test', 'drawerClosures', id)
+  async function saveDailyCashoutEntry(draft: Omit<DailyCashoutEntry, 'id' | 'createdAt'>) { if(!draft.financeQuoteId)throw new Error('Start a fresh trusted Cashout count before closing.'); await postFinanceOperation('cashout-close',{quoteId:draft.financeQuoteId,drawerDenominations:draft.drawerDenominations,creditSales:draft.creditSales,reason:draft.discrepancyReason||''}) }
 
-    await runTransaction(db, async (transaction) => {
-      const [ledgerSnapshot, cashoutSnapshot, salesSnapshot, closureSnapshot, cashControlSnapshot] = await Promise.all([
-        transaction.get(handoverRef()),
-        transaction.get(cashoutRef),
-        transaction.get(salesRef),
-        transaction.get(closureRef),
-        transaction.get(doc(db, 'cashMovementControl', 'main')),
-      ])
-      if (cashoutSnapshot.exists() || closureSnapshot.exists()) throw new Error('This cashout has already closed the drawer.')
-      const ledger = ledgerSnapshot.data() as HandoverLedger | undefined
-      const cashControlRevision = cashControlSnapshot.exists() ? Number(cashControlSnapshot.data().revision ?? 0) : 0
-      if (cashControlRevision !== holderClose.revision) throw new Error('Cash activity changed while the closing count was being prepared. Refresh and submit again.')
-      if (!ledger?.initialized) throw new Error('The shared POS drawer must be initialized before completing Cashout.')
-      if (!ledger.checkpoint) throw new Error('Complete a cashier handover count before closing the shared POS drawer.')
-      assertDrawerAvailable(ledger)
-      if (ledger.counterSession?.status !== 'open') throw new Error('Open the shared counter before completing its daily Cashout.')
+  async function deleteExpenseEntry(expenseId: string) { const expense=await getDocFromServer(doc(db,'cashouts',expenseId));if(!expense.exists())throw new Error('Expense not found.');await postFinanceOperation('expense-cancel',{expenseId,expectedRevision:expense.get('revision')||1,reason:'Owner requested audited cancellation from Logs.'}) }
 
-      const closure = buildDailyCashoutClosure({
-        cashoutId: id,
-        businessDate: draft.date,
-        countedPaise,
-        ledger,
-        recordedByUid: recordedByUserId,
-        recordedByName: draft.recordedBy,
-        createdAt: timestamp,
-      })
-      const existingSales = salesSnapshot.data() as DailySales | undefined
-      const mergedCashSales = (existingSales?.cashSales ?? 0) + draft.cashSales
-      const mergedUpiSales = (existingSales?.upiSales ?? 0) + draft.upiSales
-      const mergedCardSales = (existingSales?.cardSales ?? 0) + (draft.cardSales ?? 0)
-      const mergedBankTransferSales = existingSales?.bankTransferSales ?? 0
-      const mergedCreditSales = (existingSales?.creditSales ?? 0) + draft.creditSales
-      const mergedReturns = (existingSales?.returnsDiscounts ?? 0) + draft.returns
-      const sales: DailySales = {
-        id: salesId,
-        storeId: singleStoreId,
-        date: draft.date,
-        totalSales: mergedCashSales + mergedUpiSales + mergedCardSales + mergedBankTransferSales + mergedCreditSales,
-        cashSales: mergedCashSales,
-        upiSales: mergedUpiSales,
-        cardSales: mergedCardSales,
-        bankTransferSales: mergedBankTransferSales,
-        creditSales: mergedCreditSales,
-        returnsDiscounts: mergedReturns,
-        notes: `Auto-synced from cashout register. ${draft.actualCashParticulars}`.trim(),
-        createdAt: existingSales?.createdAt ?? timestamp,
-        updatedAt: timestamp,
-      }
-
-      transaction.set(cashoutRef, entry)
-      transaction.set(salesRef, sales)
-      transaction.set(closureRef, closure)
-      transaction.set(doc(db, 'cashMovementControl', 'main'), {
-        revision: cashControlRevision + 1,
-        lastOperation: 'daily-close',
-        lastOperationId: id,
-        updatedAt: timestamp,
-      })
-      transaction.set(handoverRef(), {
-        ...ledger,
-        revision: ledger.revision + 1,
-        lastOperation: 'cashout-close',
-        lastOperationId: id,
-        updatedByUid: recordedByUserId,
-        counterSession: { ...ledger.counterSession!, status: 'closed' },
-        checkpoint: { ...ledger.checkpoint, cashActualPaise: 0, cashNetPaise: ledger.cashNetPaise },
-      })
-    })
-  }
-
-  async function deleteExpenseEntry(expenseId: string) {
-    if (!expenseId.trim()) throw new Error('Expense id is required.')
-    await deleteDoc(doc(db, 'cashouts', expenseId))
-  }
-
-  async function deletePurchaseEntry(purchaseId: string) {
-    if (!purchaseId.trim()) throw new Error('Purchase id is required.')
-    await deleteDoc(doc(db, 'purchases', purchaseId))
-  }
+  async function deletePurchaseEntry(_purchaseId: string) { void _purchaseId; throw new Error('Purchase history is preserved. Use its authorised source reversal.') }
 
   async function deletePaymentEntry(paymentId: string) {
     if (!paymentId.trim()) throw new Error('Payment id is required.')
@@ -534,38 +214,9 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await deleteDoc(doc(db, 'payments', paymentId))
   }
 
-  async function deleteDailyCashoutEntry(entryId: string) {
-    if (!entryId.trim()) throw new Error('Daily cashout id is required.')
+  async function deleteDailyCashoutEntry(_entryId: string) { void _entryId; throw new Error('Financial Cashout history cannot be erased. Use the audited correction workflow.') }
 
-    const { dailyCashouts } = getState()
-    const targetEntry = dailyCashouts.find((entry) => entry.id === entryId)
-    if (!targetEntry) throw new Error('This daily cashout record could not be found.')
-    if (targetEntry.drawerClosureId) throw new Error('A drawer-closing cashout cannot be deleted. Use the audited correction workflow.')
-
-    await runTransaction(db, async (transaction) => {
-      const entryRef = doc(db, 'dailyCashouts', entryId)
-      const controlRef = doc(db, 'cashMovementControl', 'main')
-      const [entrySnapshot, controlSnapshot] = await Promise.all([transaction.get(entryRef), transaction.get(controlRef)])
-      if (!entrySnapshot.exists()) throw new Error('This daily cashout record could not be found.')
-      if (entrySnapshot.data().drawerClosureId) throw new Error('A drawer-closing cashout cannot be deleted. Use the audited correction workflow.')
-      transaction.delete(entryRef)
-      transaction.set(controlRef, {
-        revision: (controlSnapshot.exists() ? Number(controlSnapshot.data().revision ?? 0) : 0) + 1,
-        lastOperation: 'cashout-delete',
-        lastOperationId: entryId,
-        updatedAt: nowIso(),
-      })
-    })
-    await syncSalesForDate(
-      targetEntry.date,
-      dailyCashouts.filter((entry) => entry.id !== entryId),
-    )
-  }
-
-  async function saveCashTransfer(draft: Omit<CashTransfer, 'id' | 'createdAt'>) {
-    const createTransfer = httpsCallable<typeof draft & { operationId: string }, { id: string; createdAt: string }>(functions, 'createCashTransfer')
-    await createTransfer({ ...draft, operationId: `cash-transfer-${crypto.randomUUID()}` })
-  }
+  async function saveCashTransfer(draft: Omit<CashTransfer, 'id' | 'createdAt'>) { const {date,fromUserId,toType,toUserId,bankDepositMethod,amount,reason}=draft;await postFinanceOperation('cash-transfer',{date,fromUserId,toType,toUserId,bankDepositMethod,amount,reason}) }
 
   async function deleteCashTransferEntry(transferId: string) {
     if (!transferId.trim()) throw new Error('Cash transfer id is required.')
@@ -577,60 +228,7 @@ export function createFinanceActions({ ensureNameInDirectory, getState, setIsBus
     await deleteDoc(doc(db, 'settingsAudit', entryId))
   }
 
-  async function importLegacyData() {
-    const legacyPayload = readLegacyImportPayload()
-    if (!legacyPayload) return false
-
-    if (legacyPayload.dailyCashouts.length > 0 || legacyPayload.cashTransfers.length > 0) {
-      throw new Error('Legacy cash history cannot be imported through this screen because it would bypass the new audited cash controls. Contact the owner before clearing or migrating this browser data.')
-    }
-
-    setIsBusy(true)
-    try {
-      const batch = writeBatch(db)
-
-      legacyPayload.financeData.stores.forEach((store) => batch.set(doc(db, 'stores', store.id), store))
-      legacyPayload.financeData.sales.forEach((sale) => batch.set(doc(db, 'sales', sale.id), sale))
-      legacyPayload.financeData.purchases.forEach((purchase) => batch.set(doc(db, 'purchases', purchase.id), purchase))
-      legacyPayload.financeData.cashouts.forEach((cashout) => batch.set(doc(db, 'cashouts', cashout.id), cashout))
-      legacyPayload.financeData.payments.forEach((payment) => batch.set(doc(db, 'payments', payment.id), payment))
-      legacyPayload.nameDirectory.vendors.forEach((vendorName) => {
-        const vendorId = `vendor-${vendorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || crypto.randomUUID()}`
-        batch.set(doc(db, 'vendors', vendorId), {
-          name: vendorName,
-          ownerName: '',
-          contact: '',
-          address: '',
-          companiesProvided: '',
-          notes: 'Imported from legacy vendor list.',
-          openingOutstanding: 0,
-          openingOutstandingRemaining: 0,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        })
-      })
-      legacyPayload.loans.forEach((loan) => batch.set(doc(db, 'loans', loan.id), loan))
-      legacyPayload.settingsAuditLog.forEach((entry) => batch.set(doc(db, 'settingsAudit', entry.id), entry))
-      if (legacyPayload.nameDirectory.people.length > 0 || legacyPayload.nameDirectory.vendors.length > 0) {
-        batch.set(doc(db, 'appMetadata', 'nameDirectory'), legacyPayload.nameDirectory, { merge: true })
-      }
-      legacyPayload.users.forEach((user) => {
-        batch.set(doc(db, 'users', user.id), {
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          createdAt: user.createdAt,
-          disabled: Boolean(user.disabled),
-        })
-      })
-
-      await batch.commit()
-      clearLegacyLocalData()
-      return true
-    } finally {
-      setIsBusy(false)
-    }
-  }
+  async function importLegacyData(): Promise<boolean> { throw new Error('Legacy financial imports require a separately approved trusted migration. No data was changed.') }
 
   return {
     ...cashoutCorrectionActions,

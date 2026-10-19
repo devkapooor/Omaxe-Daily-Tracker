@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { FinanceOperationBoundary } from '@/features/register/components/FinanceOperationBoundary'
+import { useMemo, useRef, useState } from 'react'
 import type { CashTransfer, DailyCashoutEntry, UserAccount } from '@/domain/appTypes'
 import type { UserRole } from '@/domain/financeTypes'
 import {
@@ -75,6 +76,8 @@ export function CashMovementForm({
   const [amount, setAmount] = useState('0')
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
+  const [submitting,setSubmitting]=useState(false)
+  const pendingSubmit=useRef(false)
 
   const hasLegacyWarnings =
     legacyBalances.some((entry) => entry.amount !== 0) ||
@@ -83,6 +86,7 @@ export function CashMovementForm({
 
   async function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if(pendingSubmit.current)return
 
     const fromUser = senderOptions.find((user) => user.id === transferFromUserId)
     if (!fromUser) {
@@ -118,6 +122,8 @@ export function CashMovementForm({
 
     const toUser = transferTo === 'bank' ? null : userOptions.find((user) => user.id === transferTo)
 
+    pendingSubmit.current=true
+    setSubmitting(true)
     try {
       await onTransfer({
         date: today(),
@@ -138,11 +144,11 @@ export function CashMovementForm({
       setError('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save the cash movement.')
-    }
+    } finally {pendingSubmit.current=false;setSubmitting(false)}
   }
 
   return (
-    <PageLayout className="h-full" header={<PageHeader title="Cash Movement" tools={(
+    <FinanceOperationBoundary uid={currentUserId}><PageLayout className="h-full" header={<PageHeader title="Cash Movement" tools={(
       <div className="flex min-w-0 items-center justify-between gap-3 px-1 sm:justify-start">
         <span className="text-xs font-medium text-muted-foreground">Total Cash Available</span>
         <strong className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-success">{money(totalCashAvailable)}</strong>
@@ -242,8 +248,8 @@ export function CashMovementForm({
             </NativeSelect>
           </FieldLabel>
 
-          <FieldLabel label="To">
-            <div className={transferTo === 'bank' ? 'grid grid-cols-2 gap-2' : undefined}>
+          <div className={transferTo === 'bank' ? 'grid grid-cols-2 gap-2' : undefined}>
+            <FieldLabel label="To">
               <NativeSelect
                 value={transferTo}
                 onChange={(event) => {
@@ -259,8 +265,9 @@ export function CashMovementForm({
                 ))}
                 <option value="bank">Bank</option>
               </NativeSelect>
+            </FieldLabel>
               {transferTo === 'bank' ? (
-                <NativeSelect
+                <FieldLabel label="Bank deposit method"><NativeSelect
                   required
                   value={bankDepositMethod}
                   onChange={(event) => {
@@ -271,10 +278,9 @@ export function CashMovementForm({
                   <option value="">Deposit method</option>
                   <option value="bank">Bank Deposit</option>
                   <option value="cdm">CDM Machine</option>
-                </NativeSelect>
+                </NativeSelect></FieldLabel>
               ) : null}
-            </div>
-          </FieldLabel>
+          </div>
 
           <FieldLabel label="Movement Amount">
             <Input
@@ -302,10 +308,10 @@ export function CashMovementForm({
           </FieldLabel>
 
           {error ? <p className="text-sm font-semibold text-destructive md:col-span-2">{error}</p> : null}
-          <Button className="md:col-span-2">Save Cash Movement</Button>
+          <Button disabled={submitting} className="md:col-span-2">{submitting?'Saving…':'Save Cash Movement'}</Button>
         </form>
         </CardContent>
       </Card>
-    </PageLayout>
+    </PageLayout></FinanceOperationBoundary>
   )
 }

@@ -1,3 +1,4 @@
+import { ordinaryExpenseAmount, recordedNetSales } from '@/domain/refundAccounting'
 import { IST_TIMEZONE, cashoutCategories, daysBetweenInclusive, shiftDate, today, uniqNames } from '@/app/uiHelpers'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, MonthlyReportMeta, UserAccount, VendorRecord } from '@/domain/appTypes'
 import type { Cashout, FinanceData, Payment } from '@/domain/financeTypes'
@@ -41,8 +42,8 @@ function deriveDashboardRangeSummary(financeData: FinanceData, from: string, to:
   return {
     from,
     to,
-    sales: salesEntries.reduce((total, sale) => total + sale.totalSales, 0),
-    expenses: expenseEntries.reduce((total, entry) => total + entry.amount, 0),
+    sales: salesEntries.reduce((total, sale) => total + recordedNetSales(sale), 0),
+    expenses: expenseEntries.reduce((total, entry) => total + ordinaryExpenseAmount(entry), 0),
     salesLastUpdated: salesEntries.map((entry) => entry.updatedAt).sort((a, b) => b.localeCompare(a))[0] ?? null,
     expensesLastUpdated: expenseEntries.map((entry) => entry.updatedAt).sort((a, b) => b.localeCompare(a))[0] ?? null,
   }
@@ -140,8 +141,8 @@ function deriveMonthlyReports(args: {
 
   const summaries = months.map<MonthlyReportSummarySnapshot>((month) => {
     const monthMargin = metaByMonth.get(month)?.marginPercentage ?? marginPercentage
-    const totalSales = sumByMonth(financeData.sales, month, (entry) => entry.totalSales)
-    const totalCashoutExpenses = sumByMonth(financeData.cashouts, month, (entry) => entry.amount)
+    const totalSales = sumByMonth(financeData.sales, month, recordedNetSales)
+    const totalCashoutExpenses = sumByMonth(financeData.cashouts, month, ordinaryExpenseAmount)
     const totalPurchases = sumByMonth(financeData.purchases, month, (entry) => entry.purchaseAmount)
     const vendorPaymentTotal = financeData.payments
       .filter((entry) => entry.date.slice(0, 7) === month && entry.type === 'Paid' && (entry.entryType ?? 'vendor-payment') === 'vendor-payment')
@@ -180,7 +181,7 @@ function deriveMonthlyReports(args: {
     const transfers = cashTransfers.filter((entry) => entry.date.slice(0, 7) === summary.month)
 
     const expenseByCategoryMap = new Map<string, number>()
-    cashouts.forEach((entry) => {
+    cashouts.filter(entry => ordinaryExpenseAmount(entry) !== 0).forEach((entry) => {
       expenseByCategoryMap.set(entry.category, (expenseByCategoryMap.get(entry.category) ?? 0) + entry.amount)
     })
 
@@ -284,7 +285,7 @@ export function deriveWorkspaceMetrics(args: {
 
   const currentMonthSales = financeData.sales.filter((sale) => sale.date >= monthStart && sale.date <= generatedForDate)
   const latestRecordedSalesDate = currentMonthSales.map((sale) => sale.date).sort((a, b) => b.localeCompare(a))[0]
-  const mtdSales = currentMonthSales.reduce((total, sale) => total + sale.totalSales, 0)
+  const mtdSales = currentMonthSales.reduce((total, sale) => total + recordedNetSales(sale), 0)
   const completedDays = latestRecordedSalesDate ? daysBetweenInclusive(monthStart, latestRecordedSalesDate) : 0
   const averageDailySales = completedDays > 0 ? mtdSales / completedDays : 0
   const projectedMonthlySales = latestRecordedSalesDate ? averageDailySales * daysInMonth(latestRecordedSalesDate) : 0
@@ -312,7 +313,7 @@ export function deriveWorkspaceMetrics(args: {
         creditSales: latestCashoutEntries.reduce((total, entry) => total + entry.creditSales, 0),
         returns: latestCashoutEntries.reduce((total, entry) => total + entry.returns, 0),
         totalSales: 0,
-        cashExpenses: financeData.cashouts.filter((entry) => entry.date === latestClosedDay).reduce((total, entry) => total + entry.amount, 0),
+        cashExpenses: latestCashoutEntries.some(entry => entry.refundAccountingVersion === 1) ? latestCashoutEntries.reduce((sum, entry) => sum + (entry.cashExpense ?? 0), 0) : financeData.cashouts.filter((entry) => entry.date === latestClosedDay).reduce((total, entry) => total + entry.amount, 0),
         cashToHand: 0,
         transfersToday: cashTransfers.filter((entry) => entry.date === latestClosedDay).reduce((total, entry) => total + entry.amount, 0),
       }
@@ -340,7 +341,7 @@ export function deriveWorkspaceMetrics(args: {
   const dashboardMonth = generatedForDate.slice(0, 7)
   const expenseByCategoryMap = new Map<string, number>()
   financeData.cashouts
-    .filter((entry) => entry.date.slice(0, 7) === dashboardMonth)
+    .filter((entry) => entry.date.slice(0, 7) === dashboardMonth && ordinaryExpenseAmount(entry) !== 0)
     .forEach((entry) => {
       expenseByCategoryMap.set(entry.category, (expenseByCategoryMap.get(entry.category) ?? 0) + entry.amount)
     })
@@ -400,7 +401,7 @@ export function deriveWorkspaceMetrics(args: {
     },
     planner: {
       totalCounterCash: pendingCash.totalCounterCash,
-      groupedSchedule: derivePlanner(appSettings.currentBankBalance, financeData.cashouts, financeData.payments, plannedPayments),
+      groupedSchedule: appSettings.currentBankBalance === null ? [] : derivePlanner(appSettings.currentBankBalance, financeData.cashouts, financeData.payments, plannedPayments),
     },
     monthlyReports: monthlyReportsSnapshot,
   }

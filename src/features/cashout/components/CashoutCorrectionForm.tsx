@@ -1,3 +1,4 @@
+import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CashoutCorrectionValues, DailyCashoutEntry, DrawerDenominations } from '@/domain/appTypes'
@@ -20,6 +21,7 @@ type CashoutCorrectionFormProps = {
 type NumericFields = Omit<CashoutCorrectionValues, 'drawerDenominations'>
 
 export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: CashoutCorrectionFormProps) {
+  const {confirm,dialog}=useConfirmationDialog()
   const initial = correctionValuesFromEntry(entry)
   const [values, setValues] = useState<NumericFields>({
     cashSales: initial.cashSales,
@@ -35,7 +37,7 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const originalDrawerTotal = entry.drawerTotal ?? entry.remainingBalance
-  const nextDrawerTotal = drawerTotalFromDenominations(denominations)
+  const nextDrawerTotal = drawerTotalFromDenominations(denominations, entry.refundAccountingVersion === 1)
 
   function setNumericField(field: keyof NumericFields, value: string) {
     setValues((current) => ({ ...current, [field]: numberValue(value) }))
@@ -51,6 +53,8 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
       setError('Please enter a correction reason of at least 5 characters.')
       return
     }
+    if(isSaving)return
+    if(!await confirm({title:mode==='owner-edit'?'Confirm Cashout edit':'Confirm correction request',details:[formatDisplayDate(entry.date)+' | '+entry.recordedBy,reason],confirmationText:'CONFIRM',confirmLabel:'OK',warning:mode==='owner-edit'?'This saves an audited correction. Source totals remain protected.':'This requests owner approval; the Cashout will not change yet.'}))return
     setIsSaving(true)
     try {
       await onSubmit({ ...values, drawerDenominations: denominations }, reason)
@@ -65,8 +69,8 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
   if (typeof document === 'undefined') return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-sm">
-      <Card className="max-h-[94vh] w-full max-w-4xl overflow-y-auto">
+    <><div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-sm">
+      <Card role="dialog" aria-modal="true" aria-label={mode === 'owner-edit' ? 'Edit Daily Cashout' : 'Request Cashout Correction'} className="max-h-[94vh] w-full max-w-4xl overflow-y-auto">
         <CardHeader className="flex-row items-start justify-between gap-3">
           <div>
             <SectionHeading
@@ -82,13 +86,13 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <AmountField label="Cash Sales" value={values.cashSales} onChange={(value) => setNumericField('cashSales', value)} />
-              <AmountField label="UPI Sales" value={values.upiSales} onChange={(value) => setNumericField('upiSales', value)} />
-              <AmountField label={entry.cardSales === undefined ? 'Card Sales (not captured on legacy record)' : 'Card Sales'} value={values.cardSales ?? 0} onChange={(value) => setNumericField('cardSales', value)} />
-              <AmountField label="Credit Sales" value={values.creditSales} onChange={(value) => setNumericField('creditSales', value)} />
-              <AmountField label="Returns" value={values.returns} onChange={(value) => setNumericField('returns', value)} />
-              <AmountField label="Cash Expense" value={values.cashExpense} onChange={(value) => setNumericField('cashExpense', value)} />
-              <AmountField label="System Audit" value={values.cashAudit} onChange={(value) => setNumericField('cashAudit', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="Cash Sales" value={values.cashSales} onChange={(value) => setNumericField('cashSales', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="UPI Sales" value={values.upiSales} onChange={(value) => setNumericField('upiSales', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label={entry.cardSales === undefined ? 'Card Sales (not captured on legacy record)' : 'Card Sales'} value={values.cardSales ?? 0} onChange={(value) => setNumericField('cardSales', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} label="Credit Sales" value={values.creditSales} onChange={(value) => setNumericField('creditSales', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.refundAccountingVersion === 1} label="Returns" value={values.returns} onChange={(value) => setNumericField('returns', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="Cash Expense" value={values.cashExpense} onChange={(value) => setNumericField('cashExpense', value)} />
+              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="System Audit" value={values.cashAudit} onChange={(value) => setNumericField('cashAudit', value)} />
             </div>
 
             <div>
@@ -97,6 +101,7 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
                 {(['denom500', 'denom200', 'denom100', 'denom50', 'denom20', 'denom10', 'change'] as const).map((field) => (
                   <AmountField
                     key={field}
+                    step={field === 'change' && entry.refundAccountingVersion === 1 ? '0.01' : '1'}
                     label={field === 'change' ? 'Change' : field.replace('denom', '')}
                     value={denominations[field]}
                     onChange={(value) => setDenomination(field, value)}
@@ -131,15 +136,15 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
           </form>
         </CardContent>
       </Card>
-    </div>,
+    </div>{dialog}</>,
     document.body,
   )
 }
 
-function AmountField({ label, value, onChange }: { label: string; value: number; onChange: (value: string) => void }) {
+function AmountField({ label, value, onChange, readOnly = false, step = '1' }: { label: string; value: number; step?: string; readOnly?: boolean; onChange: (value: string) => void }) {
   return (
     <FieldLabel label={label}>
-      <Input type="number" min="0" step="1" value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input readOnly={readOnly} type="number" min="0" step={step} value={value} onChange={(event) => onChange(event.target.value)} />
     </FieldLabel>
   )
 }

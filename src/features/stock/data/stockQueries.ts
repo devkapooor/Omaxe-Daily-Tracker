@@ -1,4 +1,4 @@
-import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, where, type DocumentData, type QueryConstraint, type QueryDocumentSnapshot } from 'firebase/firestore'
+import { and, collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, where, type DocumentData, type QueryConstraint, type QueryCompositeFilterConstraint, type QueryFilterConstraint, type QueryNonFilterConstraint, type QueryDocumentSnapshot } from 'firebase/firestore'
 import { auth, db } from '@/shared/lib/firebase'
 import { POS_SANDBOX_ID } from '@/features/pos/domain/types'
 
@@ -15,9 +15,13 @@ export function singleFlight<T>(key: string, read: () => Promise<T>): Promise<T>
   requests.set(key, promise)
   return promise
 }
-export async function readPage<T>(name: string, constraints: QueryConstraint[], cursor: Cursor, size: number, identity: string, field = 'createdAt', direction: 'asc' | 'desc' = 'desc', secondary: string[] = []): Promise<ServerPage<T>> {
+export async function readPage<T>(name: string, constraints: (QueryConstraint | QueryCompositeFilterConstraint)[], cursor: Cursor, size: number, identity: string, field = 'createdAt', direction: 'asc' | 'desc' = 'desc', secondary: string[] = []): Promise<ServerPage<T>> {
   return singleFlight(`${name}:${identity}:${size}:${cursor?.id ?? ''}:${JSON.stringify(cursor?.data() ?? null)}`, async () => {
-    const snapshot = await getDocsFromServer(query(stockCollection(name), ...constraints, orderBy(field, direction), ...secondary.map((name) => orderBy(name, direction)), ...(field === '__name__' ? [] : [orderBy(documentId(), direction)]), ...(cursor ? [startAfter(cursor)] : []), limit(size)))
+    const isFilter = (constraint: QueryConstraint | QueryCompositeFilterConstraint) => ['where', 'or', 'and'].includes(constraint.type)
+    const filters = constraints.filter(isFilter) as QueryFilterConstraint[]
+    const ordering = [...constraints.filter(value => !isFilter(value)) as QueryNonFilterConstraint[], orderBy(field, direction), ...secondary.map((name) => orderBy(name, direction)), ...(field === '__name__' ? [] : [orderBy(documentId(), direction)]), ...(cursor ? [startAfter(cursor)] : []), limit(size)]
+    const target = filters.length ? query(stockCollection(name), and(...filters), ...ordering) : query(stockCollection(name), ...ordering)
+    const snapshot = await getDocsFromServer(target)
     return { items: snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }) as T), cursor: snapshot.docs.at(-1) ?? cursor, hasMore: snapshot.size === size }
   })
 }

@@ -1,3 +1,4 @@
+import { ordinaryExpenseAmount, recordedNetSales } from '@/domain/refundAccounting'
 import type { DashboardMonthOffset } from '@/app/uiHelpers'
 import { IST_TIMEZONE } from '@/app/uiHelpers'
 import type { DailyCashoutEntry } from '@/domain/appTypes'
@@ -90,10 +91,10 @@ function dayOfMonth(date: string) {
 function deriveMonthlyTotals(data: FinanceData, dailyCashouts: DailyCashoutEntry[], monthKey: string): MonthlyTotals {
   const sales = data.sales
     .filter((entry) => entry.date.slice(0, 7) === monthKey)
-    .reduce((total, entry) => total + entry.totalSales, 0)
+    .reduce((total, entry) => total + recordedNetSales(entry), 0)
   const expenses = data.cashouts
     .filter((entry) => entry.date.slice(0, 7) === monthKey)
-    .reduce((total, entry) => total + entry.amount, 0)
+    .reduce((total, entry) => total + ordinaryExpenseAmount(entry), 0)
   const cashCollected = dailyCashouts
     .filter((entry) => entry.date.slice(0, 7) === monthKey)
     .reduce((total, entry) => total + (entry.drawerTotal ?? entry.remainingBalance), 0)
@@ -110,7 +111,7 @@ function totalsByDay(entries: FinanceData['sales'], monthKey: string) {
   return entries.reduce<Map<number, number>>((totals, entry) => {
     if (entry.date.slice(0, 7) !== monthKey) return totals
     const day = dayOfMonth(entry.date)
-    if (day > 0) totals.set(day, (totals.get(day) ?? 0) + entry.totalSales)
+    if (day > 0) totals.set(day, (totals.get(day) ?? 0) + recordedNetSales(entry))
     return totals
   }, new Map())
 }

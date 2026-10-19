@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { pendingFinanceOperation } from '@/features/register/data/financeRepository'
+import { loadPendingCheckout } from '../data/checkoutRecovery'
+import { pendingRefund } from '../data/refundRepository'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
 import type { AppUser } from '@/domain/financeTypes'
 import { serverNowMs, synchronizeServerClock } from '@/shared/lib/serverClock'
 import { Button } from '@/shared/ui/button'
@@ -7,6 +10,7 @@ import { FieldLabel } from '@/shared/ui/field-label'
 import { DrawerCountInProgressError, cashierAuthTime, initializeHandover, joinCounter, releaseCount, reserveCount, submitHandover, subscribeCashier, subscribeHandover } from '../data/cashierHandoverRepository'
 import { COUNT_RESERVATION_MS, activeCountReservation, countCash, denominations, expectedHandover, handoverDate, isCounterOpen, type CashierState, type CountReservation, type HandoverLedger } from '../domain/cashierHandover'
 import { HandoverContext } from '../hooks/useCashierHandover'
+import { postFinanceOperation } from '@/features/register/data/financeRepository'
 
 const money = (paise: number) => `\u20b9${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 function trustedNow() { try { return serverNowMs() } catch { return null } }
@@ -20,6 +24,8 @@ export function CashierHandoverBoundary({ currentUser, onSignOut, children }: { 
   const [joinError, setJoinError] = useState('')
   const [logout, setLogout] = useState(false)
   const [logoutSaved, setLogoutSaved] = useState(false)
+  const [logoutRequested, setLogoutRequested] = useState(false)
+  const [logoutIssue, setLogoutIssue] = useState('')
   const [setup, setSetup] = useState(false)
   const [retry, setRetry] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -35,7 +41,7 @@ export function CashierHandoverBoundary({ currentUser, onSignOut, children }: { 
   const reservation = now === null ? null : activeCountReservation(ledger, now)
   const ownReservation = reservation?.uid === currentUser.id && reservation.authTime === authTime && reservation.date === date ? reservation : null
   const joined = counterOpen && cashier?.authTime === authTime && !cashier.closed && cashier.joinedCounterId === ledger?.counterSession?.openingReconciliationId
-  const open = setup || logout || Boolean(ownReservation) || (!owner && (!ready || Boolean(error || joinError)))
+  const open = setup || logout || Boolean(ownReservation && ownReservation.kind !== 'cashout') || (!owner && (!ready || Boolean(error || joinError)))
   const kind = logout || ownReservation?.kind === 'logout' ? 'logout' : 'login'
 
   useEffect(() => { const timer = setInterval(() => setNow(trustedNow()), 1000); return () => clearInterval(timer) }, [])
@@ -78,32 +84,58 @@ export function CashierHandoverBoundary({ currentUser, onSignOut, children }: { 
     if (actionPending.current) return
     actionPending.current = true; setBusy(true)
     try {
-      if (id) await releaseCount(currentUser, id)
+      if (id && reservation?.kind === 'cashout') {
+        await postFinanceOperation('cashout-count-cancel', { quoteId: id })
+      } else if (id) await releaseCount(currentUser, id)
       setReservationId(''); setLogout(false); setSetup(false); setError(''); setJoinError('')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to cancel this count.') }
     finally { actionPending.current = false; setBusy(false) }
   }
   function retryConnection() {
-    setError(''); setJoinError(''); setLoaded({ ledger: false, cashier: false }); setAuthTime(null); setRetry((value) => value + 1)
+    setLogoutIssue(''); setError(''); setJoinError(''); setLoaded({ ledger: false, cashier: false }); setAuthTime(null); setRetry((value) => value + 1)
     void synchronizeServerClock().then(() => setNow(trustedNow()), (cause: unknown) => setError(cause instanceof Error ? cause.message : 'Unable to synchronize server time.'))
   }
-  function requestLogout() {
-    if (!ready || busy || error || joinError) return
+  const completeLogoutRequest = useEffectEvent(() => {
+    if (!ready || busy || error || joinError || logoutIssue || actionPending.current) return
+    if (reservation?.kind === 'cashout') {
+      setLogoutIssue('Finish or cancel the Cashout count before signing out.')
+      return
+    }
+    try {
+      const checkout = loadPendingCheckout(currentUser.id)
+      if (checkout.pending || checkout.error || pendingRefund(currentUser.id) || pendingFinanceOperation(currentUser.id)) {
+        setLogoutIssue('Recover the pending financial operation before signing out. After recovery reloads the workspace, choose Log out again.')
+        return
+      }
+    } catch (cause) {
+      setLogoutIssue(cause instanceof Error ? cause.message : 'Recovery state is unavailable. Retry before signing out.')
+      return
+    }
+    setLogoutRequested(false)
     if (cashier && !cashier.closed && cashier.authTime === authTime && (!owner || cashier.needsLogoutCheck)) { setLogout(true); setLogoutSaved(false); void startCount('logout') }
     else void signOut()
+  })
+  useEffect(() => {
+    if (!logoutRequested || !ready || busy || error || joinError || logoutIssue) return
+    const queued = window.setTimeout(() => completeLogoutRequest(), 0)
+    return () => window.clearTimeout(queued)
+  }, [logoutRequested, ready, busy, error, joinError, logoutIssue, cashier, authTime, reservation])
+  function requestLogout() {
+    // A refresh can expose navigation before the counter listeners are ready.
+    // Preserve the click and show progress instead of silently ignoring it.
+    setLogoutIssue(''); setLogoutRequested(true)
   }
   function exitRequested() {
-    if (!logoutSaved && cashier && !cashier.closed && cashier.authTime === authTime && (!owner || cashier.needsLogoutCheck)) {
-      setLogout(true); void startCount('logout')
-    } else void signOut()
+    if (logoutSaved) void signOut()
+    else requestLogout()
   }
 
   return <HandoverContext.Provider value={{ ledger, requestSetup: () => setSetup(true), counterOpen, joined, reservation }}>
+    {logoutRequested && !open ? <div role="status" className="fixed bottom-20 left-4 right-4 z-[100] mx-auto flex max-w-xl flex-wrap items-center gap-3 rounded border border-border bg-card p-3 text-sm shadow-lg">{logoutIssue ? <p role="alert" className="text-destructive">{logoutIssue}</p> : <p>{busy ? 'Waiting for the current operation before logging out…' : error || joinError ? 'Logout is waiting. Resolve the recovery or connection message, then retry.' : 'Log out requested. Checking the counter and your session…'}</p>}<Button size="sm" variant="outline" disabled={busy} onClick={retryConnection}>Retry logout check</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => setLogoutRequested(false)}>Continue working</Button></div> : null}
     {confirmation && !open ? <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] mx-auto flex max-w-xl items-center gap-3 rounded border border-border bg-card p-3 text-sm shadow-lg"><p>{confirmation}</p><Button size="sm" variant="ghost" onClick={() => setConfirmation('')}>Dismiss</Button></div> : null}
-    {reservation && !open ? <div role="status" className="fixed bottom-4 left-4 right-4 z-[95] mx-auto flex max-w-xl items-center gap-3 rounded border border-amber-300 bg-card p-3 text-sm shadow-lg"><p>{reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Cashout Are Paused.</p>{owner ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void cancelCount(reservation.id)}>Cancel Count</Button> : null}</div> : null}
+    {reservation && !open && !(ownReservation?.kind === 'cashout') ? <div role="status" className="fixed bottom-4 left-4 right-4 z-[95] mx-auto flex max-w-xl items-center gap-3 rounded border border-amber-300 bg-card p-3 text-sm shadow-lg"><p>{reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Drawer Payments Are Paused.</p>{owner ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void cancelCount(reservation.id)}>Cancel Count</Button> : null}</div> : null}
     {!open && (error || joinError) ? <div role="alert" className="fixed bottom-4 left-4 right-4 z-[100] mx-auto flex max-w-xl items-center gap-3 rounded border border-destructive bg-card p-3 text-sm shadow-lg"><p>{error || joinError}</p><Button size="sm" variant="outline" onClick={retryConnection}>Retry Connection</Button></div> : null}
     {/* App's render prop passes the handler to logout buttons; it never invokes it during render. */}
-    {/* eslint-disable-next-line react-hooks/refs */}
     {children(requestLogout)}
     {open ? <HandoverDialog key={`${ready}:${!!ledger?.initialized}:${kind}:${ownReservation?.id ?? 'waiting'}:${logoutSaved}`} currentUser={currentUser} ledger={ledger} ready={ready} date={date} kind={kind} setupOnly={setup && counterOpen && !logout} error={error || joinError} busy={busy} reservation={ownReservation} otherReservation={reservation && !ownReservation ? reservation : null} counterOpen={counterOpen} logoutSaved={logoutSaved} onReserve={() => startCount(kind)} onCancel={() => cancelCount()} onOwnerRelease={(id) => cancelCount(id)} onRetry={retryConnection} onExit={exitRequested} onInitialize={async () => {
       if (actionPending.current) return

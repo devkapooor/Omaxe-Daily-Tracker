@@ -1,0 +1,478 @@
+[
+  {
+    "file": "src/app/AppBlockingNotice.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 50,
+        "text": "role=\"alertdialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/app/UpgradeAnnouncementNotice.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 30,
+        "text": "role=\"alertdialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/action-center/components/ActionCenterPage.tsx",
+    "tabs": [
+      [
+        "pending",
+        "Pending {pendingCount === null ? '\u2026' : '(' + pendingCount + ')'}"
+      ],
+      [
+        "history",
+        "History"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/action-center/components/ActionCentreDetailsPanel.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 156,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/action-center/components/StockPriceReviewDetails.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 12,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/cashout/components/CashoutPage.tsx",
+    "tabs": [
+      [
+        "new",
+        "New Cashout"
+      ],
+      [
+        "corrections",
+        "Corrections"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/dashboard/components/DashboardRangeFilter.tsx",
+    "tabs": [
+      [
+        "0",
+        "T"
+      ],
+      [
+        "1",
+        "T-1"
+      ],
+      [
+        "2",
+        "T-2"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/directory/components/DirectoryPage.tsx",
+    "tabs": [
+      [
+        "add",
+        "Add Party"
+      ],
+      [
+        "parties",
+        "View Parties"
+      ]
+    ],
+    "modals": [
+      {
+        "line": 159,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/directory/components/VendorDirectoryV2.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 92,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/loans/components/LoansPage.tsx",
+    "tabs": [
+      [
+        "loans",
+        "Loans"
+      ],
+      [
+        "loan-details",
+        "Loan Details"
+      ],
+      [
+        "new-loan",
+        "New Loan"
+      ],
+      [
+        "repayment",
+        "Record Repayment"
+      ],
+      [
+        "repayments",
+        "Repayment History"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/logs/components/LogsPage.tsx",
+    "tabs": [
+      [
+        "sales",
+        "Sales"
+      ],
+      [
+        "expenses",
+        "Expenses"
+      ],
+      [
+        "purchases",
+        "Purchases"
+      ],
+      [
+        "payments",
+        "Payments"
+      ],
+      [
+        "dailyCashouts",
+        "Daily Cashouts"
+      ],
+      [
+        "cashTransfers",
+        "Cash Transfers"
+      ],
+      [
+        "settingsAudit",
+        "Settings Audit"
+      ],
+      [
+        "stockAudits",
+        "Stock Audits"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/pos/components/CashierHandoverBoundary.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 159,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/pos/components/CheckoutPaymentPanel.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 68,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/pos/components/PosDashboard.tsx",
+    "tabs": [
+      [
+        "0",
+        "T"
+      ],
+      [
+        "1",
+        "T-1"
+      ],
+      [
+        "2",
+        "T-2"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/pos/components/PosGoodsReceipt.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 289,
+        "text": "role=\"dialog\""
+      },
+      {
+        "line": 298,
+        "text": "role=\"dialog\""
+      },
+      {
+        "line": 415,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/pos/components/PosPage.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 314,
+        "text": "role=\"alertdialog\""
+      },
+      {
+        "line": 465,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/register/components/RegisterPage.tsx",
+    "tabs": [
+      [
+        "expenses",
+        "Expenses"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/settings/components/SettingsPage.tsx",
+    "tabs": [
+      [
+        "staff",
+        "Staff"
+      ],
+      [
+        "operations",
+        "Operations"
+      ],
+      [
+        "pos",
+        "POS"
+      ],
+      [
+        "announcements",
+        "Announcements"
+      ],
+      [
+        "notifications",
+        "Staff Notifications"
+      ],
+      [
+        "password",
+        "Update Password"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/stock/components/StockProductDetails.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 27,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/stock/components/StockSourceDetails.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 67,
+        "text": "<dialog"
+      }
+    ]
+  },
+  {
+    "file": "src/features/stock/components/StockWorkspacePage.tsx",
+    "tabs": [
+      [
+        "current",
+        "Current Stock"
+      ],
+      [
+        "receive",
+        "Receive Stock"
+      ],
+      [
+        "grn-history",
+        "GRN History"
+      ],
+      [
+        "audit",
+        "Stock Audit"
+      ],
+      [
+        "history",
+        "Stock History"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/vendor-workspace/components/VendorLedgerCutoverPlanner.tsx",
+    "tabs": [
+      [
+        "cutover",
+        "Cutover Planning"
+      ],
+      [
+        "preview",
+        "Workflow Preview"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/vendor-workspace/components/VendorLedgerPreviewPage.tsx",
+    "tabs": [
+      [
+        "overview",
+        "Directory"
+      ],
+      [
+        "purchases",
+        "Purchases"
+      ],
+      [
+        "payments",
+        "Payments"
+      ],
+      [
+        "invoices",
+        "Open Invoices"
+      ]
+    ],
+    "modals": []
+  },
+  {
+    "file": "src/features/vendor-workspace/components/VendorLedgerWorkspacePage.tsx",
+    "tabs": [
+      [
+        "directory",
+        "Vendors"
+      ],
+      [
+        "payments",
+        "Payments"
+      ],
+      [
+        "invoices",
+        "Invoices"
+      ],
+      [
+        "returns",
+        "Returns"
+      ],
+      [
+        "corrections",
+        "Corrections"
+      ],
+      [
+        "cheques",
+        "Cheques"
+      ],
+      [
+        "balances",
+        "Balances"
+      ]
+    ],
+    "modals": [
+      {
+        "line": 214,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/shared/ui/confirmation-dialog.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 43,
+        "text": "role=\"dialog\""
+      }
+    ]
+  },
+  {
+    "file": "src/features/cashout/components/DailyCashoutForm.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 261,
+        "text": "<div className=\"fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm\">"
+      }
+    ],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  },
+  {
+    "file": "src/features/cashout/components/DailyCashoutDetailsModal.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 32,
+        "text": "<div className=\"fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm\">"
+      }
+    ],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  },
+  {
+    "file": "src/features/register/components/ChequeDetailsModal.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 25,
+        "text": "<div className=\"fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/45 px-4 py-8\">"
+      }
+    ],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  },
+  {
+    "file": "src/features/cashout/components/CashoutCorrectionForm.tsx",
+    "tabs": [],
+    "modals": [
+      {
+        "line": 68,
+        "text": "<div className=\"fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/55 px-3 py-5 backdrop-blur-sm\">"
+      }
+    ],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  },
+  {
+    "file": "src/features/cash-movement/components/CashMovementForm.tsx",
+    "tabs": [],
+    "modals": [],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  },
+  {
+    "file": "src/features/settings/components/StaffNotificationsSettings.tsx",
+    "tabs": [],
+    "modals": [],
+    "notes": "Include fixed overlays even when ARIA dialog semantics are missing; forms/controls are associated with the parent workflow."
+  }
+]

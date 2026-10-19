@@ -2,7 +2,7 @@ import { deleteApp, initializeApp } from 'firebase/app'
 import { createUserWithEmailAndPassword, getAuth, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth'
 import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { defaultPurchasingCapabilities } from '@/domain/purchasingCapabilities'
-import { auth, db, firebaseConfig } from '@/shared/lib/firebase'
+import { auth, db, firebaseConfig, configureAuthEmulator } from '@/shared/lib/firebase'
 import type { CreateUserInput, StoreCollectionState } from '@/store/storeShared'
 import { normalizeName, nowIso } from '@/store/storeShared'
 
@@ -58,6 +58,7 @@ export function createAuthActions({
     const secondaryApp = initializeApp(firebaseConfig, `create-user-${crypto.randomUUID()}`)
     const secondaryAuth = getAuth(secondaryApp)
     try {
+      configureAuthEmulator(secondaryAuth)
       const name = normalizeName(input.name)
       const email = input.email.trim().toLowerCase()
       const password = input.password

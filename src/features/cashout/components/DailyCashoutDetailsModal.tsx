@@ -1,4 +1,5 @@
 import type { DailyCashoutEntry } from '@/domain/appTypes'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDisplayDate, formatDisplayDateTime, money } from '@/app/uiHelpers'
 import { Badge } from '@/shared/ui/badge'
@@ -12,6 +13,24 @@ type DailyCashoutDetailsModalProps = {
 }
 
 export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetailsModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!entry) return
+    const previous = document.activeElement as HTMLElement | null
+    const controls = () => [...(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])]
+    controls()[0]?.focus()
+    function handle(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); onClose() }
+      if (event.key === 'Tab') {
+        const nodes = controls(), first = nodes[0], last = nodes.at(-1)
+        if (!first || !last) return
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+      }
+    }
+    document.addEventListener('keydown', handle)
+    return () => { document.removeEventListener('keydown', handle); previous?.focus() }
+  }, [entry, onClose])
   if (!entry) return null
 
   const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
@@ -30,7 +49,7 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
 
   return createPortal(
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 px-3 py-6 backdrop-blur-sm">
-      <Card className="max-h-[90vh] w-full max-w-3xl overflow-y-auto">
+      <Card ref={dialogRef} role="dialog" aria-modal="true" aria-label="Cashout details" className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto">
         <CardHeader className="gap-3">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-3">
@@ -54,15 +73,16 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Date" value={formatDisplayDate(entry.date)} />
           <DetailBlock label="Recorded By" value={entry.recordedBy} />
           <DetailBlock label="Created At" value={formatDisplayDateTime(entry.createdAt)} />
-          <DetailBlock label="Cash Sales" value={money(entry.cashSales)} />
+          <DetailBlock label={entry.financePostingVersion === 1 ? 'Gross Cash Sales' : 'Cash Sales'} value={money(entry.cashSales)} />
           <DetailBlock label="UPI Sales" value={money(entry.upiSales)} />
           <DetailBlock label="Card Sales" value={entry.cardSales === undefined ? 'Not recorded on this entry' : money(entry.cardSales)} />
           <DetailBlock label="Credit Sales" value={money(entry.creditSales)} />
           <DetailBlock label="Returns" value={money(entry.returns)} />
-          <DetailBlock label="Cash Expense" value={money(entry.cashExpense ?? 0)} />
+          <DetailBlock label={entry.financePostingVersion === 1 ? 'Cash Paid Out (including refunds)' : 'Cash Expense'} value={money(entry.cashExpense ?? 0)} />
           <DetailBlock label="System Audit" value={money(entry.cashAudit)} />
           <DetailBlock label="Drawer Total" value={money(drawerTotal)} />
           <DetailBlock label="Remaining Balance" value={money(entry.remainingBalance)} />
+          {entry.financePostingVersion === 1 ? <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Basis" value="Cash Paid Out includes cash refunds, vendor cash payments and ordinary cash expenses. Refunds shown separately are part of that total; they are not another deduction." /> : null}
           <DetailBlock label="Revision" value={String(entry.revision ?? 1)} />
           {entry.updatedAt ? <DetailBlock label="Last Corrected" value={`${formatDisplayDateTime(entry.updatedAt)} by ${entry.updatedBy ?? 'Owner'}`} /> : null}
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Audit Status" value={auditMessage} />

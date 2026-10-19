@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { DailyCashoutEntry, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import { today, type DashboardMonthOffset } from '@/app/uiHelpers'
@@ -8,9 +8,11 @@ import {
   type MonthlyPerformanceMetrics,
 } from '@/features/dashboard/domain/deriveMonthlyPerformance'
 import { deriveDirectoryOptions } from '@/store/deriveWorkspaceMetrics'
+import { derivePendingCash } from '@/store/deriveCashMetrics'
 
 type UseDashboardMetricsArgs = {
   dashboardMonthOffset: DashboardMonthOffset
+  cashTransfers: CashTransfer[]
   dailyCashouts: DailyCashoutEntry[]
   data: FinanceData
   loans: LoanEntry[]
@@ -27,6 +29,7 @@ export type { MonthlyPerformanceMetrics } from '@/features/dashboard/domain/deri
 
 export function useDashboardMetrics({
   dashboardMonthOffset,
+  cashTransfers,
   dailyCashouts,
   data,
   loans,
@@ -35,6 +38,10 @@ export function useDashboardMetrics({
   vendors,
   workspaceMetrics,
 }: UseDashboardMetricsArgs) {
+  const pendingCashNow = useMemo(
+    () => derivePendingCash(users, dailyCashouts, cashTransfers),
+    [cashTransfers, dailyCashouts, users],
+  )
   const directoryOptions = useMemo(
     () => deriveDirectoryOptions({ financeData: data, loans, nameDirectory, users, vendors }),
     [data, loans, nameDirectory, users, vendors],
@@ -60,7 +67,7 @@ export function useDashboardMetrics({
     marginPercentage: workspaceMetrics.projections.marginPercentage,
     normalizedLoans: loans,
     openLoanCount: workspaceMetrics.liabilities.openLoanCount,
-    pendingCashNow: workspaceMetrics.pendingCash,
+    pendingCashNow,
     legacyChequeItems: workspaceMetrics.planner.groupedSchedule
       .flatMap((group) => group.items)
       .filter((item) => item.source !== 'manual-plan'),

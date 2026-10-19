@@ -95,7 +95,7 @@ function cashoutStaleness(request: CashoutCorrectionRequest, cashout?: DailyCash
   if ((cashout.revision ?? 1) !== request.sourceRevision) {
     return { isStale: true, staleReason: 'The cashout revision changed after this request was submitted.' }
   }
-  if (!cashoutCorrectionValuesEqual(correctionValuesFromEntry(cashout), request.before)) {
+  if (!cashoutCorrectionValuesEqual(correctionValuesFromEntry(cashout), request.before, cashout.refundAccountingVersion === 1)) {
     return { isStale: true, staleReason: 'The saved cashout values changed after this request was submitted.' }
   }
   return { isStale: false }

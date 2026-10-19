@@ -1,3 +1,4 @@
+import { trustedFinanceSupport } from './trustedFinanceSupport'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
@@ -35,6 +36,7 @@ import {
 } from '../src/features/payroll/data/payrollRepository'
 
 let testEnvironment: RulesTestEnvironment
+const trusted = trustedFinanceSupport('demo-alphahub')
 
 const projectId = 'demo-alphahub'
 const timestamp = '2026-10-01T00:00:00.000Z'
@@ -93,6 +95,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   if (testEnvironment) await testEnvironment.cleanup()
+  await trusted.close()
 })
 
 describe('Firestore role enforcement', () => {
@@ -110,14 +113,14 @@ describe('Firestore role enforcement', () => {
     const billing = userDb('billing-user')
     await assertSucceeds(setDoc(doc(owner, 'users', 'new-user'), { name: 'New', role: 'billing', createdAt: timestamp }))
 
-    await assertSucceeds(setDoc(doc(billing, 'cashouts', 'expense-1'), {
+    await assertFails(setDoc(doc(billing, 'cashouts', 'expense-1'), {
       storeId: 'single-store', date: '2026-10-01', paidTo: 'Vendor', amount: 100,
       category: 'Other', paymentMode: 'Cash', approvedBy: 'Pending approval', notes: '',
       createdAt: timestamp, updatedAt: timestamp,
     }))
     await assertFails(updateDoc(doc(billing, 'cashouts', 'expense-1'), { amount: 200 }))
     await assertFails(deleteDoc(doc(billing, 'cashouts', 'expense-1')))
-    await assertSucceeds(deleteDoc(doc(owner, 'cashouts', 'expense-1')))
+    await assertFails(deleteDoc(doc(owner, 'cashouts', 'expense-1')))
   })
 
   it('requires all cash transfer writes to pass through the server balance guard', async () => {
@@ -156,31 +159,30 @@ describe('Firestore role enforcement', () => {
     await assertFails(deleteDoc(doc(owner, 'settingsAudit', 'audit-1')))
   })
 
-  it('allows manager planner changes but protects operational settings', async () => {
+  it('denies all browser bank/settings changes after trusted publication cutover', async () => {
     const owner = userDb('owner-user')
     const manager = userDb('manager-user')
     const settingsRef = doc(owner, 'appMetadata', 'appSettings')
-    await setDoc(settingsRef, { currentBankBalance: 1000, marginPercentage: 25 })
+    await testEnvironment.withSecurityRulesDisabled(async c => setDoc(doc(c.firestore(), 'appMetadata', 'appSettings'), { currentBankBalance: 1000, marginPercentage: 25 }))
 
-    await assertSucceeds(updateDoc(doc(manager, 'appMetadata', 'appSettings'), { currentBankBalance: 1200 }))
+    await assertFails(updateDoc(doc(manager, 'appMetadata', 'appSettings'), { currentBankBalance: 1200 }))
     await assertFails(updateDoc(doc(manager, 'appMetadata', 'appSettings'), { marginPercentage: 30 }))
-    await assertSucceeds(updateDoc(settingsRef, { marginPercentage: 30 }))
+    await assertFails(updateDoc(settingsRef, { marginPercentage: 30 }))
   })
 
-  it('permits allocation-only vendor updates and rejects arbitrary staff edits', async () => {
-    const owner = userDb('owner-user')
+  it('denies direct legacy allocations and arbitrary purchase edits', async () => {
     const billing = userDb('billing-user')
-    await setDoc(doc(owner, 'purchases', 'purchase-1'), {
+    await testEnvironment.withSecurityRulesDisabled(async c => setDoc(doc(c.firestore(), 'purchases', 'purchase-1'), {
       storeId: 'single-store', date: '2026-10-01', supplierName: 'Vendor', billNumber: '1',
       purchaseAmount: 1000, paidAmount: 0, unpaidAmount: 1000, paymentMode: 'Credit',
       category: 'Stock', notes: '', createdAt: timestamp, updatedAt: timestamp,
-    })
+    }))
 
-    await assertSucceeds(updateDoc(doc(billing, 'purchases', 'purchase-1'), { paidAmount: 200, unpaidAmount: 800, updatedAt: timestamp }))
+    await assertFails(updateDoc(doc(billing, 'purchases', 'purchase-1'), { paidAmount: 200, unpaidAmount: 800, updatedAt: timestamp }))
     await assertFails(updateDoc(doc(billing, 'purchases', 'purchase-1'), { purchaseAmount: 500 }))
   })
 
-  it('enforces cashout ownership while allowing the linked sales synchronization', async () => {
+  it('denies old browser cashout and linked sales posting', async () => {
     const billing = userDb('billing-user')
     const owner = userDb('owner-user')
     const cashout = {
@@ -200,7 +202,7 @@ describe('Firestore role enforcement', () => {
       returnsDiscounts: 0, notes: 'Auto-synced from cashout register.',
       createdAt: timestamp, updatedAt: timestamp,
     }
-    await assertSucceeds(setDoc(doc(billing, 'sales', 'single-store-2026-10-01'), sales))
+    await assertFails(setDoc(doc(billing, 'sales', 'single-store-2026-10-01'), sales))
     await assertFails(setDoc(doc(billing, 'sales', 'invalid-sales'), { ...sales, totalSales: 999 }))
     await assertFails(updateDoc(doc(billing, 'sales', 'single-store-2026-10-01'), { date: '2026-10-02' }))
   })
@@ -238,7 +240,7 @@ describe('Firestore role enforcement', () => {
     await assertFails(getDoc(doc(userDb('disabled-user'), requestPath)))
     await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), requestPath)))
 
-    await assertSucceeds(updateDoc(doc(userDb('owner-user'), requestPath), { status: 'approved' }))
+    await assertFails(updateDoc(doc(userDb('owner-user'), requestPath), { status: 'approved' }))
 
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await updateDoc(doc(context.firestore(), requestPath), { status: 'pending' })
@@ -259,8 +261,8 @@ describe('POS test sandbox isolation', () => {
 
   it('lets staff read products and audit valuation costs while protecting owner configuration', async () => {
     const owner = userDb('owner-user')
-    await setDoc(doc(owner, 'posSandboxes', 'test', 'products', 'p-1'), product)
-    await setDoc(doc(owner, 'posSandboxes', 'test', 'productCosts', 'p-1'), { productId: 'p-1', costPaise: 600, sourceValue: '6', importRunId: 'run', updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user' })
+    await testEnvironment.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'products', 'p-1'), product))
+    await testEnvironment.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'productCosts', 'p-1'), { productId: 'p-1', costPaise: 600, sourceValue: '6', importRunId: 'run', updatedAt: timestamp, updatedByUid: 'owner-user', updatedByName: 'owner-user' }))
     await setDoc(doc(owner, 'posSandboxes', 'test', 'configuration', 'admin'), { importPolicy: 'owner-only' })
     await setDoc(doc(owner, 'posSandboxes', 'test', 'configuration', 'checkout'), { billingMaxDiscountPercentage: 5 })
 
@@ -271,20 +273,26 @@ describe('POS test sandbox isolation', () => {
     await assertSucceeds(getDoc(doc(userDb('billing-user'), 'posSandboxes', 'test', 'configuration', 'checkout')))
   })
 
-  it('requires a linked append-only movement for quantity revisions', async () => {
+  it('rejects browser audit posting even with a linked fabricated movement', async () => {
     const owner = userDb('owner-user')
-    await setDoc(doc(owner, 'posSandboxes', 'test', 'products', 'p-1'), product)
+    await testEnvironment.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'products', 'p-1'), product))
     const billing = userDb('billing-user')
     await assertFails(updateDoc(doc(billing, 'posSandboxes', 'test', 'products', 'p-1'), { currentQuantity: -3, revision: 2, lastMovementId: 'missing', updatedAt: timestamp, updatedByUid: 'billing-user', updatedByName: 'billing-user' }))
 
     const batch = writeBatch(billing)
     batch.update(doc(billing, 'posSandboxes', 'test', 'products', 'p-1'), { currentQuantity: -3, revision: 2, lastMovementId: 'move-1', updatedAt: timestamp, updatedByUid: 'billing-user', updatedByName: 'billing-user' })
-    batch.set(doc(billing, 'posSandboxes', 'test', 'stockMovements', 'move-1'), { id: 'move-1', productId: 'p-1', actorUid: 'billing-user', actorName: 'billing-user', actorRole: 'billing', type: 'sale', quantityDelta: -1, beforeQuantity: -2, afterQuantity: -3, productRevisionBefore: 1, productRevisionAfter: 2, businessDate: '2026-10-03', createdAt: timestamp })
-    await assertSucceeds(batch.commit())
+    batch.set(doc(billing, 'posSandboxes', 'test', 'stockMovements', 'move-1'), { id: 'move-1', productId: 'p-1', actorUid: 'billing-user', actorName: 'billing-user', actorRole: 'billing', type: 'stock-audit', quantityDelta: -1, beforeQuantity: -2, afterQuantity: -3, productRevisionBefore: 1, productRevisionAfter: 2, businessDate: '2026-10-03', createdAt: timestamp })
+    await assertFails(batch.commit())
+    expect((await getDoc(doc(billing, 'posSandboxes', 'test', 'products', 'p-1'))).data()?.currentQuantity).toBe(-2)
     await assertFails(updateDoc(doc(owner, 'posSandboxes', 'test', 'stockMovements', 'move-1'), { quantityDelta: 99 }))
+    await assertFails(setDoc(doc(billing, 'posSandboxes', 'test', 'stockMovements', 'client-sale'), { id: 'client-sale', productId: 'p-1', actorUid: 'billing-user', actorName: 'billing-user', actorRole: 'billing', type: 'sale', quantityDelta: -1, beforeQuantity: -3, afterQuantity: -4, productRevisionBefore: 2, productRevisionAfter: 3, businessDate: '2026-10-03', createdAt: timestamp }))
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'stockMovements', 'server-sale'), { type: 'sale', quantityDelta: -1 })
+    })
+    await assertFails(deleteDoc(doc(owner, 'posSandboxes', 'test', 'stockMovements', 'server-sale')))
   })
 
-  it('keeps bills and events immutable while approvals are owner-only', async () => {
+  it('denies browser bill posting and keeps server bills immutable while approvals are owner-only', async () => {
     const billing = userDb('billing-user')
     const owner = userDb('owner-user')
     const billPath = ['posSandboxes', 'test', 'bills', 'bill-1'] as const
@@ -292,11 +300,15 @@ describe('POS test sandbox isolation', () => {
     finalizeBatch.set(doc(billing, 'posSandboxes', 'test', 'sequences', '2026-27'), { financialYear: '2026-27', lastNumber: 1, updatedByUid: 'billing-user' })
     finalizeBatch.set(doc(billing, 'posSandboxes', 'test', 'billStates', 'bill-1'), { billId: 'bill-1', state: 'active', revision: 1, updatedByUid: 'billing-user' })
     finalizeBatch.set(doc(billing, ...billPath), { id: 'bill-1', receiptNumber: 'TEST-2026-27-000001', financialYear: '2026-27', sequenceNumber: 1, testOnly: true, status: 'finalized', createdByUid: 'billing-user', subtotalPaise: 1000, totalPaise: 1000, lines: [{ id: 'l1' }], payments: [{ method: 'cash', amountPaise: 1000 }] })
-    await assertSucceeds(finalizeBatch.commit())
+    await assertFails(finalizeBatch.commit())
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), ...billPath), { id: 'bill-1', createdByUid: 'billing-user', totalPaise: 1000 })
+    })
     await assertFails(updateDoc(doc(owner, ...billPath), { totalPaise: 0 }))
-    await setDoc(doc(billing, 'posSandboxes', 'test', 'approvals', 'a-1'), { type: 'void', billId: 'bill-1', reason: 'Wrong scan', status: 'pending', requestedByUid: 'billing-user', requestedByName: 'billing-user', requestedAt: timestamp })
+    await assertFails(setDoc(doc(billing, 'posSandboxes', 'test', 'approvals', 'a-1'), { type: 'void', billId: 'bill-1', reason: 'Wrong scan', status: 'pending', requestedByUid: 'billing-user', requestedByName: 'billing-user', requestedAt: timestamp }))
+    await testEnvironment.withSecurityRulesDisabled(async context => { await setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'approvals', 'a-1'), { type: 'void', billId: 'bill-1', reason: 'Historical pending source', status: 'pending', requestedByUid: 'billing-user', requestedByName: 'billing-user', requestedAt: timestamp }) })
     await assertFails(updateDoc(doc(billing, 'posSandboxes', 'test', 'approvals', 'a-1'), { status: 'approved' }))
-    await assertSucceeds(updateDoc(doc(owner, 'posSandboxes', 'test', 'approvals', 'a-1'), { status: 'rejected', reviewedAt: timestamp, reviewedByUid: 'owner-user', reviewedByName: 'owner-user', reviewReason: 'Not supported' }))
+    await assertFails(updateDoc(doc(owner, 'posSandboxes', 'test', 'approvals', 'a-1'), { status: 'rejected', reviewedAt: timestamp, reviewedByUid: 'owner-user', reviewedByName: 'owner-user', reviewReason: 'Not supported' }))
   })
 
   it('blocks staff imports, reset state, and every non-test sandbox', async () => {
@@ -369,11 +381,11 @@ describe('POS shared cashier handover integrity', () => {
     })
     return batch
   }
-  it('allows linked billing and denies missing ledger update or forged amounts', async () => {
+  it('denies all browser billing batches including previously linked shapes', async () => {
     await seedLedger(undefined, 'open')
     await assertFails(billingBatch(authTime, false).commit())
     await assertFails(billingBatch(authTime, true, 999999).commit())
-    await assertSucceeds(billingBatch().commit())
+    await assertFails(billingBatch().commit())
   })
   it('denies old-token billing after logout and unrelated owner refund edits', async () => {
     await seedLedger({ uid: 'billing-user', authTime, needsLogoutCheck: false, closed: true, lastBillId: 'historical', lastReconciliationId: '', updatedAt: timestamp })
@@ -386,7 +398,7 @@ describe('POS shared cashier handover integrity', () => {
     await assertSucceeds(reconciliationBatch().commit())
     previousCashier = (await getDoc(ref(cashierDb(), 'cashierStates', 'billing-user'))).data()!
     await assertFails(billingBatch(authTime + 1, true, 11000, 3, 'recon-1').commit())
-    await assertSucceeds(billingBatch(authTime, true, 11000, 3, 'recon-1').commit())
+    await assertFails(billingBatch(authTime, true, 11000, 3, 'recon-1').commit())
   })
   it('saves truthful reconciliation atomically and prevents replay or rewriting financial evidence', async () => {
     await seedLedger()
@@ -423,14 +435,14 @@ describe('POS shared cashier handover integrity', () => {
     const amounts = { cash: 11000, upi: 21000, card: 31000 }
     await assertSucceeds(reconciliationBatch({ actual: amounts, expected: amounts, denominations: { '100': 1, '10': 1 } }, { cashActualPaise: 11000, upiActualPaise: 21000, cardActualPaise: 31000 }).commit())
   })
-  it('closes the physical drawer atomically and keeps the closure immutable', async () => {
+  it('denies old browser drawer closure and preserves the physical count', async () => {
     await seedLedger(undefined, 'open')
     await testEnvironment.withSecurityRulesDisabled(async context => {
       await updateDoc(ref(context.firestore(), 'handover', 'main'), { checkpoint: { cashActualPaise: 10000, cashNetPaise: 10000, date, upiActualPaise: 20000, cardActualPaise: 30000, upiNetPaise: 20000, cardNetPaise: 30000, reconciliationId: 'prior' } })
     })
-    await assertSucceeds(drawerClosureBatch().commit())
+    await assertFails(drawerClosureBatch().commit())
     const db = userDb('owner-user')
-    expect((await getDoc(ref(db, 'handover', 'main'))).data()?.checkpoint.cashActualPaise).toBe(0)
+    expect((await getDoc(ref(db, 'handover', 'main'))).data()?.checkpoint.cashActualPaise).toBe(10000)
     await assertFails(updateDoc(ref(db, 'drawerClosures', 'daily-cashout-close-1'), { removedPaise: 1 }))
     await assertFails(deleteDoc(ref(db, 'drawerClosures', 'daily-cashout-close-1')))
   })
@@ -528,19 +540,9 @@ describe('V2 vendor ledger capability enforcement', () => {
     })
   })
 
-  it('denies non-owner activation and unaudited non-zero openings', async () => {
-    const input = {
-      activationDate: '2026-10-05',
-      vendors: [{ id: 'manager-vendor', canonicalName: 'Manager Vendor', openingBalancePaise: 0, openingReason: '' }],
-      actor: { id: 'manager-user', name: 'Manager' },
-      timestamp,
-    }
-    await expect(activateVendorLedgerV2(input, userDb('manager-user'))).rejects.toThrow()
-    await expect(activateVendorLedgerV2({
-      ...input,
-      actor: { id: 'owner-user', name: 'Owner' },
-      vendors: [{ ...input.vendors[0], openingBalancePaise: 10000 }],
-    }, userDb('owner-user'))).rejects.toThrow(/audit reason/)
+  it('rejects the retired browser activation/import adapter for every actor without records', async () => {
+    for (const role of ['owner-user', 'manager-user']) await expect(activateVendorLedgerV2({ activationDate: '2026-10-05', vendors: [], actor: { id: role, name: role }, timestamp }, userDb(role))).rejects.toThrow('Historical vendor activation/import requires a separately approved trusted migration. No records were changed.')
+    expect((await getDoc(doc(userDb('owner-user'), 'appMetadata', 'vendorLedgerV2Config'))).exists()).toBe(false)
   })
 
   const vendor = {
@@ -568,6 +570,16 @@ describe('V2 vendor ledger capability enforcement', () => {
     })
   }
 
+  async function funding() {
+    await enableV2()
+    await trusted.seedFunding(['owner-user', 'purchasing-user', 'manager-user', 'billing-user', 'cheque-user'])
+  }
+  async function vendorAndInvoice() {
+    await funding()
+    await trusted.call('vendor-create', { id: 'vendor-v2-1', canonicalName: 'New Vendor' })
+    return trusted.call('vendor-purchase', { id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-1', invoiceDate: '2026-10-01', invoiceTotalPaise: 100000 })
+  }
+
   it('denies every V2 write while the protected feature flag is disabled', async () => {
     await assertFails(setDoc(doc(userDb('owner-user'), 'vendorsV2', 'vendor-v2-1'), {
       ...vendor,
@@ -576,28 +588,17 @@ describe('V2 vendor ledger capability enforcement', () => {
     }))
   })
 
-  it('allows staff vendor entry capabilities and denies disabled and unauthenticated users', async () => {
-    await enableV2()
-    await assertSucceeds(setDoc(doc(userDb('purchasing-user'), 'vendorsV2', 'vendor-v2-1'), vendor))
-    await assertSucceeds(setDoc(doc(userDb('manager-user'), 'vendorsV2', 'vendor-v2-2'), {
-      ...vendor,
-      id: 'vendor-v2-2',
-      createdByUserId: 'manager-user',
-      updatedByUserId: 'manager-user',
-    }))
-    await assertSucceeds(setDoc(doc(userDb('billing-user'), 'vendorsV2', 'vendor-v2-4'), {
-      ...vendor,
-      id: 'vendor-v2-4',
-      createdByUserId: 'billing-user',
-      updatedByUserId: 'billing-user',
-    }))
-    await assertFails(setDoc(doc(userDb('disabled-user'), 'vendorsV2', 'vendor-v2-3'), {
-      ...vendor,
-      id: 'vendor-v2-3',
-      createdByUserId: 'disabled-user',
-      updatedByUserId: 'disabled-user',
-    }))
-    await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), 'vendorsV2', 'vendor-v2-1')))
+  it('allows trusted staff vendor entry but denies direct writes and disabled actors', async () => {
+    await funding()
+    for (const uid of ['purchasing-user', 'manager-user', 'billing-user']) {
+      const id = 'vendor-' + uid
+      const result = await trusted.call('vendor-create', { id, canonicalName: uid }, uid)
+      expect(result).toMatchObject({ created: true, vendor: { id, createdByUserId: uid, openingBalancePaise: 0 } })
+      await assertFails(setDoc(doc(userDb(uid), 'vendorsV2', 'forged-' + uid), vendor))
+    }
+    await expect(trusted.call('vendor-create', { id: 'disabled', canonicalName: 'Disabled' }, 'disabled-user')).rejects.toMatchObject({ code: 'permission-denied' })
+    expect((await getDoc(doc(userDb('owner-user'), 'vendorsV2', 'disabled'))).exists()).toBe(false)
+    await assertFails(getDoc(doc(testEnvironment.unauthenticatedContext().firestore(), 'vendorsV2', 'vendor-purchasing-user')))
   })
 
   it('prevents users from granting themselves purchasing capabilities', async () => {
@@ -606,200 +607,78 @@ describe('V2 vendor ledger capability enforcement', () => {
     }))
   })
 
-  it('keeps ledger history append-only and limits reading to the ledger capability', async () => {
-    await enableV2()
-    const purchasingDb = userDb('purchasing-user')
-    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
-    const purchase = {
-      id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-1', normalizedInvoiceNumber: 'INV-1', invoiceDate: '2026-10-01',
-      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-1',
-      ledgerEntryId: 'purchase:purchase-v2-1:1:purchase', notes: '', revision: 1,
-      createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    }
-    const reservation = {
-      id: 'vendor-v2-1:INV-1', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-1',
-      purchaseId: 'purchase-v2-1', createdAt: timestamp, createdByUserId: 'purchasing-user',
-    }
-    const entry = {
-      id: 'purchase:purchase-v2-1:1:purchase',
-      vendorId: 'vendor-v2-1',
-      eventType: 'purchase',
-      posting: 'financial',
-      signedAmountPaise: 100000,
-      sourceType: 'purchase',
-      sourceRecordId: 'purchase-v2-1',
-      sourceRevision: 1,
-      occurredOn: '2026-10-01',
-      createdAt: timestamp,
-      createdByUserId: 'purchasing-user',
-    }
-    const entryPath = 'vendorLedgerEntriesV2/purchase:purchase-v2-1:1:purchase'
-    const postingBatch = writeBatch(purchasingDb)
-    postingBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-v2-1'), purchase)
-    postingBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-1'), reservation)
-    postingBatch.set(doc(purchasingDb, entryPath), entry)
-    postingBatch.set(doc(purchasingDb, 'vendorAccountStatesV2', 'vendor-v2-1'), {
-      id: 'vendor-v2-1', vendorId: 'vendor-v2-1', outstandingPaise: 100000, revision: 1,
-      lastLedgerEntryId: entry.id, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    postingBatch.set(doc(purchasingDb, 'invoiceStatesV2', 'purchase-v2-1'), {
-      id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceId: 'purchase-v2-1', openAmountPaise: 100000,
-      reservedAmountPaise: 0, revision: 1, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    await assertSucceeds(postingBatch.commit())
-    await assertSucceeds(getDoc(doc(userDb('purchasing-user'), entryPath)))
-    await assertSucceeds(getDoc(doc(userDb('manager-user'), entryPath)))
-    await assertFails(updateDoc(doc(userDb('owner-user'), entryPath), { signedAmountPaise: 1 }))
-    await assertFails(deleteDoc(doc(userDb('owner-user'), entryPath)))
+  it('keeps trusted ledger history readable by permitted staff and immutable to all clients', async () => {
+    await vendorAndInvoice()
+    const path = 'vendorLedgerEntriesV2/purchase:purchase-v2-1:1:purchase'
+    for (const uid of ['purchasing-user', 'manager-user', 'billing-user']) await assertSucceeds(getDoc(doc(userDb(uid), path)))
+    for (const uid of ['owner-user', 'purchasing-user']) { await assertFails(updateDoc(doc(userDb(uid), path), { signedAmountPaise: 1 })); await assertFails(deleteDoc(doc(userDb(uid), path))) }
+    expect((await getDoc(doc(userDb('owner-user'), path))).data()?.signedAmountPaise).toBe(100000)
   })
 
-  it('requires atomic purchase posting and rejects duplicate vendor invoice numbers', async () => {
-    await enableV2()
-    const purchasingDb = userDb('purchasing-user')
-    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
-    await assertFails(setDoc(doc(purchasingDb, 'purchasesV2', 'incomplete-purchase'), {
-      id: 'incomplete-purchase', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
-      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-2',
-      ledgerEntryId: 'purchase:incomplete-purchase:1:purchase', notes: '', revision: 1,
-      createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    }))
-
-    const firstBatch = writeBatch(purchasingDb)
-    firstBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-first'), {
-      id: 'purchase-first', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
-      invoiceTotalPaise: 100000, invoiceReservationId: 'vendor-v2-1:INV-2', ledgerEntryId: 'purchase:purchase-first:1:purchase',
-      notes: '', revision: 1, createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    firstBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-2'), {
-      id: 'vendor-v2-1:INV-2', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-2',
-      purchaseId: 'purchase-first', createdAt: timestamp, createdByUserId: 'purchasing-user',
-    })
-    firstBatch.set(doc(purchasingDb, 'vendorLedgerEntriesV2', 'purchase:purchase-first:1:purchase'), {
-      id: 'purchase:purchase-first:1:purchase', vendorId: 'vendor-v2-1', eventType: 'purchase', posting: 'financial',
-      signedAmountPaise: 100000, sourceType: 'purchase', sourceRecordId: 'purchase-first', sourceRevision: 1,
-      occurredOn: '2026-10-01', createdAt: timestamp, createdByUserId: 'purchasing-user',
-    })
-    firstBatch.set(doc(purchasingDb, 'vendorAccountStatesV2', 'vendor-v2-1'), {
-      id: 'vendor-v2-1', vendorId: 'vendor-v2-1', outstandingPaise: 100000, revision: 1,
-      lastLedgerEntryId: 'purchase:purchase-first:1:purchase', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    firstBatch.set(doc(purchasingDb, 'invoiceStatesV2', 'purchase-first'), {
-      id: 'purchase-first', vendorId: 'vendor-v2-1', invoiceId: 'purchase-first', openAmountPaise: 100000,
-      reservedAmountPaise: 0, revision: 1, updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    await assertSucceeds(firstBatch.commit())
-
-    const duplicateBatch = writeBatch(purchasingDb)
-    duplicateBatch.set(doc(purchasingDb, 'purchasesV2', 'purchase-duplicate'), {
-      id: 'purchase-duplicate', vendorId: 'vendor-v2-1', invoiceNumber: 'inv-2', normalizedInvoiceNumber: 'INV-2', invoiceDate: '2026-10-01',
-      invoiceTotalPaise: 200000, invoiceReservationId: 'vendor-v2-1:INV-2', ledgerEntryId: 'purchase:purchase-duplicate:1:purchase',
-      notes: '', revision: 1, createdAt: timestamp, createdByUserId: 'purchasing-user', updatedAt: timestamp, updatedByUserId: 'purchasing-user',
-    })
-    duplicateBatch.set(doc(purchasingDb, 'invoiceReservationsV2', 'vendor-v2-1:INV-2'), {
-      id: 'vendor-v2-1:INV-2', vendorId: 'vendor-v2-1', normalizedInvoiceNumber: 'INV-2',
-      purchaseId: 'purchase-duplicate', createdAt: timestamp, createdByUserId: 'purchasing-user',
-    })
-    duplicateBatch.set(doc(purchasingDb, 'vendorLedgerEntriesV2', 'purchase:purchase-duplicate:1:purchase'), {
-      id: 'purchase:purchase-duplicate:1:purchase', vendorId: 'vendor-v2-1', eventType: 'purchase', posting: 'financial',
-      signedAmountPaise: 200000, sourceType: 'purchase', sourceRecordId: 'purchase-duplicate', sourceRevision: 1,
-      occurredOn: '2026-10-01', createdAt: timestamp, createdByUserId: 'purchasing-user',
-    })
-    await assertFails(duplicateBatch.commit())
+  it('requires trusted atomic purchase posting and rejects duplicate vendor invoice numbers', async () => {
+    await vendorAndInvoice()
+    const owner = userDb('owner-user')
+    expect((await getDoc(doc(owner, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
+    expect((await getDoc(doc(owner, 'invoiceStatesV2', 'purchase-v2-1'))).data()?.openAmountPaise).toBe(100000)
+    const before = (await getDocs(collection(owner, 'vendorLedgerEntriesV2'))).size
+    await expect(trusted.call('vendor-purchase', { id: 'duplicate', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-1', invoiceDate: '2026-10-01', invoiceTotalPaise: 100000 })).rejects.toMatchObject({ code: 'already-exists' })
+    expect((await getDoc(doc(owner, 'purchasesV2', 'duplicate'))).exists()).toBe(false)
+    expect((await getDocs(collection(owner, 'vendorLedgerEntriesV2'))).size).toBe(before)
+    await assertFails(setDoc(doc(userDb('purchasing-user'), 'purchasesV2', 'forged'), { invoiceTotalPaise: 100000 }))
   })
 
-  it('makes repository purchase retries idempotent and rejects a second purchase for the same invoice', async () => {
-    await enableV2()
-    const purchasingDb = userDb('purchasing-user')
-    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
-    const input = {
-      id: 'purchase-repository-1',
-      vendorId: 'vendor-v2-1',
-      invoiceNumber: ' inv 3 ',
-      invoiceDate: '2026-10-01',
-      invoiceTotalPaise: 125000,
-      actorUserId: 'purchasing-user',
-      timestamp,
-    }
-
-    await expect(createPurchaseV2(input, purchasingDb)).resolves.toMatchObject({ created: true })
-    await expect(createPurchaseV2(input, purchasingDb)).resolves.toMatchObject({ created: false })
-    await expect(createPurchaseV2({ ...input, id: 'purchase-repository-2' }, purchasingDb))
-      .rejects.toThrow(/already registered/)
+  it('recovers the original trusted purchase result and rejects changed-payload or duplicate invoice replay', async () => {
+    await funding(); await trusted.call('vendor-create', { id: 'vendor-v2-1', canonicalName: 'Vendor' })
+    const input = { operationId: 'purchase-operation', id: 'purchase-v2-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-1', invoiceDate: '2026-10-01', invoiceTotalPaise: 100000 }
+    const first = await trusted.call('vendor-purchase', input)
+    expect(await trusted.call('vendor-purchase', input)).toEqual(first)
+    await expect(trusted.call('vendor-purchase', { ...input, invoiceTotalPaise: 100001 })).rejects.toMatchObject({ code: 'already-exists' })
+    await expect(trusted.call('vendor-purchase', { ...input, operationId: 'another', id: 'another' })).rejects.toMatchObject({ code: 'already-exists' })
+    expect((await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
   })
 
-  it('creates owner-managed V2 vendors at zero and keeps retries idempotent', async () => {
-    await enableV2()
-    const input = {
-      id: 'vendor-created-1', canonicalName: 'New Vendor', ownerName: 'Vendor Owner', aliases: ['NV'],
-      contact: '9999999999', address: 'Main Road', suppliedBrands: ['Brand One'], notes: 'Net 15',
-      actorUserId: 'owner-user', timestamp,
-    }
-    await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({
-      created: true,
-      vendor: {
-        ownerName: 'Vendor Owner', contact: '9999999999', address: 'Main Road',
-        suppliedBrands: ['Brand One'], notes: 'Net 15', openingBalancePaise: 0,
-      },
-    })
-    await expect(createVendorV2(input, userDb('owner-user'))).resolves.toMatchObject({ created: false })
-    await expect(createVendorV2({ ...input, canonicalName: 'Different Vendor' }, userDb('owner-user')))
-      .rejects.toThrow(/already uses this ID/)
+  it('creates trusted V2 vendors with retained contact details and idempotent zero opening', async () => {
+    await funding()
+    const input = { operationId: 'new-vendor', id: 'vendor-created-1', canonicalName: 'New Vendor', ownerName: 'Vendor Owner', aliases: ['NV'], contact: '9999999999', address: 'Main Road', suppliedBrands: ['Brand One'], notes: 'Net 15' }
+    const first = await trusted.call('vendor-create', input, 'owner-user')
+    expect(first).toMatchObject({ created: true, vendor: { ownerName: 'Vendor Owner', contact: '9999999999', address: 'Main Road', suppliedBrands: ['Brand One'], notes: 'Net 15', openingBalancePaise: 0 } })
+    expect(await trusted.call('vendor-create', input, 'owner-user')).toEqual(first)
+    await expect(trusted.call('vendor-create', { ...input, canonicalName: 'Different' }, 'owner-user')).rejects.toMatchObject({ code: 'already-exists' })
   })
 
-  it('creates an audited vendor opening atomically, keeps retries idempotent and allows payment against it', async () => {
-    await enableV2()
-    const ownerDb = userDb('owner-user')
-    const input = {
-      id: 'vendor-opening-1', canonicalName: 'Vendor With Opening', openingBalancePaise: 125050,
-      openingDate: '2026-10-11', openingReason: 'Verified statement', actorUserId: 'owner-user', timestamp,
-    }
-    const result = await createVendorV2(input, ownerDb)
-    expect(result.created).toBe(true)
-    const openingRef = doc(ownerDb, 'vendorLedgerEntriesV2', result.vendor.openingLedgerEntryId!)
-    const accountRef = doc(ownerDb, 'vendorAccountStatesV2', input.id)
-    expect((await getDoc(openingRef)).data()).toMatchObject({
-      eventType: 'opening-balance', signedAmountPaise: 125050, reason: input.openingReason, occurredOn: input.openingDate,
-    })
-    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 125050, revision: 1 })
-    await expect(createVendorV2(input, ownerDb)).resolves.toMatchObject({ created: false })
-    await expect(createVendorV2({ ...input, openingBalancePaise: 125051 }, ownerDb)).rejects.toThrow(/already uses this ID/)
-    await expect(createVendorV2({ ...input, openingReason: 'Different statement' }, ownerDb)).rejects.toThrow(/different opening evidence/)
-    await expect(createVendorV2({ ...input, openingDate: '2026-10-12' }, ownerDb)).rejects.toThrow(/different opening evidence/)
-    await createSettlementV2({
-      id: 'opening-payment', vendorId: input.id, date: '2026-10-11', amountPaise: 25050,
-      mode: 'bank-transfer', actorUserId: 'owner-user', timestamp,
-    }, ownerDb)
-    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 100000, revision: 2 })
-    await expect(createVendorV2(input, ownerDb)).resolves.toMatchObject({ created: false })
-    expect((await getDoc(accountRef)).data()).toMatchObject({ outstandingPaise: 100000, revision: 2 })
-    expect((await getDoc(openingRef)).data()?.signedAmountPaise).toBe(125050)
+  it('creates an audited trusted opening once and pays it without replaying the opening', async () => {
+    await funding()
+    const input = { operationId: 'opening-once', id: 'vendor-opening-1', canonicalName: 'Vendor With Opening', openingBalancePaise: 125050, openingDate: '2026-10-11', openingReason: 'Verified statement' }
+    const first = await trusted.call('vendor-create', input, 'owner-user')
+    expect(await trusted.call('vendor-create', input, 'owner-user')).toEqual(first)
+    const db = userDb('owner-user'), openingPath = 'vendorLedgerEntriesV2/vendor:vendor-opening-1:1:opening-balance'
+    expect((await getDoc(doc(db, openingPath))).data()).toMatchObject({ signedAmountPaise: 125050, reason: 'Verified statement', occurredOn: '2026-10-11' })
+    for (const patch of [{ openingBalancePaise: 125051 }, { openingReason: 'Different statement' }, { openingDate: '2026-10-12' }]) await expect(trusted.call('vendor-create', { ...input, ...patch }, 'owner-user')).rejects.toMatchObject({ code: 'already-exists' })
+    await trusted.call('vendor-payment', { id: 'opening-payment', vendorId: input.id, date: '2026-10-11', amountPaise: 25050, mode: 'bank-transfer' }, 'owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', input.id))).data()).toMatchObject({ outstandingPaise: 100000, revision: 2 })
+    expect(await trusted.call('vendor-create', input, 'owner-user')).toEqual(first)
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', input.id))).data()?.outstandingPaise).toBe(100000)
+    expect((await getDoc(doc(db, openingPath))).data()?.signedAmountPaise).toBe(125050)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(474950)
   })
 
-  it('rejects non-owner opening payables without leaving a partial vendor or balance', async () => {
-    await enableV2()
-    const input = {
-      id: 'staff-opening', canonicalName: 'Staff Opening', openingBalancePaise: 10000,
-      openingDate: '2026-10-11', openingReason: 'Statement', actorUserId: 'purchasing-user', timestamp,
-    }
-    await expect(createVendorV2(input, userDb('purchasing-user'))).rejects.toThrow()
-    const ownerDb = userDb('owner-user')
-    expect((await getDoc(doc(ownerDb, 'vendorsV2', input.id))).exists()).toBe(false)
-    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', input.id))).exists()).toBe(false)
-    expect((await getDoc(doc(ownerDb, 'vendorLedgerEntriesV2', 'vendor:staff-opening:1:opening-balance'))).exists()).toBe(false)
-    await expect(createVendorV2({ ...input, openingBalancePaise: 0 }, userDb('purchasing-user'))).resolves.toMatchObject({ created: true })
+  it('rejects trusted staff nonzero opening without partial writes while allowing zero opening', async () => {
+    await funding()
+    const input = { id: 'staff-opening', canonicalName: 'Staff Opening', openingBalancePaise: 10000, openingDate: '2026-10-11', openingReason: 'Statement' }
+    await expect(trusted.call('vendor-create', input)).rejects.toMatchObject({ code: 'permission-denied' })
+    const db = userDb('owner-user')
+    for (const p of ['vendorsV2/staff-opening','vendorAccountStatesV2/staff-opening','vendorLedgerEntriesV2/vendor:staff-opening:1:opening-balance']) expect((await getDoc(doc(db,p))).exists()).toBe(false)
+    expect(await trusted.call('vendor-create', { ...input, openingBalancePaise: 0 })).toMatchObject({ created: true })
   })
 
-  it('rejects unaudited and pre-activation vendor openings without financial writes', async () => {
-    await enableV2()
-    const ownerDb = userDb('owner-user')
-    const input = {
-      id: 'invalid-opening', canonicalName: 'Invalid Opening', openingBalancePaise: 10000,
-      openingDate: '2026-10-11', openingReason: 'Statement', actorUserId: 'owner-user', timestamp,
-    }
-    await expect(createVendorV2({ ...input, openingReason: '' }, ownerDb)).rejects.toThrow(/audit reason/)
-    await expect(createVendorV2({ ...input, openingDate: '2026-09-30' }, ownerDb)).rejects.toThrow(/activation date/)
-    expect((await getDoc(doc(ownerDb, 'vendorsV2', input.id))).exists()).toBe(false)
-    expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', input.id))).exists()).toBe(false)
+  it('rejects trusted unaudited and pre-activation openings without partial sources', async () => {
+    await funding()
+    const input = { id: 'invalid-opening', canonicalName: 'Invalid Opening', openingBalancePaise: 10000, openingDate: '2026-10-11', openingReason: 'Statement' }
+    await expect(trusted.call('vendor-create', { ...input, openingReason: '' }, 'owner-user')).rejects.toMatchObject({ code: 'failed-precondition' })
+    await expect(trusted.call('vendor-create', { ...input, openingDate: '2026-09-30' }, 'owner-user')).rejects.toMatchObject({ code: 'failed-precondition' })
+    const db = userDb('owner-user')
+    expect((await getDoc(doc(db, 'vendorsV2', input.id))).exists()).toBe(false)
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', input.id))).exists()).toBe(false)
   })
 
   it('blocks legacy vendor posting after V2 activation while preserving owner loan payments', async () => {
@@ -823,101 +702,45 @@ describe('V2 vendor ledger capability enforcement', () => {
     }))
   })
 
-  it('posts invoice-linked and custom settlements atomically without exceeding balances', async () => {
-    await enableV2()
-    const purchasingDb = userDb('purchasing-user')
-    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
-    await createPurchaseV2({
-      id: 'purchase-settlement-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-SETTLE',
-      invoiceDate: '2026-10-01', invoiceTotalPaise: 100000, actorUserId: 'purchasing-user', timestamp,
-    }, purchasingDb)
-
-    const linked = {
-      id: 'settlement-linked-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 40000,
-      mode: 'upi' as const, invoiceId: 'purchase-settlement-1', actorUserId: 'purchasing-user', timestamp,
-    }
-    await expect(createSettlementV2(linked, purchasingDb)).resolves.toMatchObject({ created: true })
-    await expect(createSettlementV2(linked, purchasingDb)).resolves.toMatchObject({ created: false })
-    await expect(createSettlementV2({ ...linked, amountPaise: 41000 }, purchasingDb)).rejects.toThrow(/conflicts/)
-    await expect(createSettlementV2({
-      id: 'settlement-custom-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 60000,
-      mode: 'bank-transfer', actorUserId: 'purchasing-user', timestamp,
-    }, purchasingDb)).resolves.toMatchObject({ created: true })
-    await expect(createSettlementV2({
-      id: 'settlement-excess-1', vendorId: 'vendor-v2-1', date: '2026-10-01', amountPaise: 1,
-      mode: 'cash', actorUserId: 'purchasing-user', timestamp,
-    }, purchasingDb)).rejects.toThrow(/positive outstanding/)
-
-    const correction = {
-      id: 'settlement-correction-1', kind: 'settlement-correction', sourceRecordId: 'settlement-custom-1',
-      vendorId: 'vendor-v2-1', sourceRevision: 1,
-      before: { date: '2026-10-01', amountPaise: 60000, mode: 'bank-transfer', notes: '' },
-      proposed: { date: '2026-10-01', amountPaise: 50000, mode: 'bank-transfer', notes: 'Corrected amount' },
-      reason: 'Amount entered incorrectly', requestedByUserId: 'purchasing-user', requestedBy: 'Purchasing User',
-      requestType: 'staff-request', status: 'pending', createdAt: timestamp,
-    }
-    await assertSucceeds(setDoc(doc(purchasingDb, 'vendorLedgerCorrectionRequestsV2', correction.id), correction))
-    await expect(applySettlementCorrectionV2(correction.id, { id: 'owner-user', name: 'Owner' }, '2026-10-01T01:00:00.000Z', userDb('owner-user')))
-      .resolves.toMatchObject({ adjustmentPaise: 10000 })
-    const accountAfterCorrection = await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))
-    expect(accountAfterCorrection.data()?.outstandingPaise).toBe(10000)
-    await assertFails(updateDoc(doc(userDb('owner-user'), 'vendorSettlementsV2', 'settlement-custom-1'), { amountPaise: 50000 }))
-
-    await expect(applyOwnerSettlementCorrectionV2({
-      id: 'owner-correction-linked-1', sourceRecordId: 'settlement-linked-1',
-      proposed: { date: '2026-10-01', amountPaise: 30000, mode: 'upi', notes: 'Owner corrected linked amount' },
-      reason: 'Invoice-linked amount entered incorrectly', actor: { id: 'owner-user', name: 'Owner' },
-      timestamp: '2026-10-01T02:00:00.000Z',
-    }, userDb('owner-user'))).resolves.toMatchObject({ adjustmentPaise: 10000 })
-    const linkedAccount = await getDoc(doc(userDb('owner-user'), 'vendorAccountStatesV2', 'vendor-v2-1'))
-    const linkedInvoice = await getDoc(doc(userDb('owner-user'), 'invoiceStatesV2', 'purchase-settlement-1'))
-    expect(linkedAccount.data()?.outstandingPaise).toBe(20000)
-    expect(linkedInvoice.data()?.openAmountPaise).toBe(70000)
+  it('posts trusted linked/custom payments and owner corrections with independent bank and payable reconciliation', async () => {
+    await vendorAndInvoice()
+    const linked = { operationId: 'linked-payment', id: 'settlement-linked-1', vendorId: 'vendor-v2-1', date: '2026-10-11', amountPaise: 40000, mode: 'upi', invoiceId: 'purchase-v2-1' }
+    const first = await trusted.call('vendor-payment', linked)
+    expect(await trusted.call('vendor-payment', linked)).toEqual(first)
+    await expect(trusted.call('vendor-payment', { ...linked, amountPaise: 41000 })).rejects.toMatchObject({ code: 'already-exists' })
+    await trusted.call('vendor-payment', { id: 'settlement-custom-1', vendorId: 'vendor-v2-1', date: '2026-10-11', amountPaise: 60000, mode: 'bank-transfer' })
+    await expect(trusted.call('vendor-payment', { id: 'excess', vendorId: 'vendor-v2-1', date: '2026-10-11', amountPaise: 1, mode: 'cash' })).rejects.toMatchObject({ code: 'failed-precondition' })
+    const db = userDb('owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(0)
+    await trusted.call('vendor-correction', { id: 'staff-correction', sourceRecordId: 'settlement-custom-1', expectedRevision: 1, proposed: { date: '2026-10-11', amountPaise: 50000, mode: 'bank-transfer', notes: 'Corrected' }, reason: 'Amount entered incorrectly', applyImmediately: false })
+    await assertFails(updateDoc(doc(db, 'vendorSettlementsV2', 'settlement-custom-1'), { amountPaise: 50000 }))
+    await trusted.call('vendor-correction-decision', { requestId: 'staff-correction', decision: 'approve' }, 'owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(10000)
+    await trusted.call('vendor-correction', { id: 'owner-correction', sourceRecordId: 'settlement-linked-1', expectedRevision: 1, proposed: { date: '2026-10-11', amountPaise: 30000, mode: 'upi', notes: 'Corrected linked' }, reason: 'Invoice linked amount entered incorrectly', applyImmediately: true }, 'owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(20000)
+    expect((await getDoc(doc(db, 'invoiceStatesV2', 'purchase-v2-1'))).data()?.openAmountPaise).toBe(70000)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(420000)
   })
 
-  it('keeps V2 vendor cheques unique and reduces outstanding only on debit', async () => {
-    await enableV2()
-    const purchasingDb = userDb('purchasing-user')
-    const chequeDb = userDb('cheque-user')
-    await setDoc(doc(purchasingDb, 'vendorsV2', 'vendor-v2-1'), vendor)
-    await createPurchaseV2({
-      id: 'purchase-cheque-1', vendorId: 'vendor-v2-1', invoiceNumber: 'INV-CHEQUE',
-      invoiceDate: '2026-10-01', invoiceTotalPaise: 100000, actorUserId: 'purchasing-user', timestamp,
-    }, purchasingDb)
-    await assertSucceeds(setDoc(doc(userDb('owner-user'), 'chequeBooksV2', 'book-1120-1199'), {
-      id: 'book-1120-1199', bankAccountLabel: 'Primary Bank', startNumber: 1120, endNumber: 1199,
-      active: true, revision: 1, createdAt: timestamp, createdByUserId: 'owner-user',
-      updatedAt: timestamp, updatedByUserId: 'owner-user',
-    }))
-    const input = {
-      chequeBookId: 'book-1120-1199', chequeNumber: '00 11-20', vendorId: 'vendor-v2-1',
-      date: '2026-10-02', amountPaise: 40000, actorUserId: 'cheque-user', timestamp,
-    }
-    await expect(createVendorChequeV2(input, chequeDb)).resolves.toMatchObject({ created: true })
-    await expect(createVendorChequeV2(input, chequeDb)).resolves.toMatchObject({ created: false })
-    await expect(createVendorChequeV2({ ...input, amountPaise: 41000 }, chequeDb)).rejects.toThrow(/already registered/)
-    await expect(createVendorChequeV2({ ...input, chequeNumber: '1200' }, chequeDb)).rejects.toThrow(/active leaf/)
-
-    await expect(transitionVendorChequeV2({
-      chequeNumber: '1120', expectedRevision: 1, toStatus: 'issued', actorUserId: 'cheque-user',
-      timestamp: '2026-10-01T01:00:00.000Z',
-    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'issued', revision: 2 } })
-    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
-    await expect(transitionVendorChequeV2({
-      chequeNumber: '1120', expectedRevision: 2, toStatus: 'presented', actorUserId: 'cheque-user',
-      timestamp: '2026-10-01T02:00:00.000Z',
-    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'presented', revision: 3 } })
-    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
-    await expect(transitionVendorChequeV2({
-      chequeNumber: '1120', expectedRevision: 3, toStatus: 'debited', actorUserId: 'cheque-user',
-      timestamp: '2026-10-01T03:00:00.000Z',
-    }, chequeDb)).resolves.toMatchObject({ cheque: { status: 'debited', revision: 4 } })
-    expect((await getDoc(doc(chequeDb, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(60000)
-    await expect(transitionVendorChequeV2({
-      chequeNumber: '1120', expectedRevision: 3, toStatus: 'debited', actorUserId: 'cheque-user',
-      timestamp: '2026-10-01T03:00:00.000Z',
-    }, chequeDb)).rejects.toThrow(/stale/)
-    await assertFails(updateDoc(doc(userDb('owner-user'), 'chequesV2', '1120'), { chequeNumber: '1121' }))
+  it('keeps trusted cheques unique, owner debit final and bank/payable posting exactly once', async () => {
+    await vendorAndInvoice()
+    const input = { operationId: 'cheque-issue', chequeNumber: '001120', vendorId: 'vendor-v2-1', purpose: 'vendor-payment', date: '2026-10-11', amountPaise: 40000 }
+    const first = await trusted.call('cheque-issue', input, 'owner-user')
+    expect(first).toMatchObject({ cheque: { status: 'issued', revision: 1 } })
+    expect(await trusted.call('cheque-issue', input, 'owner-user')).toEqual(first)
+    await expect(trusted.call('cheque-issue', { ...input, amountPaise: 41000 }, 'owner-user')).rejects.toMatchObject({ code: 'already-exists' })
+    const db = userDb('owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
+    await trusted.call('cheque-decision', { chequeNumber: '1120', expectedRevision: 1, toStatus: 'presented' }, 'owner-user')
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(100000)
+    await expect(trusted.call('cheque-decision', { chequeNumber: '1120', expectedRevision: 2, toStatus: 'debited' }, 'cheque-user')).rejects.toMatchObject({ code: 'permission-denied' })
+    const debit = { operationId: 'cheque-debit', chequeNumber: '1120', expectedRevision: 2, toStatus: 'debited' }
+    const result = await trusted.call('cheque-decision', debit, 'owner-user')
+    expect(await trusted.call('cheque-decision', debit, 'owner-user')).toEqual(result)
+    expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(60000)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(460000)
+    await expect(trusted.call('cheque-decision', { ...debit, operationId: 'another-debit' }, 'owner-user')).rejects.toMatchObject({ code: 'failed-precondition' })
+    await assertFails(updateDoc(doc(db, 'chequesV2', '1120'), { chequeNumber: '1121' }))
   })
 
   it('enforces correction ownership and owner-only return decisions without touching loans', async () => {

@@ -20,6 +20,8 @@ export type DailySales = {
   bankTransferSales: number
   creditSales: number
   returnsDiscounts: number
+  refundAccountingVersion?: 1
+  netSalesAmount?: number
   notes: string
   createdAt: string
   updatedAt: string
@@ -52,6 +54,22 @@ export type Cashout = {
   chequeNumber?: string
   chequePayDate?: string
   approvedBy: string
+  sourceKind?: 'pos-return' | 'expense' | 'vendor-payment'
+  sourceRecordId?: string
+  fundingSource?: 'counter' | 'bank' | 'cheque'
+  fundingVersion?: 1
+  paymentStatus?: string
+  reviewStatus?: string
+  revision?: number
+  reviewedAt?: string
+  reviewedByUid?: string
+  amountPaise?: number
+  billId?: string
+  approvalId?: string
+  eventId?: string
+  postedByUid?: string
+  postedByName?: string
+  postedByRole?: AppUser['role']
   notes: string
   createdAt: string
   updatedAt: string

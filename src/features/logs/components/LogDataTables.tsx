@@ -1,3 +1,7 @@
+import { RefundReceiptLoadingContext } from '../hooks/refundReceiptContext'
+import { useRefundReceipt } from '../hooks/useRefundReceipt'
+import { isPosRefundExpense } from '@/domain/refundAccounting'
+import { RefundReceiptLink } from './RefundReceiptLink'
 import { useMemo } from 'react'
 import { Ellipsis } from 'lucide-react'
 import type { Cashout, DailySales, Payment, Purchase } from '@/domain/financeTypes'
@@ -73,31 +77,36 @@ const expenseColumns: LogTableColumn<Cashout>[] = [
   { id: 'category', label: 'Category', value: (entry) => entry.category, cell: (entry) => entry.category },
   { id: 'amount', label: 'Amount', value: (entry) => entry.amount, cell: (entry) => <span className="font-semibold">{money(entry.amount)}</span>, align: 'right', sortDescFirst: true },
   { id: 'paymentMode', label: 'Mode', value: (entry) => entry.paymentMode, cell: (entry) => <Badge variant="outline">{entry.paymentMode}</Badge> },
-  { id: 'approvedBy', label: 'Approved by', value: (entry) => entry.approvedBy, cell: (entry) => entry.approvedBy || '-' },
+  { id: 'approvedBy', label: 'Posted / approved by', value: (entry) => isPosRefundExpense(entry) ? entry.postedByName ?? entry.postedByUid ?? '' : entry.approvedBy, cell: (entry) => isPosRefundExpense(entry) ? entry.postedByName || entry.postedByUid || 'Not recorded' : entry.approvedBy || '-' },
   { id: 'notes', label: 'Notes', value: (entry) => entry.notes, cell: (entry) => notesCell(entry.notes), sortable: false },
 ]
 
+const expenseSearchText = (entry: Cashout) => [entry.date, formatDisplayDate(entry.date), entry.paidTo, entry.category, entry.paymentMode, entry.approvedBy, entry.chequeNumber, entry.notes].join(' ')
 export function ExpenseLogTable({ entries }: { entries: Cashout[] }) {
-  return (
+  const { open, loadingId, dialog } = useRefundReceipt()
+  const columns = useMemo<LogTableColumn<Cashout>[]>(() => [{ id: 'source', label: 'Source', value: entry => entry.billId ?? '', cell: entry => isPosRefundExpense(entry) && entry.billId ? <RefundReceiptLink billId={entry.billId} onOpen={open} /> : '-', sortable: false }, ...expenseColumns], [open])
+  return (<RefundReceiptLoadingContext value={loadingId}>
     <ResponsiveLogTable
-      columns={expenseColumns}
+      columns={columns}
       data={entries}
       emptyTitle="No expenses found"
       getRowId={(entry) => entry.id}
       initialSortId="date"
       noun="expense"
       searchPlaceholder="Search paid to, category, mode or notes"
-      searchText={(entry) => [entry.date, formatDisplayDate(entry.date), entry.paidTo, entry.category, entry.paymentMode, entry.approvedBy, entry.chequeNumber, entry.notes].join(' ')}
+      searchText={expenseSearchText}
       mobileCard={(entry) => (
         <MobileLogCard title={entry.paidTo} subtitle={`${formatDisplayDate(entry.date)} | ${entry.category}`} trailing={<Badge variant="outline">{entry.paymentMode}</Badge>}>
           <MobileValue label="Amount" value={money(entry.amount)} />
-          <MobileValue label="Approved by" value={entry.approvedBy || '-'} />
+          <MobileValue label={isPosRefundExpense(entry) ? "Posted by" : "Approved by"} value={isPosRefundExpense(entry) ? entry.postedByName || entry.postedByUid || 'Not recorded' : entry.approvedBy || '-'} />
           <MobileValue label="Cheque" value={entry.chequeNumber || '-'} />
           <MobileValue label="Notes" value={entry.notes || '-'} />
+          {isPosRefundExpense(entry) && entry.billId ? <MobileValue label="Source" value={<RefundReceiptLink billId={entry.billId} onOpen={open} />} /> : null}
         </MobileLogCard>
       )}
     />
-  )
+    {dialog}
+  </RefundReceiptLoadingContext>)
 }
 
 const purchaseColumns: LogTableColumn<Purchase>[] = [

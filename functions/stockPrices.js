@@ -47,14 +47,16 @@ function createStockPriceHandlers(db, clock = () => new Date().toISOString()) {
       const keys = Object.keys(sourceValues).filter((key) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')
       const mrpText = keys.length ? String(sourceValues[keys[0]]).trim() : ''
       const rawMrp = mrpText ? Number(mrpText.replace(/[₹,\s]/g, '')) : NaN
-      const before = { mrpPaise: Number.isFinite(rawMrp) && Number.isSafeInteger(Math.round(rawMrp * 100)) ? Math.round(rawMrp * 100) : null, sellingPricePaise: product.sellingPricePaise }
+      const before = { mrpPaise: Number.isFinite(rawMrp) && rawMrp >= 0 && Number.isSafeInteger(Math.round(rawMrp * 100)) ? Math.round(rawMrp * 100) : null, sellingPricePaise: money(product.sellingPricePaise) ? product.sellingPricePaise : null }
       if (before.mrpPaise === after.mrpPaise && before.sellingPricePaise === after.sellingPricePaise) throw new HttpsError('failed-precondition', 'Change MRP or selling price before saving.')
       const timestamp = clock()
       const afterRevision = product.revision + 1
-      const record = { id: draft.operationId, productId: draft.productId, barcode: product.barcode, productName: product.name, before, after, beforeRevision: product.revision, afterRevision, reason, actorUid: actor.id, actorName: actor.name, createdAt: timestamp, reviewStatus: 'pending' }
+      const beforeRecordedValues = before.mrpPaise === null || before.sellingPricePaise === null ? { mrp: keys.length ? String(sourceValues[keys[0]]) : null, selling: product.sellingPricePaise === undefined ? null : String(product.sellingPricePaise) } : undefined
+      const record = { id: draft.operationId, productId: draft.productId, barcode: product.barcode, productName: product.name, before, after, ...(beforeRecordedValues ? { beforeRecordedValues } : {}), beforeRevision: product.revision, afterRevision, reason, actorUid: actor.id, actorName: actor.name, createdAt: timestamp, reviewStatus: 'pending' }
       keys.forEach((key) => { delete sourceValues[key] })
       if (after.mrpPaise !== null) sourceValues['Printed MRP'] = (after.mrpPaise / 100).toFixed(2)
-      transaction.update(productRef, { sourceValues, sellingPricePaise: after.sellingPricePaise, revision: afterRevision, lastMovementId: record.id, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name, lastPriceEdit: { changeId: record.id, at: timestamp, byUid: actor.id, byName: actor.name } })
+      const priceProvenance = { ...(product.priceProvenance ?? { mrp: null, selling: null }), ...(before.mrpPaise !== after.mrpPaise ? { mrp: `price:${record.id}` } : {}), ...(before.sellingPricePaise !== after.sellingPricePaise ? { selling: `price:${record.id}` } : {}) }
+      transaction.update(productRef, { sourceValues, sellingPricePaise: after.sellingPricePaise, priceProvenance, revision: afterRevision, lastMovementId: record.id, updatedAt: timestamp, updatedByUid: actor.id, updatedByName: actor.name, lastPriceEdit: { changeId: record.id, at: timestamp, byUid: actor.id, byName: actor.name } })
       transaction.create(changeRef, record)
       transaction.create(db.doc(`${basePath}/stockMovements/${record.id}`), { id: record.id, productId: record.productId, barcode: record.barcode, type: 'stock-price-correction', quantityDelta: 0, beforeQuantity: product.currentQuantity, afterQuantity: product.currentQuantity, productRevisionBefore: product.revision, productRevisionAfter: afterRevision, beforeMrpPaise: before.mrpPaise, afterMrpPaise: after.mrpPaise, beforeSellingPricePaise: before.sellingPricePaise, afterSellingPricePaise: after.sellingPricePaise, correctionId: record.id, reason, createdAt: timestamp, actorUid: actor.id, actorName: actor.name })
       return record
