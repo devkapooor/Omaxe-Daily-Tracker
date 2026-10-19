@@ -1,6 +1,6 @@
 ﻿# Financial remediation execution â€” 16 October 2026
 
-Status: Local implementation and acceptance complete. Commit, push and deployment are authorized; see the [19 October pre-deployment validation report](2026-10-19-predeployment-validation.md). Existing Batches 1â€“5 and original failure evidence preserved.
+Status: Implemented, accepted, committed, pushed, and deployed. Read-only verification and validation evidence are in the [19 October release report](2026-10-19-predeployment-validation.md). Existing Batches 1â€“5 and original failure evidence preserved.
 
 Evidence directory: output/playwright/2026-10-16-financial-remediation/
 

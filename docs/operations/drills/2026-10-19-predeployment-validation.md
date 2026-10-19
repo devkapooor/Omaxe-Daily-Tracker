@@ -1,6 +1,6 @@
 ﻿# AlphaHub pre-deployment validation - 19 October 2026
 
-Status: local acceptance complete; production release authorized and in progress.
+Status: deployed and read-only production verification complete. Release commit: `8fd7e58519d396b6b836108aea637858c57f8c63`.
 
 ## Isolation and baseline
 
@@ -28,8 +28,14 @@ The wider browser pass also passed trusted checkout, concurrent terminals, payme
 - No stale deployed Functions are being removed. The current source adds server operation callables while retaining the four deployed stock-price/time/transfer callables.
 - No production posting, data migration, historical rewrite, or billing change was performed during validation.
 
-## Remaining release checks
+## Deployment verification
 
-- Deploy approved Functions, Rules, indexes, and Hosting to `alphahub-f137b`.
-- Confirm deployment completion and Hosting availability with read-only checks; do not exercise live financial writes.
+- `firebase deploy --project alphahub-f137b --only hosting,functions,firestore:rules,firestore:indexes` completed successfully. No functions were deleted; 25 Functions are active in `asia-south1` on Node 20.
+- All 24 Firestore composite index additions deployed successfully; no existing indexes were removed. Rules released successfully.
+- `https://alphahub-f137b.web.app/` returned HTTP 200 and served `/assets/index-C6888dB-.js`. The deployed Functions inventory and Git `main`/`origin/main` were verified read-only after release.
+- No production financial/business writes were performed during verification.
+- Firebase warned that Node 20 will be decommissioned on 30 October 2026 and the pinned `firebase-functions` SDK is outdated. Schedule a separate runtime/SDK upgrade before decommission; dependencies were not upgraded for this release.
+
+## Remaining manual check
+
 - Physical scanner, installed PWA behavior, and terminal/printer behavior require a staff device check.
