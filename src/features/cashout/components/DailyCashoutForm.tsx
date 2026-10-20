@@ -206,7 +206,6 @@ export function DailyCashoutForm({
           <form onSubmit={event => void begin(event)}>
             <fieldset disabled={!!quote} aria-hidden={quote ? true : undefined} className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               <FieldLabel label="Cashout For Date"><Input type="date" required disabled={busy} value={entryDate} onChange={e => { setEntryDate(e.target.value); setSummary(null); }} /></FieldLabel>
-              {view?.lateCashout ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100 md:col-span-2 lg:col-span-3">Late Cashout for {formatDisplayDate(view.date)}. All sales, refunds, expenses and Cashout totals shown below are for {formatDisplayDate(view.date)} only. The active counter remains open; its cash is excluded from this Cashout. Count only the prior-day cash physically being handed over.</p> : null}
               <FieldLabel label="Cash Sale Recorded"><Input aria-label="Gross cash collections (before refunds)" readOnly value={view ? view.grossMethods.cash / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Machine Total (UPI + Card)"><Input aria-label="Gross UPI + Card collections" readOnly value={view ? (view.grossMethods.upi + view.grossMethods.card) / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Credit Sale Recorded"><Input aria-label="Declared non-POS credit sales" type="number" min="0" step="0.01" value={credit} onChange={e => setCredit(e.target.value)} /></FieldLabel>
