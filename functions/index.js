@@ -14,7 +14,7 @@ for (const [name, handler] of Object.entries({ quotePosReturn: refunds.quote, po
   exports[name] = onCall({ region: 'asia-south1', minInstances: 0 }, handler)
 }
 
-for (const [name, handler] of Object.entries({ createStockProduct: stockReceiving.createProduct, saveStockReceiptDraft: stockReceiving.saveDraft, deleteStockReceiptDraft: stockReceiving.deleteDraft, submitStockReceipt: stockReceiving.submit, previewStockReceiptReversal: stockReceiving.previewReverse, reverseStockReceipt: stockReceiving.reverse, beginStockAudit: stockAudit.begin, postStockAuditGroup: stockAudit.group, finishStockAudit: stockAudit.finish })) {
+for (const [name, handler] of Object.entries({ createStockProduct: stockReceiving.createProduct, allocateInternalStockBarcode: stockReceiving.allocateInternalBarcode, saveStockReceiptDraft: stockReceiving.saveDraft, deleteStockReceiptDraft: stockReceiving.deleteDraft, submitStockReceipt: stockReceiving.submit, previewStockReceiptReversal: stockReceiving.previewReverse, reverseStockReceipt: stockReceiving.reverse, beginStockAudit: stockAudit.begin, postStockAuditGroup: stockAudit.group, finishStockAudit: stockAudit.finish })) {
   exports[name] = onCall({ region: 'asia-south1', minInstances: 0 }, handler)
 }
 

@@ -77,7 +77,7 @@ export function subscribePosStockAuditBatches(callback: (audits: PosStockAuditBa
 
 export type { StockAuditCount as PosStockAuditCountInput, StockReceiptDraft as GoodsReceiptDraftInput } from '@/features/stock/data/stockPostingRepository'
 export type PosStockAuditBatchInput = { id: string; note: string }
-export { saveStockReceiptDraft, savePosGoodsReceiptDraft, deleteStockReceiptDraft as deletePosGoodsReceiptDraft, submitStockReceipt as submitPosGoodsReceipt, reversePosGoodsReceipt, previewStockReceiptReversal, beginStockAudit, postStockAuditGroup, reconcilePosStockAuditBatch, reconcilePosStockCount, finishStockAudit as completePosStockAuditBatch } from '@/features/stock/data/stockPostingRepository'
+export { allocateInternalStockBarcode, saveStockReceiptDraft, savePosGoodsReceiptDraft, deleteStockReceiptDraft as deletePosGoodsReceiptDraft, submitStockReceipt as submitPosGoodsReceipt, reversePosGoodsReceipt, previewStockReceiptReversal, beginStockAudit, postStockAuditGroup, reconcilePosStockAuditBatch, reconcilePosStockCount, finishStockAudit as completePosStockAuditBatch } from '@/features/stock/data/stockPostingRepository'
 
 export function subscribePosProducts(
   callback: (products: PosProduct[]) => void,

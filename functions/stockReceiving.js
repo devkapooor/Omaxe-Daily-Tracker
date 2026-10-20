@@ -1,3 +1,4 @@
+const { randomBytes } = require('node:crypto')
 const s = require('./stockOperations')
 
 const normalizeInvoice = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('en-IN')
@@ -10,8 +11,9 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       if (!line || typeof line !== 'object') s.fail('Invalid receipt line.', 'invalid-argument')
       const selling = line.sellingPricePaise === undefined || line.sellingPricePaise === null ? undefined : s.integer(line.sellingPricePaise, 'Selling price')
       const mrp = line.mrpPaise === undefined || line.mrpPaise === null ? null : s.integer(line.mrpPaise, 'MRP')
+      if (line.internalBarcode === true && line.newProduct !== true) s.fail('Internal barcodes can only be assigned to new GRN products.', 'invalid-argument')
       if (posting) { s.integer(selling, 'Selling price'); s.integer(mrp, 'MRP') }
-      return { productId: s.id(line.productId), barcode: s.text(line.barcode, 'Barcode', 160), productName: s.text(line.productName, 'Product name', 500), category: line.newProduct === true ? s.text(line.category, 'Category', 500) : String(line.category ?? '').trim(), quantity: s.integer(line.quantity, 'Quantity'), unitCostPaise: s.integer(line.unitCostPaise, 'Unit cost'), ...(selling !== undefined ? { sellingPricePaise: selling } : {}), mrpPaise: mrp, lineTotalPaise: s.safe(line.quantity * line.unitCostPaise), ...(line.newProduct === true ? { newProduct: true } : { expectedRevision: s.integer(line.expectedRevision, 'Scanned product revision (open legacy drafts in Receive Stock and review/re-scan)', 1) }), mrpChanged: line.mrpChanged === true }
+      return { productId: s.id(line.productId), barcode: s.text(line.barcode, 'Barcode', 160), productName: s.text(line.productName, 'Product name', 500), category: line.newProduct === true ? s.text(line.category, 'Category', 500) : String(line.category ?? '').trim(), quantity: s.integer(line.quantity, 'Quantity'), unitCostPaise: s.integer(line.unitCostPaise, 'Unit cost'), ...(selling !== undefined ? { sellingPricePaise: selling } : {}), mrpPaise: mrp, lineTotalPaise: s.safe(line.quantity * line.unitCostPaise), ...(line.newProduct === true ? { newProduct: true } : { expectedRevision: s.integer(line.expectedRevision, 'Scanned product revision (open legacy drafts in Receive Stock and review/re-scan)', 1) }), ...(line.internalBarcode === true ? { internalBarcode: true } : {}), mrpChanged: line.mrpChanged === true }
     })
     if (new Set(result.map(l => l.productId)).size !== result.length || new Set(result.map(l => l.barcode)).size !== result.length) s.fail('Each product/barcode may appear only once in a GRN.')
     const identifiers = new Set()
@@ -39,6 +41,25 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       return product
     })
   }
+  async function allocateInternalBarcode(request) {
+    const d = s.object(request.data, ['operationId', 'draftId', 'productId'])
+    const input = { ...d, draftId: s.id(d.draftId), productId: s.id(d.productId) }
+    return run(request, 'allocate-internal-grn-barcode', input, s.staff, async ({ tx, actor, timestamp, writes }) => {
+      const draft = await tx.get(ref('goodsReceipts', input.draftId))
+      if (draft.exists && (draft.get('status') !== 'draft' || (draft.get('createdByUid') !== actor.id && actor.role !== 'owner'))) s.fail('Only the draft creator or owner can allocate a barcode for this GRN.', 'permission-denied')
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const barcode = `AH${randomBytes(8).toString('hex').toUpperCase()}`
+        const reservationRef = ref('barcodeReservations', s.hash(barcode))
+        const reservation = await tx.get(reservationRef)
+        const product = await tx.get(db.collection(`${s.base}/products`).where('barcode', '==', barcode).limit(1))
+        if (reservation.exists || !product.empty) continue
+        const record = { barcode, productId: input.productId, kind: 'internal-grn', draftId: input.draftId, allocatedByUid: actor.id, allocatedByName: actor.name, createdAt: timestamp }
+        writes.push(() => tx.create(reservationRef, record), () => tx.create(ref('events', `barcode-${d.operationId}`), { type: 'internal-stock-barcode-issued', barcode, draftId: input.draftId, productId: input.productId, createdAt: timestamp, ...s.actorFields(actor) }))
+        return { barcode, draftId: input.draftId, productId: input.productId }
+      }
+      s.fail('Unable to allocate a unique internal barcode. Retry this action.', 'resource-exhausted')
+    })
+  }
   async function saveDraft(request) {
     const d = s.object(request.data, ['operationId', 'id', 'expectedRevision', 'vendorId', 'invoiceNumber', 'invoiceDate', 'receiptDate', 'lines', 'invoiceTotalPaise'])
     const input = { ...d, id: s.id(d.id), expectedRevision: s.integer(d.expectedRevision, 'Draft revision'), vendorId: s.id(d.vendorId), invoiceNumber: s.text(d.invoiceNumber, 'Invoice number', 160), invoiceDate: s.date(d.invoiceDate), receiptDate: s.date(d.receiptDate), lines: lines(d.lines), invoiceTotalPaise: s.integer(d.invoiceTotalPaise, 'Full invoice payable', 1) }
@@ -49,6 +70,9 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       if ((old.exists ? old.get('revision') : 0) !== input.expectedRevision) s.fail('The draft changed. Reload it before saving.')
       const quotedLines = []
       for (const line of input.lines) {
+        const reservation = await tx.get(ref('barcodeReservations', s.hash(line.barcode)))
+        if (reservation.exists && reservation.get('kind') === 'internal-grn' && (line.internalBarcode !== true || reservation.get('draftId') !== input.id || reservation.get('productId') !== line.productId)) s.fail('This internal barcode is reserved for another GRN line.')
+        if (line.internalBarcode === true && (!reservation.exists || reservation.get('kind') !== 'internal-grn' || reservation.get('draftId') !== input.id || reservation.get('productId') !== line.productId)) s.fail('Allocate a valid internal barcode for this GRN line before saving.')
         const product = line.newProduct ? null : await tx.get(ref('products', line.productId))
         quotedLines.push({ ...line, ...(product?.exists ? { sellingPriceBeforePaise: product.get('sellingPricePaise'), mrpBeforePaise: s.prices(product.data()).mrpPaise, quoteRevision: product.get('revision'), stockAtScan: product.get('currentQuantity') } : {}) })
       }
@@ -79,6 +103,9 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       if (!vendor.exists || vendor.get('active') !== true) s.fail('Choose an active vendor.')
       const products = []
       for (const line of received) {
+        const reservation = await tx.get(ref('barcodeReservations', s.hash(line.barcode)))
+        if (reservation.exists && reservation.get('kind') === 'internal-grn' && (line.internalBarcode !== true || reservation.get('draftId') !== receipt.id || reservation.get('productId') !== line.productId)) s.fail('This internal barcode is reserved for another GRN line.')
+        if (line.internalBarcode === true && (!reservation.exists || reservation.get('kind') !== 'internal-grn' || reservation.get('draftId') !== receipt.id || reservation.get('productId') !== line.productId)) s.fail('This internal barcode is not valid for the current GRN.')
         const product = await tx.get(ref('products', line.productId))
         const identity = await s.barcodeIdentity(db, tx, writes, line.barcode, line.productId, timestamp)
         if (identity !== line.productId) s.fail(`Barcode ${line.barcode} has another catalogue identity. Re-scan it; no records were merged.`)
@@ -201,6 +228,6 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       return { reversalId, payableReversed: !!purchase, ...preview }
     })
   }
-  return { createProduct, saveDraft, deleteDraft, submit, previewReverse, reverse }
+  return { createProduct, allocateInternalBarcode, saveDraft, deleteDraft, submit, previewReverse, reverse }
 }
 module.exports = { createStockReceivingHandlers, normalizeInvoice, eventId }

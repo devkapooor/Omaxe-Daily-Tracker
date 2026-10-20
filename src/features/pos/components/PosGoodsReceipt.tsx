@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { Printer, X } from 'lucide-react'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
@@ -12,7 +12,7 @@ import { today } from '@/app/uiHelpers'
 import type { AppUser } from '@/domain/financeTypes'
 import { normalizeInvoiceNumber, rupeesToPaise, type VendorV2 } from '@/domain/vendorLedgerV2'
 import type { PosGoodsReceipt, PosGoodsReceiptLine, PosProduct } from '../domain/types'
-import { completePosStockAuditBatch, findPosProductByBarcode, getPosCost, saveStockReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, beginStockAudit, postStockAuditGroup, previewStockReceiptReversal, reversePosGoodsReceipt } from '../data/posRepository'
+import { allocateInternalStockBarcode, completePosStockAuditBatch, findPosProductByBarcode, getPosCost, saveStockReceiptDraft, deletePosGoodsReceiptDraft, submitPosGoodsReceipt, beginStockAudit, postStockAuditGroup, previewStockReceiptReversal, reversePosGoodsReceipt } from '../data/posRepository'
 import { createVendorV2 } from '@/store/vendorLedgerV2Repository'
 import { serverNowIso } from '@/shared/lib/serverClock'
 import { where } from 'firebase/firestore'
@@ -26,6 +26,7 @@ import { StockOperationBoundary } from '@/features/stock/components/StockOperati
 import { firebaseConfig } from '@/shared/lib/firebase'
 import type { ReceiptReversalPreview } from '@/features/stock/data/stockPostingRepository'
 import { StatusPanel } from '@/shared/ui/status-panel'
+import { printInternalBarcode } from '@/features/stock/domain/internalBarcode'
 
 function productMrpPaise(product: PosProduct) {
   const raw = Object.entries(product.sourceValues ?? {}).find(([key]) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')?.[1]
@@ -56,7 +57,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const [draftId, setDraftId] = useState<string | undefined>()
   const [draftRevision, setDraftRevision] = useState(0)
   const [barcode, setBarcode] = useState('')
-  const [newProduct, setNewProduct] = useState<{ barcode: string; name: string; category: string; mrp: string } | null>(null)
+  const [newProduct, setNewProduct] = useState<{ barcode: string; name: string; category: string; mrp: string; cost: string; internalBarcode?: boolean } | null>(null)
   const [newName, setNewName] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [newContact, setNewContact] = useState('')
@@ -116,7 +117,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       }
       const product = await findPosProductByBarcode(value)
       if (!product || !product.active) {
-        setNewProduct({ barcode: value, name: '', category: '', mrp: '' })
+        setNewProduct({ barcode: value, name: '', category: '', mrp: '', cost: '' })
         return
       }
       const cost = await getPosCost(product.id)
@@ -135,22 +136,34 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     finally { setBarcode(''); scanRef.current?.focus() }
   }
 
-  function addNewProduct() {
-    if (!newProduct || !newProduct.name.trim() || !newProduct.category.trim() || !newProduct.mrp.trim()) {
-      setError('New products require a name, category, and MRP.')
+  async function addNewProduct() {
+    if (!newProduct || !newProduct.name.trim() || !newProduct.category.trim() || !newProduct.mrp.trim() || !newProduct.cost.trim()) {
+      setError('New products require a name, category, cost, and MRP.')
       return
     }
     const id = `pos-${crypto.randomUUID()}`
     const mrpValue = Number(newProduct.mrp)
+    const costValue = Number(newProduct.cost)
     if (!Number.isFinite(mrpValue) || mrpValue < 0) { setError('Enter a valid MRP of zero or greater.'); return }
-    setLines((current) => [{
-      productId: id, barcode: newProduct.barcode, productName: newProduct.name.trim(), category: newProduct.category.trim(),
-      quantity: 0, unitCostPaise: 0, unitCostInput: '', lineTotalPaise: 0, newProduct: true,
-      sellingPricePaise: rupeesToPaise(mrpValue), sellingPriceInput: mrpValue.toFixed(2), sellingPriceManuallyEdited: false,
-      mrpPaise: rupeesToPaise(mrpValue), mrpInput: mrpValue.toFixed(2), mrpChanged: true,
-    }, ...current])
-    setNewProduct(null)
-    scanRef.current?.focus()
+    if (!Number.isFinite(costValue) || costValue <= 0) { setError('Enter a cost price greater than zero.'); return }
+    setBusy(true); setError('')
+    try {
+      const draftKey = draftId ?? (draftReference.current ??= crypto.randomUUID())
+      if (!draftId) setDraftId(draftKey)
+      const barcodeInfo = newProduct.internalBarcode
+        ? await allocateInternalStockBarcode({ draftId: draftKey, productId: id }, currentUser)
+        : { barcode: newProduct.barcode, draftId: draftKey, productId: id }
+      setLines((current) => [{
+        productId: id, barcode: barcodeInfo.barcode, productName: newProduct.name.trim(), category: newProduct.category.trim(),
+        quantity: 0, unitCostPaise: rupeesToPaise(costValue), unitCostInput: costValue.toFixed(2), lineTotalPaise: 0, newProduct: true,
+        ...(newProduct.internalBarcode ? { internalBarcode: true as const } : {}),
+        sellingPricePaise: rupeesToPaise(mrpValue), sellingPriceInput: mrpValue.toFixed(2), sellingPriceManuallyEdited: false,
+        mrpPaise: rupeesToPaise(mrpValue), mrpInput: mrpValue.toFixed(2), mrpChanged: true,
+      }, ...current])
+      setNewProduct(null)
+      scanRef.current?.focus()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to prepare the new GRN product.') }
+    finally { setBusy(false) }
   }
 
   async function saveDraft() {
@@ -289,19 +302,22 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
         <FieldLabel label="Receipt date"><Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} required /></FieldLabel>
       </div>
       {matchingInvoice ? <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-2 text-sm">A submitted GRN already exists for this vendor invoice. This receipt will add stock and link to its existing payable of {money(matchingInvoice.invoiceTotalPaise ?? matchingInvoice.totalPaise)}; enter the same full invoice amount.</p> : null}
-      <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); void scan() }}><Input ref={scanRef} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan barcode, then Enter" aria-label="Scan product barcode" autoFocus /><Button type="submit">Scan item</Button></form>
-      {newProduct ? <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 sm:grid-cols-5">
-        <p className="sm:col-span-4 text-sm font-semibold">Barcode {newProduct.barcode} is not in the catalog. Create product.</p>
+      <div className="grid gap-2 sm:flex"><form className="flex min-w-0 gap-2 sm:flex-1" onSubmit={(event) => { event.preventDefault(); void scan() }}><Input className="min-w-0 flex-1" ref={scanRef} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan barcode, then Enter" aria-label="Scan product barcode" autoFocus /><Button type="submit">Scan item</Button></form><Button type="button" className="w-full sm:w-auto" variant="outline" onClick={() => { setError(''); setNewProduct({ barcode: '', name: '', category: '', mrp: '', cost: '', internalBarcode: true }) }}>Add item without barcode</Button></div>
+      {newProduct ? <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1.5fr)_minmax(9rem,1fr)_minmax(8rem,.8fr)_minmax(8rem,.8fr)_auto_auto]">
+        <p className="text-sm font-semibold sm:col-span-2 xl:col-span-6">{newProduct.internalBarcode ? 'Add a new product and assign an internal store barcode.' : `Barcode ${newProduct.barcode} is not in the catalog. Create product.`}</p>
         <FieldLabel label="Product name"><Input value={newProduct.name} onChange={(event) => setNewProduct({ ...newProduct, name: event.target.value })} required /></FieldLabel>
         <FieldLabel label="Category"><Input value={newProduct.category} onChange={(event) => setNewProduct({ ...newProduct, category: event.target.value })} required /></FieldLabel>
+        <FieldLabel label="Cost price"><Input type="number" min="0.01" step="0.01" value={newProduct.cost} onChange={(event) => setNewProduct({ ...newProduct, cost: event.target.value })} required /></FieldLabel>
         <FieldLabel label="MRP"><Input type="number" min="0" step="0.01" value={newProduct.mrp} onChange={(event) => setNewProduct({ ...newProduct, mrp: event.target.value })} required /></FieldLabel>
-        <Button type="button" className="self-end" onClick={addNewProduct}>Add to GRN</Button>
+        <Button type="button" className="self-end" disabled={busy} onClick={() => void addNewProduct()}>{busy ? 'Adding…' : 'Add to GRN'}</Button>
+        <Button type="button" className="self-end" variant="outline" disabled={busy} onClick={() => setNewProduct(null)}>Cancel</Button>
+        {newProduct.internalBarcode ? <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-6">This is an internal store barcode, not an official GS1/UPC product code. It will scan after the GRN is submitted; stock and vendor payable change only on submission.</p> : null}
       </div> : null}
       <div className="overflow-x-auto rounded-md border border-border">
         <div className="grid min-w-[1080px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span>Selling price</span><span className="text-right">Line value</span><span /></div>
         <div className="max-h-[48vh] min-w-[1080px] overflow-y-auto">
           {lines.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Scan a barcode to add received goods. Enter quantity, cost, MRP, and selling price for every line.</p> : lines.map((line) => <div key={line.productId} className="grid grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b px-3 py-2 last:border-0">
-            <div className="min-w-0"><strong className="block truncate text-sm">{line.productName}{line.newProduct ? <Badge variant="secondary" className="ml-2">New</Badge> : null}</strong><span className="text-[11px] text-muted-foreground">{line.barcode} · Stock {line.stockAtScan ?? 0}</span></div>
+            <div className="min-w-0"><strong className="block truncate text-sm">{line.productName}{line.newProduct ? <Badge variant="secondary" className="ml-2">New</Badge> : null}</strong><span className="text-[11px] text-muted-foreground">{line.barcode} · Stock {line.stockAtScan ?? 0}</span>{line.internalBarcode ? <Button type="button" size="sm" variant="outline" className="mt-1 h-7 px-2 text-[11px]" aria-label={`Print barcode label for ${line.productName}`} onClick={() => { try { printInternalBarcode(line.barcode, line.productName) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open the print window.') } }}><Printer size={13} />Print label</Button> : null}</div>
             <Input aria-label={`Received quantity for ${line.productName}`} className="h-8 px-2" type="number" min="1" step="1" required value={line.quantity || ''} onChange={(event) => setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, quantity: event.target.value === '' ? 0 : Math.max(0, Math.trunc(Number(event.target.value) || 0)) } : item))} />
             <Input aria-label={`Unit cost for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : '')} placeholder="Enter cost" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, unitCostInput: value, unitCostPaise: valid ? rupeesToPaise(parsed) : 0 } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.unitCostInput); return item.unitCostInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, unitCostInput: parsed.toFixed(2), unitCostPaise: rupeesToPaise(parsed) } : item }))} />
             <Input aria-label={`MRP for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100))} placeholder="Enter MRP" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, mrpInput: value, mrpPaise: valid ? rupeesToPaise(parsed) : null, sellingPriceInput: valid ? parsed.toFixed(2) : '', sellingPricePaise: valid ? rupeesToPaise(parsed) : undefined, sellingPriceManuallyEdited: false, mrpChanged: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.mrpInput); return item.mrpInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, mrpInput: parsed.toFixed(2), mrpPaise: rupeesToPaise(parsed), sellingPriceInput: parsed.toFixed(2), sellingPricePaise: rupeesToPaise(parsed), sellingPriceManuallyEdited: false, mrpChanged: true } : item }))} />

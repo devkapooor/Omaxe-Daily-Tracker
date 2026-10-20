@@ -61,6 +61,7 @@ export type PosGoodsReceiptLine = {
   mrpBeforePaise?: number | null
   lineTotalPaise: number
   newProduct?: true
+  internalBarcode?: true
   sellingPricePaise?: number
   stockAtScan?: number
   mrpPaise?: number | null
