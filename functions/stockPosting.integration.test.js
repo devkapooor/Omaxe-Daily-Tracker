@@ -51,7 +51,7 @@ describe('trusted stock transactions on dedicated demo emulator', { skip: !proce
   it('issues a reserved internal barcode without posting stock, then creates product only on GRN submit', async () => {
     const id = randomUUID(), productId = `pos-${randomUUID()}`
     const allocated = await call(receiving.allocateInternalBarcode, { operationId: randomUUID(), draftId: id, productId })
-    assert.match(allocated.barcode, /^AH[0-9A-F]{16}$/)
+    assert.match(allocated.barcode, /^\d{16}$/)
     assert.equal((await db.doc(`${base}/products/${productId}`).get()).exists, false)
     assert.equal((await db.doc('vendorAccountStatesV2/vendor').get()).exists, false)
     const reservation = (await db.doc(`${base}/barcodeReservations/${s.hash(allocated.barcode)}`).get()).data()

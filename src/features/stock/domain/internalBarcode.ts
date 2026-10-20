@@ -7,7 +7,7 @@ const code39: Record<string, string> = {
 }
 
 export function code39Svg(barcode: string) {
-  if (!/^AH[0-9A-F]{16}$/.test(barcode)) throw new Error('Invalid internal barcode.')
+  if (!/^\d{16}$/.test(barcode)) throw new Error('Invalid internal barcode.')
   const narrow = 2, wide = 5, height = 54, quiet = 10
   const chars = `*${barcode}*`
   let x = quiet

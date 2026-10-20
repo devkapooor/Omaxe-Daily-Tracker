@@ -48,7 +48,7 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       const draft = await tx.get(ref('goodsReceipts', input.draftId))
       if (draft.exists && (draft.get('status') !== 'draft' || (draft.get('createdByUid') !== actor.id && actor.role !== 'owner'))) s.fail('Only the draft creator or owner can allocate a barcode for this GRN.', 'permission-denied')
       for (let attempt = 0; attempt < 5; attempt++) {
-        const barcode = `AH${randomBytes(8).toString('hex').toUpperCase()}`
+        const barcode = (randomBytes(8).readBigUInt64BE() % 10000000000000000n).toString().padStart(16, '0')
         const reservationRef = ref('barcodeReservations', s.hash(barcode))
         const reservation = await tx.get(reservationRef)
         const product = await tx.get(db.collection(`${s.base}/products`).where('barcode', '==', barcode).limit(1))
