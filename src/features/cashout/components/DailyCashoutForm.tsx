@@ -206,11 +206,12 @@ export function DailyCashoutForm({
           <form onSubmit={event => void begin(event)}>
             <fieldset disabled={!!quote} aria-hidden={quote ? true : undefined} className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               <FieldLabel label="Cashout For Date"><Input type="date" required disabled={busy} value={entryDate} onChange={e => { setEntryDate(e.target.value); setSummary(null); }} /></FieldLabel>
+              {view?.lateCashout ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100 md:col-span-2 lg:col-span-3">Late Cashout for {formatDisplayDate(view.date)}. All sales, refunds, expenses and Cashout totals shown below are for {formatDisplayDate(view.date)} only. The active counter remains open; its cash is excluded from this Cashout. Count only the prior-day cash physically being handed over.</p> : null}
               <FieldLabel label="Cash Sale Recorded"><Input aria-label="Gross cash collections (before refunds)" readOnly value={view ? view.grossMethods.cash / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Machine Total (UPI + Card)"><Input aria-label="Gross UPI + Card collections" readOnly value={view ? (view.grossMethods.upi + view.grossMethods.card) / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Credit Sale Recorded"><Input aria-label="Declared non-POS credit sales" type="number" min="0" step="0.01" value={credit} onChange={e => setCredit(e.target.value)} /></FieldLabel>
               <FieldLabel label="Cash Paid Out"><Input aria-label="Cash Paid Out (source-linked)" readOnly value={view ? view.cashPaidOutPaise / 100 : '—'} /></FieldLabel>
-              <FieldLabel label="Expected Cash (Including Opening Balance)"><Input aria-label="Expected cash including opening balance" readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label={view?.lateCashout ? 'Prior-day cash available for handover' : 'Expected Cash (Including Opening Balance)'}><Input aria-label={view?.lateCashout ? 'Prior-day carryover available for handover' : 'Expected cash including opening balance'} readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
               <FieldLabel label="System Audit (Expected Drawer)"><Input aria-label="Expected drawer / System Audit" readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
               <FieldLabel label="By"><Input readOnly value={currentUserName} /></FieldLabel>
               <FieldLabel label="Cash Refunds"><Input readOnly value={view ? view.cashRefundPaise / 100 : '—'} /></FieldLabel>
@@ -232,7 +233,7 @@ export function DailyCashoutForm({
       {quote ? <CashDrawerDialog quoteId={quote.id} busy={busy} onCancel={() => void cancel()}>
         <CardHeader><SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" /><p className="text-sm text-muted-foreground">Count the drawer for {formatDisplayDate(quote.date)}. Expected cash: <strong>{cash(quote.expectedDrawerPaise)}</strong>.</p></CardHeader>
         <CardContent role="region" aria-label="Complete Daily Cashout">
-          <p className="mb-4 text-xs text-muted-foreground">Drawer activity pauses during this five-minute count. Refresh preserves the count reference; recount if it expires.</p>
+          <p className="mb-4 text-xs text-muted-foreground">Drawer activity pauses during this five-minute count. Refresh preserves the count reference; recount if it expires. {quote.lateCashout ? `This is a late Cashout for ${formatDisplayDate(quote.date)}. Count only the previous-day carryover being removed; the ${formatDisplayDate(quote.counterDate || quote.date)} counter remains open and its current sales stay in the drawer.` : ''}</p>
           <form className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" onSubmit={event => void close(event)}>
             {(Object.keys(empty) as Array<keyof DrawerDenominations>).map(key => <FieldLabel key={key} label={key === 'change' ? 'Loose change (₹)' : key.replace('denom', '')}><Input type="number" min="0" step={key === 'change' ? '0.01' : '1'} required value={counts[key]} onChange={e => setCounts(old => ({ ...old, [key]: Number(e.target.value) }))} /></FieldLabel>)}
             <FieldLabel label="Drawer Total"><Input readOnly value={drawerTotal} /></FieldLabel>

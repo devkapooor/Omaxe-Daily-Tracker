@@ -444,6 +444,98 @@ describe('trusted finance posting in an independent demo emulator database', {
     assert.equal((await read(base + '/handover/main')).checkpoint.cashActualPaise, 0);
     assert.equal(closed.holderBalancesAtClose.find(v => v.userId === 'owner').amountPaise, 70000);
   });
+  it('posts a late prior-day Cashout from the next-day opening evidence without closing the live counter', async () => {
+    now = Date.parse('2026-10-16T05:00:00.000Z');
+    const batch = db.batch();
+    batch.set(db.doc(base + '/handover/main'), {
+      initialized: true,
+      revision: 4,
+      cashNetPaise: 118000,
+      dailyTotals: { '2026-10-15': { upi: 0, card: 0 }, '2026-10-16': { upi: 0, card: 0 } },
+      checkpoint: { date: '2026-10-16', cashActualPaise: 100000, cashNetPaise: 100000, upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'opening-16' },
+      counterSession: { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' },
+      countReservation: null,
+    });
+    for (const uid of ['owner', 'billing', 'manager']) batch.set(db.doc(base + '/cashierStates/' + uid), {
+      uid, authTime: 42, closed: false, needsLogoutCheck: false, joinedCounterId: 'opening-16',
+    });
+    batch.set(db.doc(base + '/reconciliations/opening-16'), {
+      id: 'opening-16', uid: 'owner', authTime: 42, kind: 'login', date: '2026-10-16',
+      actual: { cash: 100000, upi: 0, card: 0 }, createdAt: '2026-10-15T18:31:00.000Z',
+    });
+    batch.set(db.doc(base + '/bills/sale-15'), {
+      id: 'sale-15', businessDate: '2026-10-15', createdAt: '2026-10-15T12:00:00.000Z',
+      payments: [{ method: 'cash', amountPaise: 50000 }],
+    });
+    batch.set(db.doc(base + '/bills/sale-16'), {
+      id: 'sale-16', businessDate: '2026-10-16', createdAt: '2026-10-16T05:30:00.000Z',
+      payments: [{ method: 'cash', amountPaise: 18000 }],
+    });
+    await batch.commit();
+
+    const preview = await cashout.readSummary({ auth: req({}).auth, data: { date: '2026-10-15' } });
+    assert.equal(preview.lateCashout, true);
+    assert.equal(preview.grossMethods.cash, 50000);
+    const quote = await cashout.prepare(req({ date: '2026-10-15' }));
+    assert.equal(quote.lateCashout, true);
+    assert.equal(quote.counterDate, '2026-10-16');
+    assert.equal(quote.lateCashoutCarryoverPaise, 100000);
+    assert.equal(quote.currentExpectedDrawerPaise, 118000);
+    assert.equal(quote.grossMethods.cash, 50000);
+    assert.equal(quote.expectedDrawerPaise, 100000);
+    await assert.rejects(register.expense(req(expense(100))), /being counted/);
+
+    const closeRequest = req({
+      quoteId: quote.id,
+      drawerDenominations: { denom500: 2, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 0, change: 0 },
+      creditSales: 0,
+      reason: '',
+    });
+    const entry = await cashout.close(closeRequest);
+    assert.equal(entry.date, '2026-10-15');
+    assert.equal(entry.cashSales, 500);
+    assert.equal(entry.drawerTotal, 1000);
+    assert.equal(entry.lateCashoutVersion, 1);
+    assert.equal(entry.sourceTotals.date, '2026-10-15');
+    assert.equal(entry.sourceTotals.grossMethods.cash, 50000);
+    assert.equal(entry.sourceTotals.currentExpectedDrawerPaise, undefined);
+    assert.equal(entry.sourceTotals.counterDate, undefined);
+    assert.equal(entry.sourceTotals.subsequentNetCashPaise, undefined);
+    assert.equal((await read('dailyCashouts/' + entry.id)).drawerTotal, 1000);
+    assert.equal((await read(base + '/drawerClosures/' + entry.id)).kind, 'late-cashout');
+    assert.equal((await read(base + '/drawerClosures/' + entry.id)).resultingBalancePaise, 18000);
+    assert.deepEqual(await cashout.close(closeRequest), entry);
+    const ledger = await read(base + '/handover/main');
+    assert.deepEqual(ledger.counterSession, { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' });
+    assert.equal(ledger.checkpoint.cashActualPaise, 18000);
+    assert.equal(ledger.checkpoint.cashNetPaise, 118000);
+    assert.equal((await db.collection('dailyCashouts').get()).size, 1);
+    assert.equal((await read('sales/sale-single-store-2026-10-15')).cashSales, 500);
+    assert.equal((await read(base + '/bills/sale-16')).payments[0].amountPaise, 18000);
+    assert.equal((await read(base + '/cashierStates/billing')).joinedCounterId, 'opening-16');
+    assert.equal((await read(base + '/cashierStates/billing')).needsLogoutCheck, true);
+    assert.equal((await read('financeOperations/' + closeRequest.data.operationId)).actorUid, 'billing');
+  });
+  it('rejects a late Cashout that would remove current-day collections', async () => {
+    now = Date.parse('2026-10-16T05:00:00.000Z');
+    await db.doc(base + '/handover/main').update({
+      cashNetPaise: 118000,
+      checkpoint: { date: '2026-10-16', cashActualPaise: 100000, cashNetPaise: 100000, upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'opening-16' },
+      counterSession: { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' },
+    });
+    await db.doc(base + '/cashierStates/billing').update({ joinedCounterId: 'opening-16' });
+    await db.doc(base + '/reconciliations/opening-16').set({ id: 'opening-16', uid: 'owner', authTime: 42, kind: 'login', date: '2026-10-16', actual: { cash: 100000, upi: 0, card: 0 }, createdAt: '2026-10-15T18:31:00.000Z' });
+    const quote = await cashout.prepare(req({ date: '2026-10-15' }));
+    await assert.rejects(cashout.close(req({
+      quoteId: quote.id,
+      drawerDenominations: { denom500: 2, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 0, change: 1 },
+      creditSales: 0,
+      reason: 'Too much cash for prior day',
+    })), /cannot remove today's collections/);
+    assert.equal((await db.collection('dailyCashouts').get()).size, 0);
+    assert.equal((await read(base + '/handover/main')).counterSession.date, '2026-10-16');
+    assert.equal((await read(base + '/handover/main')).countReservation.id, quote.reservationId);
+  });
   it('expired counts reject without closing and can be cancelled safely', async () => {
     const quote = await cashout.prepare(req({
       date: '2026-10-15'
@@ -483,6 +575,20 @@ describe('trusted finance posting in an independent demo emulator database', {
       expectedRevision: 1
     }, 'owner'));
     assert.equal((await read('dailyCashouts/' + entry.id)).drawerTotal, 700);
+  });
+  it('keeps the existing same-day cash-more discrepancy workflow', async () => {
+    const quote = await cashout.prepare(req({ date: '2026-10-15' }, 'owner'));
+    const entry = await cashout.close(req({
+      quoteId: quote.id,
+      drawerDenominations: { denom500: 2, denom200: 1, denom100: 0, denom50: 0, denom20: 0, denom10: 0, change: 0 },
+      creditSales: 0,
+      reason: 'Extra cash verified'
+    }, 'owner'));
+    assert.equal(entry.cashAudit, 1000);
+    assert.equal(entry.drawerTotal, 1200);
+    assert.equal(entry.auditDifference, -200);
+    assert.equal(entry.auditStatus, 'cash-more');
+    assert.equal((await read(base + '/handover/main')).counterSession.status, 'closed');
   });
   it('Cash Movement consumes held cash and bank deposit increases book without another drawer effect', async () => {
     await db.doc('dailyCashouts/fixture').set({
@@ -700,12 +806,8 @@ describe('trusted finance posting in an independent demo emulator database', {
     });
     const before = await read(base + '/handover/main'),
       summary = await cashout.readSummary({
-        auth: {
-          uid: 'owner'
-        },
-        data: {
-          date: '2026-10-15'
-        }
+        auth: req({}, 'owner').auth,
+        data: { date: '2026-10-15' }
       });
     assert.equal(summary.expectedDrawerPaise, 100000);
     assert.deepEqual(await read(base + '/handover/main'), before);

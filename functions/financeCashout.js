@@ -85,22 +85,65 @@ function createCashoutHandlers(ops) {
       sourceOutflowIds: outflows.filter(s => s.get('fundingVersion') === 1).map(s => s.id)
     };
   }
+  function previousDate(date) {
+    const value = new Date(date + 'T00:00:00.000Z');
+    value.setUTCDate(value.getUTCDate() - 1);
+    return value.toISOString().slice(0, 10);
+  }
+  async function cashoutSummary(ctx, businessDate, counter) {
+    const ledger = counter.ledger,
+      counterDate = ledger.counterSession.date,
+      lateCashout = businessDate !== counterDate;
+    if (lateCashout && businessDate !== previousDate(counterDate)) p.fail('Cashout requires the selected day\'s open counter, or the immediately previous day\'s opening count evidence.');
+    let openingSnapshot,
+      carryover;
+    if (lateCashout) {
+      const existing = await ctx.tx.get(db.collection('dailyCashouts').where('date', '==', businessDate).limit(1));
+      if (!existing.empty) p.fail('A Cashout already exists for this date. Use the audited correction workflow.');
+      openingSnapshot = await ctx.tx.get(posRef('reconciliations', ledger.counterSession.openingReconciliationId));
+      const opening = openingSnapshot.data();
+      if (!opening || opening.kind !== 'login' || opening.date !== counterDate || !Number.isSafeInteger(opening.actual?.cash) || opening.actual.cash < 0) p.fail('The next day\'s opening count evidence is unavailable. No Cashout was posted.');
+      carryover = p.paise(opening.actual.cash, 'Prior-day carryover');
+    }
+    const totals = await summary(ctx, businessDate, ledger);
+    if (!lateCashout) return {
+      ...totals,
+      lateCashout: false,
+      counterDate,
+      currentExpectedDrawerPaise: totals.expectedDrawerPaise
+    };
+    const currentExpected = p.expectedCash(ledger);
+    if (currentExpected < 0) p.fail('The current shared drawer expectation is invalid. No Cashout was posted.');
+    return {
+      ...totals,
+      lateCashout: true,
+      counterDate,
+      lateCashoutCarryoverPaise: carryover,
+      lateCashoutOpeningReconciliationId: openingSnapshot.id,
+      currentExpectedDrawerPaise: currentExpected,
+      expectedDrawerPaise: carryover,
+      openingCheckpointPaise: carryover,
+      subsequentNetCashPaise: currentExpected - carryover,
+      checkpointId: openingSnapshot.id
+    };
+  }
   async function prepare(request) {
     const d = p.object(request.data, ['operationId', 'date']);
     p.date(d.date);
     return run(request, 'cashout-count-start', d, p.STAFF, async ctx => {
+      const counterDate = p.istDate(ctx.timestamp);
       const counter = await ops.counter(ctx, {
-        businessDate: d.date,
+        businessDate: counterDate,
         allowOwnerWithoutJoining: true
       });
-      const totals = await summary(ctx, d.date, counter.ledger),
+      const totals = await cashoutSummary(ctx, d.date, counter),
         reservation = {
           id: ctx.operationId,
           uid: ctx.actor.uid,
           name: ctx.actor.name,
           authTime: request.auth.token.auth_time,
           kind: 'cashout',
-          date: d.date,
+          date: counterDate,
           revision: counter.ledger.revision,
           startedAt: p.Timestamp.fromMillis(ctx.nowMs)
         },
@@ -111,6 +154,7 @@ function createCashoutHandlers(ops) {
           reservationId: ctx.operationId,
           expiresAtMs: ctx.nowMs + 300000,
           handoverRevision: counter.ledger.revision + 1,
+          counterDate,
           createdAt: ctx.timestamp
         };
       queue(ctx, 'financeCashoutQuotes', ctx.operationId, result, true);
@@ -170,13 +214,16 @@ function createCashoutHandlers(ops) {
       if (!quote || quote.actorUid !== ctx.actor.uid || quote.cancelledAt || quote.closedAt) p.fail('This counting quote is unavailable. Recover its original result or start a new count.');
       if (ctx.nowMs >= quote.expiresAtMs) p.fail('Count expired. Cancel it and begin a fresh count.');
       const counter = await ops.counter(ctx, {
-        businessDate: quote.date,
+        businessDate: quote.counterDate || quote.date,
         allowReservation: quote.reservationId,
         allowOwnerWithoutJoining: true
       });
       if (counter.ledger.countReservation?.id !== quote.reservationId || counter.ledger.countReservation?.uid !== ctx.actor.uid || counter.ledger.revision !== quote.handoverRevision) p.fail('Counter activity changed. Cancel and start a fresh count.');
-      const totals = await summary(ctx, quote.date, counter.ledger);
-      for (const key of ['expectedDrawerPaise', 'cashRefundPaise', 'windowRefundPaise', 'ordinaryCashExpensePaise', 'vendorCashPaymentPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise']) if (totals[key] !== quote[key]) p.fail('Source totals changed during counting. Recount with a fresh quote.');
+      const totals = await cashoutSummary(ctx, quote.date, counter),
+        immutableTotals = ['expectedDrawerPaise', 'cashRefundPaise', 'windowRefundPaise', 'ordinaryCashExpensePaise', 'vendorCashPaymentPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise', 'lateCashout', 'counterDate', 'lateCashoutCarryoverPaise', 'lateCashoutOpeningReconciliationId', 'currentExpectedDrawerPaise'];
+      for (const key of immutableTotals) if ((totals[key] ?? null) !== (quote[key] ?? null)) p.fail('Source totals changed during counting. Recount with a fresh quote.');
+      if (totals.lateCashout && counted > totals.lateCashoutCarryoverPaise) p.fail('Late Cashout cannot remove today\'s collections. Count only cash being handed over for the previous day.');
+      if (totals.lateCashout && counted > totals.currentExpectedDrawerPaise) p.fail('Cash being removed exceeds the current shared drawer expectation. No Cashout was posted.');
       const difference = totals.expectedDrawerPaise - counted;
       if (difference !== 0) p.text(d.reason, 'Discrepancy reason');
       const id = 'daily-cashout-' + ctx.operationId,
@@ -186,6 +233,10 @@ function createCashoutHandlers(ops) {
         salesId = 'sale-single-store-' + quote.date,
         salesSnapshot = await ctx.tx.get(ref('sales', salesId)),
         existingSales = salesSnapshot.data();
+      const recordedSourceTotals = { ...totals };
+      if (totals.lateCashout) {
+        for (const key of ['lateCashout', 'counterDate', 'lateCashoutCarryoverPaise', 'lateCashoutOpeningReconciliationId', 'currentExpectedDrawerPaise', 'openingCheckpointPaise', 'subsequentNetCashPaise', 'checkpointId']) delete recordedSourceTotals[key];
+      }
       const now = ctx.timestamp,
         g = totals.grossMethods,
         audit = c.calculateCashoutAudit(totals.expectedDrawerPaise / 100, counted / 100),
@@ -220,9 +271,10 @@ function createCashoutHandlers(ops) {
           financePostingVersion: 1,
           financeQuoteId: quote.id,
           sourceOperationId: ctx.operationId,
-          sourceTotals: totals,
+          sourceTotals: recordedSourceTotals,
           discrepancyReason: p.text(d.reason, 'Reason', true),
           reviewStatus: difference ? 'pending' : 'matched',
+          ...(totals.lateCashout ? { lateCashoutVersion: 1, lateCashoutCounterDate: totals.counterDate, lateCashoutOpeningReconciliationId: totals.lateCashoutOpeningReconciliationId } : {}),
           ...audit
         };
       const balances = ops.holderBalances(holderRecords, entry);
@@ -252,14 +304,14 @@ function createCashoutHandlers(ops) {
         id,
         cashoutId: id,
         businessDate: quote.date,
-        kind: 'daily-cashout',
+        kind: totals.lateCashout ? 'late-cashout' : 'daily-cashout',
         expectedBeforePaise: totals.expectedDrawerPaise,
         countedPaise: counted,
         differencePaise: counted - totals.expectedDrawerPaise,
         removedPaise: counted,
         closingBalancePaise: 0,
-        subsequentNetCashPaise: 0,
-        resultingBalancePaise: 0,
+        subsequentNetCashPaise: totals.lateCashout ? totals.subsequentNetCashPaise : 0,
+        resultingBalancePaise: totals.lateCashout ? totals.currentExpectedDrawerPaise - counted : 0,
         ledgerRevisionBefore: counter.ledger.revision,
         recordedByUid: ctx.actor.uid,
         recordedByName: ctx.actor.name,
@@ -281,15 +333,21 @@ function createCashoutHandlers(ops) {
         lastOperation: 'cashout-close',
         lastOperationId: id,
         updatedByUid: ctx.actor.uid,
-        counterSession: {
+        counterSession: totals.lateCashout ? counter.ledger.counterSession : {
           ...counter.ledger.counterSession,
           status: 'closed'
         },
         checkpoint: {
           ...counter.ledger.checkpoint,
-          cashActualPaise: 0,
+          cashActualPaise: totals.lateCashout ? totals.currentExpectedDrawerPaise - counted : 0,
           cashNetPaise: counter.ledger.cashNetPaise
         }
+      }));
+      if (totals.lateCashout && counter.cashier) ctx.writes.push(() => ctx.tx.set(counter.cashierRef, {
+        ...counter.cashier,
+        needsLogoutCheck: true,
+        updatedAt: now,
+        lastFinancialOperationId: ctx.operationId
       }));
       queue(ctx, 'financeCashoutQuotes', d.quoteId, {
         ...quote,
@@ -449,13 +507,18 @@ function createCashoutHandlers(ops) {
     return db.runTransaction(async tx => {
       const actor = await ops.actorFor(tx, request),
         timestamp = new Date(ops.clock()).toISOString(),
-        ledger = (await tx.get(posRef('handover', 'main'))).data();
-      if (!ledger?.initialized || !ledger.checkpoint || ledger.counterSession?.status !== 'open' || ledger.counterSession.date !== request.data.date) p.fail('Open the selected shared counter before preparing Cashout.');
-      return summary({
+        ledger = (await tx.get(posRef('handover', 'main'))).data(),
+        counterDate = p.istDate(timestamp);
+      if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared drawer has no completed opening count.');
+      const counter = await ops.counter({ tx, actor, request, nowMs: ops.clock(), timestamp }, {
+        businessDate: counterDate,
+        allowOwnerWithoutJoining: true
+      });
+      return cashoutSummary({
         tx,
         actor,
         timestamp
-      }, request.data.date, ledger);
+      }, request.data.date, counter);
     });
   }
   async function review(request) {

@@ -119,6 +119,11 @@ export type FinanceCashoutQuote = {
   id: string;
   actorUid: string;
   date: string;
+  counterDate?: string;
+  lateCashout?: boolean;
+  lateCashoutCarryoverPaise?: number;
+  lateCashoutOpeningReconciliationId?: string;
+  currentExpectedDrawerPaise?: number;
   reservationId: string;
   expiresAtMs: number;
   handoverRevision: number;

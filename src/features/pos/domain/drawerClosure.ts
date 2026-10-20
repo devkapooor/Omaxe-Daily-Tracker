@@ -5,7 +5,7 @@ export type PosDrawerClosure = {
   id: string
   cashoutId: string
   businessDate: string
-  kind: 'daily-cashout' | 'historical-repair'
+  kind: 'daily-cashout' | 'historical-repair' | 'late-cashout'
   expectedBeforePaise: number
   countedPaise: number
   differencePaise: number
