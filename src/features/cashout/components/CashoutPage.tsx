@@ -33,6 +33,10 @@ export function CashoutPage(props: CashoutPageProps) {
         <TabsContent value="new" className="m-0 min-h-0 flex-1">
           <DailyCashoutForm currentUserId={currentUser.id} currentUserName={currentUser.name} todayCashExpenses={todayCashExpenses} onSave={async (draft) => {
             await onSave(draft)
+            if (draft.historicalCountOnlyVersion === 1) {
+              showToast(`Historical Cashout and sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} credited to ${currentUser.name}; today’s drawer is unchanged.`)
+              return
+            }
             showToast(draft.auditStatus === 'matched' ? `Cashout + Sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.` : `${draft.auditMessage} ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.`)
           }} />
         </TabsContent>

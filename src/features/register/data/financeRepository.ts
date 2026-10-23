@@ -119,6 +119,7 @@ export type FinanceCashoutQuote = {
   id: string;
   actorUid: string;
   date: string;
+  historicalCashout?: boolean;
   counterDate?: string;
   lateCashout?: boolean;
   lateCashoutCarryoverPaise?: number;
@@ -126,7 +127,7 @@ export type FinanceCashoutQuote = {
   currentExpectedDrawerPaise?: number;
   reservationId: string;
   expiresAtMs: number;
-  handoverRevision: number;
+  handoverRevision: number | null;
   grossMethods: {
     cash: number;
     upi: number;
@@ -139,10 +140,10 @@ export type FinanceCashoutQuote = {
   vendorCashPaymentPaise: number;
   cashPaidOutPaise: number;
   netCashCollectionsPaise: number;
-  expectedDrawerPaise: number;
-  openingCheckpointPaise: number;
-  subsequentNetCashPaise: number;
-  checkpointId: string;
+  expectedDrawerPaise: number | null;
+  openingCheckpointPaise: number | null;
+  subsequentNetCashPaise: number | null;
+  checkpointId: string | null;
   legacyUntrackedCashOutflowPaise: number;
   posRefundDayRevision: number;
   posRefundDayTotalPaise: number;

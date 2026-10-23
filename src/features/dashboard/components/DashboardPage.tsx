@@ -4,11 +4,8 @@ import { DashboardRangeFilter } from '@/features/dashboard/components/DashboardR
 import { MonthlyProjectionPanel } from '@/features/dashboard/components/MonthlyProjectionPanel'
 import { SummaryCard } from '@/features/dashboard/components/SummaryCard'
 import type { MonthlyPerformanceMetrics } from '@/features/dashboard/hooks/useDashboardMetrics'
-import type { AppUser } from '@/domain/financeTypes'
-import { OwnerBankBalance } from '@/features/dashboard/components/OwnerBankBalance'
 
 type DashboardPageProps = {
-  currentUser: AppUser
   marginPercentage: number
   monthOffset: DashboardMonthOffset
   performance: MonthlyPerformanceMetrics
@@ -18,7 +15,6 @@ type DashboardPageProps = {
 }
 
 export function DashboardPage({
-  currentUser,
   marginPercentage,
   monthOffset,
   performance,
@@ -42,7 +38,6 @@ export function DashboardPage({
           <SummaryCard label="Open Loan Balance" value={money(totalLoans)} />
           <SummaryCard label="Vendor Outstanding" value={money(totalVendorOutstanding)} />
         </div>
-        <div className="mt-2"><OwnerBankBalance currentUser={currentUser} /></div>
       </div>
     </section>
   )

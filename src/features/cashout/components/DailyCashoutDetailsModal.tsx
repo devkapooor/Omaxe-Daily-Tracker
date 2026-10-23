@@ -34,12 +34,12 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
   if (!entry) return null
 
   const drawerTotal = entry.drawerTotal ?? entry.remainingBalance
-  const auditDifference = entry.auditDifference ?? entry.cashAudit - drawerTotal
+  const auditDifference = entry.auditDifference ?? (entry.cashAudit === null ? null : entry.cashAudit - drawerTotal)
   const auditStatus =
-    entry.auditStatus ?? (auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched')
+    entry.auditStatus ?? (auditDifference === null ? 'not-reconciled' : auditDifference > 0 ? 'cash-less' : auditDifference < 0 ? 'cash-more' : 'matched')
   const auditMessage =
     entry.auditMessage ??
-    (auditDifference > 0
+    (auditDifference === null ? 'Expected drawer unavailable for this historical count.' : auditDifference > 0
       ? `WARNING: Cash is less by ${auditDifference}.`
       : auditDifference < 0
         ? `Cash is more by ${Math.abs(auditDifference)}, probably wrong billings.`
@@ -56,8 +56,8 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
               <SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" />
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{entry.recordedBy}</Badge>
-                <Badge variant={auditStatus === 'matched' ? 'success' : 'warning'}>
-                  {auditStatus === 'matched' ? 'Audit Matched' : auditStatus === 'cash-less' ? 'Cash Less' : 'Cash More'}
+                <Badge variant={auditStatus === 'matched' ? 'success' : auditStatus === 'not-reconciled' ? 'outline' : 'warning'}>
+                  {auditStatus === 'matched' ? 'Audit Matched' : auditStatus === 'cash-less' ? 'Cash Less' : auditStatus === 'cash-more' ? 'Cash More' : 'Not reconciled'}
                 </Badge>
               </div>
             </div>
@@ -79,7 +79,7 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Credit Sales" value={money(entry.creditSales)} />
           <DetailBlock label="Returns" value={money(entry.returns)} />
           <DetailBlock label={entry.financePostingVersion === 1 ? 'Cash Paid Out (including refunds)' : 'Cash Expense'} value={money(entry.cashExpense ?? 0)} />
-          <DetailBlock label="System Audit" value={money(entry.cashAudit)} />
+          <DetailBlock label="System Audit" value={entry.cashAudit === null ? 'Unavailable for this historical count' : money(entry.cashAudit)} />
           <DetailBlock label="Drawer Total" value={money(drawerTotal)} />
           <DetailBlock label="Remaining Balance" value={money(entry.remainingBalance)} />
           {entry.financePostingVersion === 1 ? <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Basis" value="Cash Paid Out includes cash refunds, vendor cash payments and ordinary cash expenses. Refunds shown separately are part of that total; they are not another deduction." /> : null}

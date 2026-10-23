@@ -74,6 +74,7 @@ export type LoanEntry = {
 export type DailyCashoutEntry = {
   financeQuoteId?: string
   financePostingVersion?: 1
+  historicalCountOnlyVersion?: 1
   discrepancyReason?: string
   reviewStatus?: string
   sourceTotals?: Record<string, unknown>
@@ -89,7 +90,7 @@ export type DailyCashoutEntry = {
   cashSales: number
   returns: number
   creditSales: number
-  cashAudit: number
+  cashAudit: number | null
   cashExpense?: number
   refundAccountingVersion?: 1
   posCashRefundPaise?: number
@@ -107,7 +108,7 @@ export type DailyCashoutEntry = {
   holderBalancesAtClose?: Array<{ userId: string; name: string; amountPaise: number }>
   holderBalancesRevision?: number
   auditDifference?: number
-  auditStatus?: 'matched' | 'cash-less' | 'cash-more'
+  auditStatus?: 'matched' | 'cash-less' | 'cash-more' | 'not-reconciled'
   auditMessage?: string
   actualCashParticulars: string
   pendingCashParticulars: string

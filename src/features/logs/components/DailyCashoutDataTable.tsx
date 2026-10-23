@@ -20,6 +20,7 @@ type RowActionsProps = Pick<DailyCashoutDataTableProps, 'onEdit' | 'onView'> & {
 }
 
 function auditLabel(status?: DailyCashoutEntry['auditStatus']) {
+  if (status === 'not-reconciled') return 'Not reconciled'
   if (status === 'cash-less') return 'Cash less'
   if (status === 'cash-more') return 'Cash more'
   return 'Matched'
@@ -30,6 +31,7 @@ function cashoutSearchText(entry: DailyCashoutEntry) {
 }
 
 function auditVariant(status?: DailyCashoutEntry['auditStatus']) {
+  if (status === 'not-reconciled') return 'outline' as const
   if (status === 'cash-less') return 'destructive' as const
   if (status === 'cash-more') return 'warning' as const
   return 'success' as const

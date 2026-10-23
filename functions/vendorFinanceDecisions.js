@@ -33,9 +33,6 @@ function createVendorDecisionHandlers(ops, register) {
     if (source.fundingVersion === 1) {
       const old = (await ctx.tx.get(ref('cashouts', source.outflowId))).data();
       if (!old || old.sourceRecordId !== source.id) p.fail('Linked payment evidence missing.');
-      const beforeBank = state.mode !== 'cash' ? state.amountPaise : 0,
-        afterBank = request.proposed.mode !== 'cash' ? request.proposed.amountPaise : 0;
-      if (beforeBank !== afterBank) await ops.bank(ctx, beforeBank - afterBank);
       const cashDelta = (state.mode === 'cash' ? state.amountPaise : 0) - (request.proposed.mode === 'cash' ? request.proposed.amountPaise : 0);
       if (cashDelta !== 0) {
         const latest = await ctx.tx.get(db.collection('dailyCashouts').orderBy('createdAt', 'desc').limit(1));
@@ -246,7 +243,7 @@ function createVendorDecisionHandlers(ops, register) {
           lastOperationId: ctx.operationId,
           updatedByUid: ctx.actor.uid
         }));
-      } else await ops.bank(ctx, source.amountPaise);
+      }
       const next = {
         ...source,
         paymentStatus: 'cancelled',

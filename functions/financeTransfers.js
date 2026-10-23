@@ -23,7 +23,6 @@ function createTransferHandler(ops) {
       const available = p.rupees(pendingCashForUser(d.fromUserId, records.users, records.cashouts, records.transfers), 'Available held cash', -Number.MAX_SAFE_INTEGER);
       if (available < amountPaise) p.fail("Movement exceeds the sender's available held cash.");
       if ((await ctx.tx.get(ops.ref('cashTransfers', ctx.operationId))).exists) p.fail('Legacy transfer reference already exists; recover its original source.', 'already-exists');
-      if (d.toType === 'bank') await ops.bank(ctx, amountPaise);
       const result = {
         id: ctx.operationId,
         date: d.date,

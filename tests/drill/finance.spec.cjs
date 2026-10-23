@@ -177,51 +177,27 @@ test('F45-01 Register cash expense and vendor payment reconcile drawer, allocati
     }
   });
 });
-test('F45-02 bank baseline requires blank typed confirmation; bank expense changes bank only', async ({
+test('F45-02 app does not expose a bank balance and bank expenses still post without a baseline', async ({
   drill: h
 }) => {
   await seedFinance(h);
   await h.db.doc('bankBalanceControl/main').delete();
+  await h.db.doc('appMetadata/appSettings').delete();
   const {
     page
   } = await h.session('owner');
   await h.nav(page, 'Dashboard');
-  await page.getByRole('button', {
-    name: 'Confirm bank opening balance',
-    exact: true
-  }).click();
-  await page.getByLabel('Confirmed bank balance (₹)', {
-    exact: true
-  }).fill('5000');
-  await page.getByLabel('Reconciliation reason', {
-    exact: true
-  }).fill('Verified synthetic opening balance');
-  await page.getByRole('button', {
-    name: 'Confirm recorded balance',
-    exact: true
-  }).click();
-  const dialog = page.getByRole('dialog', {
-    name: 'Confirm recorded bank baseline'
-  });
-  await expect(dialog.getByLabel('Type CONFIRM to proceed')).toHaveValue('');
-  await expect(dialog.getByRole('button', {
-    name: 'OK',
-    exact: true
-  })).toBeDisabled();
-  await dialog.getByLabel('Type CONFIRM to proceed').fill('CONFIRM');
-  await dialog.getByRole('button', {
-    name: 'OK',
-    exact: true
-  }).click();
-  await expect.poll(async () => (await h.get('bankBalanceControl/main'))?.balancePaise).toBe(500000);
+  await expect(page.getByText('Recorded bank balance', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /bank.*balance/i })).toHaveCount(0);
   await h.nav(page, 'Register');
   await choose(page, 'Payment method', 'Bank Transfer');
   await expense(page, '100');
-  await expect.poll(async () => (await h.get('bankBalanceControl/main')).balancePaise).toBe(490000);
-  expect((await h.get('appMetadata/appSettings')).currentBankBalance).toBe(4900);
+  expect((await h.records('cashouts'))[0]).toMatchObject({ amountPaise: 10000, paymentMode: 'Bank Transfer' });
+  expect(await h.get('bankBalanceControl/main')).toBeUndefined();
+  expect(await h.get('appMetadata/appSettings')).toBeUndefined();
   expect((await h.get(h.base + '/handover/main')).cashNetPaise).toBe(0);
 });
-test('F45-03 cheque UI uses Issued, In progress and final owner debit; bank and payable reduce once', async ({
+test('F45-03 cheque UI preserves lifecycle and payable posting without an app bank balance', async ({
   drill: h
 }) => {
   await seedFinance(h);
@@ -269,7 +245,7 @@ test('F45-03 cheque UI uses Issued, In progress and final owner debit; bank and 
     name: 'OK',
     exact: true
   }).click();
-  await expect.poll(async () => (await h.get('bankBalanceControl/main')).balancePaise).toBe(480000);
+  await expect.poll(async () => (await h.get('bankBalanceControl/main')).balancePaise).toBe(500000);
   expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(80000);
   expect((await h.get('invoiceStatesV2/finance-invoice')).reservedAmountPaise).toBe(0);
   expect(await h.records('cashouts')).toHaveLength(1);
@@ -427,11 +403,11 @@ test('F45-07 direct writes and staff cheque/bank authority forgeries are rejecte
     expect(await failure(() => h.rpc(page, CLIENT, 'write', ['appMetadata/appSettings', {
       currentBankBalance: 999999
     }, 'update']))).toMatch(/permission|insufficient/i);
-    if (role !== 'owner') expect(await failure(() => call(h, page, 'bank-baseline', {
+    expect(await failure(() => call(h, page, 'bank-baseline', {
       balancePaise: 999999,
       expectedRevision: 1,
       reason: 'Forged owner'
-    }))).toMatch(/account cannot/i);
+    }))).toMatch(/unsupported/i);
   }
   expect(await h.records('cashouts')).toHaveLength(0);
   expect((await h.get('bankBalanceControl/main')).balancePaise).toBe(500000);

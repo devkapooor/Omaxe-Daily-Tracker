@@ -83,6 +83,10 @@ export function DailyCashoutForm({
         }
       }
     }
+    if (entryDate < today()) {
+      void load();
+      return () => { active = false; };
+    }
     let lastRevision: number | undefined;
     const stop = onSnapshot(doc(db, 'posSandboxes', 'test', 'handover', 'main'), {
       includeMetadataChanges: true
@@ -116,7 +120,7 @@ export function DailyCashoutForm({
   }, [quote, storageKey]);
   const view = quote || summary,
     drawerTotal = drawerTotalFromDenominations(counts, true),
-    difference = view ? drawerTotal - view.expectedDrawerPaise / 100 : 0;
+    difference = view && view.expectedDrawerPaise !== null ? drawerTotal - view.expectedDrawerPaise / 100 : 0;
   async function begin(event: React.FormEvent) {
     event.preventDefault();
     if (submitting.current) return;
@@ -160,8 +164,8 @@ export function DailyCashoutForm({
   async function close(event: React.FormEvent) {
     event.preventDefault();
     if (submitting.current || !quote) return;
-    if (difference !== 0 && !reason.trim()) {
-      setError('Enter the discrepancy reason.');
+    if ((quote.historicalCashout || difference !== 0) && !reason.trim()) {
+      setError(quote.historicalCashout ? 'Explain why this historical Cashout is being entered now.' : 'Enter the discrepancy reason.');
       return;
     }
     submitting.current = true;
@@ -178,13 +182,14 @@ export function DailyCashoutForm({
         creditSales: Number(credit),
         returns: quote.windowRefundPaise / 100,
         cashExpense: quote.cashPaidOutPaise / 100,
-        cashAudit: quote.expectedDrawerPaise / 100,
+        cashAudit: quote.expectedDrawerPaise === null ? 0 : quote.expectedDrawerPaise / 100,
         drawerDenominations: counts,
         drawerTotal,
         remainingBalance: drawerTotal,
         actualCashParticulars: 'Server derives denomination evidence.',
         pendingCashParticulars: 'Server derives source totals.',
-        discrepancyReason: reason
+        discrepancyReason: reason,
+        historicalCountOnlyVersion: quote.historicalCashout ? 1 : undefined
       });
       localStorage.removeItem(storageKey);
       setQuote(null);
@@ -205,20 +210,20 @@ export function DailyCashoutForm({
         <CardContent>
           <form onSubmit={event => void begin(event)}>
             <fieldset disabled={!!quote} aria-hidden={quote ? true : undefined} className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              <FieldLabel label="Cashout For Date"><Input type="date" required disabled={busy} value={entryDate} onChange={e => { setEntryDate(e.target.value); setSummary(null); }} /></FieldLabel>
+              <FieldLabel label="Cashout For Date"><Input type="date" required max={today()} disabled={busy} value={entryDate} onChange={e => { setEntryDate(e.target.value); setSummary(null); }} /></FieldLabel>
               <FieldLabel label="Cash Sale Recorded"><Input aria-label="Gross cash collections (before refunds)" readOnly value={view ? view.grossMethods.cash / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Machine Total (UPI + Card)"><Input aria-label="Gross UPI + Card collections" readOnly value={view ? (view.grossMethods.upi + view.grossMethods.card) / 100 : '—'} /></FieldLabel>
               <FieldLabel label="Credit Sale Recorded"><Input aria-label="Declared non-POS credit sales" type="number" min="0" step="0.01" value={credit} onChange={e => setCredit(e.target.value)} /></FieldLabel>
               <FieldLabel label="Cash Paid Out"><Input aria-label="Cash Paid Out (source-linked)" readOnly value={view ? view.cashPaidOutPaise / 100 : '—'} /></FieldLabel>
-              <FieldLabel label={view?.lateCashout ? 'Prior-day cash available for handover' : 'Expected Cash (Including Opening Balance)'}><Input aria-label={view?.lateCashout ? 'Prior-day carryover available for handover' : 'Expected cash including opening balance'} readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
-              <FieldLabel label="System Audit (Expected Drawer)"><Input aria-label="Expected drawer / System Audit" readOnly value={view ? view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label={view?.historicalCashout ? 'Historical cash expected' : view?.lateCashout ? 'Prior-day cash available for handover' : 'Expected Cash (Including Opening Balance)'}><Input aria-label={view?.historicalCashout ? 'Historical expected cash' : view?.lateCashout ? 'Prior-day carryover available for handover' : 'Expected cash including opening balance'} readOnly value={view ? view.expectedDrawerPaise === null ? 'Not available' : view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
+              <FieldLabel label={view?.historicalCashout ? 'System Audit (not available for missed day)' : 'System Audit (Expected Drawer)'}><Input aria-label="Expected drawer / System Audit" readOnly value={view ? view.expectedDrawerPaise === null ? 'Not available for historical count' : view.expectedDrawerPaise / 100 : '—'} /></FieldLabel>
               <FieldLabel label="By"><Input readOnly value={currentUserName} /></FieldLabel>
               <FieldLabel label="Cash Refunds"><Input readOnly value={view ? view.cashRefundPaise / 100 : '—'} /></FieldLabel>
-              <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3">Cash Sale Recorded is before refunds. Cash Paid Out includes refunds, expenses and vendor cash payments; Cash Refunds is part of that total. Expected cash includes the opening/count balance.</p>
+              {view?.historicalCashout ? <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3">POS sales, refunds and recorded cash payouts above are for this date only. Historical expected drawer is unavailable; the physical count is credited to {currentUserName} without changing today’s drawer.</p> : <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3">Cash Sale Recorded is before refunds. Cash Paid Out includes refunds, expenses and vendor cash payments; Cash Refunds is part of that total. Expected cash includes the opening/count balance.</p>}
               {view ? <details className="rounded-lg border border-border/70 bg-secondary/35 p-3 text-sm md:col-span-2 lg:col-span-3">
                 <summary className="cursor-pointer font-semibold">Reconciliation details · {formatDisplayDate(view.date)}</summary>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><p>Gross cash sales: <strong>{cash(view.grossMethods.cash)}</strong></p><p>Cash refunds: <strong>{cash(view.cashRefundPaise)}</strong></p><p>Net cash sales: <strong>{cash(view.netCashCollectionsPaise)}</strong></p><p>Vendor cash payments: <strong>{cash(view.vendorCashPaymentPaise)}</strong></p><p>Other cash expenses: <strong>{cash(view.ordinaryCashExpensePaise)}</strong></p><p>Expected drawer: <strong>{cash(view.expectedDrawerPaise)}</strong></p></div>
-                <p className="mt-3 text-xs text-muted-foreground">Latest counted balance {cash(view.openingCheckpointPaise)} + cash movement since that count {cash(view.subsequentNetCashPaise)} = expected drawer {cash(view.expectedDrawerPaise)}. Earlier activity may already be included in the latest count.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><p>Gross cash sales: <strong>{cash(view.grossMethods.cash)}</strong></p><p>Cash refunds: <strong>{cash(view.cashRefundPaise)}</strong></p><p>Net cash sales: <strong>{cash(view.netCashCollectionsPaise)}</strong></p><p>Vendor cash payments: <strong>{cash(view.vendorCashPaymentPaise)}</strong></p><p>Other cash expenses: <strong>{cash(view.ordinaryCashExpensePaise)}</strong></p><p>Expected drawer: <strong>{view.expectedDrawerPaise === null ? 'Not available' : cash(view.expectedDrawerPaise)}</strong></p></div>
+                {view.historicalCashout ? <p className="mt-3 text-xs text-warning">Historical expected drawer cannot be reconstructed reliably from available records. The physical count will be credited to {currentUserName}; today’s drawer and counter will not change.</p> : <p className="mt-3 text-xs text-muted-foreground">Latest counted balance {cash(view.openingCheckpointPaise ?? 0)} + cash movement since that count {cash(view.subsequentNetCashPaise ?? 0)} = expected drawer {cash(view.expectedDrawerPaise ?? 0)}. Earlier activity may already be included in the latest count.</p>}
                 <p className="mt-2 text-xs text-muted-foreground">Receipt amounts remain gross. Refunds and payouts affect cash once. Add missing payments in Register.</p>
               </details> : null}
               {view && view.legacyUntrackedCashOutflowPaise > 0 ? <p className="text-xs text-warning md:col-span-2 lg:col-span-3">Legacy cash entries {cash(view.legacyUntrackedCashOutflowPaise)} lack trusted drawer posting evidence. They are not deducted again automatically. Preserve any manual deduction already made during Cashout.</p> : null}
@@ -230,15 +235,15 @@ export function DailyCashoutForm({
         </CardContent>
       </Card>
       {quote ? <CashDrawerDialog quoteId={quote.id} busy={busy} onCancel={() => void cancel()}>
-        <CardHeader><SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" /><p className="text-sm text-muted-foreground">Count the drawer for {formatDisplayDate(quote.date)}. Expected cash: <strong>{cash(quote.expectedDrawerPaise)}</strong>.</p></CardHeader>
+        <CardHeader><SectionHeading eyebrow="Cash Drawer Particulars" title={quote.historicalCashout ? 'Record Missed Cashout' : 'Complete Daily Cashout'} /><p className="text-sm text-muted-foreground">Count cash for {formatDisplayDate(quote.date)}. {quote.historicalCashout ? 'This count will be credited to your Cash Movement balance; it will not change today’s drawer or counter.' : <>Expected cash: <strong>{cash(quote.expectedDrawerPaise ?? 0)}</strong>.</>}</p></CardHeader>
         <CardContent role="region" aria-label="Complete Daily Cashout">
-          <p className="mb-4 text-xs text-muted-foreground">Drawer activity pauses during this five-minute count. Refresh preserves the count reference; recount if it expires. {quote.lateCashout ? `This is a late Cashout for ${formatDisplayDate(quote.date)}. Count only the previous-day carryover being removed; the ${formatDisplayDate(quote.counterDate || quote.date)} counter remains open and its current sales stay in the drawer.` : ''}</p>
+          <p className="mb-4 text-xs text-muted-foreground">{quote.historicalCashout ? 'This historical count does not pause drawer activity. Source totals are checked again before posting.' : 'Drawer activity pauses during this five-minute count. Refresh preserves the count reference; recount if it expires.'} {quote.lateCashout ? `This is a late Cashout for ${formatDisplayDate(quote.date)}. Count only the previous-day carryover being removed; the ${formatDisplayDate(quote.counterDate || quote.date)} counter remains open and its current sales stay in the drawer.` : ''}</p>
           <form className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" onSubmit={event => void close(event)}>
             {(Object.keys(empty) as Array<keyof DrawerDenominations>).map(key => <FieldLabel key={key} label={key === 'change' ? 'Loose change (₹)' : key.replace('denom', '')}><Input type="number" min="0" step={key === 'change' ? '0.01' : '1'} required value={counts[key]} onChange={e => setCounts(old => ({ ...old, [key]: Number(e.target.value) }))} /></FieldLabel>)}
             <FieldLabel label="Drawer Total"><Input readOnly value={drawerTotal} /></FieldLabel>
-            <FieldLabel label="Difference (count − expected)"><Input readOnly value={difference} /></FieldLabel>
-            <FieldLabel className="md:col-span-2 lg:col-span-3" label="Discrepancy reason / closing note"><Textarea required={difference !== 0} value={reason} onChange={e => setReason(e.target.value)} /></FieldLabel>
-            <p className="text-xs md:col-span-2 lg:col-span-3">Counted cash goes to {currentUserName}. Drawer closes at ₹0.00; use Cash Movement for later transfers and deposits.</p>
+            <FieldLabel label={quote.historicalCashout ? 'Expected difference' : 'Difference (count − expected)'}><Input readOnly value={quote.historicalCashout ? 'Not available' : difference} /></FieldLabel>
+            <FieldLabel className="md:col-span-2 lg:col-span-3" label={quote.historicalCashout ? 'Why is this historical Cashout being entered now?' : 'Discrepancy reason / closing note'}><Textarea required={quote.historicalCashout || difference !== 0} value={reason} onChange={e => setReason(e.target.value)} /></FieldLabel>
+            <p className="text-xs md:col-span-2 lg:col-span-3">Counted cash goes to {currentUserName}.{quote.historicalCashout ? ' Today’s drawer and counter remain unchanged.' : ' Drawer closes at ₹0.00; use Cash Movement for later transfers and deposits.'}</p>
             {error ? <p role="alert" className="text-sm text-destructive md:col-span-2 lg:col-span-3">{error}</p> : null}
             <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-3 sm:flex-row"><Button type="button" variant="outline" disabled={busy} onClick={() => void cancel()}>Cancel count</Button><Button disabled={busy} type="submit">{busy ? 'Saving…' : 'Save Cashout and Close Drawer'}</Button></div>
           </form>

@@ -86,7 +86,7 @@ function createRegisterHandlers(ops) {
       }
     });
     return run(request, 'expense', d, p.STAFF, async ctx => {
-      const funding = d.mode === 'cash' ? await ops.counter(ctx) : await ops.bank(ctx, -d.amountPaise);
+      const funding = d.mode === 'cash' ? await ops.counter(ctx) : null;
       const record = outflow(ctx, {
         ...d,
         date: p.istDate(ctx.timestamp)
@@ -113,7 +113,7 @@ function createRegisterHandlers(ops) {
       if (!account) p.fail('Vendor outstanding evidence is missing.');
       if (d.amountPaise > (await availablePayable(ctx, d.vendorId, account))) p.fail('Payment exceeds payable available after issued cheque commitments.');
       if ((await ctx.tx.get(ref('vendorSettlementsV2', d.id))).exists) p.fail('This payment ID already exists. Recover its original operation.', 'already-exists');
-      const funding = d.mode === 'cash' ? await ops.counter(ctx) : await ops.bank(ctx, -d.amountPaise);
+      const funding = d.mode === 'cash' ? await ops.counter(ctx) : null;
       if (d.mode === 'cash' && d.date !== p.istDate(ctx.timestamp)) p.fail("A new counter payment must use today's business date.");
       const posting = v.buildSettlementPostingV2({
           ...d,
@@ -370,7 +370,6 @@ function createRegisterHandlers(ops) {
         if (!expense || expense.chequeNumber !== key) p.fail('Expense cheque source missing.');
       }
       if (isDebit) {
-        await ops.bank(ctx, -c.amountPaise);
         next.debitedAt = ctx.timestamp;
         if (c.vendorId) {
           const ledgerId = v.deterministicEventId('cheque', key, next.revision, 'cheque-debit');
@@ -480,44 +479,6 @@ function createRegisterHandlers(ops) {
       return c;
     });
   }
-  async function bankBaseline(request) {
-    const d = p.object(request.data, ['operationId', 'balancePaise', 'expectedRevision', 'reason']);
-    p.paise(d.balancePaise);
-    p.paise(d.expectedRevision, 'Bank revision');
-    p.text(d.reason, 'Baseline reason');
-    return run(request, 'bank-baseline', d, ['owner'], async ctx => {
-      const [c, s] = await Promise.all([ctx.tx.get(ref('bankBalanceControl', 'main')), ctx.tx.get(ref('appMetadata', 'appSettings'))]);
-      const before = c.data();
-      if ((before?.revision || 0) !== d.expectedRevision) p.fail('Bank balance changed; review it again.');
-      const next = {
-        initialized: true,
-        balancePaise: d.balancePaise,
-        revision: d.expectedRevision + 1,
-        baselineConfirmedAt: ctx.timestamp,
-        baselineConfirmedByUid: ctx.actor.uid,
-        baselineReason: d.reason,
-        lastOperationId: ctx.operationId,
-        updatedAt: ctx.timestamp
-      };
-      queue(ctx, 'bankBalanceControl', 'main', next);
-      ctx.writes.push(() => ctx.tx.set(ref('appMetadata', 'appSettings'), {
-        currentBankBalance: d.balancePaise / 100
-      }, {
-        merge: true
-      }));
-      queue(ctx, 'settingsAudit', ctx.operationId, {
-        id: ctx.operationId,
-        action: 'Bank book baseline confirmed',
-        actor: ctx.actor.name,
-        actorUid: ctx.actor.uid,
-        beforeBalancePaise: before?.balancePaise ?? p.rupees(s.get('currentBankBalance') || 0),
-        afterBalancePaise: d.balancePaise,
-        reason: d.reason,
-        createdAt: ctx.timestamp
-      }, true);
-      return next;
-    });
-  }
   return {
     expense,
     settlement,
@@ -526,7 +487,6 @@ function createRegisterHandlers(ops) {
     cheque,
     transitionCheque,
     presentDue,
-    bankBaseline,
     config,
     vendor,
     queue

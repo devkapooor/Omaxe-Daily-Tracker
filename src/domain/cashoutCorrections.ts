@@ -136,7 +136,7 @@ export function correctionValuesFromEntry(entry: DailyCashoutEntry): CashoutCorr
     creditSales: entry.creditSales,
     returns: entry.returns,
     cashExpense: cashExpenseFromEntry(entry),
-    cashAudit: entry.cashAudit,
+    cashAudit: entry.historicalCountOnlyVersion === 1 ? 0 : entry.cashAudit ?? 0,
     drawerDenominations: denominationsFromEntry(entry),
   }, entry.refundAccountingVersion === 1)
 }

@@ -22,7 +22,7 @@ function createCashoutHandlers(ops) {
     } while (cursor);
     return rows;
   }
-  async function summary(ctx, businessDate, ledger) {
+  async function summary(ctx, businessDate, ledger = null) {
     const latest = await ctx.tx.get(db.collection('dailyCashouts').where('date', '==', businessDate).orderBy('createdAt', 'desc').limit(1)),
       previous = latest.docs[0],
       after = previous?.get('createdAt') || '';
@@ -64,7 +64,7 @@ function createCashoutHandlers(ops) {
       }
       if (out.get('sourceKind') === 'vendor-payment') vendor = p.safe(vendor + amount);else if (out.get('sourceKind') === 'expense') ordinary = p.safe(ordinary + amount);
     }
-    const expected = p.expectedCash(ledger);
+    const expected = ledger ? p.expectedCash(ledger) : null;
     return {
       date: businessDate,
       grossMethods: gross,
@@ -75,13 +75,13 @@ function createCashoutHandlers(ops) {
       cashPaidOutPaise: p.safe(cashRefund + ordinary + vendor),
       netCashCollectionsPaise: gross.cash - cashRefund,
       expectedDrawerPaise: expected,
-      openingCheckpointPaise: ledger.checkpoint.cashActualPaise,
-      subsequentNetCashPaise: ledger.cashNetPaise - ledger.checkpoint.cashNetPaise,
-      checkpointId: ledger.checkpoint.reconciliationId,
+      openingCheckpointPaise: ledger ? ledger.checkpoint.cashActualPaise : null,
+      subsequentNetCashPaise: ledger ? ledger.cashNetPaise - ledger.checkpoint.cashNetPaise : null,
+      checkpointId: ledger ? ledger.checkpoint.reconciliationId : null,
       legacyUntrackedCashOutflowPaise: legacyUntracked,
       posRefundDayRevision: refundDay.exists ? refundDay.get('revision') : 0,
       posRefundDayTotalPaise: refundDay.exists ? refundDay.get('cashRefundPaise') : 0,
-      handoverRevision: ledger.revision,
+      handoverRevision: ledger ? ledger.revision : null,
       sourceOutflowIds: outflows.filter(s => s.get('fundingVersion') === 1).map(s => s.id)
     };
   }
@@ -127,10 +127,43 @@ function createCashoutHandlers(ops) {
       checkpointId: openingSnapshot.id
     };
   }
+  async function historicalCashoutSummary(ctx, businessDate) {
+    const existing = await ctx.tx.get(db.collection('dailyCashouts').where('date', '==', businessDate).limit(1));
+    if (!existing.empty) p.fail('A Cashout already exists for this date. Use the audited correction workflow.');
+    return {
+      ...await summary(ctx, businessDate),
+      historicalCashout: true,
+      expectedDrawerPaise: null,
+      openingCheckpointPaise: null,
+      subsequentNetCashPaise: null,
+      checkpointId: null
+    };
+  }
+  function isHistoricalDate(date, timestamp) {
+    const today = p.istDate(timestamp);
+    if (date > today) p.fail('Cashout cannot be recorded for a future date.');
+    return date < today;
+  }
   async function prepare(request) {
     const d = p.object(request.data, ['operationId', 'date']);
     p.date(d.date);
     return run(request, 'cashout-count-start', d, p.STAFF, async ctx => {
+      const historicalCashout = isHistoricalDate(d.date, ctx.timestamp);
+      if (historicalCashout) {
+        const totals = await historicalCashoutSummary(ctx, d.date),
+          result = {
+            ...totals,
+            id: ctx.operationId,
+            actorUid: ctx.actor.uid,
+            reservationId: '',
+            expiresAtMs: ctx.nowMs + 300000,
+            handoverRevision: 0,
+            counterDate: p.istDate(ctx.timestamp),
+            createdAt: ctx.timestamp
+          };
+        queue(ctx, 'financeCashoutQuotes', ctx.operationId, result, true);
+        return result;
+      }
       const counterDate = p.istDate(ctx.timestamp);
       const counter = await ops.counter(ctx, {
         businessDate: counterDate,
@@ -213,6 +246,112 @@ function createCashoutHandlers(ops) {
       const quote = (await ctx.tx.get(ref('financeCashoutQuotes', p.id(d.quoteId)))).data();
       if (!quote || quote.actorUid !== ctx.actor.uid || quote.cancelledAt || quote.closedAt) p.fail('This counting quote is unavailable. Recover its original result or start a new count.');
       if (ctx.nowMs >= quote.expiresAtMs) p.fail('Count expired. Cancel it and begin a fresh count.');
+      if (quote.historicalCashout) {
+        const totals = await historicalCashoutSummary(ctx, quote.date),
+          immutableTotals = ['grossMethods', 'cashRefundPaise', 'windowRefundPaise', 'ordinaryCashExpensePaise', 'vendorCashPaymentPaise', 'cashPaidOutPaise', 'netCashCollectionsPaise', 'legacyUntrackedCashOutflowPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise'];
+        for (const key of immutableTotals) if (JSON.stringify(totals[key]) !== JSON.stringify(quote[key])) p.fail('Source totals changed during counting. Cancel and start a fresh historical count.');
+        const reason = p.text(d.reason, 'Historical Cashout reason');
+        if (reason.length < 5) p.fail('Enter at least five characters explaining this historical Cashout.');
+        const id = 'daily-cashout-historical-' + quote.date,
+          existingByDate = await ctx.tx.get(ref('dailyCashouts', id));
+        if (existingByDate.exists) p.fail('A historical Cashout has already been recorded for this date. Use the audited correction workflow.');
+        const controlRef = ref('cashMovementControl', 'main'),
+          control = await ctx.tx.get(controlRef),
+          holderRecords = await ops.holderRecords(ctx.tx),
+          salesId = 'sale-single-store-' + quote.date,
+          salesSnapshot = await ctx.tx.get(ref('sales', salesId)),
+          existingSales = salesSnapshot.data(),
+          now = ctx.timestamp,
+          g = totals.grossMethods,
+          entry = {
+            id,
+            date: quote.date,
+            recordedBy: ctx.actor.name,
+            recordedByUserId: ctx.actor.uid,
+            cashSales: g.cash / 100,
+            upiSales: g.upi / 100,
+            cardSales: g.card / 100,
+            bankTransferSales: g.bankTransfer / 100,
+            creditSales: credit / 100,
+            returns: totals.windowRefundPaise / 100,
+            cashExpense: totals.cashPaidOutPaise / 100,
+            cashAudit: null,
+            drawerTotal: counted / 100,
+            drawerDenominations: d.drawerDenominations,
+            remainingBalance: counted / 100,
+            actualCashParticulars: c.formatDrawerParticulars(d.drawerDenominations, true),
+            pendingCashParticulars: 'Historical physical cash count recorded by: ' + ctx.actor.name + '\nExpected drawer: unavailable for this historical count.',
+            createdAt: now,
+            revision: 1,
+            refundAccountingVersion: 1,
+            historicalCountOnlyVersion: 1,
+            posCashRefundPaise: totals.cashRefundPaise,
+            posRefundDayRevision: totals.posRefundDayRevision,
+            posRefundDayTotalPaise: totals.posRefundDayTotalPaise,
+            drawerClosureId: id,
+            cashRemovedPaise: counted,
+            closingDrawerPaise: 0,
+            financePostingVersion: 1,
+            financeQuoteId: quote.id,
+            sourceOperationId: ctx.operationId,
+            sourceTotals: totals,
+            discrepancyReason: reason,
+            reviewStatus: 'pending',
+            auditDifference: null,
+            auditStatus: 'not-reconciled',
+            auditMessage: 'Historical physical count recorded. Expected drawer could not be independently reconstructed.'
+          };
+        // Historical counts are intentionally not compared with a guessed drawer expectation.
+        const balances = ops.holderBalances(holderRecords, entry);
+        if (balances.some(b => b.amountPaise < 0)) p.fail('Holder balances do not reconcile. No historical Cashout was posted.');
+        entry.holderBalancesAtClose = balances;
+        entry.holderBalancesRevision = (control.get('revision') || 0) + 1;
+        const grossTotal = (g.cash + g.upi + g.card + g.bankTransfer + credit) / 100,
+          sales = {
+            ...(existingSales || {}),
+            id: salesId,
+            storeId: 'single-store',
+            date: quote.date,
+            cashSales: (existingSales?.cashSales || 0) + entry.cashSales,
+            upiSales: (existingSales?.upiSales || 0) + entry.upiSales,
+            cardSales: (existingSales?.cardSales || 0) + entry.cardSales,
+            bankTransferSales: (existingSales?.bankTransferSales || 0) + entry.bankTransferSales,
+            creditSales: (existingSales?.creditSales || 0) + entry.creditSales,
+            totalSales: (existingSales?.totalSales || 0) + grossTotal,
+            returnsDiscounts: (existingSales?.returnsDiscounts || 0) + entry.returns,
+            refundAccountingVersion: 1,
+            netSalesAmount: (existingSales?.netSalesAmount ?? (existingSales?.totalSales || 0) - (existingSales?.returnsDiscounts || 0)) + grossTotal - entry.returns,
+            notes: 'Auto-synced from trusted historical Cashout.',
+            createdAt: existingSales?.createdAt || now,
+            updatedAt: now
+          },
+          closure = {
+            id,
+            cashoutId: id,
+            businessDate: quote.date,
+            kind: 'historical-cashout',
+            expectedBeforePaise: null,
+            countedPaise: counted,
+            differencePaise: null,
+            removedPaise: counted,
+            closingBalancePaise: 0,
+            resultingBalancePaise: null,
+            recordedByUid: ctx.actor.uid,
+            recordedByName: ctx.actor.name,
+            createdAt: now
+          };
+        queue(ctx, 'dailyCashouts', id, entry, true);
+        queue(ctx, 'sales', salesId, sales);
+        ctx.writes.push(() => ctx.tx.create(posRef('drawerClosures', id), closure));
+        queue(ctx, 'cashMovementControl', 'main', {
+          revision: entry.holderBalancesRevision,
+          lastOperation: 'historical-cashout',
+          lastOperationId: id,
+          updatedAt: now
+        });
+        queue(ctx, 'financeCashoutQuotes', d.quoteId, { ...quote, closedAt: now, cashoutId: id });
+        return entry;
+      }
       const counter = await ops.counter(ctx, {
         businessDate: quote.counterDate || quote.date,
         allowReservation: quote.reservationId,
@@ -389,7 +528,8 @@ function createCashoutHandlers(ops) {
     for (const key of ['cashSales', 'upiSales', 'cardSales', 'creditSales', 'returns', 'cashExpense', 'cashAudit']) p.rupees(values[key] || 0, key);
     denominations(values.drawerDenominations);
     if (entry.financePostingVersion === 1) {
-      for (const key of ['cashSales', 'upiSales', 'cardSales', 'returns', 'cashExpense', 'cashAudit']) if (values[key] !== entry[key]) p.fail('Trusted source totals cannot be edited. Correct the linked source or physical count only.');
+      for (const key of ['cashSales', 'upiSales', 'cardSales', 'returns', 'cashExpense']) if (values[key] !== entry[key]) p.fail('Trusted source totals cannot be edited. Correct the linked source or physical count only.');
+      if (entry.historicalCountOnlyVersion === 1 ? values.cashAudit !== 0 : values.cashAudit !== entry.cashAudit) p.fail('Trusted source totals cannot be edited. Correct the linked source or physical count only.');
     }
     return c.normalizeCorrectionValues(values, entry.refundAccountingVersion === 1);
   }
@@ -399,6 +539,13 @@ function createCashoutHandlers(ops) {
     validateValues(entry, request.proposed);
     const next = c.cashoutEntryFromCorrection(entry, request.proposed, ctx.actor.name, ctx.timestamp),
       records = await ops.holderRecords(ctx.tx);
+    if (entry.historicalCountOnlyVersion === 1) {
+      next.cashAudit = null;
+      next.auditDifference = null;
+      next.auditStatus = 'not-reconciled';
+      next.auditMessage = 'Historical physical count recorded. Expected drawer could not be independently reconstructed.';
+      next.pendingCashParticulars = 'Historical physical cash count recorded by: ' + entry.recordedBy + '\nExpected drawer: unavailable for this historical count.';
+    }
     records.cashouts = records.cashouts.map(s => s.id === entry.id ? {
       id: entry.id,
       data: next
@@ -507,8 +654,9 @@ function createCashoutHandlers(ops) {
     return db.runTransaction(async tx => {
       const actor = await ops.actorFor(tx, request),
         timestamp = new Date(ops.clock()).toISOString(),
-        ledger = (await tx.get(posRef('handover', 'main'))).data(),
         counterDate = p.istDate(timestamp);
+      if (isHistoricalDate(request.data.date, timestamp)) return historicalCashoutSummary({ tx, actor, timestamp }, request.data.date);
+      const ledger = (await tx.get(posRef('handover', 'main'))).data();
       if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared drawer has no completed opening count.');
       const counter = await ops.counter({ tx, actor, request, nowMs: ops.clock(), timestamp }, {
         businessDate: counterDate,

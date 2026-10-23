@@ -276,39 +276,32 @@ describe('trusted finance posting in an independent demo emulator database', {
     assert.equal((await read(base + '/handover/main')).cashNetPaise, -70000);
     assert.equal((await db.collection('cashouts').get()).size, 1);
   });
-  it('posts bank-funded expense and vendor payment once without changing drawer', async () => {
+  it('posts bank-funded expense and vendor payment once without requiring or changing an app bank balance', async () => {
     await register.expense(req(expense(10000, {
       mode: 'bank-transfer'
     })));
     await register.settlement(req(payment(20000, {
       mode: 'bank-transfer'
     })));
-    assert.equal((await read('bankBalanceControl/main')).balancePaise, 470000);
-    assert.equal((await read('appMetadata/appSettings')).currentBankBalance, 4700);
+    assert.equal((await read('bankBalanceControl/main')).balancePaise, 500000);
+    assert.equal((await read('appMetadata/appSettings')).currentBankBalance, 5000);
+    assert.equal((await db.collection('cashouts').get()).size, 2);
+    assert.equal((await read('vendorAccountStatesV2/vendor')).outstandingPaise, 80000);
     assert.equal((await read(base + '/handover/main')).cashNetPaise, 0);
   });
-  it('requires owner baseline confirmation and rejects stale/forged baseline', async () => {
+  it('posts bank transactions when no balance record exists and leaves no balance mirror behind', async () => {
     await db.doc('bankBalanceControl/main').delete();
-    await assert.rejects(register.expense(req(expense(100, {
-      mode: 'bank-transfer'
-    }))), /owner must confirm/);
-    await assert.rejects(register.bankBaseline(req({
-      balancePaise: 100,
-      expectedRevision: 0,
-      reason: 'Fixture'
-    })), /account cannot/);
-    await register.bankBaseline(req({
-      balancePaise: 300000,
-      expectedRevision: 0,
-      reason: 'Independently verified fixture bank balance'
-    }, 'owner'));
-    assert.equal((await read('appMetadata/appSettings')).currentBankBalance, 3000);
-    await assert.rejects(register.bankBaseline(req({
-      balancePaise: 1,
-      expectedRevision: 0,
-      reason: 'Stale'
-    }, 'owner')), /changed/);
-    assert.equal((await db.collection('settingsAudit').get()).size, 1);
+    await db.doc('appMetadata/appSettings').delete();
+    const outflow = await register.expense(req(expense(100, { mode: 'bank-transfer' })));
+    await register.settlement(req(payment(10000, { mode: 'bank-transfer' })));
+    assert.equal(outflow.paymentMode, 'Bank Transfer');
+    assert.equal((await read('cashouts/' + outflow.id)).amountPaise, 100);
+    assert.equal((await read('vendorAccountStatesV2/vendor')).outstandingPaise, 90000);
+    assert.equal((await db.collection('vendorSettlementsV2').get()).size, 1);
+    assert.equal((await read('bankBalanceControl/main')), undefined);
+    assert.equal((await read('appMetadata/appSettings')), undefined);
+    assert.equal((await read(base + '/handover/main')).cashNetPaise, 0);
+    assert.equal(register.bankBaseline, undefined);
   });
   it('starts cheques Issued, auto-presents when due, Not yet does not debit, Yes debits once', async () => {
     const r = req({
@@ -353,7 +346,7 @@ describe('trusted finance posting in an independent demo emulator database', {
     }
     assert.equal((await read('chequesV2/1120')).status, 'debited');
     assert.equal((await read('chequesV2/1120')).revision, debited.cheque.revision);
-    assert.equal((await read('bankBalanceControl/main')).balancePaise, 480000);
+    assert.equal((await read('bankBalanceControl/main')).balancePaise, 500000);
     assert.equal((await read('vendorAccountStatesV2/vendor')).outstandingPaise, 80000);
     assert.equal((await read('invoiceStatesV2/invoice')).openAmountPaise, 80000);
     assert.equal((await read('invoiceStatesV2/invoice')).reservedAmountPaise, 0);
@@ -405,7 +398,7 @@ describe('trusted finance posting in an independent demo emulator database', {
       expectedRevision: 1,
       toStatus: 'debited'
     }, 'owner'));
-    assert.equal((await read('bankBalanceControl/main')).balancePaise, 495000);
+    assert.equal((await read('bankBalanceControl/main')).balancePaise, 500000);
     assert.equal((await read('cashouts/' + r.cheque.sourceRecordId)).paymentStatus, 'debited');
     assert.equal((await read(base + '/handover/main')).cashNetPaise, 0);
   });
@@ -444,97 +437,67 @@ describe('trusted finance posting in an independent demo emulator database', {
     assert.equal((await read(base + '/handover/main')).checkpoint.cashActualPaise, 0);
     assert.equal(closed.holderBalancesAtClose.find(v => v.userId === 'owner').amountPaise, 70000);
   });
-  it('posts a late prior-day Cashout from the next-day opening evidence without closing the live counter', async () => {
+  it('records any historical Cashout without a live counter and credits the cashier who counted it', async () => {
     now = Date.parse('2026-10-16T05:00:00.000Z');
-    const batch = db.batch();
-    batch.set(db.doc(base + '/handover/main'), {
-      initialized: true,
-      revision: 4,
+    await db.doc(base + '/handover/main').update({
+      counterSession: { status: 'closed', date: '2026-10-15' },
+      revision: 8,
       cashNetPaise: 118000,
-      dailyTotals: { '2026-10-15': { upi: 0, card: 0 }, '2026-10-16': { upi: 0, card: 0 } },
-      checkpoint: { date: '2026-10-16', cashActualPaise: 100000, cashNetPaise: 100000, upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'opening-16' },
-      counterSession: { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' },
-      countReservation: null,
     });
-    for (const uid of ['owner', 'billing', 'manager']) batch.set(db.doc(base + '/cashierStates/' + uid), {
-      uid, authTime: 42, closed: false, needsLogoutCheck: false, joinedCounterId: 'opening-16',
-    });
-    batch.set(db.doc(base + '/reconciliations/opening-16'), {
-      id: 'opening-16', uid: 'owner', authTime: 42, kind: 'login', date: '2026-10-16',
-      actual: { cash: 100000, upi: 0, card: 0 }, createdAt: '2026-10-15T18:31:00.000Z',
-    });
-    batch.set(db.doc(base + '/bills/sale-15'), {
+    await db.doc(base + '/bills/sale-15').set({
       id: 'sale-15', businessDate: '2026-10-15', createdAt: '2026-10-15T12:00:00.000Z',
-      payments: [{ method: 'cash', amountPaise: 50000 }],
+      payments: [{ method: 'cash', amountPaise: 50000 }, { method: 'upi', amountPaise: 25000 }],
     });
-    batch.set(db.doc(base + '/bills/sale-16'), {
+    await db.doc(base + '/bills/sale-16').set({
       id: 'sale-16', businessDate: '2026-10-16', createdAt: '2026-10-16T05:30:00.000Z',
       payments: [{ method: 'cash', amountPaise: 18000 }],
     });
-    await batch.commit();
-
+    const liveBefore = await read(base + '/handover/main');
     const preview = await cashout.readSummary({ auth: req({}).auth, data: { date: '2026-10-15' } });
-    assert.equal(preview.lateCashout, true);
+    assert.equal(preview.historicalCashout, true);
+    assert.equal(preview.expectedDrawerPaise, null);
     assert.equal(preview.grossMethods.cash, 50000);
+    assert.equal(preview.grossMethods.upi, 25000);
     const quote = await cashout.prepare(req({ date: '2026-10-15' }));
-    assert.equal(quote.lateCashout, true);
-    assert.equal(quote.counterDate, '2026-10-16');
-    assert.equal(quote.lateCashoutCarryoverPaise, 100000);
-    assert.equal(quote.currentExpectedDrawerPaise, 118000);
-    assert.equal(quote.grossMethods.cash, 50000);
-    assert.equal(quote.expectedDrawerPaise, 100000);
-    await assert.rejects(register.expense(req(expense(100))), /being counted/);
-
+    assert.equal(quote.historicalCashout, true);
+    assert.equal(quote.reservationId, '');
     const closeRequest = req({
       quoteId: quote.id,
       drawerDenominations: { denom500: 2, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 0, change: 0 },
       creditSales: 0,
-      reason: '',
-    });
+      reason: 'Missed Cashout; physical cash is held by me',
+    }, 'billing');
     const entry = await cashout.close(closeRequest);
     assert.equal(entry.date, '2026-10-15');
     assert.equal(entry.cashSales, 500);
+    assert.equal(entry.upiSales, 250);
     assert.equal(entry.drawerTotal, 1000);
-    assert.equal(entry.lateCashoutVersion, 1);
-    assert.equal(entry.sourceTotals.date, '2026-10-15');
-    assert.equal(entry.sourceTotals.grossMethods.cash, 50000);
-    assert.equal(entry.sourceTotals.currentExpectedDrawerPaise, undefined);
-    assert.equal(entry.sourceTotals.counterDate, undefined);
-    assert.equal(entry.sourceTotals.subsequentNetCashPaise, undefined);
-    assert.equal((await read('dailyCashouts/' + entry.id)).drawerTotal, 1000);
-    assert.equal((await read(base + '/drawerClosures/' + entry.id)).kind, 'late-cashout');
-    assert.equal((await read(base + '/drawerClosures/' + entry.id)).resultingBalancePaise, 18000);
-    assert.deepEqual(await cashout.close(closeRequest), entry);
-    const ledger = await read(base + '/handover/main');
-    assert.deepEqual(ledger.counterSession, { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' });
-    assert.equal(ledger.checkpoint.cashActualPaise, 18000);
-    assert.equal(ledger.checkpoint.cashNetPaise, 118000);
-    assert.equal((await db.collection('dailyCashouts').get()).size, 1);
+    assert.equal(entry.recordedByUserId, 'billing');
+    assert.equal(entry.cashAudit, null);
+    assert.equal(entry.auditStatus, 'not-reconciled');
+    assert.equal(entry.holderBalancesAtClose.find(v => v.userId === 'billing').amountPaise, 100000);
+    assert.equal((await read(base + '/drawerClosures/' + entry.id)).kind, 'historical-cashout');
     assert.equal((await read('sales/sale-single-store-2026-10-15')).cashSales, 500);
-    assert.equal((await read(base + '/bills/sale-16')).payments[0].amountPaise, 18000);
-    assert.equal((await read(base + '/cashierStates/billing')).joinedCounterId, 'opening-16');
-    assert.equal((await read(base + '/cashierStates/billing')).needsLogoutCheck, true);
-    assert.equal((await read('financeOperations/' + closeRequest.data.operationId)).actorUid, 'billing');
+    assert.deepEqual(await cashout.close(closeRequest), entry);
+    assert.deepEqual(await read(base + '/handover/main'), liveBefore);
+    await assert.rejects(cashout.prepare(req({ date: '2026-10-15' }, 'manager')), /already exists/);
+    assert.equal((await db.collection('dailyCashouts').where('date', '==', '2026-10-15').get()).size, 1);
   });
-  it('rejects a late Cashout that would remove current-day collections', async () => {
+  it('rejects a historical Cashout when POS sources change during the physical count', async () => {
     now = Date.parse('2026-10-16T05:00:00.000Z');
-    await db.doc(base + '/handover/main').update({
-      cashNetPaise: 118000,
-      checkpoint: { date: '2026-10-16', cashActualPaise: 100000, cashNetPaise: 100000, upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'opening-16' },
-      counterSession: { status: 'open', date: '2026-10-16', openingReconciliationId: 'opening-16', openedByUid: 'owner' },
-    });
-    await db.doc(base + '/cashierStates/billing').update({ joinedCounterId: 'opening-16' });
-    await db.doc(base + '/reconciliations/opening-16').set({ id: 'opening-16', uid: 'owner', authTime: 42, kind: 'login', date: '2026-10-16', actual: { cash: 100000, upi: 0, card: 0 }, createdAt: '2026-10-15T18:31:00.000Z' });
     const quote = await cashout.prepare(req({ date: '2026-10-15' }));
+    await db.doc(base + '/bills/late-historical-sale').set({
+      id: 'late-historical-sale', businessDate: '2026-10-15', createdAt: '2026-10-15T15:00:00.000Z',
+      payments: [{ method: 'cash', amountPaise: 10000 }],
+    });
     await assert.rejects(cashout.close(req({
       quoteId: quote.id,
-      drawerDenominations: { denom500: 2, denom200: 0, denom100: 0, denom50: 0, denom20: 0, denom10: 0, change: 1 },
+      drawerDenominations: count,
       creditSales: 0,
-      reason: 'Too much cash for prior day',
-    })), /cannot remove today's collections/);
+      reason: 'Historical count with changed source sales',
+    })), /Source totals changed/);
     assert.equal((await db.collection('dailyCashouts').get()).size, 0);
-    assert.equal((await read(base + '/handover/main')).counterSession.date, '2026-10-16');
-    assert.equal((await read(base + '/handover/main')).countReservation.id, quote.reservationId);
+    assert.equal((await read(base + '/handover/main')).cashNetPaise, 0);
   });
   it('expired counts reject without closing and can be cancelled safely', async () => {
     const quote = await cashout.prepare(req({
@@ -590,7 +553,9 @@ describe('trusted finance posting in an independent demo emulator database', {
     assert.equal(entry.auditStatus, 'cash-more');
     assert.equal((await read(base + '/handover/main')).counterSession.status, 'closed');
   });
-  it('Cash Movement consumes held cash and bank deposit increases book without another drawer effect', async () => {
+  it('Cash Movement records a bank deposit without requiring or mutating an app balance or drawer', async () => {
+    await db.doc('bankBalanceControl/main').delete();
+    await db.doc('appMetadata/appSettings').delete();
     await db.doc('dailyCashouts/fixture').set({
       recordedByUserId: 'billing',
       recordedBy: 'Synthetic billing',
@@ -608,7 +573,9 @@ describe('trusted finance posting in an independent demo emulator database', {
     const first = await transfer(r);
     now += 100000;
     assert.deepEqual(await transfer(r), first);
-    assert.equal((await read('bankBalanceControl/main')).balancePaise, 510000);
+    assert.equal((await read('bankBalanceControl/main')), undefined);
+    assert.equal((await read('appMetadata/appSettings')), undefined);
+    assert.equal((await read('cashTransfers/' + first.id)).recordType, 'bank-transfer');
     assert.equal((await read(base + '/handover/main')).cashNetPaise, 0);
     await assert.rejects(transfer({
       ...r,
@@ -871,14 +838,14 @@ describe('trusted finance posting in an independent demo emulator database', {
   });
   it('corrects an unallocated bank payment and recovers its result without undefined invoice effects', async () => {
     await register.settlement(req({id:'unallocated',vendorId:'vendor',date:'2026-10-15',amountPaise:60000,mode:'bank-transfer'}));
-    assert.equal((await read('bankBalanceControl/main')).balancePaise,440000);
+    assert.equal((await read('bankBalanceControl/main')).balancePaise,500000);
     const request=req({id:'unallocated-correction',sourceRecordId:'unallocated',expectedRevision:1,proposed:{date:'2026-10-15',amountPaise:50000,mode:'bank-transfer',notes:'Verified account payment'},reason:'Wrong amount on account payment',applyImmediately:true},'owner');
     const first=await decisions.correct(request);
     assert.equal(first.adjustmentPaise,10000);
     assert.equal(Object.hasOwn(first,'allocationAdjustment'),false);
     assert.equal(Object.hasOwn(first,'nextInvoiceState'),false);
     assert.deepEqual(await decisions.correct(request),first);
-    assert.equal((await read('bankBalanceControl/main')).balancePaise,450000);
+    assert.equal((await read('bankBalanceControl/main')).balancePaise,500000);
     assert.equal((await read('vendorAccountStatesV2/vendor')).outstandingPaise,50000);
     assert.equal((await read('invoiceStatesV2/invoice')).openAmountPaise,100000);
     assert.equal((await read('vendorSettlementsV2/unallocated')).amountPaise,60000);

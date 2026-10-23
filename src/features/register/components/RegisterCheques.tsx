@@ -70,7 +70,7 @@ export function RegisterCheques() {
         title: toStatus === 'cancelled' ? 'Cancel cheque' : toStatus === 'bounced' ? 'Record cheque bounce' : toStatus === 'issued' ? 'Issue saved cheque' : 'Confirm bank debit',
         details: ['Cheque ' + c.chequeNumber + ' · ' + money(c.amountPaise / 100)],
         requireReason: ['cancelled', 'bounced'].includes(toStatus),
-        warning: ['cancelled', 'bounced'].includes(toStatus) ? 'This releases the pending payment commitment. Bank and drawer balances are not debited.' : toStatus === 'issued' ? 'This issues the saved cheque as a payment commitment; it does not confirm bank debit.' : 'Bank book balance and linked payable update once. This action is final.',
+        warning: ['cancelled', 'bounced'].includes(toStatus) ? 'This releases the pending payment commitment. No bank debit or drawer change is recorded.' : toStatus === 'issued' ? 'This issues the saved cheque as a payment commitment; it does not confirm bank debit.' : 'The cheque status and linked payable update once. The app does not track bank balances. This action is final.',
         confirmationText: 'CONFIRM', confirmLabel: 'OK',
       });
       if (!answer) return;

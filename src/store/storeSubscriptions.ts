@@ -203,17 +203,12 @@ export function setupAppStoreSubscriptions({
         return
       }
       const data = snapshot.data() as Partial<{
-        currentBankBalance: unknown
         marginPercentage: unknown
         monthlyOperationalExpense: unknown
         operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
         scheduledNotifications: unknown
         upgradeAnnouncement: unknown
       }> | undefined
-      const currentBankBalance =
-        currentUserRole === 'owner' && typeof data?.currentBankBalance === 'number' && data.currentBankBalance >= 0
-          ? data.currentBankBalance
-          : defaultAppSettings.currentBankBalance
       const monthlyOperationalExpense =
         typeof data?.monthlyOperationalExpense === 'number' && data.monthlyOperationalExpense >= 0
           ? data.monthlyOperationalExpense
@@ -235,7 +230,7 @@ export function setupAppStoreSubscriptions({
             ? rawBreakdown.miscellaneous
             : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
       }
-      setAppSettings({ currentBankBalance, marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
+      setAppSettings({ marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
       markLoaded('appSettings')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', currentUserRole === 'owner' ? 'workspaceMetrics' : 'staffWorkspaceMetrics'), (snapshot) => {

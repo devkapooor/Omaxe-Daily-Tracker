@@ -55,8 +55,9 @@ async function check(tool, out) {
       await expect(page.getByRole('button', { name: /bank.*balance/i })).toHaveCount(0)
       if (role === 'ui-owner') {
         await nav('Dashboard')
-        await expect(page.getByText('Recorded bank balance', { exact: false })).toBeVisible()
-        await page.screenshot({ path: path.join(out, 'ui-feedback-owner-dashboard-bank.png'), fullPage: true })
+        await expect(page.getByText('Recorded bank balance', { exact: false })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: /bank.*balance/i })).toHaveCount(0)
+        await page.screenshot({ path: path.join(out, 'ui-feedback-owner-dashboard-no-bank-balance.png'), fullPage: true })
         await nav('Register')
       }
       await page.getByLabel('Payment type', { exact: true }).click()
@@ -67,7 +68,7 @@ async function check(tool, out) {
       await page.getByRole('option', { name: 'Drill Vendor 062', exact: true }).click()
       await expect(page.getByLabel('Vendor', { exact: true })).toHaveValue('Drill Vendor 062')
       await page.screenshot({ path: path.join(out, 'ui-feedback-' + role + '-register.png'), fullPage: true })
-      evidence.assertions.push({ role, proof, vendorTabsRemoved: true, bankInRegister: false, bankOnOwnerDashboard: role === 'ui-owner', singlePagedVendorPicker: true })
+      evidence.assertions.push({ role, proof, vendorTabsRemoved: true, bankInRegister: false, bankBalanceUiRemoved: true, singlePagedVendorPicker: true })
       if (role !== 'ui-owner') {
         await nav('Cashout')
         await expect(page.getByRole('heading', { name: 'Cashout', exact: true })).toBeVisible()

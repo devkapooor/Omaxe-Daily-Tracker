@@ -92,7 +92,7 @@ export function CashoutCorrectionForm({ entry, mode, onClose, onSubmit }: Cashou
               <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} label="Credit Sales" value={values.creditSales} onChange={(value) => setNumericField('creditSales', value)} />
               <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.refundAccountingVersion === 1} label="Returns" value={values.returns} onChange={(value) => setNumericField('returns', value)} />
               <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="Cash Expense" value={values.cashExpense} onChange={(value) => setNumericField('cashExpense', value)} />
-              <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="System Audit" value={values.cashAudit} onChange={(value) => setNumericField('cashAudit', value)} />
+              {entry.historicalCountOnlyVersion === 1 ? <p className="rounded-lg border border-border/70 p-3 text-sm text-muted-foreground">System Audit unavailable for this historical Cashout; the physical count can still be corrected with a reason.</p> : <AmountField step={entry.refundAccountingVersion === 1 ? "0.01" : "1"} readOnly={entry.financePostingVersion===1} label="System Audit" value={values.cashAudit} onChange={(value) => setNumericField('cashAudit', value)} />}
             </div>
 
             <div>

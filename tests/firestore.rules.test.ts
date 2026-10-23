@@ -659,7 +659,7 @@ describe('V2 vendor ledger capability enforcement', () => {
     expect(await trusted.call('vendor-create', input, 'owner-user')).toEqual(first)
     expect((await getDoc(doc(db, 'vendorAccountStatesV2', input.id))).data()?.outstandingPaise).toBe(100000)
     expect((await getDoc(doc(db, openingPath))).data()?.signedAmountPaise).toBe(125050)
-    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(474950)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(500000)
   })
 
   it('rejects trusted staff nonzero opening without partial writes while allowing zero opening', async () => {
@@ -719,7 +719,7 @@ describe('V2 vendor ledger capability enforcement', () => {
     await trusted.call('vendor-correction', { id: 'owner-correction', sourceRecordId: 'settlement-linked-1', expectedRevision: 1, proposed: { date: '2026-10-11', amountPaise: 30000, mode: 'upi', notes: 'Corrected linked' }, reason: 'Invoice linked amount entered incorrectly', applyImmediately: true }, 'owner-user')
     expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(20000)
     expect((await getDoc(doc(db, 'invoiceStatesV2', 'purchase-v2-1'))).data()?.openAmountPaise).toBe(70000)
-    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(420000)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(500000)
   })
 
   it('keeps trusted cheques unique, owner debit final and bank/payable posting exactly once', async () => {
@@ -738,7 +738,7 @@ describe('V2 vendor ledger capability enforcement', () => {
     const result = await trusted.call('cheque-decision', debit, 'owner-user')
     expect(await trusted.call('cheque-decision', debit, 'owner-user')).toEqual(result)
     expect((await getDoc(doc(db, 'vendorAccountStatesV2', 'vendor-v2-1'))).data()?.outstandingPaise).toBe(60000)
-    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(460000)
+    expect((await getDoc(doc(db, 'bankBalanceControl', 'main'))).data()?.balancePaise).toBe(500000)
     await expect(trusted.call('cheque-decision', { ...debit, operationId: 'another-debit' }, 'owner-user')).rejects.toMatchObject({ code: 'failed-precondition' })
     await assertFails(updateDoc(doc(db, 'chequesV2', '1120'), { chequeNumber: '1121' }))
   })

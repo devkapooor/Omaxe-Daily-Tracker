@@ -47,7 +47,7 @@ describe('cashout corrections', () => {
       creditSales: legacyEntry.creditSales,
       returns: legacyEntry.returns,
       cashExpense: 0,
-      cashAudit: legacyEntry.cashAudit,
+      cashAudit: legacyEntry.cashAudit ?? 0,
       drawerDenominations: denominationsFromEntry(legacyEntry),
     }, 'Owner', '2026-10-01T00:00:00.000Z')
     expect(corrected).not.toHaveProperty('cardSales')

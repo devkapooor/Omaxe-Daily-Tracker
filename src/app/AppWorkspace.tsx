@@ -262,7 +262,6 @@ export function AppWorkspace({
 
         {activePage === 'dashboard' && currentUser.role === 'owner' ? (
           <DashboardPage
-            currentUser={currentUser}
             marginPercentage={marginPercentage}
             monthOffset={dashboardMonthOffset}
             performance={monthlyPerformance}

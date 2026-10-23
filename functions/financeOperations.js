@@ -173,35 +173,6 @@ function createFinanceOperations(db, clock = () => Date.now()) {
       lastFinancialOperationId: ctx.operationId
     }));
   }
-  async function bank(ctx, deltaPaise) {
-    if (!Number.isSafeInteger(deltaPaise)) fail('Invalid bank amount.');
-    const controlRef = ref('bankBalanceControl', 'main'),
-      settingsRef = ref('appMetadata', 'appSettings');
-    const [s, settings] = await Promise.all([ctx.tx.get(controlRef), ctx.tx.get(settingsRef)]);
-    const control = s.data();
-    if (!control?.initialized) fail('The owner must confirm the bank book opening balance before bank-funded posting.');
-    const balance = safe(paise(control.balancePaise) + deltaPaise);
-    if (balance < 0) fail('Recorded bank balance is insufficient.');
-    if (rupees(settings.get('currentBankBalance') ?? 0) !== control.balancePaise) fail('Bank setting and trusted balance disagree. Owner reconciliation is required; no payment was posted.');
-    ctx.writes.push(() => ctx.tx.set(controlRef, {
-      ...control,
-      balancePaise: balance,
-      revision: control.revision + 1,
-      lastOperationId: ctx.operationId,
-      updatedAt: ctx.timestamp,
-      updatedByUid: ctx.actor.uid
-    }));
-    ctx.writes.push(() => ctx.tx.set(settingsRef, {
-      currentBankBalance: balance / 100
-    }, {
-      merge: true
-    }));
-    return {
-      beforePaise: control.balancePaise,
-      afterPaise: balance,
-      revision: control.revision + 1
-    };
-  }
   async function holderRecords(tx) {
     const [users, cashouts, transfers] = await Promise.all([tx.get(db.collection('users').limit(501)), tx.get(db.collection('dailyCashouts').limit(5001)), tx.get(db.collection('cashTransfers').limit(5001))]);
     if (users.size > 500 || cashouts.size > 5000 || transfers.size > 5000) fail('Cash holder history exceeds the safe compatibility read bound. A reviewed balance index is required; no balance was guessed.');
@@ -234,7 +205,6 @@ function createFinanceOperations(db, clock = () => Date.now()) {
     actorFor,
     counter,
     debitCounter,
-    bank,
     holderRecords,
     holderBalances,
     clock

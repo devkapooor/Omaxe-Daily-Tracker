@@ -49,7 +49,7 @@ function deriveDashboardRangeSummary(financeData: FinanceData, from: string, to:
   }
 }
 
-function derivePlanner(currentBankBalance: number, expenses: Cashout[], payments: Payment[], plannedPayments: WorkspaceMetrics['monthlyReports']['summaries'] extends never ? never : { id: string; title: string; date: string; amount: number; notes: string }[]) {
+function derivePlanner(expenses: Cashout[], payments: Payment[], plannedPayments: WorkspaceMetrics['monthlyReports']['summaries'] extends never ? never : { id: string; title: string; date: string; amount: number; notes: string }[]) {
   const chequeExpenses = expenses
     .filter((entry) => entry.paymentMode === 'Cheque' && entry.chequePayDate)
     .map((entry) => ({
@@ -89,26 +89,19 @@ function derivePlanner(currentBankBalance: number, expenses: Cashout[], payments
     return a.title.localeCompare(b.title)
   })
 
-  let runningBalance = currentBankBalance
   const groupedSchedule: PlannerScheduleGroupSnapshot[] = []
 
   plannerItems.forEach((item) => {
-    runningBalance -= item.amount
-    const enriched = {
-      ...item,
-      runningBalanceAfter: runningBalance,
-      status: runningBalance >= 0 ? 'available' as const : 'deficit' as const,
-    }
     const lastGroup = groupedSchedule[groupedSchedule.length - 1]
     if (lastGroup && lastGroup.date === item.date) {
-      lastGroup.items.push(enriched)
+      lastGroup.items.push(item)
       lastGroup.totalAmount += item.amount
       return
     }
     groupedSchedule.push({
       date: item.date,
       totalAmount: item.amount,
-      items: [enriched],
+      items: [item],
     })
   })
 
@@ -401,7 +394,7 @@ export function deriveWorkspaceMetrics(args: {
     },
     planner: {
       totalCounterCash: pendingCash.totalCounterCash,
-      groupedSchedule: appSettings.currentBankBalance === null ? [] : derivePlanner(appSettings.currentBankBalance, financeData.cashouts, financeData.payments, plannedPayments),
+      groupedSchedule: derivePlanner(financeData.cashouts, financeData.payments, plannedPayments),
     },
     monthlyReports: monthlyReportsSnapshot,
   }
