@@ -13,6 +13,7 @@ import { stockTableColumns } from './stockColumns'
 import { StockProductDetails } from './StockProductDetails'
 import { StockPageControls } from './StockPageControls'
 import type { AppUser } from '@/domain/financeTypes'
+import { BusinessReference } from '@/shared/businessReferences'
 
 const defaults: StockQueryFilters = { search: '', stockStatus: '' }
 export function CurrentStockPage({ currentUser }: { currentUser: AppUser }) {
@@ -48,7 +49,7 @@ export function CurrentStockPage({ currentUser }: { currentUser: AppUser }) {
             {['mrpPaise', 'costPaise', 'marginPercent'].includes(column.key) ? <span className="text-[10px] font-normal text-muted-foreground">(page)</span> : null}
           </button>
         </TableHead>)}<TableHead className="sticky right-0 bg-muted">Actions</TableHead></TableRow></TableHeader>
-        <TableBody>{visible.map((row) => <TableRow key={row.id} className="cursor-pointer" onClick={() => openProduct(row.id)}>{stockTableColumns.map((column) => <TableCell key={column.key} className={`${column.key === 'name' ? 'min-w-56' : ''} ${column.numeric ? 'text-right tabular-nums' : ''} ${column.key === 'currentQuantity' && row.currentQuantity < 0 ? 'text-destructive' : ''}`}>{column.value(row)}</TableCell>)}<TableCell className="sticky right-0 bg-card"><Button size="sm" variant="outline" aria-label={`Edit Stock Prices For ${row.name}`} onClick={(event) => { event.stopPropagation(); openProduct(row.id, true) }}>Edit</Button></TableCell></TableRow>)}</TableBody>
+        <TableBody>{visible.map((row) => <TableRow key={row.id} className="cursor-pointer" onClick={() => openProduct(row.id)}>{stockTableColumns.map((column) => <TableCell key={column.key} className={`${column.key === 'name' ? 'min-w-56' : ''} ${column.numeric ? 'text-right tabular-nums' : ''} ${column.key === 'currentQuantity' && row.currentQuantity < 0 ? 'text-destructive' : ''}`}>{column.key === 'barcode' ? <><span>{column.value(row)}</span><small className="block text-muted-foreground"><BusinessReference prefix="PRODUCT" id={row.id} /></small></> : column.value(row)}</TableCell>)}<TableCell className="sticky right-0 bg-card"><Button size="sm" variant="outline" aria-label={`Edit Stock Prices For ${row.name}`} onClick={(event) => { event.stopPropagation(); openProduct(row.id, true) }}>Edit</Button></TableCell></TableRow>)}</TableBody>
       </Table></div>}
     {data.enabled ? <><p className="text-xs text-muted-foreground">Ordering: {plan.effectiveSort === 'currentQuantity' ? 'quantity' : plan.effectiveSort === 'name' ? 'product name' : plan.effectiveSort}{plan.pageOnly ? ` · ${sort === 'mrpPaise' ? 'MRP' : sort === 'costPaise' ? 'cost' : 'margin'} sorted on this page only` : ''}. Values are a server snapshot; refresh for other-terminal changes.</p><StockPageControls {...data} loading={data.loading || pending} /></> : null}
     {selectedId ? <StockProductDetails key={selectedId} productId={selectedId} currentUser={currentUser} initialEdit={editSelected} onPricesSaved={data.refresh} onClose={() => setSelectedId(null)} /> : null}

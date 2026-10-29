@@ -6,8 +6,8 @@ import type { Cashout } from '@/domain/financeTypes';
 import { formatDisplayDate, money } from '@/app/uiHelpers';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent } from '@/shared/ui/card';
-import { Input } from '@/shared/ui/input';
 import { NativeSelect } from '@/shared/ui/native-select';
+import { BusinessReference } from '@/shared/businessReferences';
 export function RegisterPaymentHistory() {
   const [method, setMethod] = useState(''),
     [type, setType] = useState(''),
@@ -89,5 +89,5 @@ export function RegisterPaymentHistory() {
         }}>First page</Button> : null}{page.more ? <Button disabled={loading} onClick={() => {
           setLoading(true);
           setCursor(next);
-        }}>Next page</Button> : null}</div>{selected ? <div role="dialog" aria-modal="true" aria-label="Payment details" className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-3"><Card className="max-h-[90dvh] w-full max-w-xl overflow-y-auto"><CardContent className="grid gap-3 p-4"><h2 className="font-semibold">Payment details</h2><Input aria-label="Source reference" readOnly value={selected.sourceRecordId || selected.id} /><p>{selected.paidTo} · {money(selected.amount)} · {selected.paymentMode}</p><p>Type: {selected.sourceKind || 'Legacy expense'} · Status: {selected.paymentStatus || 'Recorded'}</p><p>Recorder: {selected.postedByName || 'Not recorded'}</p><p>{selected.notes || 'No notes recorded.'}</p>{source ? <p className="text-xs">Source status: {String(source.status || source.reviewStatus || 'Recorded')} · Source amount: {typeof source.amountPaise === 'number' ? money(source.amountPaise / 100) : typeof source.refundAmountPaise === 'number' ? money(source.refundAmountPaise / 100) : 'Not recorded'}</p> : null}<Button onClick={() => setSelected(null)}>Close</Button></CardContent></Card></div> : null}</CardContent></Card>;
+        }}>Next page</Button> : null}</div>{selected ? <div role="dialog" aria-modal="true" aria-label="Payment details" className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 p-3"><Card className="max-h-[90dvh] w-full max-w-xl overflow-y-auto"><CardContent className="grid gap-3 p-4"><h2 className="font-semibold">Payment details</h2><p>Source reference: {selected.sourceKind === 'vendor-payment' ? <BusinessReference prefix="PAYMENT" id={selected.sourceRecordId || selected.id}/> : selected.sourceKind === 'pos-return' && selected.eventId ? <BusinessReference prefix="REFUND" id={selected.eventId}/> : <BusinessReference prefix="EXPENSE" id={selected.sourceRecordId || selected.id}/>}</p><p>{selected.paidTo} · {money(selected.amount)} · {selected.paymentMode}</p><p>Type: {selected.sourceKind || 'Legacy expense'} · Status: {selected.paymentStatus || 'Recorded'}</p><p>Recorder: {selected.postedByName || 'Not recorded'}</p><p>{selected.notes || 'No notes recorded.'}</p>{source ? <p className="text-xs">Source status: {String(source.status || source.reviewStatus || 'Recorded')} · Source amount: {typeof source.amountPaise === 'number' ? money(source.amountPaise / 100) : typeof source.refundAmountPaise === 'number' ? money(source.refundAmountPaise / 100) : 'Not recorded'}</p> : null}<Button onClick={() => setSelected(null)}>Close</Button></CardContent></Card></div> : null}</CardContent></Card>;
 }

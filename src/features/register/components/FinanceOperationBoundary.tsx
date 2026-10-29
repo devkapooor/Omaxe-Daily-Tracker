@@ -3,10 +3,12 @@ import { financeOperationInFlight, pendingFinanceOperation, recoverFinanceOperat
 import { Button } from '@/shared/ui/button';
 export function FinanceOperationBoundary({
   uid,
-  children
+  children,
+  fill = false
 }: {
   uid: string;
   children: React.ReactNode;
+  fill?: boolean;
 }) {
   const [pending, setPending] = useState<PendingFinanceOperation | null>(() => pendingFinanceOperation(uid)),
     [busy, setBusy] = useState(false),
@@ -33,8 +35,8 @@ export function FinanceOperationBoundary({
       return null;
     }
   })();
-  return <>{recovered ? <p role="status" className="mb-2 rounded-lg border border-success/30 p-3 text-sm">Original financial result recovered. Reference: {recovered.reference}. Review its source before recording another payment.</p> : null}{pending ? <section role={posting ? 'status' : 'alert'} className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3"><strong>{posting ? 'Recording financial operation…' : 'Financial operation needs recovery'}</strong><p className="my-2 text-sm">Confirm the original result before recording another payment. Reference: {String(pending.intent.operationId)}</p><Button disabled={busy || posting} onClick={() => {
+  return <div className={fill ? 'flex min-h-0 flex-1 flex-col' : 'contents'}>{recovered ? <p role="status" className="mb-2 rounded-lg border border-success/30 p-3 text-sm">Original financial result recovered. Reference: {recovered.reference}. Review its source before recording another payment.</p> : null}{pending ? <section role={posting ? 'status' : 'alert'} className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3"><strong>{posting ? 'Recording financial operationâ€¦' : 'Financial operation needs recovery'}</strong><p className="my-2 text-sm">Confirm the original result before recording another payment. Reference: {String(pending.intent.operationId)}</p><Button disabled={busy || posting} onClick={() => {
         setBusy(true);
         void recoverFinanceOperation().then(() => window.location.reload()).catch(e => setError(e instanceof Error ? e.message : 'Recovery failed.')).finally(() => setBusy(false));
-      }}>{busy ? 'Recovering…' : 'Recover original result'}</Button>{error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}</section> : null}<fieldset disabled={!!pending || posting || busy} className="m-0 min-w-0 border-0 p-0" aria-busy={posting || busy}>{children}</fieldset></>;
+      }}>{busy ? 'Recoveringâ€¦' : 'Recover original result'}</Button>{error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}</section> : null}<fieldset disabled={!!pending || posting || busy} className={`m-0 min-w-0 border-0 p-0 ${fill ? 'flex min-h-0 flex-1 flex-col' : ''}`} aria-busy={posting || busy}>{children}</fieldset></div>;
 }

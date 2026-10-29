@@ -2,6 +2,7 @@ const { canonical } = require('./stockOperations');
 const p = require('./financeOperations');
 const v = require('./vendorLedgerPolicy');
 function createVendorDecisionHandlers(ops, register) {
+  const stockReturns = require('./vendorStockReturns').createVendorStockReturnHandlers(ops, register);
   const {
       db,
       ref,
@@ -179,7 +180,7 @@ function createVendorDecisionHandlers(ops, register) {
     });
   }
   async function resolveReturn(request) {
-    const d = p.object(request.data, ['operationId', 'returnId', 'expectedRevision', 'outcome', 'creditedValuePaise', 'outcomeReason', 'replacementReceivedAt']);
+    const d = p.object(request.data, ['operationId', 'returnId', 'expectedRevision', 'outcome', 'creditedValuePaise', 'outcomeReason', 'replacementReceivedAt', 'creditNoteNumber', 'creditNoteDate']);
     if (!['vendor-credit', 'replacement', 'rejected'].includes(d.outcome)) p.fail('Invalid return outcome.');
     p.text(d.outcomeReason, 'Decision reason');
     return run(request, 'vendor-return-decision', d, ['owner'], async ctx => {
@@ -187,6 +188,7 @@ function createVendorDecisionHandlers(ops, register) {
       const source = (await ctx.tx.get(ref('vendorReturnsV2', p.id(d.returnId)))).data();
       if (!source) p.fail('Return missing.');
       v.assertExpectedRevision(source.revision, d.expectedRevision);
+      if (source.stockPostingVersion === 1) return stockReturns.settle(ctx, source, d);
       const account = (await ctx.tx.get(ref('vendorAccountStatesV2', source.vendorId))).data();
       if (!account) p.fail('Vendor account missing.');
       if (d.replacementReceivedAt) p.date(d.replacementReceivedAt);

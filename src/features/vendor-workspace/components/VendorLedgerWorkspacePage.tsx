@@ -6,11 +6,16 @@ import { serverNowIso } from '@/shared/lib/serverClock'
 import type { AppUser } from '@/domain/financeTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
-  openInvoiceBalancesV2,
+  invoiceBalanceV2,
+  type PurchaseV2,
+  type VendorV2,
   rupeesToPaise,
   type VendorSettlementMode,
 } from '@/domain/vendorLedgerV2'
 import { VendorDirectoryV2 } from '@/features/directory/components/VendorDirectoryV2'
+import { VendorInvoiceDetails } from './VendorInvoiceDetails'
+import { VendorBalances } from './VendorBalances'
+import { VendorOpeningCorrection } from './VendorOpeningCorrection'
 import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
 import type { VendorLedgerV2Data } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
 import { Badge } from '@/shared/ui/badge'
@@ -28,27 +33,35 @@ import { Textarea } from '@/shared/ui/textarea'
 import {
   applyOwnerSettlementCorrectionV2,
   createSettlementCorrectionRequestV2,
-  createVendorReturnV2,
   createVendorV2,
+  updateVendorGstin,
   withdrawSettlementCorrectionRequestV2,
 } from '@/store/vendorLedgerV2Repository'
 
-type Props = { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[]; onOpenRegister:(vendorId?:string,invoiceId?:string)=>void }
+type DirectoryProps = { partyNames?: string[]; referenceNames?: string[]; savedPartyNames?: string[]; confirmedPartyNames?: string[]; legacyVendorNames?: string[]; onAddParty?: (name: string) => Promise<void>; onRenameParty?: (before: string, after: string) => Promise<void> }
+type Props = DirectoryProps & { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[]; onOpenRegister:(vendorId?:string,invoiceId?:string)=>void }
 
-export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister }: Props) {
+export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister, partyNames = [], referenceNames = [], savedPartyNames = [], confirmedPartyNames = [], legacyVendorNames = [], onAddParty, onRenameParty }: Props) {
   const [tab, setTab] = useState('directory')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [vendorFormOpen, setVendorFormOpen] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<PurchaseV2 | null>(null)
+  const [openingVendor, setOpeningVendor] = useState<VendorV2 | null>(null)
+  const [invoiceFilter, setInvoiceFilter] = useState('')
   const balances = useMemo(
-    () => openInvoiceBalancesV2(ledger.purchases, ledger.allocations),
-    [ledger.allocations, ledger.purchases],
+    () => ledger.purchases.map(purchase => {
+      const source = ledger.invoiceStates.find(state => state.invoiceId === purchase.id)
+      const balance = source ? { purchase, openAmountPaise: source.openAmountPaise, reservedAmountPaise: source.reservedAmountPaise, availableToAllocatePaise: Math.max(0, source.openAmountPaise - source.reservedAmountPaise) } : invoiceBalanceV2(purchase, ledger.allocations)
+      return { ...balance, paidAmountPaise: ledger.allocations.filter(item => item.invoiceId === purchase.id).reduce((sum, item) => sum + (item.state === 'posted' ? item.amountPaise : item.state === 'reversed' ? -item.amountPaise : 0), 0) }
+    }).sort((a, b) => b.purchase.invoiceDate.localeCompare(a.purchase.invoiceDate)),
+    [ledger.allocations, ledger.purchases, ledger.invoiceStates],
   )
   const vendorNameById = Object.fromEntries(ledger.vendors.map((vendor) => [vendor.id, vendor.canonicalName]))
 
   if (ledger.loading && !ledger.config) return <PageLayout header={<PageHeader title="Vendor Workspace" />}><p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p></PageLayout>
   if (ledger.config?.enabled !== true) {
-    return <PageLayout header={<PageHeader title="Vendor Workspace" />}><Card><CardHeader><SectionHeading eyebrow="Vendor setup" title="Vendor ledger setup required" /></CardHeader><CardContent className="space-y-2 text-sm text-muted-foreground"><p>The vendor ledger is not enabled. Payment and opening-balance entry are unavailable.</p><p>{currentUser.role === 'owner' ? 'The former browser activation flow has been retired. A reviewed server-based setup is required before enabling this ledger. Existing financial records have not been changed.' : 'Ask the owner to arrange the reviewed ledger setup.'}</p>{ledger.error ? <p role="alert" className="text-destructive">{ledger.error}</p> : null}</CardContent></Card></PageLayout>
+    return <FinanceOperationBoundary uid={currentUser.id} fill><PageLayout className="min-h-0 flex-1 overflow-hidden" header={<PageHeader title="Vendor Workspace" />}><div className="min-h-0 flex-1 space-y-3 overflow-y-auto"><p className="rounded border p-3 text-sm">Vendor ledger setup is required for invoices, payments and opening balances. Your other parties remain available.</p>{ledger.error ? <p role="alert" className="text-destructive">{ledger.error}</p> : null}<VendorDirectoryV2 currentUserRole={currentUser.role} vendors={[]} legacyVendorNames={legacyVendorNames} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onAddVendor={() => setVendorFormOpen(true)} onSaveParty={onAddParty} onRenameParty={onRenameParty} />{vendorFormOpen ? <VendorCreateModal busy={busy} currentUser={currentUser} vendors={[]} onClose={() => setVendorFormOpen(false)} onRun={run} onAddParty={onAddParty} partyOnly /> : null}</div></PageLayout></FinanceOperationBoundary>
   }
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -67,15 +80,14 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister 
   function openPayment(invoiceId:string,vendorId:string){onOpenRegister(vendorId,invoiceId)}
 
   return (
-    <FinanceOperationBoundary uid={currentUser.id}><Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+    <FinanceOperationBoundary uid={currentUser.id} fill><Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
       <PageLayout className="min-h-0 flex-1 overflow-hidden" header={(
         <PageHeader title="Vendor Workspace" tools={(
           <div className="min-w-0 overflow-x-auto">
-            <PageHeaderTabsList aria-label="Vendor workspace sections" className="grid min-w-max grid-cols-5">
-              <PageHeaderTab value="directory">Vendors</PageHeaderTab>
+            <PageHeaderTabsList aria-label="Vendor workspace sections" className="grid min-w-max grid-cols-4">
+              <PageHeaderTab value="directory">Vendors &amp; Parties</PageHeaderTab>
               <PageHeaderTab value="invoices">Invoices</PageHeaderTab>
-              <PageHeaderTab value="returns">Returns</PageHeaderTab>
-              <PageHeaderTab value="corrections">Corrections</PageHeaderTab>
+              <PageHeaderTab value="corrections">Payment Corrections</PageHeaderTab>
               <PageHeaderTab value="balances">Balances</PageHeaderTab>
             </PageHeaderTabsList>
           </div>
@@ -86,19 +98,21 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister 
         {ledger.error || message ? <p className="rounded-xl border border-border bg-secondary/50 px-3 py-2 text-sm">{ledger.error ?? message}</p> : null}
 
           <TabsContent value="directory" className="grid gap-2.5 pt-2">
-            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={[]} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} />
+            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={legacyVendorNames} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onSaveParty={onAddParty} onRenameParty={onRenameParty} onEditOpening={setOpeningVendor} onUpdateVendorGstin={async (vendor,gstin) => { await run(() => updateVendorGstin(vendor,gstin), 'Vendor GSTIN updated.') }} />
           </TabsContent>
-          <TabsContent value="invoices" className="pt-2"><OpenInvoicesV2 balances={balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} /></TabsContent>
-          <TabsContent value="returns" className="pt-2"><ReturnsPanel busy={busy} currentUser={currentUser} ledger={ledger} onRun={run} /></TabsContent>
+          <TabsContent value="invoices" className="pt-2"><>{invoiceFilter ? <Button className="mb-2" size="sm" variant="outline" onClick={() => setInvoiceFilter('')}>Clear vendor filter</Button> : null}<OpenInvoicesV2 balances={invoiceFilter ? balances.filter(row => row.purchase.vendorId === invoiceFilter) : balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} onViewInvoice={setSelectedInvoice} /></></TabsContent>
           <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} ledger={ledger} vendors={vendorNameById} onRun={run} /></TabsContent>
           <TabsContent value="balances" className="grid gap-2 pt-2">
-            {ledger.accountStates.map((state) => <Card key={state.id}><CardContent className="flex items-center justify-between gap-3 py-3"><span>{vendorNameById[state.vendorId] ?? state.vendorId}</span><span className="text-right"><strong className="block">Payable INR {(state.outstandingPaise / 100).toLocaleString('en-IN')}</strong>{state.vendorCreditPaise ? <small className="text-muted-foreground">Unapplied vendor credit INR {(state.vendorCreditPaise / 100).toLocaleString('en-IN')}</small> : null}</span></CardContent></Card>)}
+            <VendorBalances vendors={ledger.vendors} states={ledger.accountStates} onInvoices={id => { setInvoiceFilter(id); setTab('invoices') }} />
           </TabsContent>
           </PageCardStack>
         </div>
       </PageLayout>
+      {selectedInvoice ? <VendorInvoiceDetails purchase={selectedInvoice} vendorName={vendorNameById[selectedInvoice.vendorId] ?? 'Vendor'} onClose={() => setSelectedInvoice(null)} /> : null}
+      {openingVendor && currentUser.role === 'owner' ? <VendorOpeningCorrection vendor={openingVendor} account={ledger.accountStates.find(state => state.vendorId === openingVendor.id)} onClose={() => setOpeningVendor(null)} onSaved={() => setMessage('Opening correction posted with an audit trail.')} /> : null}
       {vendorFormOpen ? (
         <VendorCreateModal
+          onAddParty={onAddParty}
           busy={busy}
           currentUser={currentUser}
           onClose={() => setVendorFormOpen(false)}
@@ -111,7 +125,9 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister 
   )
 }
 
-function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activationDate }: {
+function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activationDate, onAddParty, partyOnly = false }: {
+  partyOnly?: boolean
+  onAddParty?: (name: string) => Promise<void>
   busy: boolean
   currentUser: AppUser
   onClose: () => void
@@ -120,7 +136,9 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
   activationDate?: string
 }) {
   const [name, setName] = useState('')
+  const [creationType, setCreationType] = useState(partyOnly ? 'party' : 'vendor')
   const [ownerName, setOwnerName] = useState('')
+  const [gstin, setGstin] = useState('')
   const [contact, setContact] = useState('')
   const [address, setAddress] = useState('')
   const [companiesProvided, setCompaniesProvided] = useState('')
@@ -138,6 +156,14 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
     event.preventDefault()
     if (busy || submissionPending.current) return
     const savedName = normalizeName(name)
+    if (creationType === 'party') {
+      if (!savedName || !onAddParty) { setFormError('Party name is required.'); return }
+      submissionPending.current = true
+      try { await onRun(() => onAddParty(savedName), `Party ${savedName} saved without creating a vendor payable.`); onClose() }
+      catch (cause) { setFormError(cause instanceof Error ? cause.message : 'Party could not be saved.') }
+      finally { submissionPending.current = false }
+      return
+    }
     const savedOwnerName = normalizeName(ownerName)
     const savedContact = contact.trim()
     const savedAddress = address.trim()
@@ -162,6 +188,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
         id: vendorId,
         canonicalName: savedName,
         ownerName: savedOwnerName,
+        gstin: gstin.trim().toUpperCase(),
         contact: savedContact,
         address: savedAddress,
         suppliedBrands,
@@ -186,7 +213,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-700">Vendor directory</p>
-              <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add V2 Vendor</h2>
+              <h2 id="add-vendor-title" className="mt-1 text-xl font-black text-foreground">Add Party / Vendor</h2>
             </div>
             <Button type="button" size="icon" variant="ghost" disabled={busy} aria-label="Close add vendor form" onClick={onClose}>
               <X className="size-5" />
@@ -196,11 +223,16 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
         <CardContent className="pt-4">
           <form className="grid gap-3.5 md:grid-cols-2" onSubmit={(event) => void handleSubmit(event).catch(() => undefined)}>
             {formError ? <p className="md:col-span-2 rounded-2xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm font-semibold text-rose-700">{formError}</p> : null}
-            <FieldLabel label="Vendor Name">
+            <FieldLabel className="md:col-span-2" label="Record type"><select className="h-9 rounded-md border bg-card px-3 text-sm" value={creationType} onChange={event => setCreationType(event.target.value)}><option value="vendor" disabled={partyOnly}>Vendor / supplier</option><option value="party">Other party / person</option></select></FieldLabel>
+            <FieldLabel label={creationType === 'party' ? 'Party name' : 'Vendor name'}>
               <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Vendor name" required autoFocus />
             </FieldLabel>
+            {creationType === 'vendor' ? <>
             <FieldLabel label="Owner Name">
               <Input value={ownerName} onChange={(event) => setOwnerName(event.target.value)} placeholder="Owner name" required />
+            </FieldLabel>
+            <FieldLabel label="Vendor GSTIN (optional)">
+              <Input value={gstin} maxLength={15} onChange={(event) => setGstin(event.target.value.toUpperCase())} placeholder="15-character GSTIN" />
             </FieldLabel>
             <FieldLabel label="Contact">
               <Input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contact number" required />
@@ -212,7 +244,7 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
               <Input value={companiesProvided} onChange={(event) => setCompaniesProvided(event.target.value)} placeholder="Example: ITC, HUL, Britannia" required />
             </FieldLabel>
             <FieldLabel className="md:col-span-2" label="Notes / Comments">
-              <Textarea className="min-h-24" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment terms, service quality, or stock rhythm" />
+              <Textarea rows={2} className="!h-12 !min-h-12 !max-h-12 resize-none" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Payment terms, service quality, or stock rhythm" />
             </FieldLabel>
             {canSetOpening ? <>
               <FieldLabel label="Opening Balance (₹)">
@@ -226,9 +258,10 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
                 <Textarea required disabled={busy} value={openingReason} onChange={(event) => setOpeningReason(event.target.value)} placeholder="Example: Verified balance from the vendor statement" />
               </FieldLabel> : null}
             </> : <p className="md:col-span-2 text-xs text-muted-foreground">Opening balance: INR 0. Only the owner can enter an opening payable.</p>}
+            </> : <p className="text-xs text-muted-foreground">Saves a directory identity only. No supplier account, opening balance, invoice, or payment is created.</p>}
             <div className="flex flex-col-reverse gap-2 md:col-span-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>
-              <Button disabled={busy}>{busy ? 'Saving...' : 'Save Vendor'}</Button>
+              <Button disabled={busy}>{busy ? 'Saving...' : creationType === 'party' ? 'Save party' : 'Save vendor'}</Button>
             </div>
           </form>
         </CardContent>
@@ -237,24 +270,6 @@ function VendorCreateModal({ busy, currentUser, onClose, onRun, vendors, activat
   )
 }
 
-function ReturnsPanel({ busy, currentUser, ledger, onRun }: {
-  busy: boolean
-  currentUser: AppUser
-  ledger: VendorLedgerV2Data
-  onRun: (action: () => Promise<unknown>, success: string) => Promise<void>
-}) {
-  const [vendorId, setVendorId] = useState('')
-  const [sourcePurchaseId, setSourcePurchaseId] = useState('')
-  const [date, setDate] = useState(today())
-  const [description, setDescription] = useState('')
-  const [quantity, setQuantity] = useState('1')
-  const [unit, setUnit] = useState('pieces')
-  const [value, setValue] = useState('')
-  const [reason, setReason] = useState('')
-  const vendorOptions = ledger.vendors.filter((vendor) => vendor.active).map((vendor) => ({ label: vendor.canonicalName, value: vendor.id }))
-  const purchaseOptions = [{ label: 'No invoice link', value: '' }, ...ledger.purchases.filter((purchase) => purchase.vendorId === vendorId).map((purchase) => ({ label: `${purchase.invoiceNumber} | INR ${(purchase.invoiceTotalPaise / 100).toLocaleString('en-IN')}`, value: purchase.id }))]
-  return <div className="grid gap-2.5"><Card><CardHeader><SectionHeading eyebrow="Vendor stock return" title="Record Return Request" description="Returns do not change balances until the owner records vendor credit. Replacements have no financial effect." /></CardHeader><CardContent><form className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" onSubmit={(event) => { event.preventDefault(); void onRun(() => createVendorReturnV2({ id: crypto.randomUUID(), vendorId, ...(sourcePurchaseId ? { sourcePurchaseId } : {}), date, description, quantity: Number(quantity), unit, valuePaise: rupeesToPaise(Number(value)), reason, actorUserId: currentUser.id, timestamp: serverNowIso() }), 'Vendor return sent to the Action Centre.').then(() => { setDescription(''); setValue(''); setReason('') }).catch(() => undefined) }}><FieldLabel label="Vendor"><SelectField searchable options={vendorOptions} value={vendorId} onValueChange={(next) => { setVendorId(next); setSourcePurchaseId('') }} /></FieldLabel><FieldLabel label="Related Invoice (Optional)"><SelectField searchable options={purchaseOptions} value={sourcePurchaseId} onValueChange={setSourcePurchaseId} /></FieldLabel><FieldLabel label="Return Date"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></FieldLabel><FieldLabel label="Item Description"><Input value={description} onChange={(event) => setDescription(event.target.value)} required /></FieldLabel><FieldLabel label="Quantity"><Input type="number" min="0.01" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></FieldLabel><FieldLabel label="Unit"><Input value={unit} onChange={(event) => setUnit(event.target.value)} required /></FieldLabel><FieldLabel label="Return Value"><Input type="number" min="0.01" step="0.01" value={value} onChange={(event) => setValue(event.target.value)} required /></FieldLabel><FieldLabel className="md:col-span-2" label="Mandatory Reason"><Textarea value={reason} onChange={(event) => setReason(event.target.value)} required /></FieldLabel><Button className="lg:col-span-3" disabled={busy || !vendorId}>Submit Return</Button></form></CardContent></Card><Card><CardHeader><SectionHeading eyebrow="Return history" title="Recorded Returns" /></CardHeader><CardContent className="grid gap-2">{ledger.returns.length === 0 ? <p className="text-sm text-muted-foreground">No vendor returns recorded.</p> : [...ledger.returns].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"><div><strong>{ledger.vendors.find((vendor) => vendor.id === item.vendorId)?.canonicalName ?? item.vendorId}</strong><p className="text-muted-foreground">{item.description} | {item.quantity} {item.unit} | INR {(item.valuePaise / 100).toLocaleString('en-IN')}</p></div><Badge variant={item.outcome === 'vendor-credit' ? 'success' : item.outcome === 'rejected' ? 'destructive' : item.outcome === 'pending' ? 'warning' : 'secondary'}>{item.outcome}</Badge></div>)}</CardContent></Card></div>
-}
 
 function CorrectionForm({ busy, currentUser, ledger, onRun, vendors }: { busy: boolean; currentUser: AppUser; ledger: VendorLedgerV2Data; onRun: (action: () => Promise<unknown>, success: string) => Promise<void>; vendors: Record<string, string> }) {
   const [selectedId, setSelectedId] = useState('')

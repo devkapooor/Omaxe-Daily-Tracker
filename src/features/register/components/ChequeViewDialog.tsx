@@ -7,6 +7,7 @@ import { db } from '@/shared/lib/firebase'
 import { formatDisplayDate, formatDisplayDateTime, money, today } from '@/app/uiHelpers'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
+import { AuditDetails } from '@/shared/ui/audit-details'
 
 export function ChequeViewDialog({ chequeId, onClose }: { chequeId: string; onClose: () => void }) {
   const [result, setResult] = useState<{ cheque: ChequeV2 & { exceptionReason?: string }; payee: string; actor: string } | null>(null)
@@ -50,10 +51,6 @@ export function ChequeViewDialog({ chequeId, onClose }: { chequeId: string; onCl
     ['Cheque number', cheque.chequeNumber], ['Cheque date', formatDisplayDate(cheque.date)],
     ['Amount', money(cheque.amountPaise / 100)], ['Status', status], ['Payee', result.payee],
     ['Payment', cheque.purpose === 'vendor-payment' ? 'Vendor payment' : 'Expense'],
-    ['Recorded by', result.actor], ['Recorded at', cheque.createdAt ? formatDisplayDateTime(cheque.createdAt) : 'Not recorded'],
-    ['Last updated', cheque.updatedAt ? formatDisplayDateTime(cheque.updatedAt) : 'Not recorded'],
-    ['Record reference', 'chequesV2/' + cheque.id],
-    ...(cheque.vendorId ? [['Vendor reference', cheque.vendorId]] : []),
     ...(cheque.exceptionReason ? [['Exception reason', cheque.exceptionReason]] : [])
   ] : []
   return createPortal(<div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/45 p-3" onClick={event => { if (event.target === event.currentTarget) onClose() }}>
@@ -63,6 +60,7 @@ export function ChequeViewDialog({ chequeId, onClose }: { chequeId: string; onCl
         {!result && !error ? <p role="status">Loading cheque details…</p> : null}
         {error ? <div role="alert"><p className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" onClick={() => { setError(''); setResult(null); setRetry(value => value + 1); dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus() }}>Retry details</Button></div> : null}
         {fields.length ? <dl className="grid gap-3 sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words text-sm font-medium">{value}</dd></div>)}</dl> : null}
+        {cheque && result ? <AuditDetails><dl className="grid gap-3 sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Recorded by</dt><dd className="mt-1 text-sm font-medium">{result.actor}</dd></div><div><dt className="text-xs text-muted-foreground">Recorded at</dt><dd className="mt-1 text-sm font-medium">{cheque.createdAt ? formatDisplayDateTime(cheque.createdAt) : 'Not recorded'}</dd></div>{cheque.updatedAt ? <div><dt className="text-xs text-muted-foreground">Last updated</dt><dd className="mt-1 text-sm font-medium">{formatDisplayDateTime(cheque.updatedAt)}</dd></div> : null}<div><dt className="text-xs text-muted-foreground">Internal record ID</dt><dd className="mt-1 break-all font-mono text-xs">{cheque.id}</dd></div>{cheque.vendorId ? <div><dt className="text-xs text-muted-foreground">Internal vendor ID</dt><dd className="mt-1 break-all font-mono text-xs">{cheque.vendorId}</dd></div> : null}</dl></AuditDetails> : null}
         {cheque && (cheque.trackingOnly || cheque.origin !== 'v2') ? <p className="text-xs text-muted-foreground">Legacy tracking only; this view does not post a payment.</p> : null}
         <div className="flex justify-end"><Button type="button" variant="outline" onClick={onClose}>Close</Button></div>
       </CardContent>

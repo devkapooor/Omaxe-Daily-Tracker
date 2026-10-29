@@ -205,6 +205,8 @@ export function setupAppStoreSubscriptions({
       const data = snapshot.data() as Partial<{
         marginPercentage: unknown
         monthlyOperationalExpense: unknown
+        businessLegalName: unknown
+        businessGstin: unknown
         operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
         scheduledNotifications: unknown
         upgradeAnnouncement: unknown
@@ -230,7 +232,7 @@ export function setupAppStoreSubscriptions({
             ? rawBreakdown.miscellaneous
             : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
       }
-      setAppSettings({ marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
+      setAppSettings({ marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, businessLegalName: typeof data?.businessLegalName === 'string' && data.businessLegalName.trim() ? data.businessLegalName.trim() : defaultAppSettings.businessLegalName, businessGstin: typeof data?.businessGstin === 'string' && data.businessGstin.trim() ? data.businessGstin.trim().toUpperCase() : defaultAppSettings.businessGstin, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
       markLoaded('appSettings')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', currentUserRole === 'owner' ? 'workspaceMetrics' : 'staffWorkspaceMetrics'), (snapshot) => {

@@ -41,7 +41,7 @@ export function subscribeStockProduct(id: string, next: (product: ReturnType<typ
 export type StockMovement = {
   id: string; productId?: string; barcode?: string; productName?: string; type: string; quantityDelta: number; beforeQuantity?: number; afterQuantity?: number
   createdAt?: string; businessDate?: string; actorName?: string; actorUid?: string; reason?: string; sourceReference?: string
-  goodsReceiptId?: string; billId?: string; stockAuditId?: string; approvalId?: string; correctionId?: string
+    goodsReceiptId?: string; billId?: string; stockAuditId?: string; approvalId?: string; correctionId?: string; vendorReturnId?: string; reference?: string
   returnCondition?: 'sellable' | 'damaged'; nonStockReturn?: boolean
   beforeMrpPaise?: number | null; afterMrpPaise?: number | null; beforeSellingPricePaise?: number | null; afterSellingPricePaise?: number
   priceChanged?: boolean; priceBefore?: { mrpPaise: number | null; sellingPricePaise: number }; priceAfter?: { mrpPaise: number | null; sellingPricePaise: number }

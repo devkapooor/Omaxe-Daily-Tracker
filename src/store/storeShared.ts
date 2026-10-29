@@ -44,6 +44,8 @@ export type AppSettings = {
   marginPercentage: number
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
+  businessLegalName: string
+  businessGstin: string
   scheduledNotifications: ScheduledNotification[]
   upgradeAnnouncement: UpgradeAnnouncement | null
 }
@@ -111,6 +113,8 @@ export const emptyNameDirectory: NameDirectory = {
 export const defaultAppSettings: AppSettings = {
   marginPercentage: defaultMarginPercentage,
   monthlyOperationalExpense: defaultMonthlyOperationalExpense,
+  businessLegalName: 'Alphaflux Ventures Pvt Ltd',
+  businessGstin: '09ABBCA5994J1Z5',
   operationalExpenseBreakdown: {
     rent: 0,
     electricity: 0,

@@ -459,6 +459,7 @@ export function useAppStore() {
     saveLoanEntry: actions.saveLoanEntry,
     saveMonthlyReportMargin: actions.saveMonthlyReportMargin,
     saveOperationalSettings: actions.saveOperationalSettings,
+    saveBusinessIdentity: actions.saveBusinessIdentity,
     saveScheduledNotifications: actions.saveScheduledNotifications,
     publishUpgradeAnnouncement: actions.publishUpgradeAnnouncement,
     clearUpgradeAnnouncement: actions.clearUpgradeAnnouncement,

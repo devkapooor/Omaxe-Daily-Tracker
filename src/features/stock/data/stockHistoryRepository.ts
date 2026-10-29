@@ -7,7 +7,7 @@ import { dateConstraints, readPage, type Cursor } from './stockQueries'
 export type HistoryFilters = { from: string; to: string; identifier: string; identifierMode: 'barcode' | 'productId'; event: string; undated: boolean }
 export type StockHistoryEntry = StockMovement & { sourceKind: 'movement' | 'damaged-return' | 'unmapped-return' }
 export const historyTypes: Record<string, string[]> = {
-  receipts: ['goods-receipt'], sales: ['sale', 'temporary-item-mapped-sale'], returns: ['sellable-return'],
+  receipts: ['goods-receipt'], sales: ['sale', 'temporary-item-mapped-sale'], returns: ['sellable-return', 'vendor-return-dispatch', 'vendor-return-replacement', 'vendor-return-rejected-restock'],
   adjustments: ['stock-audit', 'manual-inward', 'manual-adjustment'], reversals: ['goods-receipt-reversal', 'void-reversal'],
   prices: ['stock-price-correction', 'goods-receipt-mrp-correction'],
 }

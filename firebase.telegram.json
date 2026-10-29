@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "output/telegram-functions",
+    "codebase": "telegram",
+    "runtime": "nodejs22",
+    "predeploy": [
+      "node functions/scripts/prepareTelegramFunctions.js",
+      "npm --prefix output/telegram-functions ci --ignore-scripts"
+    ],
+    "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", ".env*", "**/.env*", "**/*.local"]
+  }
+}

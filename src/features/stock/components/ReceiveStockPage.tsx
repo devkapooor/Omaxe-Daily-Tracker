@@ -51,6 +51,7 @@ export function ReceiveStockPage({ currentUser, showToast, ownerEnabled, view, o
       enabled={(ownerEnabled ?? enabled) && !configError} showToast={showToast}
       view={view} onViewChange={onViewChange} onVendorChange={setSelectedId}
       renderVendorPicker={(value, onValueChange) => <StockVendorPicker value={value} selected={selected} onSelect={(vendor) => {
+        if (!vendor) return
         setSelected(vendor); setSelectedId(vendor.id); setVendorError({ id: '', message: '' }); onValueChange(vendor.id)
       }} />}
     />

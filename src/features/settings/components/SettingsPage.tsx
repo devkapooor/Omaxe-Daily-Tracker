@@ -15,6 +15,7 @@ import { StatusPanel } from '@/shared/ui/status-panel'
 import { Tabs, TabsContent } from '@/shared/ui/tabs'
 import { subscribePosConfig, updateDiscountLimit } from '@/features/pos/data/posRepository'
 import { StaffNotificationsSettings } from './StaffNotificationsSettings'
+import { TelegramAlertsSettings } from './TelegramAlertsSettings'
 
 type SettingsPageProps = {
   currentUser: AppUser
@@ -23,6 +24,9 @@ type SettingsPageProps = {
   marginPercentage: number
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
+  businessLegalName: string
+  businessGstin: string
+  onSaveBusinessIdentity: (legalName: string, gstin: string) => Promise<void>
   onCreateUser: (draft: {
     name: string
     email: string
@@ -47,6 +51,9 @@ export function SettingsPage({
   marginPercentage,
   monthlyOperationalExpense,
   operationalExpenseBreakdown,
+  businessLegalName,
+  businessGstin,
+  onSaveBusinessIdentity,
   onCreateUser,
   onDeleteUser,
   onChangeOwnPassword,
@@ -64,7 +71,13 @@ export function SettingsPage({
   const [savingPosSettings, setSavingPosSettings] = useState(false)
   const [savingAnnouncement, setSavingAnnouncement] = useState(false)
   const [announcementMessage, setAnnouncementMessage] = useState('')
+  const [identityName, setIdentityName] = useState(businessLegalName)
+  const [identityGstin, setIdentityGstin] = useState(businessGstin)
+  const [identityMessage, setIdentityMessage] = useState('')
+  const [savingIdentity, setSavingIdentity] = useState(false)
   const canManageUsers = currentUser.role === 'owner'
+
+  useEffect(() => { setIdentityName(businessLegalName); setIdentityGstin(businessGstin) }, [businessLegalName, businessGstin])
 
   useEffect(() => {
     if (!canManageUsers) return
@@ -216,6 +229,17 @@ export function SettingsPage({
     }
   }
 
+  async function saveBusinessIdentity(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    try {
+      setError(''); setIdentityMessage(''); setSavingIdentity(true)
+      await onSaveBusinessIdentity(identityName, identityGstin)
+      setIdentityMessage('Firm identity saved to the shared Settings master.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save business identity.')
+    } finally { setSavingIdentity(false) }
+  }
+
   return (
     <Tabs defaultValue={canManageUsers ? 'staff' : 'password'} className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageLayout
@@ -224,12 +248,13 @@ export function SettingsPage({
           <PageHeader
             title="Settings"
             tools={(
-              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-flow-row grid-cols-3 xl:grid-flow-col xl:grid-cols-6' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
+              <PageHeaderTabsList aria-label="Settings sections" className={`${canManageUsers ? 'grid-flow-row grid-cols-3 xl:grid-flow-col xl:grid-cols-7' : 'grid-cols-2 xl:grid-cols-2'} w-full xl:w-auto`}>
                 <PageHeaderTab value="staff">Staff</PageHeaderTab>
                 {canManageUsers ? <PageHeaderTab value="operations">Operations</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="pos">POS</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="announcements">Announcements</PageHeaderTab> : null}
                 {canManageUsers ? <PageHeaderTab value="notifications">Staff Notifications</PageHeaderTab> : null}
+                {canManageUsers ? <PageHeaderTab value="business">Business Identity</PageHeaderTab> : null}
                 <PageHeaderTab value="password">Update Password</PageHeaderTab>
               </PageHeaderTabsList>
             )}
@@ -381,6 +406,20 @@ export function SettingsPage({
           </TabsContent>
         ) : null}
 
+        {canManageUsers ? <TabsContent value="business" className="min-h-0 flex-1 overflow-y-auto">
+          <Card className="max-w-2xl">
+            <CardHeader className="px-3 pb-2 pt-3 sm:px-4"><SectionHeading eyebrow="Owner only · shared master" title="Business Identity" description="These details are shared with staff and printed on Stock Return debit notes." /></CardHeader>
+            <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+              <form className="grid gap-3 sm:grid-cols-2" onSubmit={saveBusinessIdentity}>
+                <FieldLabel className="sm:col-span-2" label="Registered legal firm name"><Input value={identityName} maxLength={200} onChange={event=>{setIdentityName(event.target.value);setIdentityMessage('');setError('')}} required /></FieldLabel>
+                <FieldLabel label="GSTIN"><Input value={identityGstin} maxLength={15} autoCapitalize="characters" onChange={event=>{setIdentityGstin(event.target.value.toUpperCase());setIdentityMessage('');setError('')}} required /></FieldLabel>
+                <div className="flex items-end"><Button disabled={savingIdentity}>{savingIdentity?'Saving…':'Save Business Identity'}</Button></div>
+                {identityMessage?<p role="status" className="text-sm text-emerald-700 sm:col-span-2">{identityMessage}</p>:null}
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent> : null}
+
         {canManageUsers ? (
           <TabsContent value="pos" className="min-h-0 flex-1 overflow-y-auto">
             <Card className="max-w-2xl">
@@ -397,6 +436,7 @@ export function SettingsPage({
                 </form>
               </CardContent>
             </Card>
+            <TelegramAlertsSettings />
           </TabsContent>
         ) : null}
 

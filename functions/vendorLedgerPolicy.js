@@ -53,6 +53,9 @@ function buildVendorV2(input) {
     const actorUserId = input.actorUserId.trim();
     if (!id || !canonicalName || !actorUserId)
         throw new Error('Vendor ID, name, and actor are required.');
+    const gstin = input.gstin?.trim().toUpperCase() ?? '';
+    if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin))
+        throw new Error('Enter a valid 15-character GSTIN.');
     const openingBalancePaise = input.openingBalancePaise ?? 0;
     assertIntegerPaise(openingBalancePaise, 'Opening balance');
     if (openingBalancePaise < 0)
@@ -72,6 +75,7 @@ function buildVendorV2(input) {
         id,
         canonicalName,
         ownerName: input.ownerName?.trim() ?? '',
+        ...(gstin ? { gstin } : {}),
         aliases,
         contact: input.contact?.trim() ?? '',
         address: input.address?.trim() ?? '',

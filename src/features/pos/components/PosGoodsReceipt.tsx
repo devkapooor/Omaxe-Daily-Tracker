@@ -22,11 +22,17 @@ import { useServerPage } from '@/features/stock/hooks/useServerPage'
 import { StockPageControls } from '@/features/stock/components/StockPageControls'
 import { SourceRecord } from '@/features/stock/components/StockSourceDetails'
 import { recentStockDate } from '@/features/stock/domain/stockDates'
+import { stockDate } from '@/features/stock/domain/currentStock'
 import { StockOperationBoundary } from '@/features/stock/components/StockOperationBoundary'
 import { firebaseConfig } from '@/shared/lib/firebase'
 import type { ReceiptReversalPreview } from '@/features/stock/data/stockPostingRepository'
 import { StatusPanel } from '@/shared/ui/status-panel'
+import { SavedReceiptDrafts } from '@/features/stock/components/SavedReceiptDrafts'
+import { StockVendorPicker } from '@/features/stock/components/StockVendorPicker'
+import { confirmStockReceiptCreditNote } from '@/features/stock/data/stockPostingRepository'
+import type { ReceiptShortage } from '../domain/types'
 import { printInternalBarcode } from '@/features/stock/domain/internalBarcode'
+import { BusinessReference } from '@/shared/businessReferences'
 
 function productMrpPaise(product: PosProduct) {
   const raw = Object.entries(product.sourceValues ?? {}).find(([key]) => key.trim().toLocaleLowerCase('en-IN') === 'printed mrp')?.[1]
@@ -36,6 +42,21 @@ function productMrpPaise(product: PosProduct) {
 }
 
 const money = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+function ReceiptLineMargin({ line }: { line: PosGoodsReceiptLine }) {
+  const cost = line.unitCostPaise
+  const selling = line.sellingPricePaise ?? 0
+  const validInput = (input: string | undefined) => input === undefined || (input.trim() !== '' && Number.isFinite(Number(input)) && Number(input) > 0)
+  const ready = Number.isSafeInteger(cost) && cost > 0 && Number.isSafeInteger(selling) && selling > 0
+    && validInput(line.unitCostInput) && validInput(line.sellingPriceInput)
+  if (!ready) return <span aria-label={`Margin for ${line.productName}`} className="text-right text-sm text-muted-foreground" title="Enter a valid cost and a selling price above zero.">—</span>
+  const difference = selling - cost
+  const percent = difference / selling * 100
+  return <span aria-label={`Margin for ${line.productName}`} className="grid text-right tabular-nums" title="Margin = (selling price − unit cost) ÷ selling price × 100">
+    <strong className={`text-sm ${difference < 0 ? 'text-destructive' : ''}`}>{percent.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</strong>
+    <span className="text-[10px] text-muted-foreground">{money(difference)} / unit</span>
+  </span>
+}
 
 export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVendorChange, renderVendorPicker, view, onViewChange }: {
   currentUser: AppUser
@@ -60,22 +81,29 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const [newProduct, setNewProduct] = useState<{ barcode: string; name: string; category: string; mrp: string; cost: string; internalBarcode?: boolean } | null>(null)
   const [newName, setNewName] = useState('')
   const [newOwner, setNewOwner] = useState('')
+  const [newGstin, setNewGstin] = useState('')
   const [newContact, setNewContact] = useState('')
   const [newAddress, setNewAddress] = useState('')
   const [newCompanies, setNewCompanies] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [showVendorForm, setShowVendorForm] = useState(false)
   const [invoiceTotal, setInvoiceTotal] = useState('')
-  const [historyInvoice, setHistoryInvoice] = useState('')
+  const [creditState, setCreditState] = useState<'none' | 'pending' | 'received'>('none')
+  const [creditNumber, setCreditNumber] = useState('')
+  const [creditDate, setCreditDate] = useState(today)
+  const [draftRefresh, setDraftRefresh] = useState(0)
+  const [historyVendorSelection, setHistoryVendorSelection] = useState<VendorV2 | null>(null)
+  const [confirmNumber, setConfirmNumber] = useState('')
+  const [confirmDate, setConfirmDate] = useState(today)
   const [historyFrom, setHistoryFrom] = useState(recentStockDate)
   const [historyTo, setHistoryTo] = useState(today)
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyVendor, setHistoryVendor] = useState('')
-  const [historySearch, setHistorySearch] = useState({ vendor: '', invoice: '' })
-  useEffect(() => { const timer = window.setTimeout(() => setHistorySearch({ vendor: historyVendor, invoice: historyInvoice }), 300); return () => window.clearTimeout(timer) }, [historyVendor, historyInvoice])
-  const historyPending = historyVendor !== historySearch.vendor || historyInvoice !== historySearch.invoice
+  const [historySearch, setHistorySearch] = useState({ vendor: '' })
+  useEffect(() => { const timer = window.setTimeout(() => setHistorySearch({ vendor: historyVendor }), 300); return () => window.clearTimeout(timer) }, [historyVendor])
+  const historyPending = historyVendor !== historySearch.vendor
   const historyKey = JSON.stringify([historyFrom, historyTo, historyStatus, historySearch])
-  const history = useServerPage<PosGoodsReceipt>(historyKey, (cursor) => readPage('goodsReceipts', [...dateConstraints(historyFrom, historyTo), ...(historyStatus ? [where('status', '==', historyStatus)] : []), ...(historySearch.vendor.trim() ? [where('vendorId', '==', historySearch.vendor.trim())] : []), ...(historySearch.invoice.trim() ? [where('invoiceNumber', '==', historySearch.invoice.trim())] : [])], cursor, 25, historyKey), view === 'history')
+  const history = useServerPage<PosGoodsReceipt>(historyKey, (cursor) => readPage('goodsReceipts', [...dateConstraints(historyFrom, historyTo, historyStatus === 'draft' ? 'updatedAt' : 'createdAt'), ...(historyStatus ? [where('status', '==', historyStatus)] : []), ...(historySearch.vendor.trim() ? [where('vendorId', '==', historySearch.vendor.trim())] : [])], cursor, 25, historyKey, historyStatus === 'draft' ? (historyFrom || historyTo ? 'updatedAt' : '__name__') : 'createdAt'), view === 'history')
   const [invoiceResult, setInvoiceResult] = useState<{ key: string; value: PosGoodsReceipt | null; error: string }>({ key: '', value: null, error: '' })
   const [invoiceAttempt, setInvoiceAttempt] = useState(0)
   const invoiceKey = JSON.stringify([vendorId, normalizeInvoiceNumber(invoiceNumber)])
@@ -89,7 +117,17 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const selectedVendor = activeVendors.find((vendor) => vendor.id === vendorId)
   const matchingInvoice = invoiceResult.key === invoiceKey ? invoiceResult.value : null
   const receivedValuePaise = lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
-  const totalPaise = invoiceTotal.trim() && Number.isFinite(Number(invoiceTotal)) ? rupeesToPaise(Number(invoiceTotal)) : 0
+  const originalInvoicePaise = invoiceTotal.trim() && Number.isFinite(Number(invoiceTotal)) ? rupeesToPaise(Number(invoiceTotal)) : 0
+  const shortage: ReceiptShortage | null = creditState === 'none' ? null : { originalInvoiceTotalPaise: originalInvoicePaise, state: creditState, ...(creditState === 'received' ? { creditNoteNumber: creditNumber, creditNoteDate: creditDate } : {}) }
+  const totalPaise = creditState === 'pending' ? originalInvoicePaise : receivedValuePaise
+  const shortageError = creditState !== 'none' && originalInvoicePaise <= receivedValuePaise ? 'Original invoice must exceed received value for a shortage.' : creditState === 'received' && (!creditNumber.trim() || !creditDate) ? 'Credit note number and date are required.' : ''
+  function restoreReceiptPricing(receipt: PosGoodsReceipt) {
+    const value = receipt.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
+    const legacyDifference = receipt.pricingMode !== 'received-stock' && (receipt.invoiceTotalPaise ?? receipt.totalPaise) > value
+    setCreditState(receipt.shortage?.state ?? (legacyDifference ? 'pending' : 'none'))
+    setInvoiceTotal(String((receipt.shortage?.originalInvoiceTotalPaise ?? receipt.invoiceTotalPaise ?? receipt.totalPaise) / 100))
+    setCreditNumber(receipt.shortage?.creditNoteNumber ?? ''); setCreditDate(receipt.shortage?.creditNoteDate ?? today())
+  }
   const linesReady = lines.length > 0 && lines.every((line) => Number.isInteger(line.quantity) && line.quantity > 0 && Number.isSafeInteger(line.unitCostPaise) && line.unitCostPaise > 0 && Number.isSafeInteger(line.sellingPricePaise) && (line.sellingPricePaise ?? -1) >= 0 && Number.isSafeInteger(line.mrpPaise) && (line.mrpPaise ?? -1) >= 0 && (line.sellingPricePaise ?? Infinity) <= (line.mrpPaise ?? -1))
   useEffect(() => { onVendorChange(vendorId) }, [vendorId, onVendorChange])
   useEffect(() => {
@@ -102,7 +140,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   }, [vendorId, invoiceNumber, enabled, invoiceKey, invoiceAttempt, view])
 
   function resetForm() {
-    setVendorId(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); draftReference.current = undefined; setDraftRevision(0); setNewProduct(null); setInvoiceTotal('')
+    setVendorId(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); draftReference.current = undefined; setDraftRevision(0); setNewProduct(null); setInvoiceTotal(''); setCreditState('none'); setCreditNumber(''); setCreditDate(today())
   }
 
   async function scan() {
@@ -171,10 +209,10 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     setBusy(true)
     try {
       const id = await saveStockReceiptDraft({
-        id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor.canonicalName, invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise,
+        id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor.canonicalName, invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise, pricingMode: 'received-stock', shortage,
       }, currentUser)
       setDraftId(id.id); setDraftRevision(id.revision)
-      showToast('GRN draft saved. Stock and payable are unchanged.')
+      setDraftRefresh(value => value + 1); showToast('GRN draft saved. Find it in Saved drafts below.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save GRN draft.') }
     finally { setBusy(false) }
   }
@@ -182,7 +220,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   async function prepareSubmit() {
     setBusy(true); setError('')
     try {
-      const saved = await saveStockReceiptDraft({ id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor?.canonicalName ?? '', invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise }, currentUser)
+      const saved = await saveStockReceiptDraft({ id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor?.canonicalName ?? '', invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise, pricingMode: 'received-stock', shortage }, currentUser)
       setDraftId(saved.id); setDraftRevision(saved.revision); setSelectedReceipt(saved); setReceiptAction('submit')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to prepare the GRN.') }
     finally { setBusy(false) }
@@ -192,7 +230,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     setBusy(true)
     try {
       const saved = id ? null : await saveStockReceiptDraft({
-        id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor?.canonicalName ?? '', invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise,
+        id: draftId ?? (draftReference.current ??= crypto.randomUUID()), expectedRevision: draftRevision, vendorId, vendorName: selectedVendor?.canonicalName ?? '', invoiceNumber, invoiceDate, receiptDate, lines, invoiceTotalPaise: totalPaise, pricingMode: 'received-stock', shortage,
       }, currentUser)
       const actualId = id ?? saved!.id
       if (saved) { setDraftId(saved.id); setDraftRevision(saved.revision) }
@@ -200,7 +238,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       showToast(result.payableCreated
         ? `GRN submitted. Stock updated and invoice payable created: ${money(result.totalPaise)}.`
         : `Partial receipt submitted. Stock updated and linked to existing invoice payable ${money(result.totalPaise)}.`)
-      resetForm(); setReceiptAction(null); history.refresh()
+      resetForm(); setReceiptAction(null); history.refresh(); setDraftRefresh(value => value + 1)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to submit GRN.') }
     finally { setBusy(false) }
   }
@@ -211,23 +249,39 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       setError('Vendor name, owner, contact, address, and companies provided are required.')
       return
     }
+    if (newGstin.trim() && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(newGstin.trim().toUpperCase())) { setError('Enter a valid 15-character vendor GSTIN or leave it blank.'); return }
     setBusy(true)
     try {
       const vendor = {
         id: `vendor-${crypto.randomUUID()}`, canonicalName: newName.trim(), ownerName: newOwner.trim(), contact: newContact.trim(),
-        address: newAddress.trim(), suppliedBrands: newCompanies.split(',').map((value) => value.trim()).filter(Boolean),
+        address: newAddress.trim(), gstin: newGstin.trim().toUpperCase(), suppliedBrands: newCompanies.split(',').map((value) => value.trim()).filter(Boolean),
         notes: newNotes.trim(), actorUserId: currentUser.id, timestamp: serverNowIso(),
       }
       await createVendorV2(vendor)
       setVendorId(vendor.id)
       setShowVendorForm(false)
-      setNewName(''); setNewOwner(''); setNewContact(''); setNewAddress(''); setNewCompanies(''); setNewNotes('')
+      setNewName(''); setNewOwner(''); setNewGstin(''); setNewContact(''); setNewAddress(''); setNewCompanies(''); setNewNotes('')
       showToast(`Vendor ${vendor.canonicalName} added.`)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to add vendor.') }
     finally { setBusy(false) }
   }
 
+  function closeDraft() {
+    if ((vendorId || invoiceNumber.trim() || lines.length) && !window.confirm('Clear this form? The saved draft will be kept. Any changes since the last save will be discarded.')) return
+    resetForm(); setError(''); setReceiptAction(null)
+  }
+  async function deleteDraft(receipt: PosGoodsReceipt) {
+    if (!window.confirm('Delete the unsubmitted draft for ' + receipt.vendorName + ', invoice ' + receipt.invoiceNumber + '? Stock and payable have not been posted.')) return
+    setBusy(true); setError('')
+    try {
+      await deletePosGoodsReceiptDraft(receipt.id, currentUser)
+      if (draftId === receipt.id) resetForm()
+      setReceiptAction(null); history.refresh(); setDraftRefresh(value => value + 1); showToast('Draft deleted.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to delete draft.') }
+    finally { setBusy(false) }
+  }
   async function editDraft(cached: PosGoodsReceipt) {
+    if ((vendorId || invoiceNumber.trim() || lines.length) && cached.id !== draftId && !window.confirm('Replace the current form? Saved drafts stay available. Unsaved changes will be discarded.')) return
     const receipt = await readSource<PosGoodsReceipt>('goodsReceipts', cached.id).catch((cause: unknown) => { setError(cause instanceof Error ? cause.message : 'Unable to open draft.'); return null })
     if (!receipt || receipt.status !== 'draft') { if (receipt) setError('This receipt is no longer a draft. Refresh history.'); return }
     if (receipt.lines.some(line => !line.newProduct && line.expectedRevision === undefined)) {
@@ -242,7 +296,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       showToast('Legacy draft revisions refreshed. Review quantities and prices, then save before submitting.')
     }
     setDraftId(receipt.id); setDraftRevision(receipt.revision); setVendorId(receipt.vendorId); setInvoiceNumber(receipt.invoiceNumber)
-    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); setInvoiceTotal(receipt.invoiceTotalPaise ? String(receipt.invoiceTotalPaise / 100) : ''); onViewChange('receipt'); setError('')
+    setInvoiceDate(receipt.invoiceDate); setReceiptDate(receipt.receiptDate); setLines(receipt.lines.map((line) => ({ ...line, unitCostInput: line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : ''), sellingPriceInput: line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2)), mrpInput: line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100)) }))); restoreReceiptPricing(receipt); onViewChange('receipt'); setError('')
   }
 
   async function openReceipt(cached: PosGoodsReceipt, action: 'view' | 'reverse' | 'submit') {
@@ -251,10 +305,11 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     try {
       const receipt = await readSource<PosGoodsReceipt>('goodsReceipts', cached.id)
       if (!receipt) throw new Error('GRN was not found.')
+      if (action === 'submit' && receipt.pricingMode !== 'received-stock') throw new Error('Open this older draft with Resume, review its payable, and save it before submitting.')
       if (action === 'submit' && receipt.status !== 'draft') throw new Error('Only a draft can be submitted.')
       if (action === 'reverse' && receipt.status !== 'submitted') throw new Error('Only a submitted GRN can be reversed.')
       const preview = action === 'reverse' ? await previewStockReceiptReversal(receipt.id, currentUser) : null
-      setReversalPreview(preview); setSelectedReceipt(receipt); setReceiptAction(action); setReverseReason('')
+      setReversalPreview(preview); setSelectedReceipt(receipt); setReceiptAction(action); setReverseReason(''); setConfirmNumber(''); setConfirmDate(today())
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open GRN.') }
     finally { setBusy(false) }
   }
@@ -276,14 +331,15 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       if (detail.actorId !== currentUser.id) return
       if (detail.method === 'saveStockReceiptDraft') {
         const r = detail.result
-        setDraftId(r.id); setDraftRevision(r.revision); setVendorId(r.vendorId); setInvoiceNumber(r.invoiceNumber); setInvoiceDate(r.invoiceDate); setReceiptDate(r.receiptDate); setLines(r.lines); setInvoiceTotal(String((r.invoiceTotalPaise ?? 0) / 100))
+        setDraftId(r.id); setDraftRevision(r.revision); setVendorId(r.vendorId); setInvoiceNumber(r.invoiceNumber); setInvoiceDate(r.invoiceDate); setReceiptDate(r.receiptDate); setLines(r.lines); restoreReceiptPricing(r)
         void readSource<PosGoodsReceipt>('goodsReceipts', r.id).then(latest => {
           if (!latest) { setError('Recovered draft source is unavailable. Check GRN History before continuing.'); return }
-          if (latest.status !== 'draft') { resetForm(); setReceiptAction(null); history.refresh(); showToast('The recovered source has since been submitted or reversed. Open GRN History for its current status.'); return }
-          setDraftRevision(latest.revision); setLines(latest.lines); setVendorId(latest.vendorId); setInvoiceNumber(latest.invoiceNumber); setInvoiceDate(latest.invoiceDate); setReceiptDate(latest.receiptDate); setInvoiceTotal(String((latest.invoiceTotalPaise ?? 0) / 100))
+          if (latest.status !== 'draft') { resetForm(); setReceiptAction(null); history.refresh(); setDraftRefresh(value => value + 1); showToast('The recovered source has since been submitted or reversed. Open GRN History for its current status.'); return }
+          setDraftRevision(latest.revision); setLines(latest.lines); setVendorId(latest.vendorId); setInvoiceNumber(latest.invoiceNumber); setInvoiceDate(latest.invoiceDate); setReceiptDate(latest.receiptDate); restoreReceiptPricing(latest)
         }).catch(() => setError('Original draft recovered; current source could not be refreshed. Check GRN History before continuing.'))
-      } else if (detail.method === 'submitStockReceipt') { resetForm(); setReceiptAction(null); history.refresh() }
-      else if (['reverseStockReceipt', 'deleteStockReceiptDraft'].includes(detail.method)) { setReceiptAction(null); history.refresh() }
+      } else if (detail.method === 'submitStockReceipt') { resetForm(); setReceiptAction(null); history.refresh(); setDraftRefresh(value => value + 1); setDraftRefresh(value => value + 1) }
+      else if (detail.method === 'confirmStockReceiptCreditNote') { setSelectedReceipt(detail.result); history.refresh() }
+      else if (['reverseStockReceipt', 'deleteStockReceiptDraft'].includes(detail.method)) { setReceiptAction(null); history.refresh(); setDraftRefresh(value => value + 1); if (detail.method === 'deleteStockReceiptDraft') resetForm() }
     }
     window.addEventListener('stock-operation-recovered', recovered)
     return () => window.removeEventListener('stock-operation-recovered', recovered)
@@ -293,7 +349,8 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     {error && !receiptAction ? <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">{error}</p> : null}
     {view === 'receipt' && vendorId && invoiceNumber.trim() && enabled && invoiceResult.key !== invoiceKey ? <StatusPanel>Checking invoice reference…</StatusPanel> : null}
     {view === 'receipt' && invoiceResult.key === invoiceKey && invoiceResult.error ? <StatusPanel variant="destructive">{invoiceResult.error}<Button variant="outline" size="sm" onClick={() => setInvoiceAttempt((value) => value + 1)}>Retry invoice lookup</Button></StatusPanel> : null}
-    {view === 'receipt' ? <Card><CardHeader className="pb-2"><h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Goods Receipt Note (GRN)</h2></CardHeader><CardContent className="grid gap-3">
+    {view === 'receipt' ? <SavedReceiptDrafts actor={currentUser} refreshKey={draftRefresh} busy={busy} onResume={receipt => void editDraft(receipt)} onDelete={receipt => void deleteDraft(receipt)} /> : null}
+    {view === 'receipt' ? <Card><CardHeader className="pb-2"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Goods Receipt Note (GRN)</h2><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={closeDraft}>{draftId ? 'Close draft' : 'Clear form'}</Button>{draftId ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void readSource<PosGoodsReceipt>('goodsReceipts', draftId).then(receipt => { if (receipt) return deleteDraft(receipt); throw new Error('Draft not found. Refresh saved drafts.') }).catch(cause => setError(cause instanceof Error ? cause.message : 'Unable to load draft.'))}>Delete draft</Button> : null}</div></div></CardHeader><CardContent className="grid gap-3">
       {!enabled ? <p role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">The vendor ledger is not active. A GRN cannot be submitted until it is enabled.</p> : null}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <FieldLabel label="Vendor"><div className="flex gap-2">{renderVendorPicker(vendorId, setVendorId)}<Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
@@ -301,7 +358,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
         <FieldLabel label="Invoice date"><Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Receipt date"><Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} required /></FieldLabel>
       </div>
-      {matchingInvoice ? <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-2 text-sm">A submitted GRN already exists for this vendor invoice. This receipt will add stock and link to its existing payable of {money(matchingInvoice.invoiceTotalPaise ?? matchingInvoice.totalPaise)}; enter the same full invoice amount.</p> : null}
+      {matchingInvoice ? <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-2 text-sm">This vendor invoice is already recorded. Open its GRN instead of submitting it again. Existing payable: {money(matchingInvoice.invoiceTotalPaise ?? matchingInvoice.totalPaise)}.</p> : null}
       <div className="grid gap-2 sm:flex"><form className="flex min-w-0 gap-2 sm:flex-1" onSubmit={(event) => { event.preventDefault(); void scan() }}><Input className="min-w-0 flex-1" ref={scanRef} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan barcode, then Enter" aria-label="Scan product barcode" autoFocus /><Button type="submit">Scan item</Button></form><Button type="button" className="w-full sm:w-auto" variant="outline" onClick={() => { setError(''); setNewProduct({ barcode: '', name: '', category: '', mrp: '', cost: '', internalBarcode: true }) }}>Add item without barcode</Button></div>
       {newProduct ? <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1.5fr)_minmax(9rem,1fr)_minmax(8rem,.8fr)_minmax(8rem,.8fr)_auto_auto]">
         <p className="text-sm font-semibold sm:col-span-2 xl:col-span-6">{newProduct.internalBarcode ? 'Add a new product and assign an internal store barcode.' : `Barcode ${newProduct.barcode} is not in the catalog. Create product.`}</p>
@@ -313,15 +370,22 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
         <Button type="button" className="self-end" variant="outline" disabled={busy} onClick={() => setNewProduct(null)}>Cancel</Button>
         {newProduct.internalBarcode ? <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-6">This is an internal store barcode, not an official GS1/UPC product code. It will scan after the GRN is submitted; stock and vendor payable change only on submission.</p> : null}
       </div> : null}
+      <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <FieldLabel label="Short / cancelled items"><NativeSelect value={creditState} onChange={event => setCreditState(event.target.value as typeof creditState)}><option value="none">None - complete invoice</option><option value="pending">Vendor credit note awaited</option><option value="received">Credit note received</option></NativeSelect></FieldLabel>
+        {creditState !== 'none' ? <><FieldLabel label="Original invoice amount"><Input inputMode="decimal" value={invoiceTotal} onChange={event => setInvoiceTotal(event.target.value)} /></FieldLabel><p className="self-center text-xs">Expected credit: {money(Math.max(0, originalInvoicePaise - receivedValuePaise))}{creditState === 'pending' ? ' - Pending, not deducted yet' : ' - Included once in the calculated payable'}</p></> : null}
+        {creditState === 'received' ? <><FieldLabel label="Credit note number"><Input value={creditNumber} onChange={event => setCreditNumber(event.target.value)} /></FieldLabel><FieldLabel label="Credit note date"><Input type="date" value={creditDate} onChange={event => setCreditDate(event.target.value)} /></FieldLabel></> : null}
+        {shortageError ? <p role="alert" className="text-xs text-destructive sm:col-span-2">{shortageError}</p> : null}
+      </div>
       <div className="overflow-x-auto rounded-md border border-border">
-        <div className="grid min-w-[1080px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span>Selling price</span><span className="text-right">Line value</span><span /></div>
+        <div className="grid min-w-[1080px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_6rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span>Selling price</span><span className="text-right">Margin</span><span className="text-right">Line value</span><span /></div>
         <div className="max-h-[48vh] min-w-[1080px] overflow-y-auto">
-          {lines.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Scan a barcode to add received goods. Enter quantity, cost, MRP, and selling price for every line.</p> : lines.map((line) => <div key={line.productId} className="grid grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_8rem_4rem] items-center gap-2 border-b px-3 py-2 last:border-0">
+          {lines.length === 0 ? <p className="p-5 text-center text-sm text-muted-foreground">Scan a barcode to add received goods. Enter quantity, cost, MRP, and selling price for every line.</p> : lines.map((line) => <div key={line.productId} className="grid grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_6rem_8rem_4rem] items-center gap-2 border-b px-3 py-2 last:border-0">
             <div className="min-w-0"><strong className="block truncate text-sm">{line.productName}{line.newProduct ? <Badge variant="secondary" className="ml-2">New</Badge> : null}</strong><span className="text-[11px] text-muted-foreground">{line.barcode} · Stock {line.stockAtScan ?? 0}</span>{line.internalBarcode ? <Button type="button" size="sm" variant="outline" className="mt-1 h-7 px-2 text-[11px]" aria-label={`Print barcode label for ${line.productName}`} onClick={() => { try { printInternalBarcode(line.barcode, line.productName) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open the print window.') } }}><Printer size={13} />Print label</Button> : null}</div>
             <Input aria-label={`Received quantity for ${line.productName}`} className="h-8 px-2" type="number" min="1" step="1" required value={line.quantity || ''} onChange={(event) => setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, quantity: event.target.value === '' ? 0 : Math.max(0, Math.trunc(Number(event.target.value) || 0)) } : item))} />
             <Input aria-label={`Unit cost for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.unitCostInput ?? (line.unitCostPaise ? (line.unitCostPaise / 100).toFixed(2) : '')} placeholder="Enter cost" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, unitCostInput: value, unitCostPaise: valid ? rupeesToPaise(parsed) : 0 } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.unitCostInput); return item.unitCostInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, unitCostInput: parsed.toFixed(2), unitCostPaise: rupeesToPaise(parsed) } : item }))} />
             <Input aria-label={`MRP for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.mrpInput ?? (line.mrpPaise === null || line.mrpPaise === undefined ? '' : String(line.mrpPaise / 100))} placeholder="Enter MRP" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, mrpInput: value, mrpPaise: valid ? rupeesToPaise(parsed) : null, sellingPriceInput: valid ? parsed.toFixed(2) : '', sellingPricePaise: valid ? rupeesToPaise(parsed) : undefined, sellingPriceManuallyEdited: false, mrpChanged: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.mrpInput); return item.mrpInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, mrpInput: parsed.toFixed(2), mrpPaise: rupeesToPaise(parsed), sellingPriceInput: parsed.toFixed(2), sellingPricePaise: rupeesToPaise(parsed), sellingPriceManuallyEdited: false, mrpChanged: true } : item }))} />
             <Input aria-label={`Selling price for ${line.productName}`} className="h-8 px-2" type="text" inputMode="decimal" required value={line.sellingPriceInput ?? (line.sellingPricePaise === undefined ? '' : (line.sellingPricePaise / 100).toFixed(2))} placeholder="Enter price" onChange={(event) => { const value = event.target.value; const parsed = Number(value); const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0; setLines((items) => items.map((item) => item.productId === line.productId ? { ...item, sellingPriceInput: value, sellingPricePaise: valid ? rupeesToPaise(parsed) : undefined, sellingPriceManuallyEdited: true } : item)) }} onBlur={() => setLines((items) => items.map((item) => { if (item.productId !== line.productId) return item; const parsed = Number(item.sellingPriceInput); return item.sellingPriceInput?.trim() && Number.isFinite(parsed) && parsed >= 0 ? { ...item, sellingPriceInput: parsed.toFixed(2), sellingPricePaise: rupeesToPaise(parsed), sellingPriceManuallyEdited: true } : item }))} />
+            <ReceiptLineMargin line={line} />
             <strong className="w-full text-right text-sm tabular-nums">{money(line.quantity * line.unitCostPaise)}</strong>
             <Button type="button" size="sm" variant="ghost" aria-label={`Remove ${line.productName}`} onClick={() => setLines((items) => items.filter((item) => item.productId !== line.productId))}>Remove</Button>
           </div>)}
@@ -329,22 +393,22 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       </div>
       <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_13rem_auto] sm:items-end">
         <div className="text-sm"><span className="block text-muted-foreground">Received stock value</span><strong>{money(receivedValuePaise)}</strong></div>
-        <FieldLabel label="Full invoice payable"><Input type="number" min="0.01" step="0.01" value={invoiceTotal} onChange={(event) => setInvoiceTotal(event.target.value)} placeholder="Invoice total" required /></FieldLabel>
-        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !selectedVendor || !lines.length || !totalPaise} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error)} onClick={() => void prepareSubmit()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
+        <FieldLabel label="Payable (calculated)"><Input aria-label="Calculated payable" readOnly value={(totalPaise / 100).toFixed(2)} /></FieldLabel>
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !selectedVendor || !invoiceNumber.trim() || !lines.length || Boolean(shortageError)} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error) || Boolean(shortageError) || Boolean(matchingInvoice)} onClick={() => void prepareSubmit()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
       </div>
-      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. The payable is the full invoice amount; stock increases only by the quantities received above.</p>
+      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. Margin % = (selling price − unit cost) ÷ selling price × 100. Payable is calculated from received stock. A shortage credit note still awaited keeps the original invoice payable until the note is confirmed; a received note is counted once.</p>
     </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recorded activity" title="GRN History" description="Filtered server pages. Blank dates include older receipts." /></CardHeader><CardContent className="grid gap-3">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-        <FieldLabel label="From"><Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} /></FieldLabel>
-        <FieldLabel label="To"><Input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} /></FieldLabel>
-        <FieldLabel label="Status"><NativeSelect value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value)}><option value="">All</option><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="reversed">Reversed</option></NativeSelect></FieldLabel>
-        <FieldLabel label="Exact vendor ID"><Input value={historyVendor} onChange={(event) => setHistoryVendor(event.target.value)} /></FieldLabel>
-        <FieldLabel label="Exact invoice"><Input value={historyInvoice} onChange={(event) => setHistoryInvoice(event.target.value)} /></FieldLabel>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <FieldLabel label={historyStatus === 'draft' ? 'Last saved from' : 'From'}><Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} /></FieldLabel>
+        <FieldLabel label={historyStatus === 'draft' ? 'Last saved to' : 'To'}><Input type="date" value={historyTo} onChange={(event) => setHistoryTo(event.target.value)} /></FieldLabel>
+        <FieldLabel label="Status"><NativeSelect value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value); if (event.target.value === 'draft') { setHistoryFrom(''); setHistoryTo('') } }}><option value="">All</option><option value="draft">Draft</option><option value="submitted">Submitted</option><option value="reversed">Reversed</option></NativeSelect></FieldLabel>
+        <FieldLabel label="Vendor name"><StockVendorPicker value={historyVendor} selected={historyVendorSelection} includeInactive allowClear onSelect={vendor => { setHistoryVendorSelection(vendor); setHistoryVendor(vendor?.id ?? '') }} /></FieldLabel>
       </div>
+      {historyStatus === 'draft' && !historyFrom && !historyTo ? <p className="text-xs text-muted-foreground">Drafts · all dates, including older drafts saved again recently.</p> : null}
       {historyPending || history.loading ? <StatusPanel>Loading receipts…</StatusPanel> : history.error ? <StatusPanel variant="destructive">{history.error}<Button variant="outline" size="sm" onClick={history.retry}>Retry</Button></StatusPanel> : <div className="grid gap-2">
-        {history.items.map((receipt) => <article key={receipt.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"><div className="min-w-0"><strong className="block truncate">{receipt.vendorName}</strong><p className="text-xs text-muted-foreground">Invoice {receipt.invoiceNumber} · {receipt.receiptDate} · {receipt.lines.length} lines</p></div><div className="flex items-center gap-2"><Badge variant={receipt.status === 'submitted' ? 'success' : receipt.status === 'reversed' ? 'destructive' : 'secondary'}>{receipt.status}</Badge><strong className="text-sm">{money(receipt.invoiceTotalPaise ?? receipt.totalPaise)}</strong></div><div className="flex flex-wrap gap-1">
+        {history.items.map((receipt) => <article key={receipt.id} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"><div className="min-w-0"><strong className="block truncate">{receipt.vendorName}</strong><p className="text-xs text-muted-foreground">GRN <BusinessReference prefix="GRN" id={receipt.id}/> · Invoice {receipt.invoiceNumber} · {receipt.receiptDate} · {receipt.lines.length} lines{receipt.status === 'draft' ? <span className="block">Created {stockDate(receipt.createdAt)} · Last saved {stockDate(receipt.updatedAt ?? receipt.createdAt)}</span> : null}</p></div><div className="flex items-center gap-2"><Badge variant={receipt.status === 'submitted' ? 'success' : receipt.status === 'reversed' ? 'destructive' : 'secondary'}>{receipt.status}</Badge><strong className="text-sm">{money(receipt.invoiceTotalPaise ?? receipt.totalPaise)}</strong></div><div className="flex flex-wrap gap-1">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void openReceipt(receipt, 'view')}>View</Button>
-          {receipt.status === 'draft' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => void editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void openReceipt(receipt, 'submit')}>Submit</Button>{currentUser.role === 'owner' || receipt.createdByUid === currentUser.id ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void deletePosGoodsReceiptDraft(receipt.id, currentUser).then(() => { showToast('Draft deleted.'); history.refresh() }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Unable to delete draft.'))}>Delete</Button> : null}</> : receipt.status === 'submitted' && currentUser.role === 'owner' ? <Button size="sm" variant="destructive" disabled={busy} onClick={() => void openReceipt(receipt, 'reverse')}>Reverse</Button> : null}
+          {receipt.status === 'draft' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => void editDraft(receipt)}>Continue</Button><Button size="sm" disabled={busy || !enabled} onClick={() => void openReceipt(receipt, 'submit')}>Submit</Button>{currentUser.role === 'owner' || receipt.createdByUid === currentUser.id ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => void deleteDraft(receipt)}>Delete</Button> : null}</> : receipt.status === 'submitted' && currentUser.role === 'owner' && !receipt.kind ? <Button size="sm" variant="destructive" disabled={busy} onClick={() => void openReceipt(receipt, 'reverse')}>Reverse</Button> : null}
         </div></article>)}
         {!history.items.length ? <StatusPanel>No GRNs match these filters.</StatusPanel> : null}
       </div>}
@@ -352,11 +416,14 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     </CardContent></Card>}
     {selectedReceipt && receiptAction ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3">
       <Card role="dialog" aria-modal="true" aria-label={receiptAction === 'reverse' ? 'Reverse GRN' : receiptAction === 'submit' ? 'Confirm GRN' : 'GRN details'} className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden shadow-xl">
-        <CardHeader className="flex-row items-center justify-between border-b"><h2 className="font-semibold">{receiptAction === 'reverse' ? 'Reverse GRN' : receiptAction === 'submit' ? 'Confirm GRN' : 'GRN details'}</h2><Button size="icon" variant="ghost" disabled={busy} aria-label="Close GRN details" onClick={() => setReceiptAction(null)}><X /></Button></CardHeader>
+        <CardHeader className="flex-row items-center justify-between border-b"><h2 className="font-semibold">{receiptAction === 'reverse' ? 'Reverse GRN' : receiptAction === 'submit' ? 'Confirm GRN' : 'GRN details'} · <BusinessReference prefix="GRN" id={selectedReceipt.id}/></h2><Button size="icon" variant="ghost" disabled={busy} aria-label="Close GRN details" onClick={() => setReceiptAction(null)}><X /></Button></CardHeader>
         <CardContent className="space-y-3 overflow-y-auto pt-4">
+          {selectedReceipt.shortage ? <div className="grid gap-2 rounded border p-3 text-sm"><strong>Shortage credit note: {selectedReceipt.shortage.state === 'pending' ? 'Awaited - not deducted' : 'Received - already included once'}</strong><span>Original invoice {money(selectedReceipt.shortage.originalInvoiceTotalPaise)} - Received {money(selectedReceipt.receivedValuePaise ?? selectedReceipt.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0))}</span>
+          {selectedReceipt.shortage.state === 'pending' && selectedReceipt.status === 'submitted' && currentUser.role === 'owner' ? <><FieldLabel label="Confirm credit note number"><Input value={confirmNumber} onChange={event => setConfirmNumber(event.target.value)} /></FieldLabel><FieldLabel label="Confirm credit note date"><Input type="date" value={confirmDate} onChange={event => setConfirmDate(event.target.value)} /></FieldLabel><Button disabled={busy || !confirmNumber.trim() || !confirmDate} onClick={() => { setBusy(true); void confirmStockReceiptCreditNote(selectedReceipt, confirmNumber, confirmDate, currentUser).then(receipt => { setSelectedReceipt(receipt); history.refresh(); showToast('Credit note linked and payable reconciled once.') }).catch(cause => setError(cause instanceof Error ? cause.message : 'Credit note could not be confirmed.')).finally(() => setBusy(false)) }}>Confirm received credit note</Button></> : <span>{selectedReceipt.shortage.creditNoteNumber ?? 'Waiting for the vendor credit note'}</span>}</div> : null}
+
           {error ? <p role="alert" className="rounded border border-destructive/50 p-3 text-sm text-destructive">{error}</p> : null}
           {receiptAction === 'view' ? <SourceRecord title="Goods receipt" value={selectedReceipt as unknown as Record<string, unknown>} /> : receiptAction === 'submit' ? <ReceiptSubmissionEffects receipt={selectedReceipt} /> : null}
-          {receiptAction === 'submit' ? <><p className="rounded border border-amber-500/40 p-3 text-sm">Confirm the received quantities, full invoice payable and prices above. Existing product prices will be updated immediately, and effective price changes will be sent to the owner for review. Stock value may differ from the full payable for partial receipts.</p><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction(null)}>Back</Button><Button disabled={busy} onClick={() => void submitDraft(selectedReceipt.id, selectedReceipt.revision)}>Confirm GRN submission</Button></div></> : receiptAction === 'reverse' ? <><p className="text-sm text-destructive">Reversal adjusts received stock and the linked payable and is permanently recorded.</p><ReceiptReversalEffects preview={reversalPreview} /><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} /></FieldLabel><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <div className="flex justify-end"><Button onClick={() => setReceiptAction(null)}>Close</Button></div>}
+          {receiptAction === 'submit' ? <><p className="rounded border border-amber-500/40 p-3 text-sm">Confirm the received quantities, full invoice payable and prices above. Existing product prices will be updated immediately, and effective price changes will be sent to the owner for review. This is a complete receipt. Any shortage credit note is shown separately and counted once.</p><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction(null)}>Back</Button><Button disabled={busy} onClick={() => void submitDraft(selectedReceipt.id, selectedReceipt.revision)}>Confirm GRN submission</Button></div></> : receiptAction === 'reverse' ? <><p className="text-sm text-destructive">Reversal adjusts received stock and the linked payable and is permanently recorded.</p><ReceiptReversalEffects preview={reversalPreview} /><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} /></FieldLabel><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <div className="flex justify-end"><Button onClick={() => setReceiptAction(null)}>Close</Button></div>}
           {receiptAction !== 'view' ? <details className="rounded border p-3 text-sm"><summary className="cursor-pointer font-medium">Recorded GRN details</summary><div className="mt-3"><SourceRecord title="Goods receipt" value={selectedReceipt as unknown as Record<string, unknown>} /></div></details> : null}
         </CardContent>
       </Card>
@@ -367,6 +434,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
         <CardContent className="overflow-y-auto pt-4"><form onSubmit={(event) => void addVendor(event)} className="grid gap-3 sm:grid-cols-2">
           <FieldLabel label="Vendor name"><Input value={newName} onChange={(event) => setNewName(event.target.value)} required /></FieldLabel>
           <FieldLabel label="Owner name"><Input value={newOwner} onChange={(event) => setNewOwner(event.target.value)} required /></FieldLabel>
+          <FieldLabel label="Vendor GSTIN (optional)"><Input value={newGstin} maxLength={15} onChange={(event) => setNewGstin(event.target.value.toUpperCase())} placeholder="15-character GSTIN" /></FieldLabel>
           <FieldLabel label="Contact"><Input value={newContact} onChange={(event) => setNewContact(event.target.value)} required /></FieldLabel>
           <FieldLabel label="Address"><Input value={newAddress} onChange={(event) => setNewAddress(event.target.value)} required /></FieldLabel>
           <FieldLabel className="sm:col-span-2" label="Companies provided"><Input value={newCompanies} onChange={(event) => setNewCompanies(event.target.value)} placeholder="Comma separated" required /></FieldLabel>

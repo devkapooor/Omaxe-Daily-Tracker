@@ -5,11 +5,13 @@ import type { AppUser } from '@/domain/financeTypes'
 import type { ChequeV2, InvoiceAllocationV2, PurchaseV2, VendorAccountStateV2, VendorLedgerCorrectionRequestV2, VendorReturnV2, VendorSettlementV2, VendorSettlementStateV2, VendorV2 } from '@/domain/vendorLedgerV2'
 import { db } from '@/shared/lib/firebase'
 import { vendorLedgerV2Collections } from '@/store/vendorLedgerV2Repository'
+import type { InvoiceStateV2 } from '@/domain/vendorLedgerV2'
 
 export type VendorLedgerV2Data = {
   config: VendorLedgerV2Config | null
   vendors: VendorV2[]
   purchases: PurchaseV2[]
+  invoiceStates: InvoiceStateV2[]
   settlements: VendorSettlementV2[]
   allocations: InvoiceAllocationV2[]
   settlementStates: VendorSettlementStateV2[]
@@ -24,14 +26,14 @@ export type VendorLedgerV2Data = {
 }
 
 type Records = Omit<VendorLedgerV2Data, 'config' | 'loading' | 'error' | 'pendingLoading' | 'pendingError'>
-const emptyRecords: Records = { vendors: [], purchases: [], settlements: [], allocations: [], settlementStates: [], correctionRequests: [], returns: [], accountStates: [], cheques: [] }
+const emptyRecords: Records = { vendors: [], purchases: [], invoiceStates: [], settlements: [], allocations: [], settlementStates: [], correctionRequests: [], returns: [], accountStates: [], cheques: [] }
 const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : 'Unable to load the vendor ledger.'
 const distinct = <T extends { id: string }>(items: T[]) => [...new Map(items.map((item) => [item.id, item])).values()]
 
 /** Share owner pending feeds; attach the remaining ledger data only to its consumer page. */
 export function useVendorLedgerV2(currentUser: AppUser, activePage: Page): VendorLedgerV2Data {
   const owner = currentUser.role === 'owner'
-  const workspaceOpen = activePage === 'vendor-preview'
+  const workspaceOpen = activePage === 'vendor-preview' || activePage === 'directory'
   const namesNeeded = workspaceOpen || (owner && activePage === 'actions')
   const readConfig = owner || workspaceOpen
   const [configState, setConfigState] = useState<{ value: VendorLedgerV2Config | null; ready: boolean; error: string | null }>({ value: null, ready: false, error: null })
@@ -68,7 +70,7 @@ export function useVendorLedgerV2(currentUser: AppUser, activePage: Page): Vendo
     if (!enabled || !namesNeeded) return
     const stops: Unsubscribe[] = []
     const ready = new Set<keyof Records>()
-    const required = workspaceOpen ? 8 : 1
+    const required = workspaceOpen ? 9 : 1
     const base = (state: typeof scoped) => state.key === scopedKey ? state : { key: scopedKey, records: emptyRecords, ready: false, error: null }
     const fail = (cause: unknown) => setScoped((state) => ({ ...base(state), ready: true, error: errorMessage(cause) }))
     const subscribe = (name: keyof typeof vendorLedgerV2Collections, key: keyof Records, filters: QueryConstraint[] = []) => {
@@ -80,6 +82,7 @@ export function useVendorLedgerV2(currentUser: AppUser, activePage: Page): Vendo
     subscribe('vendors', 'vendors')
     if (workspaceOpen) {
       subscribe('purchases', 'purchases')
+      subscribe('invoiceStates', 'invoiceStates')
       subscribe('settlements', 'settlements')
       subscribe('allocations', 'allocations')
       subscribe('settlementStates', 'settlementStates')

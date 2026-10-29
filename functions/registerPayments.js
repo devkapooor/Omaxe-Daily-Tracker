@@ -152,7 +152,7 @@ function createRegisterHandlers(ops) {
     });
   }
   async function createVendor(request) {
-    const d = p.object(request.data, ['operationId', 'id', 'canonicalName', 'ownerName', 'aliases', 'contact', 'address', 'suppliedBrands', 'notes', 'openingBalancePaise', 'openingDate', 'openingReason']);
+    const d = p.object(request.data, ['operationId', 'id', 'canonicalName', 'ownerName', 'gstin', 'aliases', 'contact', 'address', 'suppliedBrands', 'notes', 'openingBalancePaise', 'openingDate', 'openingReason']);
     p.id(d.id);
     return run(request, 'vendor-create', d, p.STAFF, async ctx => {
       p.requireCapability(ctx.actor, 'vendor.manage');

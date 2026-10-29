@@ -17,7 +17,6 @@ import {
 import { AppTopBar } from '@/features/navigation/components/AppTopBar'
 import { CashMovementForm } from '@/features/cash-movement/components/CashMovementForm'
 import { CashoutPage } from '@/features/cashout/components/CashoutPage'
-import { DirectoryPage } from '@/features/directory/components/DirectoryPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
 import { LogsPage } from '@/features/logs/components/LogsPage'
 import { SettingsPage } from '@/features/settings/components/SettingsPage'
@@ -56,6 +55,8 @@ type AppWorkspaceProps = {
     marginPercentage: number
     monthlyOperationalExpense: number
     operationalExpenseBreakdown: OperationalExpenseBreakdown
+    businessLegalName: string
+    businessGstin: string
     scheduledNotifications: ScheduledNotification[]
     upgradeAnnouncement: UpgradeAnnouncement | null
   }
@@ -83,6 +84,8 @@ type AppWorkspaceProps = {
   directoryOptions: {
     party: string[]
     vendors: string[]
+    realParties: string[]
+    references: string[]
   }
   ensureNameInDirectory: (type: 'people' | 'vendors', name: string) => Promise<boolean>
   importLegacyData: () => Promise<boolean>
@@ -114,6 +117,7 @@ type AppWorkspaceProps = {
   withdrawCashoutCorrectionRequest: (requestId: string, actor: AppUser) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
+  saveBusinessIdentity: (businessLegalName: string, businessGstin: string) => Promise<void>
   saveScheduledNotifications: (notices: ScheduledNotification[], actor: string) => Promise<void>
   publishUpgradeAnnouncement: (title: string, message: string, durationHours: number, actor: string) => Promise<void>
   clearUpgradeAnnouncement: (actor: string) => Promise<void>
@@ -171,6 +175,7 @@ export function AppWorkspace({
   withdrawCashoutCorrectionRequest,
   saveLoanEntry,
   saveOperationalSettings,
+  saveBusinessIdentity,
   saveScheduledNotifications,
   publishUpgradeAnnouncement,
   clearUpgradeAnnouncement,
@@ -319,9 +324,9 @@ export function AppWorkspace({
           <PosPage draft={billingDraft} currentUser={currentUser} showToast={showToast} />
         ) : null}
 
-        {activePage === 'stock' ? <StockWorkspacePage currentUser={currentUser} ownerVendorEnabled={currentUser.role === 'owner' ? vendorLedger.config?.enabled === true : undefined} showToast={showToast} /> : null}
+        {activePage === 'stock' ? <StockWorkspacePage currentUser={currentUser} ownerVendorEnabled={currentUser.role === 'owner' ? vendorLedger.config?.enabled === true : undefined} showToast={showToast} businessLegalName={appSettings.businessLegalName} businessGstin={appSettings.businessGstin} /> : null}
 
-        {activePage === 'vendor-preview' ? (
+        {activePage === 'vendor-preview' || activePage === 'directory' ? (
           <VendorLedgerWorkspacePage
             onOpenRegister={(vendorId = '', invoiceId = '') => {
               sessionStorage.setItem('alphahub:register-target:' + currentUser.id, JSON.stringify({ vendorId, invoiceId }))
@@ -330,25 +335,14 @@ export function AppWorkspace({
             currentUser={currentUser}
             ledger={vendorLedger}
             legacyChequeItems={legacyChequeItems}
+            legacyVendorNames={directoryOptions.vendors}
+            partyNames={directoryOptions.party}
+            referenceNames={directoryOptions.references}
+            savedPartyNames={savedPartyNames}
+            confirmedPartyNames={directoryOptions.realParties}
+            onAddParty={async name => { await ensureNameInDirectory('people', name); showToast(`Party saved: ${name}`) }}
+            onRenameParty={async (before, after) => { await renamePartyInDirectory(before, after); showToast(`Party renamed: ${before} to ${after}`) }}
           />
-        ) : null}
-
-        {activePage === 'directory' ? (
-          <section className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <DirectoryPage
-              isBusy={isBusy}
-              partyOptions={directoryOptions.party}
-              savedPartyNames={savedPartyNames}
-              onAddParty={async (name) => {
-                await ensureNameInDirectory('people', name)
-                showToast(`Party saved: ${name}`)
-              }}
-              onRenameParty={async (previousName, nextName) => {
-                const renamed = await renamePartyInDirectory(previousName, nextName)
-                if (renamed) showToast(`Party renamed: ${previousName} to ${nextName}`)
-              }}
-            />
-          </section>
         ) : null}
 
         {activePage === 'expense' ? (
@@ -364,7 +358,7 @@ export function AppWorkspace({
           <LoansPage
             loans={normalizedLoans}
             payments={data.payments}
-            partyOptions={directoryOptions.party}
+            partyOptions={directoryOptions.realParties}
             saveLoan={saveLoanEntry}
             savePayment={savePayment}
             onDeleteLoan={handleDeleteLoan}
@@ -459,6 +453,12 @@ export function AppWorkspace({
               isBusy={isBusy}
               monthlyOperationalExpense={appSettings.monthlyOperationalExpense}
               operationalExpenseBreakdown={appSettings.operationalExpenseBreakdown}
+              businessLegalName={appSettings.businessLegalName}
+              businessGstin={appSettings.businessGstin}
+              onSaveBusinessIdentity={async (legalName, gstin) => {
+                await saveBusinessIdentity(legalName, gstin)
+                showToast('Business name and GSTIN saved to Settings master.')
+              }}
               upgradeAnnouncement={appSettings.upgradeAnnouncement}
               marginPercentage={appSettings.marginPercentage}
               scheduledNotifications={appSettings.scheduledNotifications}

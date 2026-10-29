@@ -71,6 +71,7 @@ export default function App() {
     withdrawCashoutCorrectionRequest,
     saveLoanEntry,
     saveOperationalSettings,
+    saveBusinessIdentity,
     saveScheduledNotifications,
     publishUpgradeAnnouncement,
     clearUpgradeAnnouncement,
@@ -80,7 +81,7 @@ export default function App() {
   const [activePage, setActivePage] = useState<Page>(() => {
     if (typeof window === 'undefined') return 'dashboard'
     const storedPage = window.localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY)
-    return isPage(storedPage) ? storedPage : 'dashboard'
+    return isPage(storedPage) ? storedPage === 'directory' ? 'vendor-preview' : storedPage : 'dashboard'
   })
   const [dashboardMonthOffset, setDashboardMonthOffset] = useState<DashboardMonthOffset>(0)
   const [toast, setToast] = useState<AppToast | null>(null)
@@ -230,7 +231,7 @@ export default function App() {
 
   function handlePageChange(page: Page) {
     startPageTransition(() => {
-      setActivePage(page)
+      setActivePage(page === 'directory' ? 'vendor-preview' : page)
     })
   }
 
@@ -278,6 +279,7 @@ export default function App() {
         withdrawCashoutCorrectionRequest={withdrawCashoutCorrectionRequest}
         saveLoanEntry={saveLoanEntry}
         saveOperationalSettings={saveOperationalSettings}
+        saveBusinessIdentity={saveBusinessIdentity}
         saveScheduledNotifications={saveScheduledNotifications}
         publishUpgradeAnnouncement={publishUpgradeAnnouncement}
         clearUpgradeAnnouncement={clearUpgradeAnnouncement}

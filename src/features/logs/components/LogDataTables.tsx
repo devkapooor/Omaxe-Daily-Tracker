@@ -10,6 +10,7 @@ import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, money } fr
 import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/components/ResponsiveLogTable'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { BusinessReference } from '@/shared/businessReferences'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +73,7 @@ export function SalesLogTable({ entries }: { entries: DailySales[] }) {
 }
 
 const expenseColumns: LogTableColumn<Cashout>[] = [
+  { id: 'reference', label: 'Expense Ref', value: entry => entry.id, cell: entry => <BusinessReference prefix="EXPENSE" id={entry.id}/> },
   { id: 'date', label: 'Date', value: (entry) => entry.date, cell: (entry) => <span className="font-semibold">{formatDisplayDate(entry.date)}</span>, hideable: false, sortDescFirst: true },
   { id: 'paidTo', label: 'Paid to', value: (entry) => entry.paidTo, cell: (entry) => <span className="font-semibold">{entry.paidTo}</span> },
   { id: 'category', label: 'Category', value: (entry) => entry.category, cell: (entry) => entry.category },
@@ -148,7 +150,8 @@ const paymentColumns: LogTableColumn<Payment>[] = [
   { id: 'party', label: 'Party', value: (entry) => entry.partyName, cell: (entry) => <span className="font-semibold">{entry.partyName}</span> },
   { id: 'type', label: 'Type', value: (entry) => entry.type, cell: (entry) => <Badge variant={entry.type === 'Received' ? 'success' : 'secondary'}>{entry.type}</Badge> },
   { id: 'entryType', label: 'Entry', value: (entry) => entry.entryType ?? 'general', cell: (entry) => (entry.entryType ?? 'General').replace('-', ' ') },
-  { id: 'loanId', label: 'Loan Ref', value: (entry) => entry.loanId ?? '', cell: (entry) => entry.loanId ?? <span className="text-muted-foreground">-</span> },
+    { id: 'loanId', label: 'Loan Ref', value: (entry) => entry.loanId ?? '', cell: (entry) => entry.loanId ? <BusinessReference prefix="LOAN" id={entry.loanId}/> : <span className="text-muted-foreground">-</span> },
+    { id: 'repaymentId', label: 'Repayment Ref', value: entry => entry.entryType === 'loan-payment' ? entry.id : '', cell: entry => entry.entryType === 'loan-payment' ? <BusinessReference prefix="REPAYMENT" id={entry.id}/> : <span className="text-muted-foreground">-</span> },
   { id: 'amount', label: 'Amount', value: (entry) => entry.amount, cell: (entry) => <span className="font-semibold">{money(entry.amount)}</span>, align: 'right', sortDescFirst: true },
   { id: 'mode', label: 'Mode', value: (entry) => entry.paymentMode, cell: (entry) => <Badge variant="outline">{entry.paymentMode}</Badge> },
   { id: 'notes', label: 'Notes', value: (entry) => entry.notes, cell: (entry) => notesCell(entry.notes), sortable: false },
@@ -170,7 +173,7 @@ export function PaymentLogTable({ entries }: { entries: Payment[] }) {
           <MobileValue label="Amount" value={money(entry.amount)} />
           <MobileValue label="Mode" value={entry.paymentMode} />
           <MobileValue label="Entry" value={(entry.entryType ?? 'General').replace('-', ' ')} />
-          {entry.loanId ? <MobileValue label="Loan Ref" value={entry.loanId} /> : null}
+          {entry.loanId ? <MobileValue label="Loan Ref" value={<BusinessReference prefix="LOAN" id={entry.loanId}/>} /> : null}
           <MobileValue label="Notes" value={entry.notes || '-'} />
         </MobileLogCard>
       )}
@@ -192,6 +195,7 @@ function LoanActions({ entry, onDelete }: { entry: LoanEntry; onDelete: (entry: 
 
 export function LoanLogTable({ entries, onDelete }: { entries: LoanEntry[]; onDelete: (entry: LoanEntry) => Promise<void> | void }) {
   const columns = useMemo<LogTableColumn<LoanEntry>[]>(() => [
+    { id: 'reference', label: 'Loan Ref', value: (entry) => entry.id, cell: (entry) => <BusinessReference prefix="LOAN" id={entry.id}/> },
     { id: 'date', label: 'Loan date', value: (entry) => entry.date, cell: (entry) => <span className="font-semibold">{formatDisplayDate(entry.date)}</span>, hideable: false, sortDescFirst: true },
     { id: 'person', label: 'Person', value: (entry) => entry.personName, cell: (entry) => <span className="font-semibold">{entry.personName}</span> },
     { id: 'payoff', label: 'Payoff date', value: (entry) => entry.promisedPayoffDate, cell: (entry) => formatDisplayDate(entry.promisedPayoffDate) },
@@ -239,6 +243,7 @@ function transferDestinationName(entry: CashTransfer, partyName: TransferLogTabl
 
 export function TransferLogTable({ entries, partyName }: TransferLogTableProps) {
   const columns = useMemo<LogTableColumn<CashTransfer>[]>(() => [
+    { id: 'reference', label: 'Transfer Ref', value: (entry) => entry.id, cell: (entry) => <BusinessReference prefix="TRANSFER" id={entry.id}/> },
     { id: 'date', label: 'Date', value: (entry) => entry.date, cell: (entry) => <span className="font-semibold">{formatDisplayDate(entry.date)}</span>, hideable: false, sortDescFirst: true },
     { id: 'from', label: 'From', value: (entry) => partyName(entry, 'from'), cell: (entry) => partyName(entry, 'from') },
     { id: 'to', label: 'To', value: (entry) => transferDestinationName(entry, partyName), cell: (entry) => <span className="font-semibold">{transferDestinationName(entry, partyName)}</span> },

@@ -3,7 +3,7 @@ import type { ActionCentreEntry } from './actionCentreEntries'
 import { OUTDATED_CORRECTION_REASON, OUTDATED_VENDOR_CORRECTION_REASON } from './approvalItems'
 
 export type PosReviewSource = { bill: PosBill; state: PosBillState; loadedAt: string }
-export type ReturnDecision = { outcome: 'vendor-credit' | 'replacement' | 'rejected'; outcomeReason: string; creditedValuePaise?: number; replacementReceivedAt?: string }
+export type ReturnDecision = { outcome: 'vendor-credit' | 'replacement' | 'rejected'; outcomeReason: string; creditedValuePaise?: number; replacementReceivedAt?: string; creditNoteNumber?: string; creditNoteDate?: string }
 export type ReviewDecision = { action: 'approve' | 'reject' | 'close-outdated' | 'mark-reviewed' | 'resolve-return'; reason?: string; outdatedReason?: string; returnDecision?: ReturnDecision }
 
 export function paymentLabel(method?: string) {

@@ -1,5 +1,6 @@
 const { randomBytes } = require('node:crypto')
 const s = require('./stockOperations')
+const { receiptPricing } = require('./receiptPricing')
 
 const normalizeInvoice = value => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('en-IN')
 const eventId = (...parts) => parts.map(p => encodeURIComponent(String(p))).join(':')
@@ -61,8 +62,12 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
     })
   }
   async function saveDraft(request) {
-    const d = s.object(request.data, ['operationId', 'id', 'expectedRevision', 'vendorId', 'invoiceNumber', 'invoiceDate', 'receiptDate', 'lines', 'invoiceTotalPaise'])
-    const input = { ...d, id: s.id(d.id), expectedRevision: s.integer(d.expectedRevision, 'Draft revision'), vendorId: s.id(d.vendorId), invoiceNumber: s.text(d.invoiceNumber, 'Invoice number', 160), invoiceDate: s.date(d.invoiceDate), receiptDate: s.date(d.receiptDate), lines: lines(d.lines), invoiceTotalPaise: s.integer(d.invoiceTotalPaise, 'Full invoice payable', 1) }
+    const d = s.object(request.data, ['operationId', 'id', 'expectedRevision', 'vendorId', 'invoiceNumber', 'invoiceDate', 'receiptDate', 'lines', 'invoiceTotalPaise', 'pricingMode', 'shortage'])
+    if (d.pricingMode !== undefined && d.pricingMode !== 'received-stock') s.fail('Invalid receipt pricing mode.')
+    const input = { ...d, id: s.id(d.id), expectedRevision: s.integer(d.expectedRevision, 'Draft revision'), vendorId: s.id(d.vendorId), invoiceNumber: s.text(d.invoiceNumber, 'Invoice number', 160), invoiceDate: s.date(d.invoiceDate), receiptDate: s.date(d.receiptDate), lines: lines(d.lines), invoiceTotalPaise: 0 }
+    const pricing = receiptPricing(input.lines, d.shortage)
+    if (d.pricingMode === undefined && !d.shortage && d.invoiceTotalPaise !== undefined && d.invoiceTotalPaise !== pricing.invoiceTotalPaise) s.fail('The invoice amount differs from received stock. Reload Receive Stock and review the complete receipt or its shortage credit note before saving.')
+    if (pricing) { input.invoiceTotalPaise = pricing.invoiceTotalPaise; input.pricingMode = 'received-stock'; input.shortage = d.shortage ?? null }
     return run(request, 'save-draft', input, s.staff, async ({ tx, actor, timestamp, writes }) => {
       const source = ref('goodsReceipts', input.id), old = await tx.get(source), vendor = await tx.get(db.doc(`vendorsV2/${input.vendorId}`))
       if (!vendor.exists || vendor.get('active') !== true) s.fail('Choose an active vendor.')
@@ -77,7 +82,44 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
         quotedLines.push({ ...line, ...(product?.exists ? { sellingPriceBeforePaise: product.get('sellingPricePaise'), mrpBeforePaise: s.prices(product.data()).mrpPaise, quoteRevision: product.get('revision'), stockAtScan: product.get('currentQuantity') } : {}) })
       }
       const receipt = { id: input.id, status: 'draft', vendorId: input.vendorId, vendorName: vendor.get('canonicalName'), invoiceNumber: input.invoiceNumber, invoiceDate: input.invoiceDate, receiptDate: input.receiptDate, lines: quotedLines, invoiceTotalPaise: input.invoiceTotalPaise, totalPaise: input.invoiceTotalPaise, revision: input.expectedRevision + 1, createdAt: old.exists ? old.get('createdAt') : timestamp, createdByUid: old.exists ? old.get('createdByUid') : actor.id, createdByName: old.exists ? old.get('createdByName') : actor.name, ...s.updated(actor, timestamp) }
+      if (pricing) Object.assign(receipt, pricing, { pricingMode: 'received-stock', shortage: pricing.shortage ?? null })
       writes.push(() => tx.set(source, receipt)); return receipt
+    })
+  }
+  async function confirmCreditNote(request) {
+    const d = s.object(request.data, ['operationId', 'id', 'expectedRevision', 'creditNoteNumber', 'creditNoteDate'])
+    s.id(d.id); s.text(d.creditNoteNumber, 'Credit note number', 160); s.date(d.creditNoteDate)
+    return run(request, 'confirm-shortage-credit-note', d, ['owner'], async ({ tx, actor, timestamp, writes }) => {
+      const source = ref('goodsReceipts', d.id), snap = await tx.get(source), receipt = snap.data()
+      if (!receipt || receipt.status !== 'submitted' || receipt.pricingMode !== 'received-stock' || receipt.shortage?.state !== 'pending' || receipt.payableOwner !== true) s.fail('This GRN has no pending shortage credit note.')
+      s.revision(receipt.revision, d.expectedRevision)
+      if (d.creditNoteDate < receipt.invoiceDate || d.creditNoteDate > s.istDate(timestamp)) s.fail('Credit note date must be between invoice date and today.')
+      const cfg = await tx.get(db.doc('appMetadata/vendorLedgerV2Config')), vendor = await tx.get(db.doc(`vendorsV2/${receipt.vendorId}`))
+      if (cfg.get('enabled') !== true || vendor.get('active') !== true) s.fail('The vendor ledger and vendor must be active.')
+      const pricing = receiptPricing(lines(receipt.lines, true), { ...receipt.shortage, state: 'received', creditNoteNumber: d.creditNoteNumber, creditNoteDate: d.creditNoteDate })
+      const amount = pricing.shortage.expectedCreditPaise
+      const purchaseRef = db.doc(`purchasesV2/${receipt.payablePurchaseId}`), invoiceRef = db.doc(`invoiceStatesV2/${receipt.payablePurchaseId}`), accountRef = db.doc(`vendorAccountStatesV2/${receipt.vendorId}`)
+      const purchase = await tx.get(purchaseRef), invoice = await tx.get(invoiceRef), account = await tx.get(accountRef)
+      const noteRef = db.doc(`vendorCreditNoteReservationsV2/${s.hash(`${receipt.vendorId}:${normalizeInvoice(d.creditNoteNumber)}`)}`)
+      if ((await tx.get(noteRef)).exists) s.fail('This vendor credit note is already linked; it cannot be deducted twice.')
+      if (!purchase.exists || purchase.get('grnId') !== receipt.id || purchase.get('invoiceTotalPaise') !== receipt.shortage.originalInvoiceTotalPaise || !invoice.exists || invoice.get('vendorId') !== receipt.vendorId || !account.exists || account.get('vendorId') !== receipt.vendorId) s.fail('Original invoice or account evidence is inconsistent; no credit was posted.')
+      const oldOpen = s.integer(invoice.get('openAmountPaise'), 'Invoice outstanding'), reduction = Math.min(amount, oldOpen), nextOpen = oldOpen - reduction
+      if (nextOpen < s.integer(invoice.get('reservedAmountPaise') ?? 0, 'Reserved payments')) s.fail('A pending cheque reserves this invoice. Review that cheque before recording the credit note.')
+      const outstanding = s.integer(account.get('outstandingPaise'), 'Vendor outstanding')
+      if (outstanding < reduction) s.fail('Vendor account does not reconcile with this invoice; ask the owner to review it.')
+      const cheques = await tx.get(db.collection('chequesV2').where('vendorId', '==', receipt.vendorId).where('status', 'in', ['issued', 'presented']).limit(201))
+      if (cheques.size > 200) s.fail('Vendor cheque history exceeds the credit-note bound; no credit was posted.')
+      const committed = cheques.docs.filter(doc => !doc.get('trackingOnly')).reduce((sum, doc) => s.safe(sum + s.integer(doc.get('amountPaise'), 'Cheque amount')), 0)
+      if (outstanding - reduction < committed) s.fail('Pending vendor cheques reserve this payable. Review those cheques before applying the credit note.')
+      const ledgerId = `shortage-credit-${receipt.id}`
+      const next = { ...receipt, ...pricing, totalPaise: pricing.invoiceTotalPaise, revision: receipt.revision + 1, ...s.updated(actor, timestamp) }
+      writes.push(() => tx.create(noteRef, { vendorId: receipt.vendorId, number: d.creditNoteNumber.trim(), date: d.creditNoteDate, amountPaise: amount, goodsReceiptId: receipt.id, purchaseId: purchase.id, createdAt: timestamp, createdByUserId: actor.id }),
+        () => tx.create(db.doc(`vendorLedgerEntriesV2/${ledgerId}`), { id: ledgerId, vendorId: receipt.vendorId, eventType: 'vendor-credit', posting: 'financial', signedAmountPaise: -amount, sourceType: 'goods-receipt', sourceRecordId: receipt.id, sourceRevision: next.revision, reason: `Shortage credit note ${d.creditNoteNumber.trim()}`, occurredOn: d.creditNoteDate, createdAt: timestamp, createdByUserId: actor.id }),
+        () => tx.update(purchaseRef, { invoiceTotalPaise: pricing.invoiceTotalPaise, shortage: pricing.shortage, originalInvoiceTotalPaise: receipt.shortage.originalInvoiceTotalPaise, revision: purchase.get('revision') + 1, updatedAt: timestamp, updatedByUserId: actor.id }),
+        () => tx.update(invoiceRef, { openAmountPaise: nextOpen, revision: invoice.get('revision') + 1, updatedAt: timestamp, updatedByUserId: actor.id }),
+        () => tx.update(accountRef, { outstandingPaise: outstanding - reduction, vendorCreditPaise: s.safe((account.get('vendorCreditPaise') ?? 0) + amount - reduction), revision: account.get('revision') + 1, lastLedgerEntryId: ledgerId, updatedAt: timestamp, updatedByUserId: actor.id }),
+        () => tx.set(source, next), () => tx.create(ref('events', `credit-${d.operationId}`), { type: 'shortage-credit-note-confirmed', goodsReceiptId: receipt.id, amountPaise: amount, creditNoteNumber: d.creditNoteNumber.trim(), createdAt: timestamp, ...s.actorFields(actor) }))
+      return next
     })
   }
   async function deleteDraft(request) {
@@ -95,7 +137,9 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       const source = ref('goodsReceipts', d.id), snap = await tx.get(source), receipt = snap.data()
       if (!receipt || receipt.status !== 'draft') s.fail('Only an unsubmitted GRN can be posted.')
       s.revision(receipt.revision, d.expectedRevision)
+      if (receipt.pricingMode !== 'received-stock') s.fail('Open this older draft in Receive Stock, review its payable and save it before submitting.')
       const received = lines(receipt.lines, true), total = s.integer(receipt.invoiceTotalPaise, 'Full invoice payable', 1)
+      if (receipt.pricingMode === 'received-stock' && receiptPricing(received, receipt.shortage).invoiceTotalPaise !== total) s.fail('Receipt payable does not reconcile with received stock and its credit note.')
       if (received.some(l => l.quantity <= 0 || l.unitCostPaise <= 0)) s.fail('Every received line needs a positive whole quantity and unit cost.')
       s.date(receipt.invoiceDate); s.date(receipt.receiptDate)
       const config = (await tx.get(db.doc('appMetadata/vendorLedgerV2Config'))).data(), vendor = await tx.get(db.doc(`vendorsV2/${s.id(receipt.vendorId)}`))
@@ -124,8 +168,16 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
         s.integer(account.get('outstandingPaise'), 'Recorded vendor outstanding'); s.integer(account.get('revision'), 'Recorded account revision', 1)
       } else if ((vendor.get('openingBalancePaise') ?? 0) > 0) s.fail('Opening payable account is missing. Ask the owner to review the ledger.')
       const normalizedInvoiceNumber = normalizeInvoice(receipt.invoiceNumber), reservationId = eventId(receipt.vendorId, normalizedInvoiceNumber), reservationRef = db.doc(`invoiceReservationsV2/${reservationId}`), reservation = await tx.get(reservationRef)
+      if (receipt.pricingMode === 'received-stock' && receipt.shortage?.state === 'received') {
+        const note = receipt.shortage
+        if (note.creditNoteDate < receipt.invoiceDate || note.creditNoteDate > s.istDate(timestamp)) s.fail('Credit note date must be between invoice date and today.')
+        const noteRef = db.doc(`vendorCreditNoteReservationsV2/${s.hash(`${receipt.vendorId}:${normalizeInvoice(note.creditNoteNumber)}`)}`)
+        if ((await tx.get(noteRef)).exists) s.fail('This vendor credit note is already linked; it cannot be deducted twice.')
+        writes.push(() => tx.create(noteRef, { vendorId: receipt.vendorId, number: note.creditNoteNumber, date: note.creditNoteDate, amountPaise: note.expectedCreditPaise, goodsReceiptId: receipt.id, purchaseId: `grn-${receipt.id}`, appliedInNetInvoice: true, createdAt: timestamp, createdByUserId: actor.id }))
+      }
       let purchaseId = `grn-${receipt.id}`, payableCreated = false, origin
       if (reservation.exists) {
+        if (receipt.pricingMode === 'received-stock') s.fail('This vendor invoice is already recorded. Open its existing GRN; a second payable or delivery cannot be posted.')
         if (!account.exists) s.fail('The original invoice account is missing. Ask the owner to review its source.')
         purchaseId = s.text(reservation.get('purchaseId'), 'Purchase reference', 500)
         const purchase = await tx.get(db.doc(`purchasesV2/${purchaseId}`)), invoice = await tx.get(db.doc(`invoiceStatesV2/${purchaseId}`))
@@ -138,6 +190,7 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
         const ledgerId = eventId('purchase', purchaseId, 1, 'purchase'), purchaseRef = db.doc(`purchasesV2/${purchaseId}`), invoiceRef = db.doc(`invoiceStatesV2/${purchaseId}`), ledgerRef = db.doc(`vendorLedgerEntriesV2/${ledgerId}`)
         for (const target of [purchaseRef, invoiceRef, ledgerRef]) if ((await tx.get(target)).exists) s.fail('GRN payable reference already exists or conflicts.')
         const purchase = { id: purchaseId, vendorId: receipt.vendorId, invoiceNumber: receipt.invoiceNumber, normalizedInvoiceNumber, invoiceDate: receipt.invoiceDate, receiptDate: receipt.receiptDate, invoiceTotalPaise: total, invoiceReservationId: reservationId, ledgerEntryId: ledgerId, notes: '', revision: 1, createdAt: timestamp, createdByUserId: actor.id, updatedAt: timestamp, updatedByUserId: actor.id, grnId: receipt.id, lines: submittedLines }
+        if (receipt.pricingMode === 'received-stock') Object.assign(purchase, { pricingMode: receipt.pricingMode, receivedValuePaise: receipt.receivedValuePaise, originalInvoiceTotalPaise: receipt.shortage?.originalInvoiceTotalPaise ?? total, shortage: receipt.shortage ?? null })
         writes.push(() => tx.create(purchaseRef, purchase), () => tx.create(reservationRef, { id: reservationId, vendorId: receipt.vendorId, normalizedInvoiceNumber, purchaseId, createdAt: timestamp, createdByUserId: actor.id }), () => tx.create(ledgerRef, { id: ledgerId, vendorId: receipt.vendorId, eventType: 'purchase', posting: 'financial', signedAmountPaise: total, sourceType: 'purchase', sourceRecordId: purchaseId, sourceRevision: 1, occurredOn: receipt.invoiceDate, createdAt: timestamp, createdByUserId: actor.id }), () => tx.create(invoiceRef, { id: purchaseId, vendorId: receipt.vendorId, invoiceId: purchaseId, openAmountPaise: total, reservedAmountPaise: 0, revision: 1, updatedAt: timestamp, updatedByUserId: actor.id }), () => tx.set(accountRef, { ...(account.data() ?? { id: receipt.vendorId, vendorId: receipt.vendorId }), outstandingPaise: s.safe((account.get('outstandingPaise') ?? 0) + total), revision: (account.get('revision') ?? 0) + 1, lastLedgerEntryId: ledgerId, updatedAt: timestamp, updatedByUserId: actor.id }))
         payableCreated = true
       }
@@ -159,6 +212,8 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
     if (!receipt || receipt.status !== 'submitted' || !receipt.payablePurchaseId) s.fail('Only a submitted GRN can be reversed.')
     const products = [], costs = [], effects = []
     for (const line of receipt.lines) {
+      const returned = await tx.get(db.doc(`vendorReturnReceiptStates/${s.hash(receipt.id+':'+line.productId)}`))
+      if ((returned.get('returnedQuantity') ?? 0) > 0) s.fail('This GRN has dispatched vendor returns. Review their linked stock and credit records before reversal.')
       const product = await tx.get(ref('products', line.productId)), cost = await tx.get(ref('productCosts', line.productId))
       if (!product.exists) s.fail('A receipt product is unavailable. Review its source history.')
       const p = product.data(), before = s.prices(p), after = { ...before }, owner = `grn:${receiptId}`, known = !!line.priceProvenanceBefore
@@ -228,6 +283,6 @@ function createStockReceivingHandlers(db, clock = () => new Date().toISOString()
       return { reversalId, payableReversed: !!purchase, ...preview }
     })
   }
-  return { createProduct, allocateInternalBarcode, saveDraft, deleteDraft, submit, previewReverse, reverse }
+  return { createProduct, allocateInternalBarcode, saveDraft, deleteDraft, submit, confirmCreditNote, previewReverse, reverse }
 }
 module.exports = { createStockReceivingHandlers, normalizeInvoice, eventId }

@@ -6,6 +6,7 @@ import { ResponsiveLogTable, type LogTableColumn } from '@/features/logs/compone
 import { dailyCashoutSearchText } from '@/features/logs/domain/logTableSearch'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { BusinessReference } from '@/shared/businessReferences'
 
 
 type DailyCashoutDataTableProps = {
@@ -43,6 +44,7 @@ function RowActions({ entry, onEdit, onView }: RowActionsProps) {
 
 export function DailyCashoutDataTable({ entries, onEdit, onView }: DailyCashoutDataTableProps) {
   const columns = useMemo<LogTableColumn<DailyCashoutEntry>[]>(() => [
+    { id: 'reference', label: 'Cashout Ref', value: entry => entry.id, cell: entry => <BusinessReference prefix="CASHOUT" id={entry.id}/> },
     { id: 'date', label: 'Date', value: (entry) => entry.date, cell: (entry) => <span className="font-semibold">{formatDisplayDate(entry.date)}</span>, hideable: false, sortDescFirst: true },
     {
       id: 'recordedBy',

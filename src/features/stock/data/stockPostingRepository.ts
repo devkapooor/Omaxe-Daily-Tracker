@@ -5,7 +5,7 @@ import type { AppUser } from '@/domain/financeTypes'
 import type { PosGoodsReceipt, PosProduct, PosStockAuditBatch } from '@/features/pos/domain/types'
 
 export type StockPendingOperation = { version: 1; actorId: string; method: string; input: Record<string, unknown> }
-const methods = new Set(['createStockProduct', 'allocateInternalStockBarcode', 'saveStockReceiptDraft', 'deleteStockReceiptDraft', 'submitStockReceipt', 'reverseStockReceipt', 'beginStockAudit', 'postStockAuditGroup', 'finishStockAudit'])
+const methods = new Set(['createStockProduct', 'allocateInternalStockBarcode', 'saveStockReceiptDraft', 'deleteStockReceiptDraft', 'submitStockReceipt', 'confirmStockReceiptCreditNote', 'reverseStockReceipt', 'beginStockAudit', 'postStockAuditGroup', 'finishStockAudit'])
 const key = (uid: string) => `alphahub:stock-operation:${firebaseConfig.projectId}:${uid}`
 const changed = () => window.dispatchEvent(new Event('stock-operation-change'))
 const inFlight = new Set<string>()
@@ -61,7 +61,10 @@ export async function postStockAuditGroup(batchId: string, groupIndex: number, a
 export async function finishStockAudit(batchId: string, actor: AppUser, interrupted = false) {
   return stockCall<PosStockAuditBatch>('finishStockAudit', { id: batchId, interrupted, operationId: `${batchId}-finish-${interrupted}` }, actor)
 }
-export type StockReceiptDraft = Pick<PosGoodsReceipt, 'vendorId' | 'vendorName' | 'invoiceNumber' | 'invoiceDate' | 'receiptDate' | 'lines'> & { id?: string; expectedRevision?: number; invoiceTotalPaise?: number }
+export type StockReceiptDraft = Pick<PosGoodsReceipt, 'vendorId' | 'vendorName' | 'invoiceNumber' | 'invoiceDate' | 'receiptDate' | 'lines' | 'pricingMode' | 'shortage'> & { id?: string; expectedRevision?: number; invoiceTotalPaise?: number }
+export function confirmStockReceiptCreditNote(receipt: PosGoodsReceipt, number: string, date: string, actor: AppUser) {
+  return stockCall<PosGoodsReceipt>('confirmStockReceiptCreditNote', { id: receipt.id, expectedRevision: receipt.revision, creditNoteNumber: number, creditNoteDate: date, operationId: crypto.randomUUID() }, actor)
+}
 export async function allocateInternalStockBarcode(input: { draftId: string; productId: string }, actor: AppUser) {
   return stockCall<{ barcode: string; draftId: string; productId: string }>('allocateInternalStockBarcode', { ...input, operationId: crypto.randomUUID() }, actor)
 }

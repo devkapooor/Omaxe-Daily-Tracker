@@ -154,6 +154,7 @@ export function RegisterPaymentForm({
             setKind(e.target.value);
           }}><option value="expense">Ordinary expense</option><option value="vendor-payment">Vendor payment</option></NativeSelect></FieldLabel><FieldLabel label="Payment method"><NativeSelect value={mode} onChange={e => setMode(e.target.value)}><option value="cash">Counter Cash</option><option value="bank-transfer">Bank Transfer</option>{chequeAllowed ? <option value="cheque">Cheque</option> : null}</NativeSelect></FieldLabel>{kind === 'vendor-payment' ? <><FieldLabel label="Vendor"><StockVendorPicker value={vendorId} selected={selectedVendor} onSelect={vendor => {
               setSelectedVendor(vendor);
+              if (!vendor) return;
               setVendorId(vendor.id);
               setInvoiceId('');
               setPayable(null);

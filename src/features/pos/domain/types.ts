@@ -73,6 +73,9 @@ export type PosGoodsReceiptLine = {
 }
 
 export type PosGoodsReceipt = {
+  pricingMode?: 'received-stock'
+  receivedValuePaise?: number
+  shortage?: ReceiptShortage | null
   id: string
   status: 'draft' | 'submitted' | 'reversed'
   vendorId: string
@@ -94,15 +97,27 @@ export type PosGoodsReceipt = {
   payablePurchaseId?: string
   payableOwner?: boolean
   originatingGoodsReceiptId?: string
+  kind?: 'vendor-return-replacement' | 'vendor-return-rejected-restock'
+  reference?: string
+  vendorReturnId?: string
   linkedReceiptIds?: string[]
   reversalLedgerEntryId?: string
   revision: number
   createdAt: string
+  submittedAt?: string
   createdByUid: string
   createdByName: string
   updatedAt: string
   updatedByUid: string
   updatedByName: string
+}
+
+export type ReceiptShortage = {
+  originalInvoiceTotalPaise: number
+  state: 'pending' | 'received'
+  creditNoteNumber?: string
+  creditNoteDate?: string
+  expectedCreditPaise?: number
 }
 
 export type PosStockAudit = {

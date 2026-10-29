@@ -6,6 +6,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card, CardContent, CardHeader } from '@/shared/ui/card'
 import { SectionHeading } from '@/shared/ui/section-heading'
+import { AuditDetails } from '@/shared/ui/audit-details'
 
 type DailyCashoutDetailsModalProps = {
   entry: DailyCashoutEntry | null
@@ -53,7 +54,7 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
         <CardHeader className="gap-3">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-3">
-              <SectionHeading eyebrow="Cash Drawer Particulars" title="Complete Daily Cashout" />
+              <SectionHeading eyebrow="Daily cash summary" title="Complete Daily Cashout" />
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{entry.recordedBy}</Badge>
                 <Badge variant={auditStatus === 'matched' ? 'success' : auditStatus === 'not-reconciled' ? 'outline' : 'warning'}>
@@ -66,13 +67,12 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
             </Button>
           </div>
           <p className="text-sm font-medium text-muted-foreground">
-            Review the complete saved daily cashout for {formatDisplayDate(entry.date)}.
+            Review the cash totals and reconciliation for {formatDisplayDate(entry.date)}.
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <DetailBlock label="Date" value={formatDisplayDate(entry.date)} />
           <DetailBlock label="Recorded By" value={entry.recordedBy} />
-          <DetailBlock label="Created At" value={formatDisplayDateTime(entry.createdAt)} />
           <DetailBlock label={entry.financePostingVersion === 1 ? 'Gross Cash Sales' : 'Cash Sales'} value={money(entry.cashSales)} />
           <DetailBlock label="UPI Sales" value={money(entry.upiSales)} />
           <DetailBlock label="Card Sales" value={entry.cardSales === undefined ? 'Not recorded on this entry' : money(entry.cardSales)} />
@@ -83,18 +83,13 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Drawer Total" value={money(drawerTotal)} />
           <DetailBlock label="Remaining Balance" value={money(entry.remainingBalance)} />
           {entry.financePostingVersion === 1 ? <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Basis" value="Cash Paid Out includes cash refunds, vendor cash payments and ordinary cash expenses. Refunds shown separately are part of that total; they are not another deduction." /> : null}
-          <DetailBlock label="Revision" value={String(entry.revision ?? 1)} />
-          {entry.updatedAt ? <DetailBlock label="Last Corrected" value={`${formatDisplayDateTime(entry.updatedAt)} by ${entry.updatedBy ?? 'Owner'}`} /> : null}
           <DetailBlock className="md:col-span-2 xl:col-span-3" label="Audit Status" value={auditMessage} />
-          <DetailBlock className="md:col-span-2 xl:col-span-3" label="Cash Drawer Particulars" value={entry.actualCashParticulars} />
-          <DetailBlock className="md:col-span-2 xl:col-span-3" label="Pending Cash Particulars" value={entry.pendingCashParticulars} />
-          <DetailBlock
-            className="md:col-span-2 xl:col-span-3"
-            label="Staff Cash Balances At Close"
-            value={entry.holderBalancesAtClose?.length
-              ? entry.holderBalancesAtClose.map((balance) => `${balance.name}: ${money(balance.amountPaise / 100)}`).join('\n')
-              : 'Not recorded on this historical cashout.'}
-          />
+          <div className="md:col-span-2 xl:col-span-3"><AuditDetails title="Cash count and audit details">
+            <div className="grid gap-3 sm:grid-cols-2"><DetailBlock label="Created At" value={formatDisplayDateTime(entry.createdAt)} /><DetailBlock label="Revision" value={String(entry.revision ?? 1)} />{entry.updatedAt ? <DetailBlock label="Last Corrected" value={`${formatDisplayDateTime(entry.updatedAt)} by ${entry.updatedBy ?? 'Owner'}`} /> : null}</div>
+            <DetailBlock label="Cash Drawer Particulars" value={entry.actualCashParticulars} />
+            <DetailBlock label="Pending Cash Particulars" value={entry.pendingCashParticulars} />
+            <DetailBlock label="Staff Cash Balances At Close" value={entry.holderBalancesAtClose?.length ? entry.holderBalancesAtClose.map((balance) => `${balance.name}: ${money(balance.amountPaise / 100)}`).join('\n') : 'Not recorded on this historical cashout.'} />
+          </AuditDetails></div>
         </CardContent>
       </Card>
     </div>,

@@ -36,6 +36,7 @@ import {
 } from '../data/posRepository'
 import { printPosReceipt } from './receipt'
 import { CheckoutPaymentPanel } from './CheckoutPaymentPanel'
+import { PosQuickAdd } from './PosQuickAdd'
 import { PosDashboard } from './PosDashboard'
 import { buildCheckoutPayment, emptySplitPayments, type CheckoutPaymentMode, type SplitPaymentAmounts } from '../domain/checkoutPayments'
 import { serverNowDate } from '@/shared/lib/serverClock'
@@ -311,6 +312,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
                 </div>)}
               </div> : null}
             </form>
+            <PosQuickAdd disabled={showUnresolvedAlert} onAdd={(product) => { addProduct(product); focusScanner() }} />
           </CardContent></Card>
           <Card aria-label="Cart items" className="flex min-h-0 flex-col"><CardHeader className="shrink-0 flex-row items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><SectionHeading eyebrow="Billing" title="Cart" /><div className="flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-primary-foreground shadow-sm" aria-live="polite" aria-label={`${cartQuantity} items in cart`}><strong className="text-xl leading-none tabular-nums">{cartQuantity}</strong><span className="text-[10px] font-bold uppercase tracking-wide">Items</span></div></div><Button type="button" variant="outline" size="sm" disabled={cart.length === 0 || busy || Boolean(pendingCheckout) || Boolean(recovery.error)} onClick={clearCart}><Trash2 />Clear cart</Button></CardHeader><CardContent ref={cartScrollRef} className="@container grid auto-rows-max content-start gap-1.5 p-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {cart.length === 0 ? <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">Scan a barcode to add items to the cart.</p> : cart.map((line) => <div key={line.id} className={`grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors duration-500 @min-[32rem]:grid-cols-[minmax(0,1fr)_auto_auto_auto] ${highlightedCartKey === (line.kind === 'product' ? line.productId : line.id) ? 'border-primary bg-primary/10 ring-1 ring-primary/30' : ''}`}>

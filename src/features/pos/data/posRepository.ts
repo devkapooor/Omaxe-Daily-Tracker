@@ -137,6 +137,23 @@ export async function findPosProductByBarcode(barcode: string) {
   return null
 }
 
+// Existing live catalog items: carry bags (MRP 5/10), glass (20),
+// Dras ice (50/75) and Dras ice cup (30).
+// Keep only identities here; names, prices, stock and revisions come from Firestore.
+const QUICK_ADD_BARCODES = ['102030', '101151', '19008', '757953692553', '769807187498', '726684841202']
+
+export function subscribePosQuickProducts(
+  callback: (products: PosProduct[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(query(posCollection('products'), where('barcode', 'in', QUICK_ADD_BARCODES)), { includeMetadataChanges: true }, (snapshot) => {
+    if (snapshot.metadata.fromCache) return
+    callback(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as PosProduct)
+      .filter((product) => product.active)
+      .sort((left, right) => QUICK_ADD_BARCODES.indexOf(left.barcode) - QUICK_ADD_BARCODES.indexOf(right.barcode)))
+  }, onError)
+}
+
 export { createStockProduct as createPosProductFromBarcode } from '@/features/stock/data/stockPostingRepository'
 
 export async function getPosCost(productId: string) {

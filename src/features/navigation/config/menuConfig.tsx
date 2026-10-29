@@ -11,7 +11,6 @@ import {
   ScanBarcode,
   Settings,
   TestTube2,
-  Users,
   Wallet,
 } from 'lucide-react'
 import type { AppUser } from '@/domain/financeTypes'
@@ -40,7 +39,7 @@ export function pageTitle(page: Page) {
     case 'vendor-preview':
       return 'Vendor Workspace'
     case 'directory':
-      return 'Party Directory'
+      return 'Vendor Workspace'
     case 'expense':
       return 'Register'
     case 'loans':
@@ -122,15 +121,6 @@ export function buildMenu(currentUser: AppUser): NavItem[] {
   })
 
   items.push(
-    {
-      icon: <Users className="size-4 shrink-0" />,
-      label: 'Party Directory',
-      page: 'directory',
-      gradient: '',
-      hoverClass: '',
-      activeClass: 'bg-secondary text-foreground',
-      action: 'page',
-    },
     {
       icon: <ReceiptText className="size-4 shrink-0" />,
       label: 'Register',

@@ -26,7 +26,12 @@ describe('trusted stock transactions on dedicated demo emulator', { skip: !proce
   const auth = { uid: 'billing' }, owner = { uid: 'owner' }
   const call = (handler, data, who = auth) => handler({ auth: who, data })
   const line = (quantity = 3, overrides = {}) => ({ productId: 'a', barcode: '00001', productName: 'A', category: 'Fixture', quantity, unitCostPaise: 6000, mrpPaise: 10000, sellingPricePaise: 9000, expectedRevision: 1, ...overrides })
-  const draft = (id = randomUUID(), overrides = {}) => ({ operationId: randomUUID(), id, expectedRevision: 0, vendorId: 'vendor', invoiceNumber: ' INV 1 ', invoiceDate: '2026-10-13', receiptDate: '2026-10-13', invoiceTotalPaise: 100000, lines: [line()], ...overrides })
+  const draft = (id = randomUUID(), overrides = {}) => {
+    const input = { operationId: randomUUID(), id, expectedRevision: 0, vendorId: 'vendor', invoiceNumber: ' INV 1 ', invoiceDate: '2026-10-13', receiptDate: '2026-10-13', invoiceTotalPaise: 100000, lines: [line()], ...overrides }
+    const value = input.lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
+    if (input.invoiceTotalPaise > value) input.shortage = { state: 'pending', originalInvoiceTotalPaise: input.invoiceTotalPaise }
+    return input
+  }
   async function receive(input = draft()) { const saved = await call(receiving.saveDraft, input); const intent = { operationId: randomUUID(), id: saved.id, expectedRevision: saved.revision }; return { saved, intent, result: await call(receiving.submit, intent) } }
   async function reversal(id) { const p = await call(receiving.previewReverse, { id }, owner); return { operationId: randomUUID(), id, expectedRevision: p.expectedRevision, confirmationHash: p.confirmationHash, reason: 'Synthetic approved reversal' } }
   beforeEach(async () => {
@@ -41,7 +46,7 @@ describe('trusted stock transactions on dedicated demo emulator', { skip: !proce
     await b.commit()
   })
   after(async () => deleteApp(app))
-  it('posts quantity23/value18000 but full payable100000, canonical vendor/actor and one source', async () => {
+  it('keeps gross payable100000 pending its shortage note while posting quantity23/value18000', async () => {
     const r = await receive(); assert.equal(r.result.totalPaise, 100000)
     assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 23)
     assert.equal((await db.doc('vendorAccountStatesV2/vendor').get()).get('outstandingPaise'), 100000)
@@ -80,9 +85,15 @@ describe('trusted stock transactions on dedicated demo emulator', { skip: !proce
     await assert.rejects(call(receiving.submit, r.intent, owner), /different actor or intent/)
     assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 22)
   })
-  it('links partial receipts once, blocks original until partial reversed, then credits paid amount', async () => {
-    const original = await receive(), partial = await receive(draft(undefined, { lines: [line(2, { expectedRevision: 2 })], invoiceNumber: 'inv   1' }))
-    assert.equal(partial.result.payableCreated, false); assert.equal((await db.collection('purchasesV2').get()).size, 1)
+  it('preserves reversal of historical partial receipts and credits paid amounts without rewriting them', async () => {
+    const original = await receive()
+    // Historical partial sources remain reversible; new partial receipts are now rejected.
+    const partial = { saved: { id: randomUUID() } }, originalRef = db.doc(`${base}/goodsReceipts/${original.saved.id}`)
+    const historical = (await originalRef.get()).data()
+    await db.doc(`${base}/goodsReceipts/${partial.saved.id}`).set({ ...historical, id: partial.saved.id, pricingMode: 'historical-partial', payableOwner: false, originatingGoodsReceiptId: original.saved.id, lines: [{ ...historical.lines[0], quantity: 2, lineTotalPaise: 12000 }], revision: 1 })
+    await originalRef.update({ linkedReceiptIds: [partial.saved.id], revision: 3 })
+    await db.doc(`${base}/products/a`).update({ currentQuantity: 25, revision: 3 })
+    assert.equal((await db.collection('purchasesV2').get()).size, 1)
     await assert.rejects(reversal(original.saved.id), /partial receipts first/)
     await call(receiving.reverse, await reversal(partial.saved.id), owner)
     assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 23)

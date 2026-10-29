@@ -15,6 +15,11 @@ function text(value, max) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail('Enter valid settings text.')
   return value.trim()
 }
+function gstin(value) {
+  const normalized = text(value, 15).toUpperCase()
+  if (!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalized)) fail('Enter a valid 15-character GSTIN.')
+  return normalized
+}
 const expenseKeys = ['rent', 'electricity', 'maintenance', 'salaries', 'royalty', 'caFee', 'miscellaneous']
 function notices(value) {
   if (!Array.isArray(value) || value.length > 25) fail('Use at most 25 staff notifications.')
@@ -31,6 +36,8 @@ function settingsProjection(source, timestamp) {
   // Explicit allowlist: never spread a private settings object into a staff document.
   const result = { schemaVersion: VERSION, sourceRevision: source.sharedSettingsRevision || 0, publishedAt: timestamp }
   for (const k of ['marginPercentage', 'monthlyOperationalExpense']) if (source[k] !== undefined) result[k] = number(source[k])
+  if (source.businessLegalName !== undefined) result.businessLegalName = text(source.businessLegalName, 200)
+  if (source.businessGstin !== undefined) result.businessGstin = gstin(source.businessGstin)
   if (source.operationalExpenseBreakdown) result.operationalExpenseBreakdown = Object.fromEntries(expenseKeys.map(k => [k, number(source.operationalExpenseBreakdown[k] ?? 0)]))
   if (source.scheduledNotifications !== undefined) result.scheduledNotifications = notices(source.scheduledNotifications)
   if (source.upgradeAnnouncement === null) result.upgradeAnnouncement = null
@@ -106,6 +113,12 @@ function createSharedViewHandlers(db, clock = () => Date.now()) {
         patch.monthlyOperationalExpense=number(Object.values(patch.operationalExpenseBreakdown).reduce((a,b)=>a+b,0))
         action='Operational settings updated'
       }else if(d.kind==='notifications'){patch.scheduledNotifications=notices(d.value);action='Scheduled blocking notifications updated'}
+      else if(d.kind==='business-identity'){
+        object(d.value,['businessLegalName','businessGstin'])
+        patch.businessLegalName=text(d.value.businessLegalName,200)
+        patch.businessGstin=gstin(d.value.businessGstin)
+        action='Business legal name and GSTIN updated'
+      }
       else if(d.kind==='announcement'){
         object(d.value,['title','message','durationHours'])
         if(![1,4,24].includes(d.value.durationHours))fail('Choose a valid announcement duration.')

@@ -71,6 +71,16 @@ export async function createVendorV2(input: CreateVendorV2Input, _database: Fire
     operationId: 'vendor-' + input.id
   });
 }
+export function updateVendorGstin(vendor: VendorV2, gstin: string) {
+  return postFinanceOperation<{ vendor: VendorV2; changed: boolean }>('vendor-gstin-update', {
+    vendorId: vendor.id,
+    expectedVendorRevision: vendor.revision,
+    gstin: gstin.trim().toUpperCase(),
+  });
+}
+export function correctVendorOpening(input: { vendorId: string; expectedVendorRevision: number; expectedAccountRevision: number; openingBalancePaise: number; reason: string; operationId: string }) {
+  return postFinanceOperation<{ ledgerEntryId: string }>('vendor-opening-correction', input)
+}
 export async function createVendorChequeV2(input: CreateVendorChequeV2Input & {
   invoiceId?: string;
 }, _database: Firestore = db) {

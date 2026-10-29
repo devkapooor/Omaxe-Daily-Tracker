@@ -4,6 +4,7 @@ export type VendorV2 = {
   id: string
   canonicalName: string
   ownerName?: string
+  gstin?: string
   aliases: string[]
   contact: string
   address: string
@@ -23,6 +24,7 @@ export type CreateVendorV2Input = {
   id: string
   canonicalName: string
   ownerName?: string
+  gstin?: string
   aliases?: string[]
   contact?: string
   address?: string
@@ -36,6 +38,10 @@ export type CreateVendorV2Input = {
 }
 
 export type PurchaseV2 = {
+  pricingMode?: 'received-stock'
+  grnId?: string
+  originalInvoiceTotalPaise?: number
+  shortage?: { state: 'pending' | 'received'; originalInvoiceTotalPaise: number; expectedCreditPaise?: number; creditNoteNumber?: string; creditNoteDate?: string } | null
   id: string
   vendorId: string
   invoiceNumber: string
@@ -142,10 +148,28 @@ export type InvoiceStateV2 = {
   updatedByUserId: string
 }
 
-export type VendorReturnOutcome = 'pending' | 'vendor-credit' | 'replacement' | 'rejected'
+export type VendorReturnOutcome = 'draft' | 'pending' | 'vendor-credit' | 'replacement' | 'rejected'
+
+export type VendorStockReturnLine = {
+  productId: string; productName: string; barcode: string; sourceReceiptId?: string; sourcePurchaseId?: string; sourceInvoiceNumber?: string
+  quantity: number; unitCostPaise: number; lineTotalPaise: number; expectedProductRevision: number; expectedReceiptRevision?: number; stockAtScan: number
+}
 
 export type VendorReturnV2 = {
   id: string
+  reference?: string
+  stockPostingVersion?: 1
+  stockStatus?: 'draft' | 'dispatched' | 'returned-back'
+  lines?: VendorStockReturnLine[]
+  vendorName?: string
+  vendorGstin?: string
+  dispatchedAt?: string
+  replacementStatus?: 'awaiting-receipt' | 'received'
+  replacementReceiptId?: string
+  restockStatus?: 'awaiting-physical-return' | 'received'
+  restockReceiptId?: string
+  creditNoteNumber?: string
+  creditNoteDate?: string
   vendorId: string
   sourcePurchaseId?: string
   date: string
@@ -184,10 +208,12 @@ export type CreateVendorReturnV2Input = {
 }
 
 export type ResolveVendorReturnV2Input = {
-  outcome: Exclude<VendorReturnOutcome, 'pending'>
+  outcome: Exclude<VendorReturnOutcome, 'pending' | 'draft'>
   creditedValuePaise?: AmountPaise
   outcomeReason: string
   replacementReceivedAt?: string
+  creditNoteNumber?: string
+  creditNoteDate?: string
   actor: { id: string; name: string }
   timestamp: string
 }
@@ -307,6 +333,8 @@ export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
   const canonicalName = input.canonicalName.trim()
   const actorUserId = input.actorUserId.trim()
   if (!id || !canonicalName || !actorUserId) throw new Error('Vendor ID, name, and actor are required.')
+  const gstin = input.gstin?.trim().toUpperCase() ?? ''
+  if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) throw new Error('Enter a valid 15-character GSTIN.')
   const openingBalancePaise = input.openingBalancePaise ?? 0
   assertIntegerPaise(openingBalancePaise, 'Opening balance')
   if (openingBalancePaise < 0) throw new Error('Opening balance must be zero or a positive payable amount.')
@@ -326,6 +354,7 @@ export function buildVendorV2(input: CreateVendorV2Input): VendorV2 {
     id,
     canonicalName,
     ownerName: input.ownerName?.trim() ?? '',
+    ...(gstin ? { gstin } : {}),
     aliases,
     contact: input.contact?.trim() ?? '',
     address: input.address?.trim() ?? '',
@@ -890,7 +919,15 @@ export function invoiceBalanceV2(purchase: PurchaseV2, allocations: InvoiceAlloc
     .reduce((total, allocation) => total + allocation.amountPaise, 0)
   assertIntegerPaise(postedAmountPaise, 'Posted invoice allocation')
   assertIntegerPaise(reservedAmountPaise, 'Reserved invoice allocation')
-  const openAmountPaise = purchase.invoiceTotalPaise - postedAmountPaise + reversedAmountPaise
+  const rawOpen = purchase.invoiceTotalPaise - postedAmountPaise + reversedAmountPaise
+  // An invoice paid before its confirmed shortage credit can leave vendor credit.
+  // Original allocations remain immutable; only that evidenced excess is allowed.
+  const creditExcess = purchase.pricingMode === 'received-stock' && purchase.shortage?.state === 'received'
+    && purchase.shortage.originalInvoiceTotalPaise === purchase.originalInvoiceTotalPaise
+    && purchase.shortage.expectedCreditPaise === (purchase.originalInvoiceTotalPaise ?? 0) - purchase.invoiceTotalPaise
+    && (purchase.originalInvoiceTotalPaise ?? 0) >= purchase.invoiceTotalPaise
+    && postedAmountPaise - reversedAmountPaise <= (purchase.originalInvoiceTotalPaise ?? 0)
+  const openAmountPaise = creditExcess ? Math.max(0, rawOpen) : rawOpen
   const availableToAllocatePaise = openAmountPaise - reservedAmountPaise
   if (openAmountPaise < 0 || availableToAllocatePaise < 0) {
     throw new Error('Invoice allocations exceed the immutable invoice total.')

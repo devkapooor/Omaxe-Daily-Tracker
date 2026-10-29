@@ -1,4 +1,5 @@
 import { ordinaryExpenseAmount, recordedNetSales } from '@/domain/refundAccounting'
+import { expensePartyVisibility, partyNameKey } from '@/domain/partyDirectory'
 import { IST_TIMEZONE, cashoutCategories, daysBetweenInclusive, shiftDate, today, uniqNames } from '@/app/uiHelpers'
 import type { CashTransfer, DailyCashoutEntry, LoanEntry, MonthlyReportMeta, UserAccount, VendorRecord } from '@/domain/appTypes'
 import type { Cashout, FinanceData, Payment } from '@/domain/financeTypes'
@@ -420,23 +421,31 @@ export function deriveDirectoryOptions(args: {
     'Stock Purchase',
     'Loan Repayment',
   ].map((category) => category.trim().toLowerCase()))
-  const derivedPartyNames = [
-    ...financeData.cashouts
-      .filter((cashout) => !expenseCategoryNames.has(cashout.paidTo.trim().toLowerCase()))
-      .map((cashout) => cashout.paidTo),
+  const realPartyNames = uniqNames([
+    ...nameDirectory.people,
     ...financeData.payments.map((payment) => payment.partyName),
     ...loans.map((loan) => loan.personName),
-  ]
+    ...users.map(user => user.name),
+  ])
+  const protectedNames = new Set(realPartyNames.map(partyNameKey))
+  const references = uniqNames(financeData.cashouts.filter(cashout =>
+    !expenseCategoryNames.has(partyNameKey(cashout.paidTo)) &&
+    expensePartyVisibility(cashout.paidTo, protectedNames,
+      cashout.sourceKind === 'pos-return' && /^Customer refund TNS-/i.test(cashout.paidTo)) === 'reference',
+  ).map(cashout => cashout.paidTo))
+  const derivedPartyNames = [...realPartyNames, ...references]
   const derivedVendors = financeData.purchases.map((purchase) => purchase.supplierName)
   const userNames = users.map((user) => user.name)
   const vendorNames = vendors.map((vendor) => vendor.name)
   const vendorNameKeys = new Set(vendorNames.map((vendor) => vendor.trim().toLowerCase()))
   const party = uniqNames([...nameDirectory.people, ...derivedPartyNames, ...userNames]).filter(
-    (name) => !vendorNameKeys.has(name.trim().toLowerCase()) && !expenseCategoryNames.has(name.trim().toLowerCase()),
+    (name) => protectedNames.has(partyNameKey(name)) || (!vendorNameKeys.has(partyNameKey(name)) && !expenseCategoryNames.has(partyNameKey(name))),
   )
 
   return {
     party,
+    realParties: realPartyNames,
+    references: references.filter(name => !vendorNameKeys.has(partyNameKey(name))),
     vendors: uniqNames([...vendorNames, ...nameDirectory.vendors, ...derivedVendors]),
   }
 }
