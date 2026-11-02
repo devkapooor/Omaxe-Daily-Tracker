@@ -1,235 +1,78 @@
 # Architecture
 
-## Hard Rule
+Verified against the local working tree based on `ccc0eb4`, 31 October 2026. This describes source responsibilities, not deployed parity. Dated audits and release checkpoints remain historical evidence. Update this document when navigation, auth, storage, posting authority, summaries or PWA behavior changes.
 
-If navigation, auth flow, storage behavior, source structure, installability, or derived summary logic changes, update this file with the matching docs in the same pass.
+## Runtime and entry points
 
-## Current Product Shape
+- React 19/TypeScript/Vite; `index.html` -> `src/main.tsx` -> `src/app/App.tsx` -> `AppWorkspace.tsx`.
+- Separate owner Telegram settings entry: `telegram-settings.html` -> `src/features/settings/TelegramAlertsEntry.tsx`. Both entries are included by `vite.config.ts`; `vite.telegram.config.ts` is a specialized historical build path, retained for its documented tooling consumers.
+- Firebase web SDK configuration: `src/shared/lib/firebase.ts`. Auth, profile verification and role checks precede workspace access. Local URLs are not proof of isolation.
+- Node 22 backend: `functions/index.js`, `functions/package.json`; `firebase.json` uses `nodejs22`. `telegramFunctions.js` is the isolated Telegram codebase through `firebase.telegram.json`/its preparation tool. No runtime upgrade or cloud change is part of maintenance.
+- `firestore.rules` and `firestore.indexes.json` govern client access/query shapes. Callable handlers must independently validate identity, authority, revision, intent and transaction invariants; Admin SDK bypasses client Rules.
+- `public/manifest.webmanifest`, `public/sw.js`, `public/offline.html` provide PWA packaging/offline shell. Business operations are online. Automated drill contexts block service workers and do not accept installed-app behavior.
 
-AlphaHub is a Firebase-first, single-store operations app with:
+## Current navigation and presentation
 
-- email/password login
-- owner-created staff accounts
-- live Firestore subscriptions
-- role-based page access
-- compact desktop sidebar plus mobile drawer navigation
-- Dashboard, Action Centre, POS, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Logs and Settings
-- POS Billing, Dashboard, Bills, GRN, and Stock Audit workflows
-- remembered-account sign-in with password entry and password-reset flow
-- installable PWA packaging for Chrome/mobile standalone launch
-- online-only offline handling for cached or installed opens
+Owner: Dashboard, Action Centre, POS, Stock, Vendor Workspace, Register, Loans, Cashout, Cash Movement, Logs, Settings. Logout is a separate menu action. Manager/billing: POS, Stock, Vendor Workspace, Register, Cashout, Cash Movement, Settings. Cashout visibility/access also depends on the IST window. These lists describe page families, not a fixed count of visible buttons.
 
-## Current Source Hierarchy
+| Page | Tabs / primary controls and dialogs |
+|---|---|
+| Dashboard | Month/date range, sales mix, trend, projections and source summaries |
+| Action Centre | Pending / History; price, payout, cashout, handover and financial correction details; acknowledge/approve/reject as permitted |
+| POS | Billing / Dashboard / Bills; product search/scanning, cart, hold/resume, checkout, bill receipt, immediate return and recovery |
+| Stock | Current Stock / Receive Stock / GRN History / Stock Return / Stock Audit / Stock History; price editor, receipt/draft/source, count/reversal, debit note |
+| Vendor Workspace | Vendors & Parties / Invoices / Payment Corrections / Balances; combined add/edit directory, GST, opening correction, invoice/GRN details, payment navigation |
+| Register | New Payment / Payment History; owner Cheques; expense/vendor payment, cheque issue/presentation, confirmation and operation recovery |
+| Loans | Owner workflow; navigation/read only during this maintenance, no mutation acceptance |
+| Cashout | Denominations, expected/actual reconciliation, source details, correction, count and typed confirmation |
+| Cash Movement | Real staff account/bank destination, amount, confirmation and recoverable posting |
+| Logs | Sales / Expenses / Purchases / Payments / Daily Cashouts / Cash Transfers / Settings Audit / Stock Audits; range/name filters, table controls, details/receipt/corrections |
+| Settings | Owner Staff / Operations / POS / Staff Notifications / Business Identity / Update Password; staff-permitted views and own password |
 
-```text
-public/
-  manifest.webmanifest
-  offline.html
-  sw.js
-  icon.svg
-  icon-maskable.svg
+`pos-test`, `vendor-preview`, `expense` and `directory` are legacy page IDs. They are not instructions to create demo records or activate retired previews. `directory` routes to the combined Vendor Workspace; there is no separate Party Directory menu. Audit history is in Logs. Display references such as GRN/AUDIT coexist with immutable internal document/actor IDs. Technical identity remains available in collapsed details where needed; hiding a UID never removes audit data.
 
-src/
-  app/
-    App.tsx
-    AppWorkspace.tsx
-    uiHelpers.ts
+## Source ownership
 
-  domain/
-    appTypes.ts
-    financeTypes.ts
-    workspaceMetrics.ts
+| Location | Responsibility |
+|---|---|
+| `src/app/` | Auth/workspace composition, role/page resolution, notices, display helpers |
+| `src/config/`, `src/domain/` | Configuration, domain types and pure policies/summary calculations |
+| `src/features/auth/`, `navigation/` | Sign-in/remembered accounts/offline gates; desktop/mobile navigation |
+| `src/features/pos/` | Billing, checkout/refund clients, recovery intents, receipts, handovers, POS dashboard; historical GRN/domain compatibility |
+| `src/features/stock/` | Current stock queries, receive/drafts, audits, returns, history and stock operation recovery |
+| `src/features/vendor-workspace/`, `directory/` | Vendor ledger UI/repositories, combined directory, GST and opening correction; retained cutover/preview modules are not reachable from the current entry graph |
+| `src/features/register/`, `cashout/`, `cash-movement/` | Finance UI, cheque operations, counts, correction and durable operation recovery |
+| `src/features/dashboard/`, `logs/`, `action-center/` | Read models, bounded source history, role-scoped reviews and source links |
+| `src/features/settings/` | Staff/settings/business identity and separate Telegram controls |
+| `src/features/loans/`, `payroll/` | Existing loan workflow and retained payroll compatibility/test modules; no reactivation/removal under maintenance |
+| `src/store/` | App state, subscriptions, auth/settings/legacy compatibility, vendor client API and shared-view publication |
+| `src/shared/lib/`, `ui/` | Firebase/time/theme/format infrastructure and reusable controls; shared name normalization lives in `nameUtils.ts`, re-exported by old public helper modules |
+| `functions/` | Trusted financial and stock posting, intent idempotency, server time and safe read-model publication |
+| `scripts/` | Explicit developer/operational tools; policy generator writes tracked copies, publisher can write cloud state and is not a drill command |
 
-  features/
-    action-center/
-    auth/
-    cash-movement/
-    cashout/
-    dashboard/
-    directory/
-    logs/
-    navigation/
-    pos/
-    register/
-    settings/
-    vendor-workspace/
+`DirectoryPage.tsx` and `ExpenseForm.tsx` were retired during maintenance after entry/import/config/script/test review. Replacements are `VendorDirectoryV2` and `RegisterPaymentForm`; DIR-01 and F45 retain current workflow coverage. Other unreachable modules remain retained for tests, compatibility or unresolved cutover history. See the exact [cleanup and retention register](../operations/MAINTENANCE_FOLDER_REGISTER_2026-10-31.md).
 
-  shared/
-    lib/
-      firebase.ts
-      utils.ts
-    ui/
-      ...
+## Posting authority and transaction boundaries
 
-  store/
-    actions/
-      createAuthActions.ts
-      createFinanceActions.ts
-      createSettingsActions.ts
-    appStore.ts
-    deriveWorkspaceMetrics.ts
-    legacyLocalData.ts
-    seedData.ts
-    storeActions.ts
-    storeShared.ts
-    storeSubscriptions.ts
-    vendorLedgerV2Repository.ts
+1. Auth state resolves `users/{uid}` and workspace permissions. Disabled/missing profiles fail closed; active-session changes must be tested separately from sign-in.
+2. Feature clients persist an operation intent before posting, with stable operation identity for retry/recovery. Pending or ambiguous outcomes must be recovered before a second financial intent.
+3. Checkout/refunds, stock receipts/audits/prices/returns and current finance operations call their trusted handlers. `postFinanceOperation` dispatches Register, cashout, correction, vendor opening/GST and return operations; named stock/checkout/refund exports remain separate.
+4. Handlers derive trusted totals, actor and relevant revisions, validate policy, then transact related source/state/ledger/movement records together. An operation replay must return its original result without duplicating effects. Client quotes are not financial authority.
+5. Firestore subscriptions refresh screens and read models. Owner `appStore` derives workspace metrics from loaded sources, then calls `publishWorkspaceMetrics`; `functions/sharedViews.js` validates publication and produces staff-safe projections. Staff never read the private owner settings/metrics mirror. This is not a fully server-derived metrics architecture.
+6. Legacy V1 records, old voids, slot identity and planner fields remain read-compatible. Their presence does not authorize new historical writes, loan mutation or migrations.
 
-  styles/
-    global.css
-```
+Pure financial policies are intentionally not merged by superficial similarity. `scripts/syncFinancePolicies.cjs` generates `functions/vendorLedgerPolicy.js` and `cashoutPolicy.js` from their existing domain contracts; review parity/diffs and test both sides after generation. Do not run the generator casually in a read-only review.
 
-## Runtime Responsibilities
+## Data and listener ownership
 
-### App Shell
+Production Firestore is the active shared database. **Production `posSandboxes/test` contains real business data.** Local SQLite, stock CSV and JSON backups are retained sources/evidence, not the running app's canonical database. The same collection spelling in `demo-alphahub-drill` contains synthetic fixtures only after endpoint proof.
 
-`src/app/App.tsx`
+Vendor/purchase/settlement/allocation/account state and append-only audit sources are separate records; legacy history must not be rewritten to simplify UI. Cash ownership uses real user IDs. Business identity is Settings master data and vendor GST belongs to vendor profiles; receipt printing consumes saved values rather than separate constants.
 
-- resolves authentication, offline, loading, and workspace-access states
-- holds the persisted active page
-- wires the store into the workspace shell
+Workspace/vendor subscriptions are shared where already implemented. Current Stock starts no catalogue query for blank barcode/all-status, uses bounded query pages, and opens product/cost and movement readers lazily. A filter/sort UI does not imply all-database sorting; verify each query's scope. The drill observes actual Listen add/remove targets but does not estimate production billable reads. Large modules remain intact where transaction boundaries or compatibility are not yet proven separable.
 
-`src/app/AppWorkspace.tsx`
+## Operational truth and verification
 
-- renders the authenticated workspace
-- maps page state to feature screens
-- owns top-level toasts and legacy-import messaging
-
-### Shared App Helpers
-
-`src/app/uiHelpers.ts`
-
-- IST date and display formatting helpers
-- page-access resolution for non-owner roles
-- user-name resolution and cash-display helpers
-- shared payment mode and category constants
-
-### Feature Ownership
-
-- `features/navigation`: desktop sidebar, mobile drawer, menu config, page titles
-- `features/pos`: barcode billing, stock deduction and bill history; GRN stock receipts/vendor payables; physical stock audits; drawer reconciliation and POS reporting. POS persistence is under the existing `posSandboxes/test` Firestore path, whose name does not mean its business records are disposable.
-- `features/dashboard`: month-scoped performance, sales mix, projections, trend, recording coverage and current financial-position cards
-- `features/action-center`: owner review adapters for cashout corrections, settlement corrections and vendor returns
-- `features/directory`: Party Directory and the reusable V2 vendor list/details modal
-- `features/register`: expense/owner-loan workspace plus reusable V2 purchase/payment forms and cheque helpers
-- `features/vendor-workspace`: production vendor workspace, guarded subscription, activation planner and local preview
-- `features/cashout`: daily cashout workflow and drawer audit
-- `features/cash-movement`: user-to-user and user-to-bank movement logging
-- `features/logs`: owner-only audit and record history
-- `features/settings`: user management, password updates, projection settings
-- `features/auth`: login, loading, and offline-only auth/system screens
-
-### Store Layer
-
-`src/store/appStore.ts`
-
-- owns the local app state
-- connects auth lifecycle, access verification, and subscriptions
-- reconciles Firestore-backed derived workspace metrics into `appMetadata/workspaceMetrics`
-- exposes stable reads plus store actions
-
-`src/store/deriveWorkspaceMetrics.ts`
-
-- derives shared dashboard, planner, pending-cash, and monthly-report read models
-- keeps business summaries deterministic before they are written back to Firestore metadata
-
-`src/store/storeActions.ts` and `src/store/actions/*`
-
-- compose auth, finance, and settings write paths
-- keep Firestore write concerns out of the feature UI components
-
-`src/store/storeSubscriptions.ts`
-
-- hydrates Firestore collections and metadata into local state
-- keeps users, settings, finance records, legacy planned-payment records, logs, and `workspaceMetrics` live
-
-`src/store/vendorLedgerV2Repository.ts` owns guarded V2 transactions. The workspace-level `useVendorLedgerV2` subscription is shared with Action Centre and Vendor Workspace rather than adding one listener per page.
-
-## Current Navigation Model
-
-Owner sees:
-
-- `Dashboard`
-- `Action Centre`
-- `Vendor Workspace`
-- `Directory`
-- `Register`
-- `Cashout`
-- `Cash Movement`
-- `Logs`
-- `Settings`
-
-Manager sees:
-
-- `Vendor Workspace`
-- `Directory`
-- `Register`
-- `Cashout`
-- `Cash Movement`
-- `Settings`
-
-Billing sees:
-
-- `Vendor Workspace`
-- `Directory`
-- `Register`
-- `Cashout`
-- `Cash Movement`
-- `Settings`
-
-Internal page ids still use:
-
-- `dashboard`
-- `actions` for Action Centre
-- `vendor-preview` for Vendor Workspace (retained for persisted navigation compatibility)
-- `directory`
-- `expense` for the `Register` workspace
-- `cashout`
-- `movement`
-- `logs`
-- `settings`
-
-Restricted page access resolves back to `expense`.
-
-The Directory label is Party Directory. Register mounts expenses and owner-only Loan Taken/Loan Repayment. The source-folder rename does not change page IDs, roles or stored navigation.
-
-## Data Flow
-
-```text
-Firebase auth state
-  -> access verification against users/{uid}
-  -> Firestore subscriptions hydrate collections
-  -> app derives shared workspace metrics and writes appMetadata/workspaceMetrics when source records change
-  -> App resolves current user and allowed page
-  -> AppWorkspace renders feature screens from Firestore collections + workspaceMetrics snapshots
-  -> feature forms submit drafts through store actions
-  -> Firestore writes complete
-  -> subscriptions refresh source records and shared read models
-```
-
-Offline or installed launch behavior:
-
-```text
-App opened without internet
-  -> cached shell or offline fallback may load
-  -> auth/workspace verification cannot complete
-  -> app shows explicit online-required state
-  -> no local shadow data or queued writes are attempted
-```
-
-## Current Design Notes
-
-- The app is intentionally single-store and does not implement multi-store routing.
-- Monthly Dashboard performance uses the shared pure deriveMonthlyPerformance helper over subscribed source records; settings, liabilities and cash summaries still use workspaceMetrics. Retained monthly-report/table fields are compatibility data, not active dashboard panels.
-- The Payment Planner route and its screen actions have been removed. Historical `plannedPayments`, `currentBankBalance`, and `workspaceMetrics.planner` data remain in the shared model for compatibility and audit; no active screen writes them.
-- `Cash Movement` remains separate from `Cashout` and separate from the removed shift-handover experiment.
-- Active cash ownership now uses Firebase user IDs end to end for cashouts, transfers, balance cards, and transfer logs.
-- Legacy slot fields such as `recordedByHolder`, `from`, and `toPerson` are compatibility-only fields for older documents and are not written by new runtime flows.
-- The live workspace migration on `2026-06-05` mapped all resolvable legacy cashouts and cash transfers onto user IDs, so unresolved legacy cash should no longer appear in normal operations.
-- The shared metrics snapshot is generated by the app client; no Cloud Function currently derives these summaries. Firestore is the shared read source across devices.
-- `functions/index.js` exports the authenticated `getServerTime` callable used to synchronize the client clock for cashout controls. This is separate from the client-generated shared metrics snapshot above.
-- Stable releases are now tracked with Git tags and operational docs under `docs/operations/`.
-- V2 domain helpers and guarded repository transactions are connected to Vendor Workspace. Configuration is read from Firestore; this documentation makes no claim about a current production flag value.
-- The disabled owner view still needs the cutover planner and local fixture preview. These are reachable components, not obsolete code.
-- VendorDirectoryV2, PurchaseFormV2, OpenInvoicesV2 and VendorSettlementFormV2 are reused by production and preview workflows.
-- V2 source records, append-only audit events and transaction-updated projections are distinct from preserved V1 history. See [Vendor Ledger](../domain/VENDOR_LEDGER.md) for current contracts and deferred requirements.
+- [Operations index](../operations/README.md), [test/coverage map](../operations/TEST_COVERAGE.md), [drill runbook](../../drill.md), [device/timed gaps](../operations/DEVICE_ACCEPTANCE.md).
+- Local build/unit success does not establish workflow acceptance or deployed parity. Current maintenance performs no deployment, push, cloud configuration change or live-data mutation.
+- Secrets stay ignored/in place. Public Git history may still contain previously tracked records despite current index exclusions. Retention, recovery verification and any history handling require their own decisions.

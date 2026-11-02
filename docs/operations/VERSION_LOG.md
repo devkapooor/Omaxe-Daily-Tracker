@@ -1,5 +1,44 @@
 # Version Log
 
+## Historical Cashout safety and drawer correction - 1 November 2026 IST
+
+- Deployed explicit past-date cash timing and owner-audited duplicate deduction correction to two Node 22 Functions and Hosting. Frozen source and live asset hashes matched; other Functions, Rules and indexes were unchanged.
+- In a separately approved, scoped production transaction, restored the still-effective ₹14,300 duplicate debit from the 17 October Cashout. Balance at posting: ₹8,659 before, ₹22,959 after. Original sales, Cash Movement control, drawer closure and original operation hashes matched after correction; a retry did not apply it twice. No historical expense reconciliation was applied.
+- Isolated backend, browser and administrative-adapter checks passed. Physical devices/PWA/hardware remain outside this release evidence. No Git commit or push. [Incident release and recovery](HISTORICAL_CASHOUT_SAFETY_2026-11-01.md).
+
+## Historical expense reconciliation - 1 November 2026 IST
+
+- Deployed owner-only past-date expense confirmation and audited corrections to supported completed Cashouts. Original expenses and physical counts remain intact; reconciliation itself has zero live drawer impact. Ambiguous legacy entries are blocked for individual review.
+- Validation: 181 unit checks passed (one retained exclusion), 78 related backend checks and four browser/isolation checks passed. Screens covered desktop light/dark and a phone viewport, precise payout display, permissions, duplicate recovery and lost responses; physical devices and PWA remain unaccepted.
+- Both changed Node 22 Functions match all 26 staged runtime files; all 11 live Hosting files match the tested bundle. Configuration, Rules and 35 other Functions are unchanged. No production financial adjustment, Git commit or push was performed. [Operator steps, release evidence and recovery](HISTORICAL_EXPENSE_RECONCILIATION_2026-11-01.md).
+
+## Vendor invoice UI Hosting update - 31 October 2026
+
+- Deployed the completed-reset-card removal and compact invoice table/filter toolbar. Current period is the default; Before reset retains historical invoices, saved balances and read-only details with payment disabled.
+- Desktop light/dark and phone browser checks, 10 filter/sort tests, lint and build passed. The phone filter-clipping issue found during visual review was corrected and covered by viewport assertions.
+- All 11 live files match the tested bundle. The 37 Functions, Rules and financial records were unchanged; no Git commit or push was performed. [Details and evidence](VENDOR_INVOICE_UI_2026-10-31.md).
+
+## Counter-date backend follow-up - 31 October 2026
+
+- Deployed and verified the overnight-counter correction in five Node 22 Functions. Operations now use the latest accepted count date while retaining original opening provenance; existing reservations, membership, funds and retry guards remain enforced.
+- Validation: 64 related backend tests, 17 domain tests and five focused browser checks passed. Live source hashes match the tested package; other Functions, Hosting and Rules were unchanged.
+- No cash reset, saved-date rewrite, financial mutation, Git commit or push was performed. [Details and evidence](COUNTER_DATE_FIX_2026-10-31.md).
+
+## Production deployment ? 31 October 2026
+
+- Deployed the approved current application/Rules/default Functions snapshot to `alphahub-f137b`; 30 application Functions are ACTIVE on Node 22 and all 11 Hosting files match the release hashes. Telegram's seven Functions were unchanged.
+- Includes vendor reset/opening controls, the single V2 vendor master and reviewed legacy migration, Announcements retirement, Business Identity FSSAI/bank fields, and the pending maintenance/financial/UI work.
+- Release checks: 154 browser scenarios passed, 3 explicit manual/timed exclusions, no failures; source, backend, Rules/support and isolated Telegram phases passed. Live verification was read-only or rejected unauthenticated requests.
+- No production reset/migration, Git commit, tag or push was performed. Frozen working-tree snapshot and previous source/Rules/Hosting recovery evidence are retained locally.
+- Exact result and limitations: [deployment record](DEPLOYMENT_2026-10-31.md).
+
+## Local maintenance checkpoint ? 31 October 2026 (subsequently deployed)
+
+- Working tree based on `ccc0eb4`; no new commit/tag/push/deploy. Preserve the prior uncommitted changes and staged data exclusions.
+- Shared name-helper consolidation, two proven retired UI removals, three verified empty-directory removals; business files, backups and historical evidence retained.
+- Responsive receipt-focus restoration, explicit select accessibility props and collapsed recorder technical ID. Financial posting algorithms are unchanged by this final batch.
+- One current full static/Functions/Rules/browser command plus focused concurrency mode, deterministic last-unit race and navigation observations. Current results and limits: [operations index](README.md); historical repair results remain immutable.
+
 ## v1.5.2 - 2026-10-12
 
 - Status: committed, tagged, pushed and deployed after the user explicitly authorized deploy, commit and push following the local preview. Feature checkpoint: `f469cb0`; release commit: `eee3381`; tag: `v1.5.2`.

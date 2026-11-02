@@ -82,9 +82,9 @@ export async function deleteStockReceiptDraft(id: string, actor: AppUser) {
   const receipt = await source(id)
   return stockCall('deleteStockReceiptDraft', { id, expectedRevision: receipt.revision, operationId: crypto.randomUUID() }, actor)
 }
-export async function submitStockReceipt(id: string, actor: AppUser, expectedRevision?: number) {
+export async function submitStockReceipt(id: string, actor: AppUser, expectedRevision?: number, openingBalancePaise?: number) {
   const revision = expectedRevision ?? (await source(id)).revision
-  return stockCall<{ purchaseId: string; totalPaise: number; payableCreated: boolean }>('submitStockReceipt', { id, expectedRevision: revision, operationId: crypto.randomUUID() }, actor)
+  return stockCall<{ purchaseId: string; totalPaise: number; payableCreated: boolean }>('submitStockReceipt', { id, expectedRevision: revision, ...(openingBalancePaise !== undefined ? { openingBalancePaise } : {}), operationId: crypto.randomUUID() }, actor)
 }
 export type ReceiptReversalPreview = { id: string; expectedRevision: number; confirmationHash: string; payableReversed: boolean; openPayableRemovedPaise: number; vendorCreditAddedPaise: number; lines: Array<{ productId: string; barcode: string; quantityBefore: number; quantityAfter: number; pricesBefore: { mrpPaise: number | null; sellingPricePaise: number }; pricesAfter: { mrpPaise: number | null; sellingPricePaise: number }; priceRestoration: string; costInvalidated: boolean }> }
 export async function previewStockReceiptReversal(id: string, actor: AppUser) {

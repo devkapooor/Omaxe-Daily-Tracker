@@ -12,10 +12,10 @@ test('ENV-01 real emulator isolation and outbound denial',async({drill:h})=>{
 test('AUTH-01 owner and staff navigation with real profile gates',async({drill:h})=>{
  for(const role of ['owner','manager','billingA','billingB']){
   const {page}=await h.session(role)
-  for(const label of ['POS','Stock','Vendor Workspace','Party Directory','Register','Cash Movement','Settings'])await expect(page.getByRole('button',{name:new RegExp('^'+label+'(?:\\s|$)')}).first()).toBeVisible()
+  for(const label of ['POS','Stock','Vendor Workspace','Register','Cash Movement','Settings'])await expect(page.getByRole('button',{name:new RegExp('^'+label+'(?:\\s|$)')}).first()).toBeVisible()
   expect(await page.getByRole('button',{name:/^Cashout(?:\s|$)/}).count()).toBe(1)
   for(const label of ['Loans','Action Centre','Logs'])expect(await page.getByRole('button',{name:new RegExp('^'+label+'(?:\\s|$)')}).count()).toBe(role==='owner'?1:0)
-  await h.nav(page,'Stock');await expect(page.getByRole('tablist',{name:'Stock sections'}).getByRole('tab')).toHaveCount(5)
+  await h.nav(page,'Stock');await expect(page.getByRole('tablist',{name:'Stock sections'}).getByRole('tab')).toHaveCount(6)
   await h.nav(page,'POS');await expect(page.getByRole('tablist',{name:'POS sections'}).getByRole('tab')).toHaveCount(3)
  }
  const states=await h.records(admin.base+'/cashierStates');expect(states.filter(s=>s.joinedCounterId==='fixture-opening').length).toBeGreaterThanOrEqual(3)

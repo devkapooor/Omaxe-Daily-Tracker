@@ -1,5 +1,9 @@
 # Roadmap
 
+## Local maintenance checkpoint ? 31 October 2026
+
+Current consolidated work: [completion plan](MAINTENANCE_COMPLETION_PLAN_2026-10-31.md), [operations index](README.md). Local cleanup, focused UI fixes, command consolidation and isolated regression are recorded in the completion report. This is not a release, deployment or production-verification claim. Dependency upgrades, actual devices/PWA/hardware acceptance, timed cross-midnight acceptance and public-history containment remain separate open items. The dated queue below preserves older release decisions; current navigation/authority is documented in [Architecture](../architecture/ARCHITECTURE.md).
+
 This is the single current plan and task queue for approved AlphaHub work, consolidated from PLAN, PLANNED_UPGRADES, and TASK_QUEUE and reconciled to the 2026-10-11 release candidate. Preserve upgrade IDs and acceptance criteria when updating status. Historical deployment claims below come from the existing release record; documentation updates do not reverify or change production data.
 
 ## Approved Stock workspace checkpoint

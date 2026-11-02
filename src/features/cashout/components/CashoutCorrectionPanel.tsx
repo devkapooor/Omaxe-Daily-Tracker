@@ -10,6 +10,7 @@ import { SectionHeading } from '@/shared/ui/section-heading'
 import { CashoutCorrectionForm } from './CashoutCorrectionForm'
 import { db } from '@/shared/lib/firebase'
 import { StatusPanel } from '@/shared/ui/status-panel'
+import { postFinanceOperation } from '@/features/register/data/financeRepository'
 
 type CashoutCorrectionPanelProps = {
   currentUser: AppUser
@@ -17,10 +18,13 @@ type CashoutCorrectionPanelProps = {
   requests: CashoutCorrectionRequest[]
   onSubmit: (entry: DailyCashoutEntry, values: CashoutCorrectionValues, reason: string) => Promise<void>
   onWithdraw: (requestId: string) => Promise<void>
+  showToast: (message: string) => void
 }
 
-export function CashoutCorrectionPanel({ currentUser, dailyCashouts, requests, onSubmit, onWithdraw }: CashoutCorrectionPanelProps) {
+export function CashoutCorrectionPanel({ currentUser, dailyCashouts, requests, onSubmit, onWithdraw, showToast }: CashoutCorrectionPanelProps) {
   const [selectedEntry, setSelectedEntry] = useState<DailyCashoutEntry | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
+  const [applyError, setApplyError] = useState<string | null>(null)
   const [ownHistory, setOwnHistory] = useState<CashoutCorrectionRequest[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [historyReady, setHistoryReady] = useState(false)
@@ -35,20 +39,40 @@ export function CashoutCorrectionPanel({ currentUser, dailyCashouts, requests, o
   const eligibleEntries = useMemo(() => {
     const earliestDate = shiftDate(today(), -6)
     return dailyCashouts.filter(
-      (entry) => entry.recordedByUserId === currentUser.id && entry.date >= earliestDate && entry.date <= today(),
+      (entry) => entry.date >= earliestDate && entry.date <= today() && (currentUser.role === 'owner' || entry.recordedByUserId === currentUser.id),
     )
-  }, [currentUser.id, dailyCashouts])
+  }, [currentUser.id, currentUser.role, dailyCashouts])
   const availableRequests = currentUser.role === 'owner' ? [...new Map([...ownHistory, ...requests].map((request) => [request.id, request])).values()] : requests
   const recentRequests = availableRequests.filter((request) => request.requestedByUserId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10)
+
+  async function applyToVirtualDrawer(entry: DailyCashoutEntry) {
+    const amount = money(entry.drawerTotal ?? entry.remainingBalance)
+    if (!window.confirm(`Apply ${amount} from the ${formatDisplayDate(entry.date)} cashout to the current virtual drawer? This will not change bills or sales totals.`)) return
+    setApplyingId(entry.id)
+    setApplyError(null)
+    try {
+      const result = await postFinanceOperation<{ afterPaise: number }>('cashout-drawer-debit', {
+        cashoutId: entry.id,
+        expectedRevision: entry.revision ?? 1,
+        reason: 'Owner confirmed the historical Cashout cash was physically removed; apply it to the current virtual drawer.',
+      })
+      showToast(`${amount} removed from the virtual drawer. New balance: ${money(result.afterPaise / 100)}.`)
+    } catch (cause) {
+      setApplyError(cause instanceof Error ? cause.message : 'Unable to apply this cashout to the virtual drawer.')
+    } finally {
+      setApplyingId(null)
+    }
+  }
 
   return (
     <Card className="flex h-full min-h-0 flex-col">
       <CardHeader>
-        <SectionHeading eyebrow="Controlled Corrections" title="My Recent Cashouts" />
+        <SectionHeading eyebrow="Controlled Corrections" title={currentUser.role === 'owner' ? 'Recent Cashouts' : 'My Recent Cashouts'} />
         <p className="text-xs font-semibold text-muted-foreground">7-day window · Owner approval required</p>
       </CardHeader>
       <CardContent className="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-2">
         {historyError ? <StatusPanel variant="destructive" role="alert" className="lg:col-span-2">{historyError}</StatusPanel> : null}
+        {applyError ? <StatusPanel variant="destructive" role="alert" className="lg:col-span-2">{applyError}</StatusPanel> : null}
         {currentUser.role === 'owner' && !historyReady ? <p role="status" className="text-sm text-muted-foreground lg:col-span-2">Loading Correction History…</p> : null}
         <div className="space-y-2">
           <span className="block text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">Eligible Cashouts</span>
@@ -62,7 +86,10 @@ export function CashoutCorrectionPanel({ currentUser, dailyCashouts, requests, o
                     <p className="text-sm font-bold">{formatDisplayDate(entry.date)}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Drawer {money(entry.drawerTotal ?? entry.remainingBalance)} | Revision {entry.revision ?? 1}</p>
                   </div>
-                  {pendingRequest ? <Badge variant="warning">Pending</Badge> : <Button size="sm" onClick={() => setSelectedEntry(entry)}>Request Correction</Button>}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {currentUser.role === 'owner' && entry.historicalCountOnlyVersion === 1 && !entry.drawerDebitOperationId && !Number.isSafeInteger(entry.drawerDebitPaise) ? <Button size="sm" variant="outline" disabled={applyingId !== null} onClick={() => void applyToVirtualDrawer(entry)}>{applyingId === entry.id ? 'Applying…' : 'Apply to drawer'}</Button> : null}
+                    {pendingRequest ? <Badge variant="warning">Pending</Badge> : <Button size="sm" onClick={() => setSelectedEntry(entry)}>Request Correction</Button>}
+                  </div>
                 </div>
               </div>
             )

@@ -1,6 +1,6 @@
 const { createHash } = require('node:crypto')
 const { HttpsError } = require('firebase-functions/v2/https')
-const { activeUser } = require('./cashBalance')
+const { activeUser, isCounterOpenForDate } = require('./cashBalance')
 
 const BASE = 'posSandboxes/test'
 const fail = (message, kind = 'validation', code = 'invalid-argument', extra = {}) => {
@@ -94,7 +94,7 @@ function createCheckoutHandler(db, now = () => Date.now()) {
       const configRef = db.doc(`${BASE}/configuration/checkout`), sequenceRef = db.doc(`${BASE}/sequences/${financialYear}`), ledgerRef = db.doc(`${BASE}/handover/main`), cashierRef = db.doc(`${BASE}/cashierStates/${uid}`)
       const [configSnapshot, sequenceSnapshot, ledgerSnapshot, cashierSnapshot, ...products] = await Promise.all([tx.get(configRef), tx.get(sequenceRef), tx.get(ledgerRef), tx.get(cashierRef), ...productIds.map(id => tx.get(db.doc(`${BASE}/products/${id}`)))])
       const ledger = ledgerSnapshot.data(), cashier = cashierSnapshot.data()
-      if (!ledger?.initialized || ledger.counterSession?.status !== 'open' || ledger.checkpoint?.date !== date) fail('Open the shared counter with one count before billing.', 'counter', 'failed-precondition')
+      if (!isCounterOpenForDate(ledger, date)) fail('Open the shared counter with one count before billing.', 'counter', 'failed-precondition')
       const reservation = ledger.countReservation
       if (reservation && (!reservation.startedAt?.toMillis || nowMs < reservation.startedAt.toMillis() + 300000)) fail(`${reservation.name || 'A cashier'} is counting the shared drawer. Wait until the count is saved or cancelled.`, 'count-lock', 'failed-precondition')
       if (!cashier || cashier.uid !== uid || cashier.authTime !== authTime || cashier.closed !== false || cashier.joinedCounterId !== ledger.counterSession.openingReconciliationId) fail('Join the open shared counter before billing. Reconnect or retry your session.', 'membership', 'failed-precondition')

@@ -70,6 +70,44 @@ test('B1-02 concurrent terminals serialize sequences and reconcile stock/cash', 
   h.evidence.assertions.push({ bills, independentCashNetPaise: 27000 })
 })
 
+test('B1-15 same last unit requests serialize and the stale terminal cannot post extra effects', async ({ drill: h }) => {
+  await h.db.doc(h.base + '/products/drill-product-1').update({ currentQuantity: 1 });
+  const { page: a } = await h.session('billingA'), { page: b } = await h.session('billingB');
+  const ia = await input(h, 1), ib = await input(h, 1);
+  expect(ia.lines[0].expectedProductRevision).toBe(1);
+  expect(ib.lines[0].stockAtScan).toBe(1);
+  let arrived = 0, release;
+  const gate = new Promise(resolve => { release = resolve });
+  const rendezvous = async route => {
+    if (route.request().method() === 'POST') {
+      arrived += 1;
+      if (arrived === 2) release();
+      await gate;
+    }
+    await route.fallback();
+  };
+  await a.route(endpoint, rendezvous);
+  await b.route(endpoint, rendezvous);
+  const attempts = await Promise.allSettled([post(h, a, ia), post(h, b, ib)]);
+  await a.unroute(endpoint, rendezvous);
+  await b.unroute(endpoint, rendezvous);
+  expect(arrived).toBe(2);
+  expect(attempts.filter(attempt => attempt.status === 'fulfilled')).toHaveLength(1);
+  const winner = attempts.findIndex(attempt => attempt.status === 'fulfilled'), loser = 1 - winner;
+  expect(attempts[loser].reason.message).toMatch(/Product updated since scan/i);
+  expect((await h.get(h.base + '/products/drill-product-1')).currentQuantity).toBe(0);
+  expect((await h.get(h.base + '/products/drill-product-1')).revision).toBe(2);
+  expect(await h.records(h.base + '/bills')).toHaveLength(1);
+  expect(await h.records(h.base + '/stockMovements')).toHaveLength(1);
+  expect((await h.records(h.base + '/stockMovements'))[0].quantityDelta).toBe(-1);
+  expect((await h.get(h.base + '/handover/main')).cashNetPaise).toBe(9000);
+  const beforeRetry = await snapshot(h);
+  expect(await post(h, [a, b][winner], [ia, ib][winner])).toEqual(attempts[winner].value);
+  expect(await rejected(() => post(h, [a, b][loser], [ia, ib][loser]))).toMatch(/Product updated since scan/i);
+  expect(await snapshot(h)).toEqual(beforeRetry);
+  h.evidence.assertions.push({ rendezvousRequests: arrived, winner: winner === 0 ? 'billingA' : 'billingB', independentExpected: { startingStock: 1, finalStock: 0, acceptedBills: 1, stockMovement: -1, cashNetPaise: 9000 }, policy: 'Stale revision rejection; no new negative-stock rule introduced.' });
+});
+
 test('B1-03 same intent races and replays once; changed payload and actor reject', async ({ drill: h }) => {
   const { page: a } = await h.session('billingA'), { page: b } = await h.session('billingB')
   const data = await input(h)

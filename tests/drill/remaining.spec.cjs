@@ -1,4 +1,59 @@
 const {test,expect}=require('./helpers.cjs')
+test('VEN-11 completed reset disappears and compact invoices separate current and historical payments',async({drill:h},info)=>{
+ test.setTimeout(120000)
+ const {page}=await h.session('owner')
+ await h.nav(page,'Vendor Workspace');await page.getByRole('tab',{name:'Balances',exact:true}).click()
+ await expect(page.getByRole('button',{name:'Reset vendor balances to zero',exact:true})).toBeVisible()
+ await h.db.doc('appMetadata/vendorLedgerV2Config').set({balanceCutoverId:'drill-ui-reset',balanceCutoverDate:h.date},{merge:true})
+ await expect(page.getByRole('button',{name:'Reset vendor balances to zero',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('heading',{name:'Opening balance reset',exact:true})).toHaveCount(0)
+ const stamp=new Date().toISOString(),purchases=[
+  {id:'ui-current-a',vendorId:'drill-alpha',invoiceNumber:'CUR-A',invoiceTotalPaise:125000},
+  {id:'ui-current-b',vendorId:'drill-beta',invoiceNumber:'CUR-B',invoiceTotalPaise:75000},
+  {id:'ui-historical',vendorId:'drill-alpha',invoiceNumber:'HIST-OLD',invoiceTotalPaise:90000,cutoverHistoricalOnly:true,balanceCutoverId:'drill-ui-reset',balanceCutoverDate:h.date},
+ ]
+ const batch=h.db.batch()
+ for(const p of purchases){
+  batch.set(h.db.doc('purchasesV2/'+p.id),{...p,invoiceDate:h.date,normalizedInvoiceNumber:p.invoiceNumber.toLowerCase(),revision:1,createdAt:stamp,createdByUserId:'drill-owner',updatedAt:stamp,updatedByUserId:'drill-owner'})
+  batch.set(h.db.doc('invoiceStatesV2/'+p.id),{id:p.id,invoiceId:p.id,vendorId:p.vendorId,revision:1,openAmountPaise:p.cutoverHistoricalOnly?0:p.invoiceTotalPaise,reservedAmountPaise:0,...(p.cutoverHistoricalOnly?{cutoverStatus:'historical',cutoverOpenAmountPaise:90000,balanceCutoverDate:h.date}:{})})
+ }
+ batch.set(h.db.doc('vendorAccountStatesV2/drill-alpha'),{id:'drill-alpha',vendorId:'drill-alpha',outstandingPaise:125000,vendorCreditPaise:0,revision:1})
+ batch.set(h.db.doc('vendorAccountStatesV2/drill-beta'),{id:'drill-beta',vendorId:'drill-beta',outstandingPaise:75000,vendorCreditPaise:0,revision:1})
+ await batch.commit()
+ const before={config:await h.get('appMetadata/vendorLedgerV2Config'),purchases:await h.records('purchasesV2'),states:await h.records('invoiceStatesV2'),accounts:await h.records('vendorAccountStatesV2')}
+ await page.getByRole('tab',{name:'Invoices',exact:true}).click()
+ const table=page.getByRole('table',{name:'Vendor invoices',exact:true}),rows=table.locator('tbody tr')
+ await expect(rows).toHaveCount(2);await expect(page.getByRole('button',{name:'View invoice HIST-OLD',exact:true})).toHaveCount(0)
+ await h.select(page,'Sort invoices','Total: low to high');await expect(rows.first()).toContainText('CUR-B')
+ await page.getByRole('textbox',{name:'Search invoices',exact:true}).fill('Alpha CUR-A');await expect(rows).toHaveCount(1)
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(2)
+ await h.select(page,'Invoice period','Before reset');await expect(rows).toHaveCount(1)
+ await expect(table.getByRole('columnheader',{name:'Balance at reset',exact:true})).toBeVisible()
+ const historical=rows.filter({hasText:'HIST-OLD'})
+ await expect(historical.getByRole('button',{name:'Make Payment',exact:true})).toBeDisabled()
+ await expect(historical.locator('td').nth(4)).toHaveText(/\u20b9\s*0(?:\.00)?$/);await expect(historical.locator('td').nth(5)).toHaveText(/\u20b9\s*900(?:\.00)?$/)
+ await page.getByRole('button',{name:'View invoice HIST-OLD',exact:true}).click();await expect(page.getByRole('dialog',{name:'Invoice and linked GRNs',exact:true})).toContainText('HIST-OLD');await page.getByRole('button',{name:'Close invoice',exact:true}).click()
+ await historical.getByRole('button',{name:'View GRN',exact:true}).click();await expect(page.getByRole('dialog',{name:'Invoice and linked GRNs',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close invoice',exact:true}).click()
+ await h.select(page,'Invoice period','All invoices');await expect(rows).toHaveCount(3)
+ const desktop=info.outputPath('compact-invoices-desktop.png');await page.screenshot({path:desktop,fullPage:true});await info.attach('compact-invoices-desktop',{path:desktop,contentType:'image/png'})
+ await page.getByRole('button',{name:'Switch to dark mode',exact:true}).click()
+ const dark=info.outputPath('compact-invoices-dark.png');await page.screenshot({path:dark,fullPage:true});await info.attach('compact-invoices-dark',{path:dark,contentType:'image/png'})
+ await page.getByRole('button',{name:'Switch to light mode',exact:true}).click()
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click()
+ await rows.filter({hasText:'CUR-A'}).getByRole('button',{name:'Make Payment',exact:true}).click();await expect(page.getByRole('heading',{name:'Register',exact:true})).toBeVisible()
+ await page.setViewportSize({width:390,height:844});await h.nav(page,'Vendor Workspace');await page.getByRole('tab',{name:'Invoices',exact:true}).click();await h.select(page,'Invoice period','Before reset')
+ await expect(rows).toHaveCount(1)
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true)
+ for(const label of ['Search invoices','Invoice period','Invoice date from','Invoice date to','Sort invoices']){
+  const bounds=await page.getByLabel(label,{exact:true}).boundingBox()
+  expect(bounds,label+' must stay within the phone viewport').not.toBeNull()
+  expect(bounds.x,label+' left edge').toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width,label+' right edge').toBeLessThanOrEqual(391)
+ }
+ const mobile=info.outputPath('compact-invoices-mobile.png');await page.screenshot({path:mobile,fullPage:true});await info.attach('compact-invoices-mobile',{path:mobile,contentType:'image/png'})
+ await page.reload();await expect(page.getByRole('heading',{name:'Vendor Workspace',exact:true})).toBeVisible();await page.getByRole('tab',{name:'Balances',exact:true}).click();await expect(page.getByRole('button',{name:'Reset vendor balances to zero',exact:true})).toHaveCount(0)
+ expect(await h.get('appMetadata/vendorLedgerV2Config')).toEqual(before.config);expect(await h.records('purchasesV2')).toEqual(before.purchases);expect(await h.records('invoiceStatesV2')).toEqual(before.states);expect(await h.records('vendorAccountStatesV2')).toEqual(before.accounts)
+ h.evidence.assertions.push({defaultCurrentRows:2,historicalRows:1,sameInvoiceDateAcrossPeriods:true,historicalPaidPaise:0,historicalBalanceAtResetPaise:90000,paymentDisabledForHistory:true,resetCardHidden:true,financialDataUnchanged:true})
+})
 const crypto=require('node:crypto')
 const CLIENT='/tests/drill/client.ts',REPO='/src/features/pos/data/posRepository.ts',VENDOR='/src/store/vendorLedgerV2Repository.ts'
 async function attempt(action){try{return {ok:true,value:await action()}}catch(error){if(/DRILL_HELPER_|m\[name\].*not a function|Failed to fetch dynamically imported module/.test(error.message))throw error;return {ok:false,error:error.message}}}
@@ -11,6 +66,40 @@ test('AUTH-04 remembered account focus, switching and refresh',async({drill:h})=
  await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:'Use another account',exact:true}).click();await page.getByRole('textbox',{name:'Email',exact:true}).fill('manager@drill.invalid');await page.getByLabel('Password',{exact:true}).fill(h.PASSWORD);await page.getByRole('button',{name:'Open Workspace',exact:true}).click()
  await expect(page.getByRole('button',{name:/^Stock\s/}).first()).toBeVisible();expect(await page.getByRole('button',{name:/^Logs\s/}).count()).toBe(0)
 })
+test('AUTH-08 active disablement and role removal preserve other live sessions and deny new authority', async ({ drill: h }, info) => {
+ info.annotations.push({ type: 'layer', description: 'Three independent real-auth browser contexts; owner-authorized profile changes through real client Rules, not mocked roles.' })
+ const { page: a } = await h.session('billingA'), { page: b } = await h.session('billingB'), { page: owner } = await h.session('owner')
+ const before = await h.get(h.base + '/products/drill-product-1')
+ await h.rpc(owner, CLIENT, 'write', ['users/drill-billingA', { disabled: true }, 'update'])
+ await expect(a.getByRole('button', { name: /^Stock(?:\s|$)/ }).first()).toHaveCount(0)
+ const denied = await attempt(() => h.rpc(a, CLIENT, 'call', ['changeStockPrices', { operationId: crypto.randomUUID(), productId: 'drill-product-1', expectedRevision: 1, mrpPaise: 10000, sellingPricePaise: 9500, reason: 'Synthetic active-disable denial' }]))
+ expect(denied.ok).toBe(false)
+ expect(denied.error).toMatch(/permission|disabled|active|authoriz|access|authenticat|Sign in before editing stock/i)
+ await h.nav(b, 'Stock')
+ await expect(b.getByRole('tablist', { name: 'Stock sections' })).toBeVisible()
+ await h.nav(owner, 'Settings')
+ await h.rpc(owner, CLIENT, 'write', ['users/drill-owner', { role: 'billing' }, 'update'])
+ expect((await h.get('users/drill-owner')).role).toBe('billing')
+ await expect(owner.getByRole('button', { name: /^Logs(?:\s|$)/ }).first()).toHaveCount(0)
+ const cachedRead = await attempt(() => h.rpc(owner, CLIENT, 'read', ['appMetadata/appSettings']))
+ const privateRead = await attempt(() => h.rpc(owner, CLIENT, 'readServer', ['appMetadata/appSettings']))
+ const independentRead = await owner.evaluate(async () => {
+  const { auth } = await import('/src/shared/lib/firebase.ts')
+  const response = await fetch('http://127.0.0.1:8080/v1/projects/demo-alphahub-drill/databases/(default)/documents/appMetadata/appSettings', { headers: { Authorization: 'Bearer ' + await auth.currentUser.getIdToken() } })
+  const body = await response.json()
+  return { status: response.status, errorCode: body.error?.status }
+ })
+ h.evidence.assertions.push({ kind: 'active-role-read-probe', cachedReadAvailable: cachedRead.ok, sdkServerReadAvailable: privateRead.ok, independentRead })
+ // getDocFromServer can reuse a previously authorized active SDK target.
+ // This fresh REST request cannot reuse that target and proves current Rules.
+ expect(independentRead).toEqual({ status: 403, errorCode: 'PERMISSION_DENIED' })
+ expect(await h.get(h.base + '/products/drill-product-1')).toEqual(before)
+ expect(await h.records(h.base + '/stockPriceChanges')).toEqual([])
+ expect(await h.records(h.base + '/bills')).toEqual([])
+ expect(await h.records('cashouts')).toEqual([])
+ h.evidence.assertions.push({ disabledCallable: denied, demotedOwnerFreshPrivateRead: independentRead, previouslyAuthorizedCacheStillAvailable: cachedRead.ok, unaffectedSession: 'billingB', financialEffects: 0 })
+})
+
 test('AUTH-05 password reset and own password stay local',async({drill:h})=>{
  const {page:login}=await h.session('unauthenticated');await login.getByRole('textbox',{name:'Email',exact:true}).fill('owner@drill.invalid');await login.getByRole('button',{name:'Forgot password?',exact:true}).click();await expect(login.getByText(/If an account exists/)).toBeVisible()
  const oob=await(await fetch('http://127.0.0.1:9099/emulator/v1/projects/demo-alphahub-drill/oobCodes')).json();expect(oob.oobCodes.some(c=>c.email==='owner@drill.invalid'&&c.requestType==='PASSWORD_RESET')).toBe(true)
@@ -48,7 +137,7 @@ test('STK-01 STK-02 STK-03 STK-04 AUD-04 barcode/status pages, sorting and lazy 
  await page.getByRole('textbox',{name:'Barcode',exact:true}).fill('00001');await page.getByRole('button',{name:'Edit Stock Prices For Drill Product A',exact:true}).click();await expect(page.getByRole('heading',{name:'Edit Stock Prices',exact:true})).toBeVisible();expect(await page.locator('details[open]').count()).toBe(0);await page.getByRole('button',{name:'Close Product Details',exact:true}).click()
  await page.getByRole('textbox',{name:'Barcode',exact:true}).fill('Drill Product');await expect(page.getByText('No products match these filters.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Clear Filters',exact:true}).click()
  await h.select(page,'Stock Status','In Stock');await expect(page.locator('tbody tr')).toHaveCount(50);await page.getByRole('button',{name:'Next',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(14);await expect(page.getByText(/^Page 2/)).toBeVisible()
- await page.getByRole('button',{name:'Sort By MRP',exact:true}).click();await expect(page.getByText(/^Page 1/)).toBeVisible();await expect(page.getByText(/MRP sorted on this page only/)).toBeVisible();await h.select(page,'Stock Status','Zero Stock');await expect(page.getByRole('cell',{name:'00003',exact:true})).toBeVisible();await h.select(page,'Stock Status','Negative Stock');await expect(page.getByRole('cell',{name:'00004',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'Sort By MRP',exact:true}).click();await expect(page.getByText(/^Page 1/)).toBeVisible();await expect(page.getByText(/MRP sorted on this page only/)).toBeVisible();await h.select(page,'Stock Status','Zero Stock');await expect(page.getByRole('cell').getByText('00003',{exact:true})).toBeVisible();await h.select(page,'Stock Status','Negative Stock');await expect(page.getByRole('cell').getByText('00004',{exact:true})).toBeVisible()
  await page.getByRole('tab',{name:'Stock Audit',exact:true}).click();expect(await page.getByRole('heading',{name:/Audit History/}).count()).toBe(0)
 })
 test('STK-05 API required fields/reasons/paise for all allowed roles',async({drill:h},info)=>{
@@ -61,7 +150,7 @@ test('STK-05 API required fields/reasons/paise for all allowed roles',async({dri
 })
 test('GRN-03 GRN-06 GRN-07 new product, retired correction and vendor paging',async({drill:h},info)=>{
  info.annotations.push({type:'layer',description:'Real receive UI picker/history plus real Rules new-product posting; independent source quantities'})
- const {page}=await h.session('billingA');await h.nav(page,'Stock');await page.getByRole('tab',{name:'Receive Stock',exact:true}).click();const vendor=page.getByPlaceholder('Choose vendor');await vendor.click();await expect(page.getByRole('option')).toHaveCount(25);await page.getByRole('button',{name:'Load more vendors',exact:true}).click();await expect(page.getByRole('option')).toHaveCount(50);await vendor.fill('Drill Vendor 062');await page.getByRole('option',{name:'Drill Vendor 062',exact:true}).click();await expect(vendor).toHaveValue('Drill Vendor 062')
+ const {page}=await h.session('billingA');await h.nav(page,'Stock');await page.getByRole('tab',{name:'Receive Stock',exact:true}).click();const vendor=page.getByPlaceholder('Choose vendor');await vendor.click();await expect(page.getByRole('option')).toHaveCount(25);await page.getByRole('button',{name:'Show more matches',exact:true}).click();await expect(page.getByRole('option')).toHaveCount(50);await vendor.fill('Drill Vendor 062');await page.getByRole('option',{name:'Drill Vendor 062',exact:true}).click();await expect(vendor).toHaveValue('Drill Vendor 062')
  const actor=await h.actor(page),id=await h.rpc(page,REPO,'savePosGoodsReceiptDraft',[{vendorId:'drill-alpha',vendorName:'Drill Alpha Vendor',invoiceNumber:'DRILL-NEW-GRN',invoiceDate:h.date,receiptDate:h.date,invoiceTotalPaise:6000,lines:[{productId:'drill-new-product',barcode:'99999',productName:'Drill New GRN Product',category:'Drill',quantity:3,unitCostPaise:2000,lineTotalPaise:6000,mrpPaise:5000,sellingPricePaise:4500,mrpChanged:true,newProduct:true}]},actor])
  await h.rpc(page,REPO,'submitPosGoodsReceipt',[id,actor]);expect((await h.get(h.base+'/products/drill-new-product')).currentQuantity).toBe(3);expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(6000)
  await page.getByRole('tab',{name:'GRN History',exact:true}).click();expect(await page.getByRole('button',{name:/Correct MRP/}).count()).toBe(0)
@@ -112,9 +201,10 @@ test('FIN-05 FIN-06 COUNTER-07 Cashout cancel, denominations and closure',async(
  expect((await h.records(h.base+'/drawerClosures')).length).toBe(1)
 })
 test('LOG-01 LOG-02 SET-01 Vendor/Logs/Settings tab and empty-source coverage',async({drill:h})=>{
- const {page}=await h.session('owner');await h.nav(page,'Vendor Workspace');for(const title of ['Vendors','Invoices','Returns','Corrections','Balances']){await page.getByRole('tab',{name:title,exact:true}).click();await expect(page.getByRole('tab',{name:title,exact:true})).toHaveAttribute('aria-selected','true')}
+ const {page}=await h.session('owner');await h.nav(page,'Vendor Workspace');for(const title of ['Vendors & Parties','Invoices','Payment Corrections','Balances']){await page.getByRole('tab',{name:title,exact:true}).click();await expect(page.getByRole('tab',{name:title,exact:true})).toHaveAttribute('aria-selected','true')}
+ await h.nav(page,'Stock');await page.getByRole('tab',{name:'Stock Return',exact:true}).click();await expect(page.getByRole('tab',{name:'Stock Return',exact:true})).toHaveAttribute('aria-selected','true');await expect(page.getByRole('heading',{name:'Return history',exact:true})).toBeVisible();await expect(page.getByText('No vendor returns recorded.',{exact:true})).toBeVisible()
  await h.nav(page,'Logs');for(const title of ['Sales','Expenses','Purchases','Payments','Daily Cashouts','Cash Transfers','Settings Audit','Stock Audits']){await page.getByRole('tab',{name:title,exact:true}).click();await expect(page.getByRole('tab',{name:title,exact:true})).toHaveAttribute('aria-selected','true')}
- await h.nav(page,'Settings');for(const title of ['Staff','Operations','POS','Announcements','Staff Notifications','Update Password']){await page.getByRole('tab',{name:title,exact:true}).click();await expect(page.getByRole('tab',{name:title,exact:true})).toHaveAttribute('aria-selected','true')}
+ await h.nav(page,'Settings');for(const title of ['Staff','Operations','POS','Staff Notifications','Business Identity','Update Password']){await page.getByRole('tab',{name:title,exact:true}).click();await expect(page.getByRole('tab',{name:title,exact:true})).toHaveAttribute('aria-selected','true')}
  expect(await h.records('sales')).toEqual([]);expect(await h.records('cashouts')).toEqual([])
 })
 test('UX-01 UX-02 UX-03 phone, keyboard focus, offline and reconnect',async({drill:h})=>{

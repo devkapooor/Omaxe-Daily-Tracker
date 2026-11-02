@@ -222,6 +222,13 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
     setShowUnresolvedAlert(false)
   }
 
+  function closeUnknownBarcodeDialog() {
+    const discardedUnknownScan = Boolean(unknownBarcode)
+    setUnknownBarcode(''); setUnknownProductName(''); setUnknownPrice('')
+    setShowUnresolvedAlert(false)
+    if (discardedUnknownScan) showToast('Unknown barcode scan discarded. Nothing was added to this bill.')
+  }
+
   async function checkout() {
     if (checkoutInFlight.current || recovery.error) return
     if (!pendingCheckout && (unknownBarcode || cart.some((line) => line.kind === 'temporary'))) {
@@ -289,9 +296,9 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
     )}>
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <PageCardStack className={tab === 'checkout' ? 'flex min-h-full flex-col pb-4 lg:h-full lg:min-h-0' : tab === 'dashboard' ? 'h-full pb-4' : 'min-h-full content-start pb-4'}>
-      {!handover.ledger?.initialized ? <StatusPanel variant="warning">Shared drawer setup is required before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to initialize the drawer.'}</StatusPanel> : null}
-      {handover.ledger?.initialized && !handover.counterOpen ? <StatusPanel variant="warning">The Shared Counter Needs An Opening Count. <Button size="sm" disabled={Boolean(handover.reservation)} onClick={handover.requestSetup}>Open Counter</Button></StatusPanel> : null}
-      {handover.reservation ? <StatusPanel variant="warning" role="status">{handover.reservation.name} Is Counting The Shared Drawer. Billing, Refunds And Cashout Are Paused.</StatusPanel> : handover.counterOpen ? <p className="text-xs text-muted-foreground" role="status">Shared Counter Open {handover.joined ? '· Your Billing Session Is Ready' : '· Joining Your Billing Session...'}</p> : null}
+      {!handover.ledger?.initialized ? <StatusPanel variant="warning">Set up the shared cash drawer before billing. {currentUser.role === 'owner' ? <Button size="sm" onClick={handover.requestSetup}>Set up drawer</Button> : 'Ask the owner to set up the drawer.'}</StatusPanel> : null}
+      {handover.ledger?.initialized && !handover.counterOpen ? <StatusPanel variant="warning">Open the shared counter before billing. <Button size="sm" disabled={Boolean(handover.reservation)} onClick={handover.requestSetup}>Open counter</Button></StatusPanel> : null}
+      {handover.reservation ? <StatusPanel variant="warning" role="status">{handover.reservation.name} is counting the shared cash drawer. Billing, refunds, and cashout are paused.</StatusPanel> : handover.counterOpen ? <p className="text-xs text-muted-foreground" role="status">{handover.joined ? 'Shared counter open · Billing is ready.' : 'Connecting to the shared counter…'}</p> : null}
       {sandbox.error ? <StatusPanel variant="destructive">{sandbox.error}</StatusPanel> : null}
 
       {tab === 'checkout' && (pendingCheckout || recovery.error) ? <div role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
@@ -348,7 +355,7 @@ export function PosPage({ currentUser, showToast, draft }: { currentUser: AppUse
     {showUnresolvedAlert ? createPortal(
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3" role="alertdialog" aria-modal="true" aria-labelledby="pos-unresolved-title" aria-describedby="pos-unresolved-description">
         <Card className="w-full max-w-xl shadow-2xl">
-          <CardHeader><SectionHeading eyebrow="Billing blocked" title="Resolve unknown product before checkout" /></CardHeader>
+          <CardHeader><div className="flex items-start justify-between gap-3"><SectionHeading eyebrow="Billing blocked" title="Resolve unknown product before checkout" /><Button type="button" size="sm" variant="outline" disabled={creatingProduct} onClick={closeUnknownBarcodeDialog}>Close</Button></div></CardHeader>
           <CardContent className="grid gap-3">
             <p id="pos-unresolved-description" className="text-sm text-muted-foreground">The bill cannot be finalized while an unknown barcode or unresolved cart item remains. Add the product to live inventory, or remove unresolved legacy items from this cart.</p>
             {unknownBarcode ? <>

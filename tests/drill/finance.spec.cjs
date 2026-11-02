@@ -191,10 +191,13 @@ test('F45-02 app does not expose a bank balance and bank expenses still post wit
   await expect(page.getByRole('button', { name: /bank.*balance/i })).toHaveCount(0);
   await h.nav(page, 'Register');
   await choose(page, 'Payment method', 'Bank Transfer');
+  const savedExpense = page.waitForResponse(response => response.url() === 'http://127.0.0.1:5001/demo-alphahub-drill/asia-south1/postFinanceOperation' && response.request().method() === 'POST' && response.request().postDataJSON()?.data?.kind === 'expense');
   await expense(page, '100');
-  expect((await h.records('cashouts'))[0]).toMatchObject({ amountPaise: 10000, paymentMode: 'Bank Transfer' });
-  expect(await h.get('bankBalanceControl/main')).toBeUndefined();
-  expect(await h.get('appMetadata/appSettings')).toBeUndefined();
+  expect((await savedExpense).ok()).toBe(true);
+  await expect.poll(async () => (await h.records('cashouts')).length).toBe(1);
+  expect((await h.records('cashouts'))[0]).toMatchObject({ amountPaise: 10000, paymentMode: 'Bank Transfer', postedByUid: 'drill-owner' });
+  expect(await h.get('bankBalanceControl/main')).toBeNull();
+  expect(await h.get('appMetadata/appSettings')).toBeNull();
   expect((await h.get(h.base + '/handover/main')).cashNetPaise).toBe(0);
 });
 test('F45-03 cheque UI preserves lifecycle and payable posting without an app bank balance', async ({
@@ -241,14 +244,30 @@ test('F45-03 cheque UI preserves lifecycle and payable posting without an app ba
     exact: true
   })).toBeDisabled();
   await dialog.getByLabel('Type CONFIRM to proceed').fill('CONFIRM');
+  const debitResponse = page.waitForResponse(response => response.url() === 'http://127.0.0.1:5001/demo-alphahub-drill/asia-south1/postFinanceOperation' && response.request().method() === 'POST' && response.request().postDataJSON()?.data?.kind === 'cheque-decision');
   await dialog.getByRole('button', {
     name: 'OK',
     exact: true
   }).click();
-  await expect.poll(async () => (await h.get('bankBalanceControl/main')).balancePaise).toBe(500000);
+  const completedDebit = await debitResponse;
+  expect(completedDebit.ok()).toBe(true);
+  await expect.poll(async () => (await h.get('chequesV2/1120')).status).toBe('debited');
+  expect((await h.get('bankBalanceControl/main')).balancePaise).toBe(500000);
   expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(80000);
+  expect((await h.get('invoiceStatesV2/finance-invoice')).openAmountPaise).toBe(80000);
   expect((await h.get('invoiceStatesV2/finance-invoice')).reservedAmountPaise).toBe(0);
   expect(await h.records('cashouts')).toHaveLength(1);
+  const allocations = await h.records('invoiceAllocationsV2');
+  expect(allocations).toHaveLength(1);
+  expect(allocations[0]).toMatchObject({ amountPaise: 20000, state: 'posted' });
+  expect((await h.records('vendorLedgerEntriesV2')).filter(entry => entry.eventType === 'cheque-debit')).toHaveLength(1);
+  expect((await h.get(h.base + '/handover/main')).cashNetPaise).toBe(0);
+  const debitRequest = completedDebit.request().postDataJSON().data;
+  expect(await h.rpc(page, CLIENT, 'call', ['postFinanceOperation', debitRequest])).toEqual((await completedDebit.json()).result);
+  expect(await h.records('cashouts')).toHaveLength(1);
+  expect(await h.records('invoiceAllocationsV2')).toEqual(allocations);
+  expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(80000);
+  expect((await h.records('vendorLedgerEntriesV2')).filter(entry => entry.eventType === 'cheque-debit')).toHaveLength(1);
   await expect(page.getByRole('button', {
     name: 'Mark cheque 1120 as debited',
     exact: true
@@ -286,11 +305,10 @@ test('F45-04 lost acknowledgement and refresh recover original expense without d
   await expect(page.getByText('Financial operation needs recovery', {
     exact: true
   })).toBeVisible();
-  await page.getByRole('button', {
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', {
     name: 'Recover original result',
     exact: true
-  }).click();
-  await page.waitForLoadState('domcontentloaded');
+  }).click()]);
   await h.nav(page, 'Register');
   await expect(page.getByLabel('Amount (₹)', {
     exact: true
@@ -486,3 +504,67 @@ test('F45-08 phone Logs icons and edit typed confirmation preserve trusted total
 });
 
 test('F45-09 cash payout preserves mandatory logout count and its source evidence',async({drill:h})=>{await seedFinance(h);const {page}=await h.session('billingA');await post(h,page,'expense',{amountPaise:5000,category:'Electricity',paidTo:'Logout fixture',mode:'cash',notes:''});const before=await h.get(h.base+'/cashierStates/drill-billingA');expect(before.needsLogoutCheck).toBe(true);const actor=await h.actor(page),module='/src/features/pos/data/cashierHandoverRepository.ts';const reserved=await h.rpc(page,module,'reserveCount',[actor,'logout']);const record=await h.rpc(page,module,'submitHandover',[actor,'logout',{'500':1,'200':2,'50':1},0,0,0,reserved.revision,h.date,'',reserved.id]);expect(record.actual.cash).toBe(95000);expect(record.expected.cash).toBe(95000);const after=await h.get(h.base+'/cashierStates/drill-billingA');expect(after.closed).toBe(true);expect(after.needsLogoutCheck).toBe(false);expect(after.lastFinancialOperationId).toBe(before.lastFinancialOperationId);expect((await h.get(h.base+'/handover/main')).cashNetPaise).toBe(-5000)})
+
+test('F45-16 save feedback is neutral; lost response recovery posts once and its notice can be dismissed', async ({ drill: h }) => {
+  const { page } = await h.session('owner');
+  await h.nav(page, 'Register');
+  let held;
+  function holdResponse(mode) {
+    let arrived, release;
+    const control = { mode, arrived: new Promise(resolve => { arrived = resolve }), released: new Promise(resolve => { release = resolve }), arrive: value => arrived(value), release: () => release() };
+    held = control;
+    return control;
+  }
+  // The real callable commits first. Only delivery of its response is controlled.
+  await page.route('http://127.0.0.1:5001/demo-alphahub-drill/asia-south1/postFinanceOperation', async route => {
+    const control = held;
+    if (!control || route.request().method() !== 'POST') return route.continue();
+    held = null;
+    const response = await route.fetch({ maxRedirects: 0 });
+    control.arrive(response.status());
+    await control.released;
+    return control.mode === 'lost' ? route.abort('failed') : route.fulfill({ response });
+  });
+  const normal = holdResponse('success');
+  await expense(page, '50');
+  expect(await normal.arrived).toBe(200);
+  try {
+    await expect(page.getByText('Saving...', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Recover original result', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Financial operation needs recovery', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Amount (₹)', { exact: true })).toBeDisabled();
+    expect(await h.rpc(page, FIN, 'pendingFinanceOperation')).not.toBeNull();
+    expect(await h.records('cashouts')).toHaveLength(1);
+    await page.screenshot({ path: test.info().outputPath('saving-neutral.png'), fullPage: true });
+  } finally { normal.release() }
+  await expect.poll(() => h.rpc(page, FIN, 'pendingFinanceOperation')).toBeNull();
+  await expect(page.getByText('Saving...', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Amount (₹)', { exact: true })).toHaveValue('');
+
+  const lost = holdResponse('lost');
+  await expense(page, '25');
+  expect(await lost.arrived).toBe(200);
+  const pending = await h.rpc(page, FIN, 'pendingFinanceOperation');
+  lost.release();
+  const warning = page.getByRole('alert').filter({ hasText: 'Financial operation needs recovery' });
+  await expect(warning).toBeVisible();
+  await expect(warning.getByText('Reference:', { exact: false })).not.toBeVisible();
+  await expect(page.getByLabel('Amount (₹)', { exact: true })).toBeDisabled();
+  await page.screenshot({ path: test.info().outputPath('recovery-required.png'), fullPage: true });
+  await warning.getByText('Details', { exact: true }).click();
+  await expect(warning).toContainText(pending.intent.operationId);
+  await Promise.all([page.waitForEvent('load'), warning.getByRole('button', { name: 'Recover original result', exact: true }).click()]);
+  await expect(page.getByText('Original financial result recovered.', { exact: false })).toBeVisible();
+  expect(await h.rpc(page, FIN, 'pendingFinanceOperation')).toBeNull();
+  const sources = await h.records('cashouts');
+  expect(sources).toHaveLength(2);
+  expect(sources.map(source => source.amountPaise).sort((a, b) => a - b)).toEqual([2500, 5000]);
+  expect((await h.get(h.base + '/handover/main')).cashNetPaise).toBe(-7500);
+  await page.screenshot({ path: test.info().outputPath('result-recovered.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Dismiss recovery notice', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Record payment', exact: true })).toBeVisible();
+  await expect(page.getByText('Original financial result recovered.', { exact: false })).toHaveCount(0);
+  expect(await h.records('cashouts')).toHaveLength(2);
+  h.evidence.assertions.push({ uiFeedback: 'neutral saving, uncertain result, recover and dismiss', originalLostOperation: pending.intent.operationId, independentTotalPaise: 7500, effectsAfterRecovery: sources.length });
+});

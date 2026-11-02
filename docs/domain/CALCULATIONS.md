@@ -1,5 +1,13 @@
 # Calculations And Projections
 
+## Historical Cashout drawer timing - deployed 1 November 2026 IST
+
+For a past-date Cashout, `already-removed` records the historical payout without debiting the live drawer; `remove-now` uses the normal physical count, reservation and one-time drawer debit. The approved 17 October incident correction added the remaining ₹14,300 duplicate debit effect to current `handover/main.cashNetPaise`. It preserved the current checkpoint, all subsequent genuine movements, original historical payout and Cash Movement calculations. The amount was derived from the original immutable debit evidence and verified current count boundary, not assigned from a stale displayed total. See [incident release and audit evidence](../operations/HISTORICAL_CASHOUT_SAFETY_2026-11-01.md).
+
+## Current-source scope ? 31 October 2026
+
+Current trusted posting arithmetic belongs to the checkout/refund/stock/finance Functions handlers and their existing policies, not the historical client projection descriptions alone. Shared metrics are owner-derived then validated/published by `functions/sharedViews.js`; staff consume the sanitized projection. Independent scenario arithmetic/persisted reconciliation is recorded in [current drill results](../operations/README.md). Legacy planner/rupee fields below remain compatibility context and must not be merged with canonical paise accounting by apparent similarity. This documentation update changes no formula.
+
 ## Hard Rule
 
 If any displayed summary, projection, or allocation rule changes, update this file with the rest of the product docs.
@@ -11,7 +19,7 @@ Current shared derivation lives in:
 - `src/store/deriveWorkspaceMetrics.ts`
 - `appMetadata/workspaceMetrics`
 - `src/features/dashboard/domain/deriveMonthlyPerformance.ts`
-- `src/domain/unifiedPaymentPlanner.ts`
+- Historical Payment Planner fields only; `src/domain/unifiedPaymentPlanner.ts` is retired and is not a current runtime source
 - V2 domain/repository contracts described in [Vendor Ledger](./VENDOR_LEDGER.md)
 
 The Dashboard month helper reads subscribed source sales, expenses and daily cashouts; shared settings/liabilities/cash snapshots remain Firestore-derived. Vendor Workspace consumes V2 account states. These sources are documented as implemented; cleanup does not change their calculations.
@@ -59,12 +67,11 @@ sum(normalizedLoan.remainingAmount for all loans)
 
 ### Vendor Outstanding
 
-This is the retained legacy metric currently passed to the Dashboard. V2 Vendor Workspace balances are separate account-state projections; switching the Dashboard source is outside cleanup.
+The Dashboard uses the V2 vendor master for labels and V2 account states for current payable values. Account amounts are integer paise and are converted to rupees only for display. Vendor credits are shown separately and do not reduce the positive payable summary.
 
 ```text
 vendorOutstandingByName =
-vendor.openingOutstandingRemaining
-+ sum(purchase.unpaidAmount for matching vendor)
+sum(vendorAccountState.outstandingPaise for the matching stable vendor ID) / 100
 
 workspaceMetrics.liabilities.totalVendorOutstanding =
 sum(all vendorOutstandingByName values)
@@ -307,3 +314,27 @@ The read model retains monthly grouped fields such as:
 - payment mode breakdown for paid payments
 
 These remain in workspaceMetrics.dashboardTables for compatibility. The current Dashboard does not render the removed detailed tables; this cleanup removes only their unreachable UI files.
+
+
+## Shared counter date and overnight carryover
+
+`counterSession.date` is the historical session opening date. An initialized, open counter is ready for a business date when `checkpoint.date` matches that date. An accepted later-day logout/handover count can therefore make the same session ready for that day without rewriting its opening date or session ID. POS, cash expenses/vendor payments, customer refunds and current-day Cashout use this same readiness rule; cashier membership, count reservations and sufficient cash remain independently enforced.
+
+Current-day Cashout classifies the active drawer using the accepted checkpoint date. Historical-date Cashout retains its separate source selection and drawer-debit audit. The fix does not synthesize an opening record for a later date or use an old opening count as later-day carryover evidence. A stale count or closed counter still requires a valid opening/count through POS. The counter formula remains `checkpoint.cashActualPaise + cashNetPaise - checkpoint.cashNetPaise`; midnight changes no cash automatically.
+
+Regression: F45-17 in the existing finance-followup drill covers the user-visible overnight path and the Open Counter option after closure. Deterministic handler regressions cover current counts, stale/closed rejection, original source preservation and retry safety. Real full-stack midnight/device acceptance remains separately timed/manual.
+
+## Historical Cashout expense reconciliation (deployed 1 November 2026 IST)
+
+Pending follow-up: [historical cash timing and duplicate-debit correction](../operations/HISTORICAL_CASHOUT_SAFETY_2026-11-01.md) requires an explicit past-date cash-removal choice and compensates only drawer posting deltas not already absorbed by the current verified checkpoint. This safety repair is locally implemented, not yet deployed. Expense reconciliation below remains separate and has zero drawer impact.
+
+For a past date, `recordedOrdinaryCashExpenses` includes trusted expenses plus recognised legacy ordinary cash expense records. Cancelled/non-cash entries are excluded; vendor payments and POS refund events are separate. The owner confirms the full ordinary expense total, not an additional payout:
+
+```text
+historicalAdjustmentPaise = confirmedOrdinaryExpensePaise - recordedOrdinaryExpensePaise
+historicalCashPaidOutPaise = recordedOrdinaryExpensePaise + historicalAdjustmentPaise
+                           + vendorCashPaymentPaise + cashRefundPaise
+expenseReconciliationDrawerImpactPaise = 0
+```
+
+Source changes make the dated declaration stale and require reconfirmation. The declaration never creates an itemised payment or mutates stock, sales, physical cash counts or live cash. Existing Cashouts require explicit owner correction with retained before/after evidence; ambiguous legacy combined payouts and changed vendor/refund evidence are not guessed. A separately saved physical Cashout continues to remove its actual counted cash. See [current workflow and safeguards](../operations/HISTORICAL_EXPENSE_RECONCILIATION_2026-11-01.md).

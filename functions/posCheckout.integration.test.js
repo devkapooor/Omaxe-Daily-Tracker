@@ -55,6 +55,23 @@ describe('checkout server transaction in dedicated emulator project', { skip: !p
     assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 18)
     assert.equal((await db.doc(`${base}/bills/legacy`).get()).get('totalPaise'), 7500)
   })
+  it('overnight counter bills against the current count while preserving its original opening', async () => {
+    now += 86400000;
+    await db.doc(`${base}/handover/main`).update({ 'counterSession.date': '2026-10-13', 'checkpoint.date': '2026-10-14' });
+    const before = (await db.doc(`${base}/handover/main`).get()).data();
+    const data = draft({ businessDate: '2026-10-14' }), bill = await handler({ auth, data });
+    assert.equal(bill.businessDate, '2026-10-14');
+    const after = (await db.doc(`${base}/handover/main`).get()).data();
+    assert.deepEqual(after.counterSession, before.counterSession);
+    assert.deepEqual(after.checkpoint, before.checkpoint);
+    assert.equal(after.cashNetPaise, 18000);
+    assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 18);
+    assert.deepEqual(await handler({ auth, data }), bill);
+    now += 86400000;
+    await assert.rejects(handler({ auth, data: draft({ businessDate: '2026-10-15' }) }), /Open.*counter/);
+    assert.deepEqual((await db.doc(`${base}/handover/main`).get()).data(), after);
+    assert.equal((await db.doc(`${base}/products/a`).get()).get('currentQuantity'), 18);
+  })
   it('replays original result after closed counter, revision/date change and new login', async () => {
     const data = draft(), bill = await handler({ auth, data })
     now += 86400000

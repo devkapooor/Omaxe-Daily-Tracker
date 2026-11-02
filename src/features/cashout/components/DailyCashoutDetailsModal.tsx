@@ -78,7 +78,9 @@ export function DailyCashoutDetailsModal({ entry, onClose }: DailyCashoutDetails
           <DetailBlock label="Card Sales" value={entry.cardSales === undefined ? 'Not recorded on this entry' : money(entry.cardSales)} />
           <DetailBlock label="Credit Sales" value={money(entry.creditSales)} />
           <DetailBlock label="Returns" value={money(entry.returns)} />
-          <DetailBlock label={entry.financePostingVersion === 1 ? 'Cash Paid Out (including refunds)' : 'Cash Expense'} value={money(entry.cashExpense ?? 0)} />
+          <DetailBlock label={entry.financePostingVersion === 1 ? 'Cash Paid Out (including refunds)' : 'Cash Expense'} value={money(entry.cashExpense ?? 0, 2)} />
+          {entry.historicalExpenseReconciliationId ? <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">Historical expenses were corrected with owner confirmation. The physical cash count and drawer balance were preserved.</p> : null}
+          {entry.historicalCashTiming === 'already-removed' ? <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">Cash was already removed earlier. This historical Cashout does not require another live drawer deduction.{entry.drawerDebitReversalOperationId ? ` The duplicate deduction was corrected with an audit entry; live drawer correction: ${money((entry.drawerDebitReversalRestoredPaise ?? 0) / 100, 2)}.` : ''}</p> : null}
           <DetailBlock label="System Audit" value={entry.cashAudit === null ? 'Unavailable for this historical count' : money(entry.cashAudit)} />
           <DetailBlock label="Drawer Total" value={money(drawerTotal)} />
           <DetailBlock label="Remaining Balance" value={money(entry.remainingBalance)} />

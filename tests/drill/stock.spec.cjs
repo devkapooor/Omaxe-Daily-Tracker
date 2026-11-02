@@ -4,22 +4,35 @@ const path = require('node:path')
 const CLIENT = '/tests/drill/client.ts', POST = '/src/features/stock/data/stockPostingRepository.ts'
 const call = (h, page, name, input) => h.rpc(page, CLIENT, 'call', [name, input])
 const attempt = async fn => { try { return { ok: true, value: await fn() } } catch (e) { if (/DRILL_HELPER_|not a function|Failed to fetch dynamically/.test(e.message)) throw e; return { ok: false, message: e.message } } }
-function draft(h, id = randomUUID(), line = {}) { return { operationId: randomUUID(), id, expectedRevision: 0, vendorId: 'drill-alpha', invoiceNumber: 'STOCK-ACCEPT-1', invoiceDate: h.date, receiptDate: h.date, invoiceTotalPaise: 100000, lines: [{ productId: 'drill-product-1', barcode: '00001', productName: 'Drill Product A', category: 'Drill', quantity: 3, unitCostPaise: 6000, mrpPaise: 10000, sellingPricePaise: 9000, expectedRevision: 1, ...line }] } }
+function draft(h, id = randomUUID(), line = {}) {
+  const lines = [{ productId: 'drill-product-1', barcode: '00001', productName: 'Drill Product A', category: 'Drill', quantity: 3, unitCostPaise: 6000, mrpPaise: 10000, sellingPricePaise: 9000, expectedRevision: 1, ...line }]
+  return { operationId: randomUUID(), id, expectedRevision: 0, vendorId: 'drill-alpha', invoiceNumber: 'STOCK-ACCEPT-1', invoiceDate: h.date, receiptDate: h.date, invoiceTotalPaise: lines.reduce((sum, item) => sum + item.quantity * item.unitCostPaise, 0), lines }
+}
 async function receive(h, page, input = draft(h)) { const saved = await call(h, page, 'saveStockReceiptDraft', input), intent = { operationId: randomUUID(), id: saved.id, expectedRevision: saved.revision }; return { saved, intent, result: await call(h, page, 'submitStockReceipt', intent) } }
 async function reverse(h, page, id) { const preview = await call(h, page, 'previewStockReceiptReversal', { id }); return call(h, page, 'reverseStockReceipt', { operationId: randomUUID(), id, reason: 'Synthetic reversal acceptance', expectedRevision: preview.expectedRevision, confirmationHash: preview.confirmationHash }) }
 async function stockSnapshot(h) {
   const result = {}
   for (const collection of ['products','productCosts','stockMovements','goodsReceipts','stockAudits','stockAuditBatches','stockOperations','stockPriceChanges']) result[collection] = (await h.records(h.base+'/'+collection)).sort((a,b)=>a.id.localeCompare(b.id))
-  for (const collection of ['purchasesV2','invoiceStatesV2','vendorAccountStatesV2','vendorLedgerEntriesV2','invoiceReservationsV2']) result[collection] = (await h.records(collection)).sort((a,b)=>a.id.localeCompare(b.id))
+  for (const collection of ['purchasesV2','invoiceStatesV2','vendorAccountStatesV2','vendorLedgerEntriesV2','invoiceReservationsV2','vendorCreditNoteReservationsV2','invoiceAllocationsV2','vendorSettlementsV2']) result[collection] = (await h.records(collection)).sort((a,b)=>a.id.localeCompare(b.id))
   return result
 }
-test('B2-03 B2-04 trusted partial receipts reconcile stock and one full payable', async ({drill:h}) => {
-  const {page}=await h.session('billingA'), original=await receive(h,page), partial=await receive(h,page,draft(h,undefined,{quantity:2,expectedRevision:2}))
-  expect(original.result).toMatchObject({totalPaise:100000,payableCreated:true}); expect(partial.result.payableCreated).toBe(false)
-  expect((await h.get(h.base+'/products/drill-product-1')).currentQuantity).toBe(25)
-  expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(100000)
-  expect(await h.records('purchasesV2')).toHaveLength(1); expect(await h.records(h.base+'/stockMovements')).toHaveLength(2)
-  expect(await call(h,page,'submitStockReceipt',partial.intent)).toEqual(partial.result)
+test('B2-03 B2-04 short line requires credit note and posts only received stock once', async ({drill:h}) => {
+  const {page}=await h.session('billingA'), incomplete={...draft(h),invoiceTotalPaise:100000}, before=await stockSnapshot(h)
+  const rejected=await attempt(()=>call(h,page,'saveStockReceiptDraft',incomplete))
+  expect(rejected.ok).toBe(false); expect(rejected.message).toMatch(/complete receipt or its shortage credit note/i)
+  expect(await stockSnapshot(h)).toEqual(before)
+
+  const input=draft(h)
+  input.pricingMode='received-stock'
+  input.shortage={state:'received',originalInvoiceTotalPaise:100000,creditNoteNumber:'DRILL-CN-1',creditNoteDate:h.date}
+  const posted=await receive(h,page,input)
+  expect(posted.result).toMatchObject({totalPaise:18000,payableCreated:true})
+  expect((await h.get(h.base+'/products/drill-product-1')).currentQuantity).toBe(23)
+  expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(18000)
+  expect(await h.records('purchasesV2')).toHaveLength(1); expect(await h.records(h.base+'/stockMovements')).toHaveLength(1)
+  expect((await h.records('vendorCreditNoteReservationsV2'))[0]).toMatchObject({amountPaise:82000,goodsReceiptId:posted.saved.id,appliedInNetInvoice:true})
+  expect(await call(h,page,'submitStockReceipt',posted.intent)).toEqual(posted.result)
+  expect((await h.get(h.base+'/products/drill-product-1')).currentQuantity).toBe(23)
 })
 test('B2-02 authentication roles, malformed intent and cross-actor replay reject with no effects',async({drill:h})=>{
   const {page}=await h.session('billingA'), {page:manager}=await h.session('manager'), {page:anonymous}=await h.session('unauthenticated',{gate:false})
@@ -33,7 +46,9 @@ test('B2-02 authentication roles, malformed intent and cross-actor replay reject
   expect(await h.records('purchasesV2')).toHaveLength(0)
 })
 test('B2-05 real partial payment and owner reversal preserve original payment and credit40000',async({drill:h})=>{
-  const {page}=await h.session('billingA'), r=await receive(h,page), actor=await h.actor(page)
+  const {page}=await h.session('billingA'), r=await receive(h,page,draft(h,undefined,{quantity:20,unitCostPaise:5000})), actor=await h.actor(page)
+  expect(r.result.totalPaise).toBe(100000)
+  expect((await h.get(h.base+'/products/drill-product-1')).currentQuantity).toBe(40)
   await h.rpc(page,'/src/store/vendorLedgerV2Repository.ts','createSettlementV2',[{id:'stock-payment',vendorId:'drill-alpha',date:h.date,amountPaise:40000,mode:'cash',invoiceId:r.result.purchaseId,actorUserId:actor.id,timestamp:new Date().toISOString()}])
   expect((await h.get('vendorAccountStatesV2/drill-alpha')).outstandingPaise).toBe(60000)
   const {page:owner}=await h.session('owner'); await reverse(h,owner,r.saved.id)
@@ -81,7 +96,8 @@ test('B2-15 B2-18 real Receive Stock UI posts canonical receipt and opens source
   await page.getByRole('textbox',{name:'Scan product barcode',exact:true}).fill('00001');await page.getByRole('button',{name:'Scan item',exact:true}).click()
   await page.getByRole('spinbutton',{name:'Received quantity for Drill Product A',exact:true}).fill('3')
   await page.getByRole('textbox',{name:'Selling price for Drill Product A',exact:true}).fill('90')
-  await page.getByRole('spinbutton',{name:'Full invoice payable',exact:true}).fill('1000')
+  await expect(page.getByLabel('Calculated payable',{exact:true})).toHaveValue('180.00')
+  await expect(page.getByLabel('Calculated payable',{exact:true})).toHaveAttribute('readonly','')
   await page.getByRole('button',{name:'Submit GRN',exact:true}).click()
   await page.getByRole('button',{name:'Confirm GRN submission',exact:true}).click()
   await expect.poll(async()=>(await h.get(h.base+'/products/drill-product-1')).currentQuantity).toBe(23)
@@ -152,7 +168,7 @@ test('B2-06 lost draft acknowledgement retains source identity and survives acco
 test('B2-15 stale GRN confirmation cannot silently submit a newer owner-edited draft',async({drill:h})=>{
   const {page}=await h.session('billingA');await h.nav(page,'Stock');await page.getByRole('tab',{name:'Receive Stock',exact:true}).click()
   await page.getByPlaceholder('Choose vendor').click();await page.getByRole('option',{name:'Drill Alpha Vendor',exact:true}).click();await page.getByRole('textbox',{name:'Vendor invoice number',exact:true}).fill('STALE-REVIEW')
-  await page.getByRole('textbox',{name:'Scan product barcode',exact:true}).fill('00001');await page.getByRole('button',{name:'Scan item',exact:true}).click();await page.getByRole('spinbutton',{name:'Received quantity for Drill Product A',exact:true}).fill('3');await page.getByRole('textbox',{name:'Selling price for Drill Product A',exact:true}).fill('90');await page.getByRole('spinbutton',{name:'Full invoice payable',exact:true}).fill('1000')
+  await page.getByRole('textbox',{name:'Scan product barcode',exact:true}).fill('00001');await page.getByRole('button',{name:'Scan item',exact:true}).click();await page.getByRole('spinbutton',{name:'Received quantity for Drill Product A',exact:true}).fill('3');await page.getByRole('textbox',{name:'Selling price for Drill Product A',exact:true}).fill('90');await expect(page.getByLabel('Calculated payable',{exact:true})).toHaveValue('180.00')
   await page.getByRole('button',{name:'Submit GRN',exact:true}).click();await expect(page.getByRole('button',{name:'Confirm GRN submission',exact:true})).toBeVisible()
   const source=(await h.records(h.base+'/goodsReceipts'))[0],{page:owner}=await h.session('owner')
   await call(h,owner,'saveStockReceiptDraft',{...draft(h,source.id,{quantity:9}),expectedRevision:1,invoiceNumber:'STALE-REVIEW'})

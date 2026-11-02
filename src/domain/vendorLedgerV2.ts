@@ -12,6 +12,13 @@ export type VendorV2 = {
   notes?: string
   active: boolean
   openingBalancePaise: AmountPaise
+  preCutoverOpeningBalancePaise?: AmountPaise
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
+  cutoverOpeningCaptured?: boolean
+  cutoverOpeningBalancePaise?: AmountPaise
+  cutoverOpeningCapturedAt?: string
+  cutoverOpeningCapturedByUid?: string
   openingLedgerEntryId?: string
   revision: number
   createdAt: string
@@ -42,6 +49,9 @@ export type PurchaseV2 = {
   grnId?: string
   originalInvoiceTotalPaise?: number
   shortage?: { state: 'pending' | 'received'; originalInvoiceTotalPaise: number; expectedCreditPaise?: number; creditNoteNumber?: string; creditNoteDate?: string } | null
+  cutoverHistoricalOnly?: boolean
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
   id: string
   vendorId: string
   invoiceNumber: string
@@ -86,6 +96,9 @@ export type VendorSettlementV2 = {
   createdByUserId: string
   updatedAt: string
   updatedByUserId: string
+  cutoverHistoricalOnly?: boolean
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
 }
 
 export type SettlementCorrectionValuesV2 = Pick<VendorSettlementV2, 'amountPaise' | 'date' | 'mode' | 'notes'> & {
@@ -142,6 +155,11 @@ export type InvoiceStateV2 = {
   invoiceId: string
   openAmountPaise: AmountPaise
   reservedAmountPaise: AmountPaise
+  cutoverOpenAmountPaise?: AmountPaise
+  cutoverReservedAmountPaise?: AmountPaise
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
+  cutoverStatus?: 'historical'
   revision: number
   lastAllocationId?: string
   updatedAt: string
@@ -165,6 +183,8 @@ export type VendorReturnV2 = {
   vendorGstin?: string
   dispatchedAt?: string
   replacementStatus?: 'awaiting-receipt' | 'received'
+  cutoverHistoricalOnly?: boolean
+  historicalCreditOnly?: boolean
   replacementReceiptId?: string
   restockStatus?: 'awaiting-physical-return' | 'received'
   restockReceiptId?: string
@@ -249,6 +269,7 @@ export type ChequeV2 = {
   origin: ChequeOrigin
   sourceStatus?: string
   trackingOnly: boolean
+  cutoverTrackingOnly?: boolean
   pendingLedgerEntryId?: string
   debitLedgerEntryId?: string
   revision: number
@@ -313,6 +334,9 @@ export type InvoiceBalanceV2 = {
   openAmountPaise: AmountPaise
   reservedAmountPaise: AmountPaise
   availableToAllocatePaise: AmountPaise
+  cutoverOpenAmountPaise?: AmountPaise
+  balanceCutoverDate?: string
+  cutoverStatus?: 'historical'
 }
 
 const businessDatePattern = /^\d{4}-\d{2}-\d{2}$/

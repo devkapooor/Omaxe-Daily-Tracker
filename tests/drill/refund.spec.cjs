@@ -90,6 +90,29 @@ test('B3-07 bill eye and row open read-only details with keyboard/phone dismissa
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'View bill '+bill.receiptNumber,exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:output('bill-view-phone.png'),fullPage:true});await page.getByRole('button',{name:'Close',exact:true}).click()
 })
 
+test('UX-04 bill dialog returns focus to the visible opener after a layout change', async ({ drill: h }) => {
+  const { page } = await h.session('billingA'), bill = await sale(h, page, 1);
+  const before = await snapshot(h);
+  await h.nav(page, 'POS');
+  await page.getByRole('tab', { name: 'Bills', exact: true }).click();
+  const opener = page.getByRole('button', { name: 'View bill ' + bill.receiptNumber, exact: true });
+  await opener.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(bill.createdByUid, { exact: true })).not.toBeVisible();
+  await page.getByRole('dialog').getByText('Recorder details', { exact: true }).click();
+  await expect(page.getByRole('dialog').getByText(bill.createdByUid, { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(opener).toBeFocused();
+  expect(await snapshot(h)).toEqual(before);
+});
+
 test('B3-08 Cashout gross180, refund90, expense90, drawer1090 and net sales90 reconcile once',async({drill:h})=>{
  const {page}=await h.session('owner'),bill=await sale(h,page);await call(h,page,'postPosReturn',await intent(h,page,bill));await h.nav(page,'Cashout')
  await expect(page.getByLabel('Gross cash collections (before refunds)',{exact:true})).toHaveValue('180');await expect(page.getByLabel('Cash Paid Out (source-linked)',{exact:true})).toHaveValue('90')

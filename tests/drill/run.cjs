@@ -1,5 +1,14 @@
 const fs=require('node:fs'),path=require('node:path'),{spawn,spawnSync}=require('node:child_process')
-const root=path.resolve('.'),runId=process.env.DRILL_RUN_ID||'2026-10-12-drill-01',out=path.join(root,'output/playwright',runId)
+const root=path.resolve('.'),runRoot=path.resolve(root,'output/playwright'),requestedRunId=process.env.DRILL_RUN_ID
+let runId=requestedRunId||`drill-${new Date().toISOString().replace(/[-:.TZ]/g,'')}`
+if(!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(runId))throw Error('DRILL_ISOLATION: DRILL_RUN_ID must be a simple 1-80 character folder name.')
+let out=path.resolve(runRoot,runId)
+if(!out.startsWith(runRoot+path.sep))throw Error('DRILL_ISOLATION: evidence path must remain inside output/playwright.')
+if(!requestedRunId){let suffix=2;while(fs.existsSync(out)){runId=`${runId}-${suffix++}`;out=path.resolve(runRoot,runId)}}
+const chromeCandidates=[process.env['PROGRAMFILES(X86)']&&path.join(process.env['PROGRAMFILES(X86)'],'Google/Chrome/Application/chrome.exe'),process.env.ProgramFiles&&path.join(process.env.ProgramFiles,'Google/Chrome/Application/chrome.exe'),process.env.LOCALAPPDATA&&path.join(process.env.LOCALAPPDATA,'Google/Chrome/Application/chrome.exe')].filter(Boolean)
+const browserExecutable=process.env.DRILL_BROWSER_EXECUTABLE||chromeCandidates.find(fs.existsSync)
+if(!browserExecutable||!fs.existsSync(browserExecutable))throw Error('DRILL_ISOLATION: installed Chrome was not found. Set DRILL_BROWSER_EXECUTABLE to its executable; no browser download is attempted.')
+process.env.DRILL_BROWSER_EXECUTABLE=browserExecutable
 fs.mkdirSync(out,{recursive:true})
 Object.assign(process.env,{DRILL_RUN_ID:runId,GCLOUD_PROJECT:'demo-alphahub-drill',FIRESTORE_EMULATOR_HOST:'127.0.0.1:8080',FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9099',FIREBASE_EMULATOR_HUB:'127.0.0.1:4400',DRILL_GUARD_LOG:path.join(out,'server-guard.jsonl'),CI:'true',FIREBASE_CLI_DISABLE_UPDATE_CHECK:'true',FUNCTIONS_DISCOVERY_TIMEOUT:'60',METADATA_SERVER_DETECTION:'none'})
 const cache=path.join(process.env.LOCALAPPDATA,'npm-cache/_npx')
@@ -53,7 +62,8 @@ async function main(){
    spawnSync('taskkill.exe',['/PID',String(pid),'/T','/F'],{stdio:'inherit',windowsHide:true})
   }return
  }
- const batches={remediation:'remediation.spec.cjs','finance-followup':'financeFollowup.spec.cjs',finance:'finance.spec.cjs',refund:'refund.spec.cjs',stock:'stock.spec.cjs','stock-residual':'stockResidual.spec.cjs',checkout:'checkout.spec.cjs',smoke:'smoke.spec.cjs',financial:'financial.spec.cjs',concurrency:'concurrency.spec.cjs',remaining:'remaining.spec.cjs',advanced:'advanced.spec.cjs',closure:'closure.spec.cjs',resilience:'resilience.spec.cjs',all:['smoke.spec.cjs','financial.spec.cjs','concurrency.spec.cjs','remaining.spec.cjs','advanced.spec.cjs','closure.spec.cjs','resilience.spec.cjs']}
+ const allSuites=['smoke.spec.cjs','checkout.spec.cjs','financial.spec.cjs','finance.spec.cjs','financeFollowup.spec.cjs','refund.spec.cjs','stock.spec.cjs','stockResidual.spec.cjs','concurrency.spec.cjs','remaining.spec.cjs','advanced.spec.cjs','closure.spec.cjs','resilience.spec.cjs','remediation.spec.cjs']
+ const batches={remediation:'remediation.spec.cjs','finance-followup':'financeFollowup.spec.cjs',finance:'finance.spec.cjs',refund:'refund.spec.cjs',stock:'stock.spec.cjs','stock-residual':'stockResidual.spec.cjs',checkout:'checkout.spec.cjs',smoke:'smoke.spec.cjs',financial:'financial.spec.cjs',concurrency:'concurrency.spec.cjs',remaining:'remaining.spec.cjs',advanced:'advanced.spec.cjs',closure:'closure.spec.cjs',resilience:'resilience.spec.cjs',all:allSuites}
  if(command==='checks'){require('./server-guard.cjs');await require('./safe-admin.cjs').health();require('./checks.cjs');return}
  if(!batches[command])throw Error('Unknown batch '+command)
  // All browser batches reset the same demo dataset. Never run two runners
@@ -69,9 +79,19 @@ async function main(){
  fs.writeFileSync(lock,JSON.stringify({pid:process.pid,runId,batch:command}),{flag:'wx'})
  process.once('exit',()=>{if(fs.existsSync(lock)&&JSON.parse(fs.readFileSync(lock,'utf8')).pid===process.pid)fs.unlinkSync(lock)})
  require('./server-guard.cjs');await require('./safe-admin.cjs').health()
- process.env.DRILL_BATCH=command
- process.env.DRILL_ATTEMPT=String(Date.now())
- const result=spawnSync(process.execPath,[path.join(tool,'cli.js'),'test','--config','tests/drill/playwright.config.cjs',...[].concat(batches[command]),...process.argv.slice(3)],{cwd:root,stdio:'inherit',env:process.env,windowsHide:true})
- process.exitCode=result.status??1
+ function runBrowserBatch(batch,suites){
+  process.env.DRILL_BATCH=batch
+  process.env.DRILL_ATTEMPT=String(Date.now())
+  return spawnSync(process.execPath,[path.join(tool,'cli.js'),'test','--config','tests/drill/playwright.config.cjs',...suites,...process.argv.slice(3)],{cwd:root,stdio:'inherit',env:process.env,windowsHide:true})
+ }
+ if(command==='all'){
+  const isolation=runBrowserBatch('isolation-smoke',['smoke.spec.cjs'])
+  if(isolation.status!==0){process.exitCode=isolation.status??1;return}
+  const regression=runBrowserBatch('all',allSuites.filter(suite=>suite!=='smoke.spec.cjs'))
+  process.exitCode=regression.status??1
+ }else{
+  const result=runBrowserBatch(command,[].concat(batches[command]))
+  process.exitCode=result.status??1
+ }
 }
 main().catch(e=>{console.error(e.message);process.exitCode=1})

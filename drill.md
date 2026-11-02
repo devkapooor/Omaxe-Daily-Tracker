@@ -1,5 +1,45 @@
 # AlphaHub isolated drill
 
+## Current maintenance execution — 31 October 2026
+
+This section supersedes the historical startup commands, runtime requirements and approval status below. Keep the original dated scenario cards/results as evidence. Current scope and exclusions: [coverage map](docs/operations/TEST_COVERAGE.md). Latest run/maintenance status: [operations index](docs/operations/README.md). Historical inventory/findings JSON files are not a current defect list. No deployment, Git push or production mutation is authorized.
+
+Use Node **22**, installed Java 21, existing root/Functions dependencies, Firebase CLI and cached Playwright **1.63.0** with installed Chrome. `run.cjs` discovers the existing cache and fails if unavailable; it does not download tools. The retained portable Node path below is local and must exist. On another machine use its verified Node 22 path. Do not execute old Node20 batch wrappers to start a current run.
+
+```powershell
+$drillNode = (Resolve-Path 'output/node22-upgrade-2026-10-29/node-v22.23.4-win-x64/node.exe').Path
+$stackRun = 'local-stack-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+$env:DRILL_RUN_ID = $stackRun
+& $drillNode tests/drill/run.cjs start
+if ($LASTEXITCODE -ne 0) { throw 'Local startup failed; do not continue' }
+
+# Distinct evidence ID; full runs static -> support -> isolated Telegram -> isolation smoke -> browser.
+$env:DRILL_RUN_ID = 'full-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+& $drillNode tests/drill/full-financial-acceptance.cjs full
+$fullExit = $LASTEXITCODE
+
+# Optional focused race recheck, never concurrently with another runner.
+$env:DRILL_RUN_ID = 'races-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+& $drillNode tests/drill/full-financial-acceptance.cjs concurrency
+
+# Stop only the stack this session started. Also run this after failed tests.
+$env:DRILL_RUN_ID = $stackRun
+& $drillNode tests/drill/run.cjs stop
+Write-Output "Full regression exit: $fullExit"
+```
+
+Use a new run ID for every comprehensive attempt. Results are appended per attempt and final phase results refuse overwrite. The full runner stops before dependent phases after a failure. Its Telegram phase owns a separate cached Firestore1.22.0 jar on127.0.0.1:8189 (websocket9159), exact project demo-telegram-alerts, runs the existing integration with test transport, then stops only its child process. It refuses occupied ports/missing jar and never downloads tools. Fix/diagnose then use a fresh ID; never erase failed evidence. `npm run test:full` and other package aliases are equivalent when Node22 is on PATH. Full checks can take 30–45 minutes locally. A failure, skip, timeout, missing prerequisite or missing screenshot must remain visible in the report.
+
+Isolation gates: exact project `demo-alphahub-drill`, Auth `127.0.0.1:9099`, Firestore `127.0.0.1:8080`, Functions `127.0.0.1:5001/demo-alphahub-drill/asia-south1`, hub `127.0.0.1:4400`, Vite `127.0.0.1:5178`. Logging is 4500. Startup refuses occupied ports; never kill unknown listeners. The server socket guard, browser outbound allowlist, SDK project checks and ENV-01 must all pass. No fallback to production, localhost proxy, remote Functions, Telegram or other real recipients. The duplicate legacy collection path `posSandboxes/test` is synthetic ONLY in this exact demo project; in production it contains real business records.
+
+One browser runner owns shared fixtures via `output/playwright/.drill-browser-run.lock`. Every test resets demo Auth/Firestore; never run independent suites, support/Rules tests or manual device checks concurrently. Races use independent authenticated contexts inside a single scenario with coordinated requests. Reset/seed rejects wrong hosts/project and any existing loan record. Never seed loan records or change their exclusions. The operations integration suite now separates its historical loan-specific reference fixture into an explicit skipped check; product-reference coverage remains enabled. Four historical Rules cases remain excluded. Operations, stock-vendor and Telegram resets also refuse existing loan data. Before manual previews, finish the runner and inspect/reset only through the same safe entry point.
+
+Evidence: `output/playwright/<run>/` contains phase logs/results, append-only `results.jsonl`, per-attempt screenshots/traces/DOM and `evidence.json` with synthetic source records and independent expectations. `batch-progress.json` is a convenience latest view, not a replacement for all attempts. Reporter includes F45 IDs. Current curated results live in `docs/operations/drills/`. Do not publish raw traces without reviewing for credentials/identifiers; a generic text redactor is not a screenshot/privacy guarantee.
+
+The default browser configuration explicitly blocks service workers. Desktop contexts and resized phone viewports do not establish physical-device/PWA acceptance. Use the [device and timed acceptance checklist](docs/operations/DEVICE_ACCEPTANCE.md); LAN, HTTPS/tunnel and cloud changes require their own safe setup. Missing device access stays Blocked. No production workaround.
+
+The remaining sections preserve historical plans/checkpoints. Their old “next step”, runtime20 and limited `all` assumptions are superseded by this section and the current source/coverage map.
+
 Current next step: [16 October financial remediation and release plan](docs/operations/drills/2026-10-16-financial-remediation-plan.md) — proposed after the full financial run; awaiting implementation approval. No deployment authorised.
 
 Remediation proposal: [13 October 2026 prioritized fix plan](docs/operations/drills/2026-10-13-remediation-plan.md). Documentation only; no application fixes or deployment authorized.
@@ -46,19 +86,13 @@ Products A00001: quantity20, MRP10000, selling9000, cost6000 paise; B00002: quan
 
 ## Inventory and reconciled requirements
 
-Current source pages: owner Dashboard, Action Centre, POS, Stock, Vendor Workspace, Party Directory, Register, Loans(read-only), Cashout, Cash Movement, Logs, Settings. Staff omit owner Dashboard/Action Centre/Loans/Logs. POS Billing/Dashboard/Bills; Stock Current Stock/Receive Stock/GRN History/Stock Audit/Stock History; Vendor Vendors/Payments/Invoices/Returns/Corrections/Cheques(owner)/Balances; Register Expenses; Cashout New Cashout/Corrections; Action Centre Pending/History; Logs eight source tabs; Settings Staff/Operations/POS/Announcements/Staff Notifications/Update Password(owner), restricted staff views. Inventory exact modal/tab source locations: [inventory.json](tests/drill/inventory.json). Coverage matrix below includes source/detail/edit/confirm dialogs under their parent workflows, plus shared confirmation/count/auth gates.
+The approved 30 October repairs are documented in [the repair plan](docs/operations/DRILL_REMEDIATION_PLAN_2026-10-30.md) and [execution results](docs/operations/drills/2026-10-30-drill-repairs-results.md). Wait for the intended saved financial operation before reconciling totals; recovery navigation must wait for the new document. Receipt fixtures must reconcile line value/payable or include an explicit shortage credit note. Fixture dates derive from the IST date key. Listener evidence is scoped to navigation and detail phases, including cleanup of the bounded POS Quick Add query. Historical failed runs remain unchanged.
+
+Current source pages: owner Dashboard, Action Centre, POS, Stock, Vendor Workspace (including parties), Register, Loans (read-only drill coverage), Cashout, Cash Movement, Logs, Settings. Staff omit owner Dashboard/Action Centre/Loans/Logs. POS Billing/Dashboard/Bills; Stock Current Stock/Receive Stock/GRN History/Stock Return/Stock Audit/Stock History; Vendor Workspace Vendors & Parties/Invoices/Payment Corrections/Balances; Register New Payment/Payment History/Cheques with role permissions; Cashout count/recovery workflows; Action Centre Pending/History; Logs eight source tabs; owner Settings Staff/Operations/POS/Staff Notifications/Business Identity/Update Password. There is no separate Party Directory navigation item. Historical modal/tab locations are in [inventory.json](tests/drill/inventory.json); verify them against current source. Coverage includes source/detail/edit/confirm dialogs under their parent workflows and shared confirmation/count/auth gates.
 
 QA_CHECKLIST is historical guidance: it omits Stock in menus, says all added vendors have zero opening, describes Action Centre latest20 instead of current cursor history, suggests loan mutations, and states browser automation is outside cleanup. This task supersedes cleanup constraints and excludes loan mutation. FIREBASE_SETUP's no-Functions/Spark wording is outdated: current source has time, price/review and cash-transfer Functions; ROADMAP records existing Blaze. GRN MRP correction is retired; legacy evidence/view/reversal remains. Vendor purchases have repository support; their active entry point must be verified instead of invented. Loan and retired payroll/planner controls are not silently reactivated.
 
 Historical tests/deployments and previous vulnerability probes are leads, not current results. Browser-owned POS/GRN/audit/vendor/Cashout/summary writes are architecture concerns; real Rules/API probes will distinguish allowed fraud from missing hardening. No fixes are applied in this drill.
-
-## Baseline references and workflow inventory
-
-See [baseline and access/write inventory](docs/operations/drills/2026-10-12-baseline.md) and [tab/modal source inventory](tests/drill/inventory.json), including overlays without dialog roles. Current source and approved checkpoints take precedence over outdated historical QA.
-
-## Baseline references and workflow inventory
-
-See [baseline and access/write inventory](docs/operations/drills/2026-10-12-baseline.md) and [tab/modal source inventory](tests/drill/inventory.json), including overlays without dialog roles. Current source and approved checkpoints take precedence over outdated historical QA.
 
 ## Baseline references and workflow inventory
 
@@ -110,7 +144,7 @@ Initial statuses below preserve the pre-execution plan. The dated report contain
 | STK-08 | Owner review does not reapply old price | owner/manager/billing | P1 | Not Run |
 | STK-09 | Unified history trace/filter/duplicates | owner/manager/billing | P1 | Not Run |
 | GRN-01 | Draft save/continue/delete and top-bar form retention | billing/manager/owner | P0 | Not Run |
-| GRN-02 | Existing-product partial receipt/invoice link | billing/manager/owner | P0 | Not Run |
+| GRN-02 | Received stock with confirmed shortage credit note | billing/manager/owner | P0 | Not Run |
 | GRN-03 | New product receive and price/quantity validation | billing/manager/owner | P0 | Not Run |
 | GRN-04 | Duplicate and concurrent submissions | billing/manager/owner | P0 | Not Run |
 | GRN-05 | Owner reversal and concurrent downstream changes | billing/manager/owner | P0 | Not Run |
@@ -146,7 +180,7 @@ Initial statuses below preserve the pre-execution plan. The dated report contain
 | LOG-01 | Every active Logs tab and source navigation | owner | P1 | Not Run |
 | LOG-02 | Date/name filters, sorting, columns and pagination | owner | P1 | Not Run |
 | SET-01 | Role settings, operations and audit | owner/staff | P1 | Not Run |
-| SET-02 | Synthetic announcement and notifications | owner/staff | P1 | Not Run |
+| SET-02 | Scheduled staff notifications | owner/staff | P1 | Not Run |
 | UX-01 | Desktop/phone/long labels/overflow | all permitted roles | P1 | Not Run |
 | UX-02 | Keyboard/focus/modal dismissal/loading/errors | all permitted roles | P1 | Not Run |
 | UX-03 | Offline/reconnect/interruption and subscriptions | all permitted roles | P1 | Not Run |
@@ -801,19 +835,19 @@ Automation: [closure.spec.cjs](tests/drill/closure.spec.cjs), [financial.spec.cj
 
 Evidence: real roles/endpoints; canonical source values, actor/revisions and exactly-once assertions; screenshot/console/failed requests/trace on failure under `output/playwright/<run-id>/`. Redact passwords, tokens and OOB codes before sharing.
 
-### GRN-02 - Existing-product partial receipt/invoice link
+### GRN-02 - Received stock with confirmed shortage credit note
 
 Role: billing/manager/owner; priority: P0; initial status: Not Run.
 
 Preconditions: Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.
 
 1. Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.
-2. Exercise "Existing-product partial receipt/invoice link" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.
+2. Try saving a receipt with a short line and no credit note; confirm it is rejected without writes. Record only received lines, enter the full invoice amount and confirmed credit-note details, then submit once and retry the same operation.
 3. Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect.
 
-Independent expected result: Receive A x3 at cost6000, MRP10000,sell9000: stock20->23; full invoice18000 paise payable once, linked reservation/source/ledger.
+Independent expected result: Receive A x3 at cost6000, MRP10000,sell9000: stock20->23; original invoice100000 paise less confirmed credit82000 gives net payable18000 once. The credit-note reservation, source receipt, stock movement, invoice and vendor account reconcile; retry has no second effect.
 
-Automation: [financial.spec.cjs](tests/drill/financial.spec.cjs). Resume with `node tests/drill/run.cjs all --grep GRN-02`.
+Automation: [financial.spec.cjs](tests/drill/financial.spec.cjs), [stock.spec.cjs](tests/drill/stock.spec.cjs). Resume with `node tests/drill/run.cjs all --grep GRN-02`.
 
 Evidence: real roles/endpoints; canonical source values, actor/revisions and exactly-once assertions; screenshot/console/failed requests/trace on failure under `output/playwright/<run-id>/`. Redact passwords, tokens and OOB codes before sharing.
 
@@ -843,7 +877,7 @@ Preconditions: Fresh guarded demo fixture; real authenticated profile for the li
 2. Exercise "Duplicate and concurrent submissions" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.
 3. Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect.
 
-Independent expected result: Same draft/invoice does not add stock or payable twice; partial receipts share one full invoice payable.
+Independent expected result: Repeating the same submission does not add stock or payable twice; a second new receipt against the same vendor/invoice is rejected without writes.
 
 Automation: [closure.spec.cjs](tests/drill/closure.spec.cjs), [financial.spec.cjs](tests/drill/financial.spec.cjs). Resume with `node tests/drill/run.cjs all --grep GRN-04`.
 
@@ -1377,21 +1411,23 @@ Automation: [closure.spec.cjs](tests/drill/closure.spec.cjs), [remaining.spec.cj
 
 Evidence: real roles/endpoints; canonical source values, actor/revisions and exactly-once assertions; screenshot/console/failed requests/trace on failure under `output/playwright/<run-id>/`. Redact passwords, tokens and OOB codes before sharing.
 
-### SET-02 - Synthetic announcement and notifications
+### SET-02 - Scheduled staff notifications
 
 Role: owner/staff; priority: P1; initial status: Not Run.
 
 Preconditions: Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.
 
 1. Sign in as owner/staff; open Settings and its named role-restricted tab and capture its canonical baseline.
-2. Exercise "Synthetic announcement and notifications" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.
+2. Exercise "Scheduled staff notifications" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.
 3. Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect.
 
-Independent expected result: Owner publish audit, active staff notices, dismissal/expiry/window behavior; only emulator records.
+Independent expected result: Owner save audit, scheduled staff notices, role targeting and acknowledgement; only emulator records.
 
-Automation: [advanced.spec.cjs](tests/drill/advanced.spec.cjs), [closure.spec.cjs](tests/drill/closure.spec.cjs). Resume with `node tests/drill/run.cjs all --grep SET-02`.
+Automation: [closure.spec.cjs](tests/drill/closure.spec.cjs). Resume with `node tests/drill/run.cjs all --grep SET-02`.
 
 Evidence: real roles/endpoints; canonical source values, actor/revisions and exactly-once assertions; screenshot/console/failed requests/trace on failure under `output/playwright/<run-id>/`. Redact passwords, tokens and OOB codes before sharing.
+
+The separate upgrade announcement feature was retired by the owner on 31 October 2026. Its announcement-only browser scenario was removed; scheduled staff notification coverage remains in SET-02 in closure.spec.cjs. Historical result reports are retained.
 
 ### UX-01 - Desktop/phone/long labels/overflow
 
@@ -1585,23 +1621,19 @@ Run report: [2026-10-12 drill01](docs/operations/drills/2026-10-12-drill-01.md).
 
 ## Current financial acceptance rerun - 16 October 2026
 
-User authorised the full financial test run after the local UI review. Current report: [16 October financial acceptance](docs/operations/drills/2026-10-16-full-financial-testing.md). Evidence: `output/playwright/2026-10-16-full-financial/`. Use Node20 and installed Java21; start `node tests/drill/run.cjs start`, then `node tests/drill/full-financial-acceptance.cjs static`, `support`, and `browser`. Browser suites must remain sequential. No loan mutation, production writes, dependency upgrades, commit, push or deployment. Previous statuses above describe the original drill, not this rerun.
-
-### 16 October run completed with findings
-
-133/143 distinct browser scenarios passed;7 failed and3 skipped (165 attempts including retained retries). Failures:4 application-related checks across3 issues,3 obsolete removed-feature contracts. Domain140+2 metrics, Functions93 and current financial/query Rules21 passed. Older Rules23 failed and4 loan-mutation cases were deliberately excluded; no green acceptance claimed. See the [full report](docs/operations/drills/2026-10-16-full-financial-testing.md) and [scenario matrix](docs/operations/drills/2026-10-16-financial-coverage.md). No application/production changes, commit, push or deploy in this test round.
-
-Supported PowerShell resumption with existing installed tools (use one existing terminal; helpers hide child windows):
+Use portable Node22.23.4 and installed Java21. Give every execution a new run ID to preserve evidence, then start the guarded emulator/Vite stack, run the checks, and stop the owned processes:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot'
-$env:Path = 'C:\Users\devka\AppData\Local\AlphaHubQA\node-v20.20.2-win-x64;' + $env:JAVA_HOME + '\bin;' + $env:Path
-$env:DRILL_RUN_ID = '2026-10-16-full-financial'
-# Start only if local services are stopped; occupied ports are preserved.
-& 'C:\Users\devka\AppData\Local\AlphaHubQA\node-v20.20.2-win-x64\node.exe' .\tests\drill\run.cjs start
-# Run supporting Rules before browser mutations to avoid local compilation contention.
-& 'C:\Users\devka\AppData\Local\AlphaHubQA\node-v20.20.2-win-x64\node.exe' .\tests\drill\full-financial-acceptance.cjs support
-& 'C:\Users\devka\AppData\Local\AlphaHubQA\node-v20.20.2-win-x64\node.exe' .\tests\drill\run.cjs finance-followup --grep F45-12
+$env:DRILL_RUN_ID = 'maintenance-YYYYMMDD-HHMM'
+node tests/drill/run.cjs start
+node tests/drill/full-financial-acceptance.cjs static
+node tests/drill/full-financial-acceptance.cjs support
+node tests/drill/full-financial-acceptance.cjs browser
+node tests/drill/run.cjs stop
 ```
 
-The final command intentionally remains failing until owner-bank read confidentiality is fixed. Do not bypass the endpoint guards, restore retired void/client writers, or use production posSandboxes/test for fixtures. Loans remain read-only.
+The runner creates evidence under `output/playwright/<run-id>/`, blocks nonlocal traffic, verifies the demo emulator project, and refuses to overwrite a mode’s existing result. Browser execution uses one worker and serial fixtures; each test seeds the same demo project. No loan mutation, production writes, dependency upgrades, commit, push or deployment. Browser sessions are not physical-device or installed-PWA acceptance.
+
+### Historical 16 October run
+
+The 16 October acceptance record remains preserved in the [full report](docs/operations/drills/2026-10-16-full-financial-testing.md) and [scenario matrix](docs/operations/drills/2026-10-16-financial-coverage.md). It reported 133/143 distinct browser scenarios passed, 7 failed and 3 skipped; those historical statuses are not current acceptance. Use the fresh-run instructions above for any rerun. Do not reuse the old evidence folder or bypass endpoint guards. Loans remain read-only.

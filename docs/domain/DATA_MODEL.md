@@ -1,5 +1,15 @@
 # Data Model
 
+## Current-source scope ? 31 October 2026
+
+The field tables below preserve legacy finance shapes and are not a complete current callable/schema contract. Current authority and page ownership: [Architecture](../architecture/ARCHITECTURE.md). Current schema sources also include `src/features/pos/domain/types.ts`, stock repository types, `functions/financeOperations.js`, `registerPayments.js`, stock/checkout/refund handlers and `firestore.rules`. Existing rupee-valued compatibility fields must not be treated as interchangeable with integer-paise posting values.
+
+Current active records include owner settings and staff-safe projections; POS products/protected costs/bills/bill states/movements/GRNs/audits/handovers under the legacy `posSandboxes/test` path; V2 vendor/invoice/allocation/account/ledger records; expenses/daily cashouts/transfers and durable operation records. Business identity is Settings master data, GST belongs to vendor profiles, short display references coexist with immutable document IDs. Current financial/stock writes use trusted callables; schema tables alone do not authorize direct client writes. Historical local stock sources/backups/SQLite are retained evidence, not the live database. No schema migration or record rewrite was performed in maintenance.
+
+Deployed follow-up (1 November IST): `cashoutExpenseReconciliations/{date}` stores the current owner-confirmed historical ordinary cash expense total and signed unitemised reporting adjustment, source fingerprint, revision, reason and attribution. It is server-only; original `cashouts` itemised expense records remain authoritative for category/recipient details. Immutable `financeOperations` retain declaration before/after evidence. Supported completed Cashout payout corrections additionally use the existing approved `cashoutCorrectionRequests` audit and a dated reconciliation reference on `dailyCashouts`. This does not create a second cash ledger or change physical drawer balances. Deployment did not create or adjust any production financial record. [Workflow and schema contract](../operations/HISTORICAL_EXPENSE_RECONCILIATION_2026-11-01.md).
+
+Deployed historical Cashout safety: past-date quotes/entries bind `historicalCashTiming` (`already-removed` or `remove-now`). New actual debit results retain `drawerDebitCheckpoint` for exact current-baseline comparison. The server-only, append-only `cashoutDrawerCorrections/{operationId}` collection records authorised compensation, with an immutable finance operation and reversal reference on the original Cashout. Original debit/closure evidence and historical Cash Movement records are retained. The approved 17 October duplicate debit was corrected once for ₹14,300 on 1 November IST; this did not alter the original financial sources. [Current contract and incident evidence](../operations/HISTORICAL_CASHOUT_SAFETY_2026-11-01.md).
+
 ## Hard Rule
 
 If record shape, storage ownership, or derived-finance assumptions change, update this file with the matching docs.
@@ -100,7 +110,9 @@ If record shape, storage ownership, or derived-finance assumptions change, updat
 | disabled | boolean | no | Optional inactive marker |
 | purchasingCapabilities | map | no | Optional V2 purchasing grants; absent and false values grant nothing to non-owners, while owners retain full authority |
 
-### VendorRecord
+### Legacy vendor record (retained data only)
+
+These fields describe retained documents in the old `vendors` collection. The app no longer models or reads this schema; current vendor identity is `VendorV2` in `src/domain/vendorLedgerV2.ts`.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -244,7 +256,7 @@ Used to back searchable selectors and keep naming consistent across forms.
 - Active canonical names and aliases must be unique across V2 vendors. Ambiguous names resolve to no vendor and require owner review.
 - Unmatched historical names remain explicit legacy references and never acquire a V2 vendor ID automatically.
 
-V1 Purchase, Payment and VendorRecord documents remain preserved historical records. The all-vendor activation boundary selects the new entry workflow; legacy data is not copied into V2 balances.
+V1 Purchase and Payment documents remain preserved historical transaction records. Legacy vendor profile fields can be moved into `vendorsV2` by the reviewed owner migration; their old opening balances are archived but are not copied into V2 balances.
 
 ### V2 Persistence Boundary
 
@@ -269,6 +281,9 @@ Current app settings include:
 - `monthlyOperationalExpense`
 - `marginPercentage`
 - `currentBankBalance` (legacy Payment Planner compatibility; no active editor)
+- `businessLegalName`, `businessGstin`, optional `businessFssaiLicense`
+- Optional owner-only `businessBankName`, `businessBankAccountHolder`, `businessBankAccountNumber`, `businessBankIfsc`, `businessBankBranch` (strings; account numbers preserve leading zeros)
+- `scheduledNotifications` (Staff Notifications; replaces the retired upgrade-announcement workflow)
 - `operationalExpenseBreakdown`
 
 `operationalExpenseBreakdown` currently contains:
@@ -283,12 +298,15 @@ Current app settings include:
 
 `monthlyOperationalExpense` remains stored as the derived total used by the dashboard and projection math.
 
+Business registration and bank details are saved by the owner-only `business-identity` settings operation, with server validation and audit. Blank optional fields clear a value; omitted fields from older clients preserve existing values. `appMetadata/appSettings` remains the canonical owner-only master. The staff projection explicitly excludes every bank field and the retired `upgradeAnnouncement` field. Stored historical announcement data and audit entries are retained; no new announcement operation is accepted. Bank details describe the firm account and never change bank balances or post transactions.
+
 ### appMetadata/nameDirectory
 
 Current directory metadata includes:
 
 - `people`
-- `vendors`
+
+The retired `vendors` name list is not read by the app. Its entries are reviewed and moved into `vendorsV2` by the owner-only legacy migration; the original list is preserved in the restricted migration archive.
 
 ### appMetadata/workspaceMetrics
 
@@ -316,10 +334,10 @@ This document is a shared read model derived from source finance records and met
 - Firestore stores app records and app metadata.
 - `appMetadata/workspaceMetrics` stores the shared derived read model used by the main finance dashboards and legacy-cheque compatibility flow.
 - Legacy browser-only data can still be imported once.
-- `Purchase.unpaidAmount` and `VendorRecord.openingOutstandingRemaining` drive the retained legacy vendor metric, including the current dashboard liability binding. V2 workspace balances use V2 account states; cleanup does not switch financial sources.
+- `vendorsV2` is the active vendor master and `vendorAccountStatesV2` supplies current payable projections. Legacy `vendors` and `appMetadata/vendorCatalog` are not read by the app; legacy purchases/payments remain historical transaction records.
 - Historical planner availability used `currentBankBalance`, not counter cash; the planner screen and its write actions are removed.
 - `Cash Movement` records affect pending cash and bank totals; preserved planner records do not.
 - Active money ownership is user-ID based. Legacy slot fields are read-only compatibility fields and are not used for new records.
 - Loan notes are additive and optional; historical loan documents can omit them.
 - `Sales` log rows remain read-only because they are derived from daily cashout history.
-- `workspaceMetrics` is derived data, not the canonical input record set. The canonical write records remain collections such as `sales`, `cashouts`, `payments`, `purchases`, `dailyCashouts`, `cashTransfers`, `loans`, and metadata documents such as `appSettings`.
+- `workspaceMetrics` is derived data, not a posting source. Vendor summaries are rebuilt from V2 vendor identities and account states. Canonical write records remain their domain collections, with append-only vendor ledger evidence and atomically maintained current-state projections.

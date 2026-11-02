@@ -1,5 +1,7 @@
 # Rollback Playbook
 
+Current local maintenance recovery is [per-file snapshot recovery](MAINTENANCE_FOLDER_REGISTER_2026-10-31.md#recovery-and-preservation-verification). The deployment rollback instructions below require separate explicit authorization and a compatible reviewed release. Never run branch checkout, blanket copy-back or reset over the current unrelated working changes. Prepare a clean isolated checkout first; code rollback does not authorize financial-data rollback or restoring a business backup.
+
 ## Goal
 
 Recover AlphaHub to a known stable version without rewriting `main`.

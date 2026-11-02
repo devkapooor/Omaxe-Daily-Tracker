@@ -73,8 +73,6 @@ export default function App() {
     saveOperationalSettings,
     saveBusinessIdentity,
     saveScheduledNotifications,
-    publishUpgradeAnnouncement,
-    clearUpgradeAnnouncement,
     savePayment,
   } = useAppStore()
 
@@ -281,8 +279,6 @@ export default function App() {
         saveOperationalSettings={saveOperationalSettings}
         saveBusinessIdentity={saveBusinessIdentity}
         saveScheduledNotifications={saveScheduledNotifications}
-        publishUpgradeAnnouncement={publishUpgradeAnnouncement}
-        clearUpgradeAnnouncement={clearUpgradeAnnouncement}
         savePayment={savePayment}
         setDashboardMonthOffset={setDashboardMonthOffset}
         settingsAuditLog={settingsAuditLog}

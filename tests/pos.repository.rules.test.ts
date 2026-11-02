@@ -172,7 +172,7 @@ describe('POS repository workflows against deployed rules', () => {
     expect((await getDoc(doc(state.db, 'posSandboxes', 'test', 'goodsReceipts', receiptId))).data()?.status).toBe('reversed')
   })
 
-  it('links partial receipts to one full-invoice payable', async () => {
+  it('requires a shortage credit note and posts only received stock with the net payable', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'appMetadata', 'vendorLedgerV2Config'), { enabled: true, activationDate: '2026-10-01', updatedAt: timestamp, updatedByUserId: owner.id })
       await setDoc(doc(context.firestore(), 'vendorsV2', 'qa-vendor'), {
@@ -181,24 +181,33 @@ describe('POS repository workflows against deployed rules', () => {
       })
     })
     const receiptInput = {
-      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-PARTIAL', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
+      vendorId: 'qa-vendor', vendorName: 'QA Vendor', invoiceNumber: 'INV-SHORTAGE', invoiceDate: '2026-10-03', receiptDate: '2026-10-03',
       lines: [{ productId: 'qa-product', barcode: '001', productName: 'QA Product', category: 'QA', expectedRevision: 1, quantity: 1, unitCostPaise: 1000, sellingPricePaise: 1200, mrpPaise: 1500, mrpChanged: true, lineTotalPaise: 1000 }],
       invoiceTotalPaise: 2500,
     }
-    const firstId = await savePosGoodsReceiptDraft(receiptInput, billing)
-    const firstResult = await submitPosGoodsReceipt(firstId, billing)
-    const secondId = await savePosGoodsReceiptDraft({ ...receiptInput, lines: receiptInput.lines.map(line => ({ ...line, expectedRevision: 2 })) }, billing)
-    const secondResult = await submitPosGoodsReceipt(secondId, billing)
-    expect(firstResult.payableCreated).toBe(true)
-    expect(secondResult).toMatchObject({ payableCreated: false, purchaseId: `grn-${firstId}`, totalPaise: 2500 })
-    expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
-    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(12)
+    await expect(savePosGoodsReceiptDraft(receiptInput, billing)).rejects.toThrow(/complete receipt or its shortage credit note/i)
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(10)
+    expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).exists()).toBe(false)
+
+    const receiptId = await savePosGoodsReceiptDraft({
+      ...receiptInput,
+      pricingMode: 'received-stock',
+      shortage: { state: 'received', originalInvoiceTotalPaise: 2500, creditNoteNumber: 'CN-SHORT-1', creditNoteDate: '2026-10-03' },
+    }, billing)
+    const result = await submitPosGoodsReceipt(receiptId, billing)
+    expect(result).toMatchObject({ payableCreated: true, purchaseId: `grn-${receiptId}`, totalPaise: 1000 })
+    expect((await getDoc(doc(state.db!, ...productPath))).data()?.currentQuantity).toBe(11)
+    expect((await getDoc(doc(state.db!, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(1000)
     state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
-    await reversePosGoodsReceipt(secondId, 'Reverse later partial', owner)
-    expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(2500)
-    expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(11)
-    await reversePosGoodsReceipt(firstId, 'Reverse original receipt', owner)
+    await environment.withSecurityRulesDisabled(async context => {
+      const database = context.firestore()
+      const purchase = (await getDoc(doc(database, 'purchasesV2', `grn-${receiptId}`))).data()!
+      const note = (await getDocs(collection(database, 'vendorCreditNoteReservationsV2'))).docs.map(snapshot => snapshot.data()).find(record => record.number === 'CN-SHORT-1')
+      expect(purchase).toMatchObject({ invoiceTotalPaise: 1000, receivedValuePaise: 1000, originalInvoiceTotalPaise: 2500, shortage: { state: 'received', expectedCreditPaise: 1500 } })
+      expect(note).toMatchObject({ amountPaise: 1500, goodsReceiptId: receiptId, appliedInNetInvoice: true })
+    })
+    await reversePosGoodsReceipt(receiptId, 'Reverse received stock and credited payable', owner)
     expect((await getDoc(doc(state.db, 'vendorAccountStatesV2', 'qa-vendor'))).data()?.outstandingPaise).toBe(0)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
   })
@@ -455,7 +464,7 @@ describe('POS repository workflows against deployed rules', () => {
     state.userId = owner.id
     state.db = environment.authenticatedContext(owner.id, { auth_time: state.authTime }).firestore()
     await environment.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'posSandboxes', 'test', 'importRuns', 'qa-checksum'), { status: 'completed', completedRows: 6069 }))
-    const parsed = parseApprovedPosCsv(readFileSync('data/pos/omaxe-opening-stock-2026-10-02.approved.csv', 'utf8'))
+    const parsed = parseApprovedPosCsv(readFileSync('tests/fixtures/pos-products.synthetic.csv', 'utf8'))
     await expect(importPosProducts({ rows: parsed.products, validation: parsed.validation, file: new File([''], 'approved.csv'), checksum: 'qa-checksum', sourceHeaders: parsed.sourceHeaders, actor: owner })).rejects.toThrow(/import is retired/)
     expect((await getDoc(doc(state.db, ...productPath))).data()?.currentQuantity).toBe(10)
   })

@@ -1,5 +1,7 @@
 # QA Checklist
 
+Current execution commands/results and precise exclusions: [test coverage](TEST_COVERAGE.md), [drill runbook](../../drill.md#current-maintenance-execution--31-october-2026), [device acceptance](DEVICE_ACCEPTANCE.md), [operations index](README.md). This checklist is supporting guidance; dated assertions below do not override current source or per-scenario evidence. Current owner/staff menus include Stock; Loans has its own owner page and is mutation-excluded.
+
 This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the archived DRILL template. Record results as Pass, Fail, or Blocked; an unexecuted scenario is not a pass. Historical reports remain in docs/archive.
 
 ## Environment and evidence
@@ -9,17 +11,17 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - A local Vite URL does not imply an isolated database: inspect the configured project before any test. Automatic local sign-in uses real Firebase credentials and is not an emulator.
 - Use owner, manager, billing, disabled, and unauthenticated fixtures, plus isolated vendor and party fixtures. Never create test records in production.
 - Record commit, timestamp, environment/project, role, scenario, observed result, severity, and evidence path. Redact credentials and business data.
-- Prefer terminal validation and responsive-CSS inspection. Browser debugging/automation is not part of cleanup; manual visual checks can be recorded separately.
-- Repository scripts: npm test; npx eslint src tests; npm run build; npm run test:rules. Rules tests explicitly target demo-alphahub and require an available Java runtime and Firebase CLI.
+- Use the Playwright drill runner for current browser workflows after verifying exact demo project/endpoints and outbound guards. Headless sessions are not physical-device or installed-PWA acceptance; record those checks separately.
+- Repository checks: `npm test`; `npm run lint` (app source); `npx eslint --config tests/drill/eslint.config.mjs tests/drill`; `npm --prefix functions test`; `npm run build`; and `npm run test:rules`. Rules tests require Java and Firebase CLI and exclude the four historical loan-mutation cases by title.
 - Serve the build on loopback with npm run preview -- --host 127.0.0.1. An HTTP check validates the shell and asset URLs, not authenticated financial workflows.
 
 ## Authentication and navigation
 
 - Verify Firebase email/password sign-in, sign-out, password updates, profile validation, disabled/deleted-user denial, and restricted-page fallback.
 - Returning remembered accounts appear as user cards; selecting one focuses the password field. Verify switching account, fallback email sign-in, forgot-password response, and dark mode on the login screen.
-- Owner sees POS, Dashboard, Action Centre, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement, Logs and Settings.
-- Manager sees POS, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement and Settings.
-- Billing sees POS, Vendor Workspace, Party Directory, Register, Cashout, Cash Movement and Settings.
+- Owner sees POS, Dashboard, Action Centre, Vendor Workspace (including parties), Register, Cashout, Cash Movement, Logs and Settings. Loan drill coverage remains read-only.
+- Manager sees POS, Vendor Workspace (including parties), Register, Cashout, Cash Movement and Settings.
+- Billing sees POS, Vendor Workspace (including parties), Register, Cashout, Cash Movement and Settings.
 - Owner creates staff accounts from Settings without losing the owner's session. Non-owner settings remain restricted.
 - Verify active menu state, collapsed sidebar, fluid mobile drawer, keyboard focus, modal close controls and disabled/loading/error/empty states.
 - Refresh/reopen preserves valid navigation. The internal vendor-preview key must continue to open Vendor Workspace after the folder rename.
@@ -32,13 +34,14 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - Validate monthly totals against isolated sales, expense and daily cashout source records, including missing dates and preceding-month zero values.
 - Current-month projections and completed-month actuals remain distinct; margin results are estimates from configured settings.
 - Verify break-even zero-margin/unavailable states, remaining daily requirement, and neutral recording coverage without assumed working days.
-- Current loan/vendor summary values do not change with the month selector. Do not infer that the dashboard's legacy vendor metric equals V2 account totals; see CALCULATIONS.
+- Current loan/vendor summary values do not change with the month selector. Reconcile the Dashboard vendor summary to V2 account states and verify that legacy vendor and purchase fields do not affect it; see CALCULATIONS.
 - Do not restore removed holder balances, bank-transfer totals, latest closed-day panel or detailed dashboard tables.
 
-## Vendor Workspace and Party Directory
+## Vendor Workspace and combined party directory
 
 - Verify stable vendor-ID selection, search across profile fields/aliases, active status, compact rows and the view-only details modal.
-- Add Vendor opens the existing modal and creates a zero-opening vendor. Party Directory contains people only; adding/renaming a party preserves its approved financial behavior.
+- Add Party / Vendor opens the unified entry form. Vendor creation and party identity do not merge records or rewrite historical transactions.
+- Stock Return entry/history is under Stock. Vendor Workspace has Vendors & Parties, Invoices, Payment Corrections and Balances. Owner Settings includes Business Identity.
 - Validate purchase invoice-number uniqueness and source/ledger/projection atomicity, retry behavior and activation-date boundaries.
 - The invoice payment shortcut opens a separate reviewed payment form. Test full/partial invoice-linked payments, custom-payment caps, overpayment/concurrency rejection, and separate vendor/invoice balances.
 - Test staff settlement correction request, own pending withdrawal, duplicate-pending protection, owner approve/reject/direct edit, stale revisions, reasons, allocation adjustment and immutable original records.
@@ -53,7 +56,7 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 
 - Register contains Expenses with Rent, Electricity, Store Maintenance, Stock Delivery and Staff Welfare. Loan creation, repayments, history and party totals belong in the owner-only Loans page. Vendor purchases/payments belong in Vendor Workspace.
 - Check expense validation, cheque details and logs. Cancelling a cheque-details modal must not save.
-- With emulator fixtures only, confirm existing loan creation/repayment, oldest-open-loan allocation, overpayment rejection and protected permissions; cleanup must not change their calculations.
+- Loan mutation remains excluded from maintenance and drill runs unless the owner separately authorizes it. Existing loan records and read-only behavior must remain unchanged.
 - Daily cashout confirmation cancellation does not save. Validate denomination totals, expected cash, matched/cash-less/cash-more status, particulars and linked daily sales.
 - Staff may request eligible own-record corrections within seven IST calendar days. Owner edits remain audited; source date and identity stay fixed.
 - Test duplicate request, withdrawal, approval, rejection, stale closure, revision increment, source preservation and linked-sales resynchronization.
@@ -79,10 +82,11 @@ This is the current checklist, consolidated from CURRENT_DRILL_PLAN and the arch
 - Verify finalizing a bill atomically records the bill and stock deduction; canceled/failed checkout must not deduct stock. Use emulator or isolated non-production fixtures only.
 - Verify one billing field handles barcode scans and product-name search; unknown barcodes block checkout until a product is created/resolved, new products start at zero stock, and unresolved held-cart lines cannot be finalized.
 - Bills loads the newest seven records first; Load more fetches older records incrementally and the loaded list remains scrollable. Verify search and pagination do not duplicate or skip records.
-- GRN supports multiple existing/new catalog products, received quantity, editable MRP and cost, line totals, draft/partial/full receipt handling, invoice payable linking, and safe reversal. Historical GRN MRP correction remains readable, while new corrections use Current Stock. Confirm only submitted receipt quantities affect stock and the invoice payable matches the full invoice.
+- GRN supports multiple existing/new catalog products, received quantity, editable MRP and cost, line totals, draft handling, invoice payable linking, and safe reversal. Deliveries are complete: if a line is short, cancel that line and record the vendor credit-note state. A pending note retains the original invoice payable; a confirmed note applies its value once. Stock changes only for received lines. Historical partial receipts remain reviewable/reversible. Historical GRN MRP correction remains readable, while new corrections use Current Stock.
 - Stock Audit supports multiple scanned items, a unique audit ID, before/physical/delta quantities and rupee impact, confirmation before reconciliation, expandable audit history, and concurrent distinct audits without silent overwrite. Use isolated fixtures; do not reconcile production stock as a test.
 - The shared counter requires one opening count; staff join/resume without repeated login counts. App logout saves a mandatory shared count without closing the counter. Counting reservations block bills, refunds and Cashout on the server across both computers; normal daily Cashout closes the counter. A late prior-day Cashout may use the active next-day counter only when its saved opening count proves the carryover; all displayed and recorded sales, refunds, expenses and source totals remain scoped to the selected prior date, while current-day cash remains in the open drawer. Dashboard-only owners retain their count exemption and can initialize/recover the drawer. Discrepancy records remain visible for owner review. Do not fabricate or overwrite counts. Paired Rules/Hosting deployed in v1.2.0; isolated runtime acceptance remains pending. See [the shared-counter checkpoint](./POS_SHARED_COUNTER_2026-10-11.md).
-- On an isolated test announcement, verify active-session notice, expiry/dismissal, and displayed `Ctrl+Shift+R` guidance. Do not publish test announcements to production.
+- Use Staff Notifications for staff messages and upgrade reminders. In an isolated environment, verify trigger time, target roles and acknowledgement. The separate Announcements tab and popup are retired; historical announcement records remain evidence.
+- Business Identity: owner can save and reload optional FSSAI licence and bank name/account holder/account number/IFSC/branch. Preserve leading zeros in account numbers. Invalid nonempty values must reject without partial writes; bank details must never appear in staff settings projections or audit messages. Firm name/GSTIN debit-note printing remains unchanged.
 
 ## Persistence, PWA and reporting
 

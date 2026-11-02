@@ -71,6 +71,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [vendorId, setVendorId] = useState('')
+  const [openingBalanceInput, setOpeningBalanceInput] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(today())
   const [receiptDate, setReceiptDate] = useState(today())
@@ -115,7 +116,10 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   const scanRef = useRef<HTMLInputElement>(null)
   const activeVendors = useMemo(() => vendors.filter((vendor) => vendor.active).sort((a, b) => a.canonicalName.localeCompare(b.canonicalName)), [vendors])
   const selectedVendor = activeVendors.find((vendor) => vendor.id === vendorId)
+  const openingBalancePending = Boolean(selectedVendor?.balanceCutoverId && selectedVendor.cutoverOpeningCaptured !== true)
+  const openingBalancePaise = /^\d+(?:\.\d{1,2})?$/.test(openingBalanceInput) ? Math.round(Number(openingBalanceInput) * 100) : null
   const matchingInvoice = invoiceResult.key === invoiceKey ? invoiceResult.value : null
+  const skuCount = new Set(lines.map((line) => line.productId)).size
   const receivedValuePaise = lines.reduce((sum, line) => sum + line.quantity * line.unitCostPaise, 0)
   const originalInvoicePaise = invoiceTotal.trim() && Number.isFinite(Number(invoiceTotal)) ? rupeesToPaise(Number(invoiceTotal)) : 0
   const shortage: ReceiptShortage | null = creditState === 'none' ? null : { originalInvoiceTotalPaise: originalInvoicePaise, state: creditState, ...(creditState === 'received' ? { creditNoteNumber: creditNumber, creditNoteDate: creditDate } : {}) }
@@ -140,7 +144,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   }, [vendorId, invoiceNumber, enabled, invoiceKey, invoiceAttempt, view])
 
   function resetForm() {
-    setVendorId(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); draftReference.current = undefined; setDraftRevision(0); setNewProduct(null); setInvoiceTotal(''); setCreditState('none'); setCreditNumber(''); setCreditDate(today())
+    setVendorId(''); setOpeningBalanceInput(''); setInvoiceNumber(''); setInvoiceDate(today()); setReceiptDate(today()); setLines([]); setDraftId(undefined); draftReference.current = undefined; setDraftRevision(0); setNewProduct(null); setInvoiceTotal(''); setCreditState('none'); setCreditNumber(''); setCreditDate(today())
   }
 
   async function scan() {
@@ -227,6 +231,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
   }
 
   async function submitDraft(id?: string, expectedRevision?: number) {
+    if (openingBalancePending && (currentUser.role !== 'owner' || openingBalancePaise === null)) { setError('An owner must enter this vendor’s opening payable before submitting the first GRN.'); return }
     setBusy(true)
     try {
       const saved = id ? null : await saveStockReceiptDraft({
@@ -234,7 +239,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       }, currentUser)
       const actualId = id ?? saved!.id
       if (saved) { setDraftId(saved.id); setDraftRevision(saved.revision) }
-      const result = await submitPosGoodsReceipt(actualId, currentUser, expectedRevision ?? saved?.revision)
+      const result = await submitPosGoodsReceipt(actualId, currentUser, expectedRevision ?? saved?.revision, openingBalancePending ? openingBalancePaise ?? undefined : undefined)
       showToast(result.payableCreated
         ? `GRN submitted. Stock updated and invoice payable created: ${money(result.totalPaise)}.`
         : `Partial receipt submitted. Stock updated and linked to existing invoice payable ${money(result.totalPaise)}.`)
@@ -309,6 +314,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       if (action === 'submit' && receipt.status !== 'draft') throw new Error('Only a draft can be submitted.')
       if (action === 'reverse' && receipt.status !== 'submitted') throw new Error('Only a submitted GRN can be reversed.')
       const preview = action === 'reverse' ? await previewStockReceiptReversal(receipt.id, currentUser) : null
+      if (action === 'submit') { setVendorId(receipt.vendorId); setOpeningBalanceInput(''); onViewChange('receipt') }
       setReversalPreview(preview); setSelectedReceipt(receipt); setReceiptAction(action); setReverseReason(''); setConfirmNumber(''); setConfirmDate(today())
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to open GRN.') }
     finally { setBusy(false) }
@@ -349,15 +355,24 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
     {error && !receiptAction ? <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">{error}</p> : null}
     {view === 'receipt' && vendorId && invoiceNumber.trim() && enabled && invoiceResult.key !== invoiceKey ? <StatusPanel>Checking invoice reference…</StatusPanel> : null}
     {view === 'receipt' && invoiceResult.key === invoiceKey && invoiceResult.error ? <StatusPanel variant="destructive">{invoiceResult.error}<Button variant="outline" size="sm" onClick={() => setInvoiceAttempt((value) => value + 1)}>Retry invoice lookup</Button></StatusPanel> : null}
-    {view === 'receipt' ? <SavedReceiptDrafts actor={currentUser} refreshKey={draftRefresh} busy={busy} onResume={receipt => void editDraft(receipt)} onDelete={receipt => void deleteDraft(receipt)} /> : null}
+    {view === 'receipt' ? <SavedReceiptDrafts actor={currentUser} refreshKey={draftRefresh} busy={busy} onResume={receipt => void editDraft(receipt)} onDelete={receipt => void deleteDraft(receipt)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span role="status" aria-live="polite" className="whitespace-nowrap rounded-md border px-2 py-1.5 text-xs">SKUs: <strong>{skuCount}</strong></span>
+        {creditState === 'received' ? <span role="status" className="max-w-64 text-xs text-muted-foreground">Saved draft credit note: {creditNumber || 'recorded'}{creditDate ? ` · ${creditDate}` : ''}</span> : <label className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold">
+          <span>Short / cancelled items</span>
+          <NativeSelect aria-label="Short or cancelled items" className="min-w-44" value={creditState} onChange={event => setCreditState(event.target.value as 'none' | 'pending')}><option value="none">None</option><option value="pending">Credit note awaited</option></NativeSelect>
+        </label>}
+      </div>
+    </SavedReceiptDrafts> : null}
     {view === 'receipt' ? <Card><CardHeader className="pb-2"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Goods Receipt Note (GRN)</h2><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={closeDraft}>{draftId ? 'Close draft' : 'Clear form'}</Button>{draftId ? <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void readSource<PosGoodsReceipt>('goodsReceipts', draftId).then(receipt => { if (receipt) return deleteDraft(receipt); throw new Error('Draft not found. Refresh saved drafts.') }).catch(cause => setError(cause instanceof Error ? cause.message : 'Unable to load draft.'))}>Delete draft</Button> : null}</div></div></CardHeader><CardContent className="grid gap-3">
       {!enabled ? <p role="alert" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">The vendor ledger is not active. A GRN cannot be submitted until it is enabled.</p> : null}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <FieldLabel label="Vendor"><div className="flex gap-2">{renderVendorPicker(vendorId, setVendorId)}<Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
+        <FieldLabel label="Vendor"><div className="flex gap-2">{renderVendorPicker(vendorId, (id) => { setOpeningBalanceInput(''); setVendorId(id) })}<Button type="button" size="sm" variant="outline" onClick={() => setShowVendorForm(true)}>Add vendor</Button></div></FieldLabel>
         <FieldLabel label="Vendor invoice number"><Input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Invoice date"><Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} required /></FieldLabel>
         <FieldLabel label="Receipt date"><Input type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} required /></FieldLabel>
       </div>
+      {openingBalancePending ? currentUser.role === 'owner' ? <FieldLabel label={`Opening payable as of ${selectedVendor?.balanceCutoverDate ?? ''}`}><Input aria-label="Vendor opening payable" type="number" min="0" step="0.01" required value={openingBalanceInput} onChange={event => setOpeningBalanceInput(event.target.value)} /><span className="text-xs text-muted-foreground">Enter the net amount actually owed after accounting for old issued cheques and returns. This is saved once with the first new GRN and is not part of the stock value.</span></FieldLabel> : <p role="status" className="rounded border p-2 text-sm">The owner must record this vendor’s opening payable before the first GRN.</p> : null}
       {matchingInvoice ? <p role="status" className="rounded-md border border-primary/30 bg-primary/5 p-2 text-sm">This vendor invoice is already recorded. Open its GRN instead of submitting it again. Existing payable: {money(matchingInvoice.invoiceTotalPaise ?? matchingInvoice.totalPaise)}.</p> : null}
       <div className="grid gap-2 sm:flex"><form className="flex min-w-0 gap-2 sm:flex-1" onSubmit={(event) => { event.preventDefault(); void scan() }}><Input className="min-w-0 flex-1" ref={scanRef} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Scan barcode, then Enter" aria-label="Scan product barcode" autoFocus /><Button type="submit">Scan item</Button></form><Button type="button" className="w-full sm:w-auto" variant="outline" onClick={() => { setError(''); setNewProduct({ barcode: '', name: '', category: '', mrp: '', cost: '', internalBarcode: true }) }}>Add item without barcode</Button></div>
       {newProduct ? <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1.5fr)_minmax(9rem,1fr)_minmax(8rem,.8fr)_minmax(8rem,.8fr)_auto_auto]">
@@ -370,12 +385,12 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
         <Button type="button" className="self-end" variant="outline" disabled={busy} onClick={() => setNewProduct(null)}>Cancel</Button>
         {newProduct.internalBarcode ? <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-6">This is an internal store barcode, not an official GS1/UPC product code. It will scan after the GRN is submitted; stock and vendor payable change only on submission.</p> : null}
       </div> : null}
-      <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FieldLabel label="Short / cancelled items"><NativeSelect value={creditState} onChange={event => setCreditState(event.target.value as typeof creditState)}><option value="none">None - complete invoice</option><option value="pending">Vendor credit note awaited</option><option value="received">Credit note received</option></NativeSelect></FieldLabel>
-        {creditState !== 'none' ? <><FieldLabel label="Original invoice amount"><Input inputMode="decimal" value={invoiceTotal} onChange={event => setInvoiceTotal(event.target.value)} /></FieldLabel><p className="self-center text-xs">Expected credit: {money(Math.max(0, originalInvoicePaise - receivedValuePaise))}{creditState === 'pending' ? ' - Pending, not deducted yet' : ' - Included once in the calculated payable'}</p></> : null}
-        {creditState === 'received' ? <><FieldLabel label="Credit note number"><Input value={creditNumber} onChange={event => setCreditNumber(event.target.value)} /></FieldLabel><FieldLabel label="Credit note date"><Input type="date" value={creditDate} onChange={event => setCreditDate(event.target.value)} /></FieldLabel></> : null}
+      {creditState !== 'none' ? <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(12rem,1fr)_auto]">
+        <FieldLabel label="Original invoice amount"><Input inputMode="decimal" value={invoiceTotal} onChange={event => setInvoiceTotal(event.target.value)} /></FieldLabel>
+        <p className="self-center text-xs">Expected credit: {money(Math.max(0, originalInvoicePaise - receivedValuePaise))}{creditState === 'pending' ? ' - Awaited; not deducted yet' : ' - Already recorded on this saved draft'}</p>
+        {creditState === 'received' ? <p className="text-xs text-muted-foreground sm:col-span-2">This saved draft retains its credit note details. For new receipts, record the vendor credit note from GRN History after submission.</p> : null}
         {shortageError ? <p role="alert" className="text-xs text-destructive sm:col-span-2">{shortageError}</p> : null}
-      </div>
+      </div> : null}
       <div className="overflow-x-auto rounded-md border border-border">
         <div className="grid min-w-[1080px] grid-cols-[minmax(13rem,1fr)_5.5rem_7rem_7rem_7rem_6rem_8rem_4rem] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product · stock</span><span>Received</span><span>Cost / unit</span><span>MRP</span><span>Selling price</span><span className="text-right">Margin</span><span className="text-right">Line value</span><span /></div>
         <div className="max-h-[48vh] min-w-[1080px] overflow-y-auto">
@@ -394,9 +409,9 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
       <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_13rem_auto] sm:items-end">
         <div className="text-sm"><span className="block text-muted-foreground">Received stock value</span><strong>{money(receivedValuePaise)}</strong></div>
         <FieldLabel label="Payable (calculated)"><Input aria-label="Calculated payable" readOnly value={(totalPaise / 100).toFixed(2)} /></FieldLabel>
-        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !selectedVendor || !invoiceNumber.trim() || !lines.length || Boolean(shortageError)} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error) || Boolean(shortageError) || Boolean(matchingInvoice)} onClick={() => void prepareSubmit()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
+        <div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !selectedVendor || !invoiceNumber.trim() || !lines.length || Boolean(shortageError)} onClick={() => void saveDraft()}>Save draft</Button><Button type="button" disabled={busy || !enabled || !linesReady || !selectedVendor || !invoiceNumber.trim() || !totalPaise || invoiceResult.key !== invoiceKey || Boolean(invoiceResult.error) || Boolean(shortageError) || Boolean(matchingInvoice) || openingBalancePending && (currentUser.role !== 'owner' || openingBalancePaise === null)} onClick={() => void prepareSubmit()}>{busy ? 'Saving…' : 'Submit GRN'}</Button></div>
       </div>
-      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. Margin % = (selling price − unit cost) ÷ selling price × 100. Payable is calculated from received stock. A shortage credit note still awaited keeps the original invoice payable until the note is confirmed; a received note is counted once.</p>
+      <p className="text-xs text-muted-foreground">Quantity, unit cost, MRP, and selling price are required for every product line. Selling price starts at MRP and must not exceed MRP. Margin % = (selling price − unit cost) ÷ selling price × 100. For short or cancelled lines, keep the original invoice payable until the vendor sends the credit note; record and link it from GRN History when received.</p>
     </CardContent></Card> : <Card><CardHeader><SectionHeading eyebrow="Recorded activity" title="GRN History" description="Filtered server pages. Blank dates include older receipts." /></CardHeader><CardContent className="grid gap-3">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <FieldLabel label={historyStatus === 'draft' ? 'Last saved from' : 'From'}><Input type="date" value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} /></FieldLabel>
@@ -423,7 +438,7 @@ export function PosGoodsReceipt({ currentUser, vendors, enabled, showToast, onVe
 
           {error ? <p role="alert" className="rounded border border-destructive/50 p-3 text-sm text-destructive">{error}</p> : null}
           {receiptAction === 'view' ? <SourceRecord title="Goods receipt" value={selectedReceipt as unknown as Record<string, unknown>} /> : receiptAction === 'submit' ? <ReceiptSubmissionEffects receipt={selectedReceipt} /> : null}
-          {receiptAction === 'submit' ? <><p className="rounded border border-amber-500/40 p-3 text-sm">Confirm the received quantities, full invoice payable and prices above. Existing product prices will be updated immediately, and effective price changes will be sent to the owner for review. This is a complete receipt. Any shortage credit note is shown separately and counted once.</p><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction(null)}>Back</Button><Button disabled={busy} onClick={() => void submitDraft(selectedReceipt.id, selectedReceipt.revision)}>Confirm GRN submission</Button></div></> : receiptAction === 'reverse' ? <><p className="text-sm text-destructive">Reversal adjusts received stock and the linked payable and is permanently recorded.</p><ReceiptReversalEffects preview={reversalPreview} /><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} /></FieldLabel><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <div className="flex justify-end"><Button onClick={() => setReceiptAction(null)}>Close</Button></div>}
+          {receiptAction === 'submit' ? <><p className="rounded border border-amber-500/40 p-3 text-sm">Confirm the received quantities, full invoice payable and prices above. Existing product prices will be updated immediately, and effective price changes will be sent to the owner for review. This is a complete receipt. Any shortage credit note is shown separately and counted once.</p><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction(null)}>Back</Button><Button disabled={busy || openingBalancePending && (currentUser.role !== 'owner' || openingBalancePaise === null)} onClick={() => void submitDraft(selectedReceipt.id, selectedReceipt.revision)}>Confirm GRN submission</Button></div></> : receiptAction === 'reverse' ? <><p className="text-sm text-destructive">Reversal adjusts received stock and the linked payable and is permanently recorded.</p><ReceiptReversalEffects preview={reversalPreview} /><FieldLabel label="Reason for reversal"><Textarea value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} /></FieldLabel><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setReceiptAction('view')}>Cancel</Button><Button variant="destructive" disabled={busy || !reverseReason.trim()} onClick={() => void reverseReceipt()}>{busy ? 'Reversing…' : 'Confirm reversal'}</Button></div></> : <div className="flex justify-end"><Button onClick={() => setReceiptAction(null)}>Close</Button></div>}
           {receiptAction !== 'view' ? <details className="rounded border p-3 text-sm"><summary className="cursor-pointer font-medium">Recorded GRN details</summary><div className="mt-3"><SourceRecord title="Goods receipt" value={selectedReceipt as unknown as Record<string, unknown>} /></div></details> : null}
         </CardContent>
       </Card>

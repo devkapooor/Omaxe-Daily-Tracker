@@ -8,6 +8,8 @@ function createCashoutHandlers(ops) {
     posRef,
     run
   } = ops;
+  const historicalExpenses = require('./historicalExpenses').createHistoricalExpenseHandlers(ops);
+  const drawerReversal = require('./historicalCashoutReversal').createHistoricalCashoutReversal(ops);
   function queue(ctx, col, key, value, create = false) {
     ctx.writes.push(() => create ? ctx.tx.create(ref(col, key), value) : ctx.tx.set(ref(col, key), value));
   }
@@ -90,9 +92,17 @@ function createCashoutHandlers(ops) {
     value.setUTCDate(value.getUTCDate() - 1);
     return value.toISOString().slice(0, 10);
   }
+  function activeCount(ledger, nowMs) {
+    const reservation = ledger?.countReservation;
+    return reservation?.startedAt?.toMillis && nowMs < reservation.startedAt.toMillis() + 300000;
+  }
+  function recordedCashoutPaise(entry) {
+    if (Number.isSafeInteger(entry.cashRemovedPaise)) return p.paise(entry.cashRemovedPaise, 'Cashout amount');
+    return p.rupees(Number(entry.drawerTotal ?? entry.remainingBalance ?? 0), 'Cashout amount');
+  }
   async function cashoutSummary(ctx, businessDate, counter) {
     const ledger = counter.ledger,
-      counterDate = ledger.counterSession.date,
+      counterDate = ledger.checkpoint.date,
       lateCashout = businessDate !== counterDate;
     if (lateCashout && businessDate !== previousDate(counterDate)) p.fail('Cashout requires the selected day\'s open counter, or the immediately previous day\'s opening count evidence.');
     let openingSnapshot,
@@ -129,9 +139,10 @@ function createCashoutHandlers(ops) {
   }
   async function historicalCashoutSummary(ctx, businessDate) {
     const existing = await ctx.tx.get(db.collection('dailyCashouts').where('date', '==', businessDate).limit(1));
-    if (!existing.empty) p.fail('A Cashout already exists for this date. Use the audited correction workflow.');
+    if (!existing.empty) p.fail('A Cashout already exists for this date. Use the audited correction workflow.', 'already-exists');
     return {
       ...await summary(ctx, businessDate),
+      ...await historicalExpenses.forSummary(ctx, businessDate),
       historicalCashout: true,
       expectedDrawerPaise: null,
       openingCheckpointPaise: null,
@@ -145,25 +156,55 @@ function createCashoutHandlers(ops) {
     return date < today;
   }
   async function prepare(request) {
-    const d = p.object(request.data, ['operationId', 'date']);
+    const d = p.object(request.data, ['operationId', 'date', 'historicalCashTiming']);
     p.date(d.date);
     return run(request, 'cashout-count-start', d, p.STAFF, async ctx => {
       const historicalCashout = isHistoricalDate(d.date, ctx.timestamp);
       if (historicalCashout) {
+        if (!['already-removed', 'remove-now'].includes(d.historicalCashTiming)) p.fail('Choose Cash already removed or Removing cash now before recording a past-date Cashout.', 'invalid-argument');
+        const alreadyRemoved = d.historicalCashTiming === 'already-removed';
+        if (alreadyRemoved && ctx.actor.role !== 'owner') p.fail('Only the owner may confirm cash was already removed earlier.', 'permission-denied');
+        const ledgerRef = posRef('handover', 'main'),
+          ledgerSnapshot = await ctx.tx.get(ledgerRef),
+          ledger = ledgerSnapshot.data();
+        if (!ledger?.initialized || !ledger.checkpoint) p.fail('Set up and count the shared cash drawer before recording a Cashout.');
+        if (!alreadyRemoved && activeCount(ledger, ctx.nowMs)) p.fail('The shared drawer is being counted. Wait for the count to finish or be cancelled.');
         const totals = await historicalCashoutSummary(ctx, d.date),
+          reservationId = ctx.operationId,
+          reservation = {
+            id: reservationId,
+            uid: ctx.actor.uid,
+            name: ctx.actor.name,
+            authTime: request.auth.token.auth_time,
+            kind: 'cashout',
+            date: p.istDate(ctx.timestamp),
+            revision: ledger.revision,
+            startedAt: p.Timestamp.fromMillis(ctx.nowMs)
+          },
           result = {
             ...totals,
             id: ctx.operationId,
             actorUid: ctx.actor.uid,
-            reservationId: '',
+            historicalCashTiming: d.historicalCashTiming,
+            reservationId: alreadyRemoved ? null : reservationId,
             expiresAtMs: ctx.nowMs + 300000,
-            handoverRevision: 0,
+            handoverRevision: alreadyRemoved ? null : ledger.revision + 1,
             counterDate: p.istDate(ctx.timestamp),
+            currentDrawerPaise: p.expectedCash(ledger),
             createdAt: ctx.timestamp
           };
         queue(ctx, 'financeCashoutQuotes', ctx.operationId, result, true);
+        if (!alreadyRemoved) ctx.writes.push(() => ctx.tx.set(ledgerRef, {
+          ...ledger,
+          countReservation: reservation,
+          revision: ledger.revision + 1,
+          lastOperation: 'count-reserve',
+          lastOperationId: ctx.operationId,
+          updatedByUid: ctx.actor.uid
+        }));
         return result;
       }
+      if (d.historicalCashTiming !== undefined) p.fail('Historical cash timing is available only for past dates.', 'invalid-argument');
       const counterDate = p.istDate(ctx.timestamp);
       const counter = await ops.counter(ctx, {
         businessDate: counterDate,
@@ -247,11 +288,22 @@ function createCashoutHandlers(ops) {
       if (!quote || quote.actorUid !== ctx.actor.uid || quote.cancelledAt || quote.closedAt) p.fail('This counting quote is unavailable. Recover its original result or start a new count.');
       if (ctx.nowMs >= quote.expiresAtMs) p.fail('Count expired. Cancel it and begin a fresh count.');
       if (quote.historicalCashout) {
+        if (!['already-removed', 'remove-now'].includes(quote.historicalCashTiming)) p.fail('This old quote has no cash-removal choice. Cancel it and start again.');
+        const alreadyRemoved = quote.historicalCashTiming === 'already-removed';
+        if (alreadyRemoved && ctx.actor.role !== 'owner') p.fail('Owner confirmation is required for cash already removed earlier.', 'permission-denied');
+        const ledgerRef = posRef('handover', 'main'),
+          ledgerSnapshot = await ctx.tx.get(ledgerRef),
+          ledger = ledgerSnapshot.data();
+        if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared cash drawer is unavailable. No Cashout was posted.');
+        if (!alreadyRemoved && (ledger.countReservation?.id !== quote.reservationId || ledger.countReservation?.uid !== ctx.actor.uid || ledger.countReservation?.authTime !== request.auth.token.auth_time || ledger.revision !== quote.handoverRevision)) p.fail('Drawer activity changed. Cancel and start a fresh Cashout count.');
         const totals = await historicalCashoutSummary(ctx, quote.date),
-          immutableTotals = ['grossMethods', 'cashRefundPaise', 'windowRefundPaise', 'ordinaryCashExpensePaise', 'vendorCashPaymentPaise', 'cashPaidOutPaise', 'netCashCollectionsPaise', 'legacyUntrackedCashOutflowPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise'];
+          immutableTotals = ['grossMethods', 'cashRefundPaise', 'windowRefundPaise', 'ordinaryCashExpensePaise', 'vendorCashPaymentPaise', 'cashPaidOutPaise', 'netCashCollectionsPaise', 'legacyUntrackedCashOutflowPaise', 'posRefundDayRevision', 'posRefundDayTotalPaise', 'historicalExpenseRevision', 'historicalExpenseSourceFingerprint'];
         for (const key of immutableTotals) if (JSON.stringify(totals[key]) !== JSON.stringify(quote[key])) p.fail('Source totals changed during counting. Cancel and start a fresh historical count.');
         const reason = p.text(d.reason, 'Historical Cashout reason');
         if (reason.length < 5) p.fail('Enter at least five characters explaining this historical Cashout.');
+        const drawerBeforePaise = p.expectedCash(ledger);
+        if (!alreadyRemoved && counted > drawerBeforePaise) p.fail('Cashout amount exceeds the current virtual drawer. No Cashout was posted.');
+        const drawerAfterPaise = alreadyRemoved ? drawerBeforePaise : drawerBeforePaise - counted;
         const id = 'daily-cashout-historical-' + quote.date,
           existingByDate = await ctx.tx.get(ref('dailyCashouts', id));
         if (existingByDate.exists) p.fail('A historical Cashout has already been recorded for this date. Use the audited correction workflow.');
@@ -285,12 +337,13 @@ function createCashoutHandlers(ops) {
             revision: 1,
             refundAccountingVersion: 1,
             historicalCountOnlyVersion: 1,
+            historicalCashTiming: quote.historicalCashTiming,
             posCashRefundPaise: totals.cashRefundPaise,
             posRefundDayRevision: totals.posRefundDayRevision,
             posRefundDayTotalPaise: totals.posRefundDayTotalPaise,
             drawerClosureId: id,
             cashRemovedPaise: counted,
-            closingDrawerPaise: 0,
+            closingDrawerPaise: drawerAfterPaise,
             financePostingVersion: 1,
             financeQuoteId: quote.id,
             sourceOperationId: ctx.operationId,
@@ -299,7 +352,11 @@ function createCashoutHandlers(ops) {
             reviewStatus: 'pending',
             auditDifference: null,
             auditStatus: 'not-reconciled',
-            auditMessage: 'Historical physical count recorded. Expected drawer could not be independently reconstructed.'
+            auditMessage: 'Historical physical count recorded. Expected drawer for that date is unavailable.',
+            drawerDebitPaise: alreadyRemoved ? 0 : counted,
+            drawerBalanceBeforePaise: drawerBeforePaise,
+            drawerBalanceAfterPaise: drawerAfterPaise,
+            ...(alreadyRemoved ? {} : { drawerDebitAt: now, drawerDebitByUid: ctx.actor.uid, drawerDebitOperationId: ctx.operationId, drawerDebitReason: reason, drawerDebitCheckpoint: ledger.checkpoint })
           };
         // Historical counts are intentionally not compared with a guessed drawer expectation.
         const balances = ops.holderBalances(holderRecords, entry);
@@ -330,12 +387,14 @@ function createCashoutHandlers(ops) {
             cashoutId: id,
             businessDate: quote.date,
             kind: 'historical-cashout',
-            expectedBeforePaise: null,
+            expectedBeforePaise: alreadyRemoved ? null : drawerBeforePaise,
             countedPaise: counted,
-            differencePaise: null,
-            removedPaise: counted,
-            closingBalancePaise: 0,
-            resultingBalancePaise: null,
+            differencePaise: alreadyRemoved ? null : counted - drawerBeforePaise,
+            removedPaise: alreadyRemoved ? 0 : counted,
+            closingBalancePaise: drawerAfterPaise,
+            resultingBalancePaise: drawerAfterPaise,
+            historicalCashTiming: quote.historicalCashTiming,
+            ...(alreadyRemoved ? {} : { drawerDebitOperationId: ctx.operationId }),
             recordedByUid: ctx.actor.uid,
             recordedByName: ctx.actor.name,
             createdAt: now
@@ -343,6 +402,15 @@ function createCashoutHandlers(ops) {
         queue(ctx, 'dailyCashouts', id, entry, true);
         queue(ctx, 'sales', salesId, sales);
         ctx.writes.push(() => ctx.tx.create(posRef('drawerClosures', id), closure));
+        if (!alreadyRemoved) ctx.writes.push(() => ctx.tx.set(ledgerRef, {
+          ...ledger,
+          cashNetPaise: p.safe(ledger.cashNetPaise - counted),
+          countReservation: null,
+          revision: ledger.revision + 1,
+          lastOperation: 'cashout-close',
+          lastOperationId: ctx.operationId,
+          updatedByUid: ctx.actor.uid
+        }));
         queue(ctx, 'cashMovementControl', 'main', {
           revision: entry.holderBalancesRevision,
           lastOperation: 'historical-cashout',
@@ -496,6 +564,76 @@ function createCashoutHandlers(ops) {
       return entry;
     });
   }
+  async function applyHistoricalDrawerDebit(request) {
+    const d = p.object(request.data, ['operationId', 'cashoutId', 'expectedRevision', 'reason']);
+    p.text(d.reason, 'Correction reason');
+    if (d.reason.trim().length < 5) p.fail('Correction reason must be at least five characters.', 'invalid-argument');
+    return run(request, 'cashout-drawer-debit', d, ['owner'], async ctx => {
+      const entrySnapshot = await ctx.tx.get(ref('dailyCashouts', p.id(d.cashoutId))),
+        entry = entrySnapshot.data();
+      if (!entry || entry.historicalCountOnlyVersion !== 1) p.fail('Only an unapplied historical Cashout can be applied to the live drawer.');
+      if (entry.historicalCashTiming === 'already-removed' || entry.drawerDebitReversalOperationId) p.fail('Cash already removed earlier cannot be deducted from the drawer again.');
+      v.assertExpectedRevision(entry.revision || 1, d.expectedRevision);
+      if (entry.drawerDebitOperationId || Number.isSafeInteger(entry.drawerDebitPaise)) p.fail('This Cashout has already been applied to the virtual drawer.');
+      const closureId = entry.drawerClosureId || entry.id,
+        closureRef = posRef('drawerClosures', closureId),
+        closureSnapshot = await ctx.tx.get(closureRef),
+        closure = closureSnapshot.data();
+      if (!closure || closure.kind !== 'historical-cashout' || closure.cashoutId !== entry.id) p.fail('Historical Cashout closure evidence is missing. No drawer change was posted.');
+      const ledgerRef = posRef('handover', 'main'),
+        ledgerSnapshot = await ctx.tx.get(ledgerRef),
+        ledger = ledgerSnapshot.data();
+      if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared cash drawer is unavailable. No correction was posted.');
+      if (activeCount(ledger, ctx.nowMs)) p.fail('The shared drawer is being counted. Wait for the count to finish or be cancelled.');
+      const amountPaise = recordedCashoutPaise(entry),
+        beforePaise = p.expectedCash(ledger);
+      if (amountPaise > beforePaise) p.fail('Cashout amount exceeds the current virtual drawer. No correction was posted.');
+      const afterPaise = beforePaise - amountPaise,
+        now = ctx.timestamp,
+        nextEntry = {
+          ...entry,
+          drawerDebitPaise: amountPaise,
+          drawerBalanceBeforePaise: beforePaise,
+          drawerBalanceAfterPaise: afterPaise,
+          drawerDebitAt: now,
+          drawerDebitByUid: ctx.actor.uid,
+          drawerDebitOperationId: ctx.operationId,
+          drawerDebitReason: d.reason,
+          drawerDebitCheckpoint: ledger.checkpoint,
+          revision: (entry.revision || 1) + 1,
+          updatedAt: now,
+          updatedBy: ctx.actor.name
+        },
+        nextClosure = {
+          ...closure,
+          expectedBeforePaise: beforePaise,
+          differencePaise: amountPaise - beforePaise,
+          closingBalancePaise: afterPaise,
+          resultingBalancePaise: afterPaise,
+          drawerDebitOperationId: ctx.operationId,
+          drawerDebitAt: now,
+          drawerDebitByUid: ctx.actor.uid
+        };
+      queue(ctx, 'dailyCashouts', entry.id, nextEntry);
+      ctx.writes.push(() => ctx.tx.set(closureRef, nextClosure));
+      ctx.writes.push(() => ctx.tx.set(ledgerRef, {
+        ...ledger,
+        cashNetPaise: p.safe(ledger.cashNetPaise - amountPaise),
+        revision: ledger.revision + 1,
+        lastOperation: 'cashout-close',
+        lastOperationId: ctx.operationId,
+        updatedByUid: ctx.actor.uid
+      }));
+      const control = (await ctx.tx.get(ref('cashMovementControl', 'main'))).data();
+      queue(ctx, 'cashMovementControl', 'main', {
+        revision: (control?.revision || 0) + 1,
+        lastOperation: 'cashout-drawer-debit',
+        lastOperationId: ctx.operationId,
+        updatedAt: now
+      });
+      return { cashoutId: entry.id, amountPaise, beforePaise, afterPaise, appliedAt: now, drawerDebitCheckpoint: ledger.checkpoint };
+    });
+  }
   async function syncSales(ctx, entry, before) {
     // Apply only this correction delta. Historical sales may include valid
     // card/bank declarations not linked to a cashout row; preserve them.
@@ -537,8 +675,48 @@ function createCashoutHandlers(ops) {
     v.assertExpectedRevision(entry.revision || 1, request.sourceRevision);
     if (!c.cashoutCorrectionValuesEqual(c.correctionValuesFromEntry(entry), request.before, entry.refundAccountingVersion === 1)) p.fail('Cashout changed after the request.');
     validateValues(entry, request.proposed);
-    const next = c.cashoutEntryFromCorrection(entry, request.proposed, ctx.actor.name, ctx.timestamp),
-      records = await ops.holderRecords(ctx.tx);
+    const next = c.cashoutEntryFromCorrection(entry, request.proposed, ctx.actor.name, ctx.timestamp);
+    let drawerAdjustment = null;
+    if (entry.historicalCountOnlyVersion === 1 && entry.drawerDebitOperationId && entry.historicalCashTiming !== 'already-removed' && !entry.drawerDebitReversalOperationId) {
+      const amountPaise = p.rupees(next.drawerTotal, 'Corrected historical Cashout'),
+        previousAmountPaise = p.paise(entry.drawerDebitPaise ?? entry.cashRemovedPaise ?? Math.round(entry.drawerTotal * 100), 'Previously applied Cashout'),
+        deltaPaise = amountPaise - previousAmountPaise,
+        ledgerRef = posRef('handover', 'main'),
+        ledgerSnapshot = await ctx.tx.get(ledgerRef),
+        ledger = ledgerSnapshot.data();
+      if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared drawer is unavailable. No correction was posted.');
+      if (activeCount(ledger, ctx.nowMs)) p.fail('The shared drawer is being counted. Wait for the count to finish or be cancelled.');
+      const beforePaise = p.expectedCash(ledger);
+      if (deltaPaise > beforePaise) p.fail('Correction would make the virtual drawer negative. No correction was posted.');
+      const afterPaise = beforePaise - deltaPaise;
+      next.cashRemovedPaise = amountPaise;
+      next.drawerDebitPaise = amountPaise;
+      next.drawerBalanceBeforePaise = beforePaise;
+      next.drawerBalanceAfterPaise = afterPaise;
+      next.drawerDebitAt = ctx.timestamp;
+      next.drawerDebitByUid = ctx.actor.uid;
+      next.drawerDebitOperationId = ctx.operationId;
+      next.drawerDebitReason = request.reason;
+      next.drawerDebitCheckpoint = ledger.checkpoint;
+      drawerAdjustment = { ledgerRef, ledger, amountPaise: deltaPaise, beforePaise, afterPaise };
+      const closureRef = posRef('drawerClosures', entry.drawerClosureId || entry.id),
+        closureSnapshot = await ctx.tx.get(closureRef),
+        closure = closureSnapshot.data();
+      if (!closure) p.fail('Historical Cashout closure evidence is missing. No correction was posted.');
+      ctx.writes.push(() => ctx.tx.set(closureRef, {
+        ...closure,
+        countedPaise: amountPaise,
+        removedPaise: amountPaise,
+        expectedBeforePaise: beforePaise,
+        differencePaise: amountPaise - beforePaise,
+        closingBalancePaise: afterPaise,
+        resultingBalancePaise: afterPaise,
+        drawerDebitOperationId: ctx.operationId,
+        drawerDebitAt: ctx.timestamp,
+        drawerDebitByUid: ctx.actor.uid
+      }));
+    }
+    const records = await ops.holderRecords(ctx.tx);
     if (entry.historicalCountOnlyVersion === 1) {
       next.cashAudit = null;
       next.auditDifference = null;
@@ -554,6 +732,14 @@ function createCashoutHandlers(ops) {
     const control = (await ctx.tx.get(ref('cashMovementControl', 'main'))).data();
     await syncSales(ctx, next, entry);
     queue(ctx, 'dailyCashouts', entry.id, next);
+    if (drawerAdjustment && drawerAdjustment.amountPaise !== 0) ctx.writes.push(() => ctx.tx.set(drawerAdjustment.ledgerRef, {
+      ...drawerAdjustment.ledger,
+      cashNetPaise: p.safe(drawerAdjustment.ledger.cashNetPaise - drawerAdjustment.amountPaise),
+      revision: drawerAdjustment.ledger.revision + 1,
+      lastOperation: 'cashout-correction',
+      lastOperationId: ctx.operationId,
+      updatedByUid: ctx.actor.uid
+    }));
     queue(ctx, 'cashMovementControl', 'main', {
       revision: (control?.revision || 0) + 1,
       lastOperation: 'cashout-correction',
@@ -649,12 +835,16 @@ function createCashoutHandlers(ops) {
     });
   }
   async function readSummary(request) {
-    p.object(request.data, ['date']);
+    p.object(request.data, ['date', 'expenseReconciliation', 'drawerReversal']);
     p.date(request.data.date);
+    if (request.data.expenseReconciliation !== undefined && request.data.expenseReconciliation !== true) p.fail('Invalid expense review request.', 'invalid-argument');
+    if (request.data.drawerReversal !== undefined && request.data.drawerReversal !== true || request.data.drawerReversal && request.data.expenseReconciliation) p.fail('Invalid drawer correction review request.', 'invalid-argument');
     return db.runTransaction(async tx => {
-      const actor = await ops.actorFor(tx, request),
+      const actor = await ops.actorFor(tx, request, request.data.expenseReconciliation || request.data.drawerReversal ? ['owner'] : p.STAFF),
         timestamp = new Date(ops.clock()).toISOString(),
         counterDate = p.istDate(timestamp);
+      if (request.data.expenseReconciliation) return historicalExpenses.publicView(await historicalExpenses.inspect({ tx, actor, timestamp }, request.data.date));
+      if (request.data.drawerReversal) return drawerReversal.publicView(await drawerReversal.inspect({ tx, actor, timestamp, nowMs: ops.clock() }, request.data.date));
       if (isHistoricalDate(request.data.date, timestamp)) return historicalCashoutSummary({ tx, actor, timestamp }, request.data.date);
       const ledger = (await tx.get(posRef('handover', 'main'))).data();
       if (!ledger?.initialized || !ledger.checkpoint) p.fail('The shared drawer has no completed opening count.');
@@ -690,6 +880,9 @@ function createCashoutHandlers(ops) {
     cancel,
     close,
     correction,
+    applyHistoricalDrawerDebit,
+    reconcileExpenses: historicalExpenses.reconcile,
+    reverseHistoricalDrawer: drawerReversal.reverse,
     decideCorrection,
     deleteLegacy,
     summary,

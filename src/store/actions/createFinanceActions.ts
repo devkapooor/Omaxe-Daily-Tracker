@@ -2,7 +2,7 @@ import { postFinanceOperation } from '@/features/register/data/financeRepository
 import { deleteDoc, deleteField, doc, getDocFromServer, setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import type { CashoutDraft, DailySales, Payment, PaymentDraft, PurchaseDraft } from '@/domain/financeTypes'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry } from '@/domain/appTypes'
 import { allocateLoanRepayment, allocateLoanRepaymentToLoan, loanRupeesToPaise, normalizeLoanAmount } from '@/domain/loanMoney'
 import type { NameDirectoryType, StoreCollectionState } from '@/store/storeShared'
 import {
@@ -86,8 +86,6 @@ export function createFinanceActions({ ensureNameInDirectory, getState }: Financ
   async function saveSales(_draft: Omit<DailySales, 'id' | 'createdAt' | 'updatedAt'>) { void _draft; throw new Error('Sales are posted from trusted Cashout. Manual browser sales posting is retired.') }
 
   async function savePurchase(_draft: PurchaseDraft) { void _draft; throw new Error('Receive stock through the Stock workspace. Legacy manual purchase posting is retired.') }
-
-  async function saveVendor(_input: Omit<VendorRecord, 'id' | 'createdAt' | 'updatedAt'>) { void _input; throw new Error('Create and manage vendors through Vendor Workspace.') }
 
   async function saveCashout(draft: CashoutDraft) { const modes = { Cash:'cash', UPI:'upi', Card:'card', 'Bank Transfer':'bank-transfer', Cheque:'cheque' }; await postFinanceOperation('expense',{amountPaise:rupeesToPaise(draft.amount),category:draft.category,paidTo:draft.paidTo,mode:modes[draft.paymentMode],notes:draft.notes,...(draft.paymentMode==='Cheque'?{chequeNumber:draft.chequeNumber,chequeDate:draft.chequePayDate}: {})}) }
 
@@ -248,6 +246,5 @@ export function createFinanceActions({ ensureNameInDirectory, getState }: Financ
     savePayment,
     savePurchase,
     saveSales,
-    saveVendor,
   }
 }

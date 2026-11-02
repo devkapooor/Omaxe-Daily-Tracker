@@ -1,5 +1,4 @@
-import type { MutableRefObject } from 'react'
-import { collection, doc, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { collection, doc, limit, onSnapshot, orderBy, query, where, type Unsubscribe } from 'firebase/firestore'
 import { db } from '../shared/lib/firebase'
 import type { AppStoreSetters, LoadedCollections } from './storeShared'
 import {
@@ -8,10 +7,8 @@ import {
   mapDoc,
   normalizeLoanRecord,
   type OperationalExpenseBreakdown,
-  parseVendorCatalog,
   sortByCreatedAtDesc,
   uniqNames,
-  normalizeVendorRecord,
 } from './storeShared'
 import type {
   Cashout,
@@ -30,20 +27,12 @@ import type {
   PlannedPayment,
   SettingsAuditEntry,
   UserAccount,
-  VendorRecord,
+  VendorIdentitySummary,
 } from '../domain/appTypes'
 import type { AppUser } from '../domain/financeTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
 import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
-import type { UpgradeAnnouncement } from '@/domain/appTypes'
-
-function parseUpgradeAnnouncement(value: unknown): UpgradeAnnouncement | null {
-  if (!value || typeof value !== 'object') return null
-  const announcement = value as Partial<UpgradeAnnouncement>
-  if (typeof announcement.id !== 'string' || typeof announcement.title !== 'string' || typeof announcement.message !== 'string' || typeof announcement.publishedAt !== 'string' || typeof announcement.expiresAt !== 'string' || typeof announcement.publishedBy !== 'string') return null
-  if (!Number.isFinite(Date.parse(announcement.publishedAt)) || !Number.isFinite(Date.parse(announcement.expiresAt))) return null
-  return announcement as UpgradeAnnouncement
-}
+import type { VendorAccountStateV2 } from '@/domain/vendorLedgerV2'
 
 type SetupSubscriptionsArgs = Pick<
   AppStoreSetters,
@@ -59,11 +48,11 @@ type SetupSubscriptionsArgs = Pick<
   | 'setSettingsAuditLog'
   | 'setUsers'
   | 'setVendors'
+  | 'setVendorAccountStates'
   | 'setWorkspaceMetrics'
 > & {
   currentUserRole: AppUser['role']
   onSubscriptionError: (error: unknown) => void
-  vendorFallbackLoadedRef: MutableRefObject<boolean>
 }
 
 export function setupCashoutCorrectionSubscription(
@@ -100,10 +89,10 @@ export function setupAppStoreSubscriptions({
   setSettingsAuditLog,
   setUsers,
   setVendors,
+  setVendorAccountStates,
   setWorkspaceMetrics,
   currentUserRole,
   onSubscriptionError,
-  vendorFallbackLoadedRef,
 }: SetupSubscriptionsArgs) {
   const markLoaded = (key: keyof LoadedCollections) => {
     setLoadedCollections((current) => (current[key] ? current : { ...current, [key]: true }))
@@ -149,27 +138,53 @@ export function setupAppStoreSubscriptions({
       setUsers(sortByCreatedAtDesc(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<UserAccount, 'id'>))))
       markLoaded('users')
     }, onSubscriptionError),
-    onSnapshot(
-      collection(db, 'vendors'),
-      (snapshot) => {
-        vendorFallbackLoadedRef.current = false
-        setVendors(
-          sortByCreatedAtDesc(
-            snapshot.docs.map((item) => normalizeVendorRecord(mapDoc(item.id, item.data() as Omit<VendorRecord, 'id'>))),
-          ),
-        )
-        markLoaded('vendors')
-      },
-      () => {
-        if (vendorFallbackLoadedRef.current) return
-        const fallbackUnsubscribe = onSnapshot(doc(db, 'appMetadata', 'vendorCatalog'), (snapshot) => {
-          vendorFallbackLoadedRef.current = true
-          setVendors(parseVendorCatalog(snapshot.data()))
-          markLoaded('vendors')
+    (() => {
+      let vendorMasterReady = false
+      let accountStatesReady = false
+      let vendorLedgerEnabled: boolean | null = null
+      let vendorSubscriptions: Unsubscribe[] = []
+      const stopVendorSubscriptions = () => {
+        vendorSubscriptions.forEach(unsubscribe => unsubscribe())
+        vendorSubscriptions = []
+        vendorMasterReady = false
+        accountStatesReady = false
+      }
+      const markVendorsReady = () => {
+        if (vendorMasterReady && accountStatesReady) markLoaded('vendors')
+      }
+      const configUnsubscribe = onSnapshot(doc(db, 'appMetadata', 'vendorLedgerV2Config'), (snapshot) => {
+        const enabled = snapshot.exists() && snapshot.get('enabled') === true
+        if (vendorLedgerEnabled === enabled) return
+        vendorLedgerEnabled = enabled
+        stopVendorSubscriptions()
+        if (!enabled) {
+          setVendors([])
+          setVendorAccountStates([])
+          setLoadedCollections(current => ({ ...current, vendors: true }))
+          return
+        }
+        setLoadedCollections(current => ({ ...current, vendors: false }))
+        const vendorMasterUnsubscribe = onSnapshot(collection(db, 'vendorsV2'), (vendorSnapshot) => {
+          const vendors = vendorSnapshot.docs.map((item) => ({
+            id: item.id,
+            name: String(item.get('canonicalName') ?? ''),
+          } satisfies VendorIdentitySummary))
+          setVendors(vendors)
+          vendorMasterReady = true
+          markVendorsReady()
         }, onSubscriptionError)
-        unsubscribers.push(fallbackUnsubscribe)
-      },
-    ),
+        const accountStatesUnsubscribe = onSnapshot(collection(db, 'vendorAccountStatesV2'), (accountSnapshot) => {
+          setVendorAccountStates(accountSnapshot.docs.map((item) => ({ ...item.data(), id: item.id } as VendorAccountStateV2)))
+          accountStatesReady = true
+          markVendorsReady()
+        }, onSubscriptionError)
+        vendorSubscriptions = [vendorMasterUnsubscribe, accountStatesUnsubscribe]
+      }, onSubscriptionError)
+      return () => {
+        configUnsubscribe()
+        stopVendorSubscriptions()
+      }
+    })(),
     onSnapshot(collection(db, 'dailyCashouts'), (snapshot) => {
       setDailyCashouts(
         sortByCreatedAtDesc(snapshot.docs.map((item) => mapDoc(item.id, item.data() as Omit<DailyCashoutEntry, 'id'>))),
@@ -192,7 +207,6 @@ export function setupAppStoreSubscriptions({
       const data = snapshot.data() as Partial<NameDirectory> | undefined
       setNameDirectory({
         people: uniqNames(Array.isArray(data?.people) ? data.people : []),
-        vendors: uniqNames(Array.isArray(data?.vendors) ? data.vendors : []),
       })
       markLoaded('nameDirectory')
     }, onSubscriptionError),
@@ -207,9 +221,14 @@ export function setupAppStoreSubscriptions({
         monthlyOperationalExpense: unknown
         businessLegalName: unknown
         businessGstin: unknown
+        businessFssaiLicense: unknown
+        businessBankName: unknown
+        businessBankAccountHolder: unknown
+        businessBankAccountNumber: unknown
+        businessBankIfsc: unknown
+        businessBankBranch: unknown
         operationalExpenseBreakdown: Partial<Record<keyof OperationalExpenseBreakdown, unknown>>
         scheduledNotifications: unknown
-        upgradeAnnouncement: unknown
       }> | undefined
       const monthlyOperationalExpense =
         typeof data?.monthlyOperationalExpense === 'number' && data.monthlyOperationalExpense >= 0
@@ -232,7 +251,20 @@ export function setupAppStoreSubscriptions({
             ? rawBreakdown.miscellaneous
             : defaultAppSettings.operationalExpenseBreakdown.miscellaneous,
       }
-      setAppSettings({ marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown, businessLegalName: typeof data?.businessLegalName === 'string' && data.businessLegalName.trim() ? data.businessLegalName.trim() : defaultAppSettings.businessLegalName, businessGstin: typeof data?.businessGstin === 'string' && data.businessGstin.trim() ? data.businessGstin.trim().toUpperCase() : defaultAppSettings.businessGstin, scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications), upgradeAnnouncement: parseUpgradeAnnouncement(data?.upgradeAnnouncement) })
+      const optionalText = (value: unknown) => typeof value === 'string' ? value.trim() : ''
+      const ownerBankText = (value: unknown) => currentUserRole === 'owner' ? optionalText(value) : ''
+      setAppSettings({
+        marginPercentage, monthlyOperationalExpense, operationalExpenseBreakdown,
+        businessLegalName: optionalText(data?.businessLegalName) || defaultAppSettings.businessLegalName,
+        businessGstin: optionalText(data?.businessGstin).toUpperCase() || defaultAppSettings.businessGstin,
+        businessFssaiLicense: optionalText(data?.businessFssaiLicense),
+        businessBankName: ownerBankText(data?.businessBankName),
+        businessBankAccountHolder: ownerBankText(data?.businessBankAccountHolder),
+        businessBankAccountNumber: ownerBankText(data?.businessBankAccountNumber),
+        businessBankIfsc: ownerBankText(data?.businessBankIfsc),
+        businessBankBranch: ownerBankText(data?.businessBankBranch),
+        scheduledNotifications: parseScheduledNotifications(data?.scheduledNotifications),
+      })
       markLoaded('appSettings')
     }, onSubscriptionError),
     onSnapshot(doc(db, 'appMetadata', currentUserRole === 'owner' ? 'workspaceMetrics' : 'staffWorkspaceMetrics'), (snapshot) => {

@@ -1,6 +1,8 @@
 import type { DocumentData } from 'firebase/firestore'
 import type { Dispatch, SetStateAction } from 'react'
 import { seedData } from './seedData'
+import { normalizeName } from '@/shared/lib/nameUtils'
+export { normalizeName, uniqNames } from '@/shared/lib/nameUtils'
 import type {
   FinanceData,
   Store,
@@ -15,14 +17,15 @@ import type {
   NameDirectory,
   PlannedPayment,
   SettingsAuditEntry,
-  UpgradeAnnouncement,
   UserAccount,
-  VendorRecord,
+  VendorIdentitySummary,
 } from '../domain/appTypes'
 import type { WorkspaceMetrics } from '../domain/workspaceMetrics'
+import type { VendorAccountStateV2 } from '@/domain/vendorLedgerV2'
 import { serverNowIso } from '@/shared/lib/serverClock'
 import type { ScheduledNotification } from '../domain/appTypes'
 import { DEFAULT_SCHEDULED_NOTIFICATIONS } from '@/features/action-center/domain/scheduledNotifications'
+import type { BusinessIdentity } from '@/domain/businessIdentity'
 
 export const singleStoreId = 'single-store'
 export const defaultMonthlyOperationalExpense = 500000
@@ -40,14 +43,11 @@ export type OperationalExpenseBreakdown = {
 
 export type NameDirectoryType = keyof NameDirectory
 
-export type AppSettings = {
+export type AppSettings = BusinessIdentity & {
   marginPercentage: number
   monthlyOperationalExpense: number
   operationalExpenseBreakdown: OperationalExpenseBreakdown
-  businessLegalName: string
-  businessGstin: string
   scheduledNotifications: ScheduledNotification[]
-  upgradeAnnouncement: UpgradeAnnouncement | null
 }
 
 export type CreateUserInput = {
@@ -107,7 +107,6 @@ export const emptyFinanceData: FinanceData = {
 
 export const emptyNameDirectory: NameDirectory = {
   people: [],
-  vendors: [],
 }
 
 export const defaultAppSettings: AppSettings = {
@@ -115,6 +114,12 @@ export const defaultAppSettings: AppSettings = {
   monthlyOperationalExpense: defaultMonthlyOperationalExpense,
   businessLegalName: 'Alphaflux Ventures Pvt Ltd',
   businessGstin: '09ABBCA5994J1Z5',
+  businessFssaiLicense: '',
+  businessBankName: '',
+  businessBankAccountHolder: '',
+  businessBankAccountNumber: '',
+  businessBankIfsc: '',
+  businessBankBranch: '',
   operationalExpenseBreakdown: {
     rent: 0,
     electricity: 0,
@@ -125,7 +130,6 @@ export const defaultAppSettings: AppSettings = {
     miscellaneous: 0,
   },
   scheduledNotifications: DEFAULT_SCHEDULED_NOTIFICATIONS,
-  upgradeAnnouncement: null,
 }
 
 export const emptyWorkspaceMetrics: WorkspaceMetrics = {
@@ -226,7 +230,8 @@ export type AppStoreSetters = {
   setAppSettings: Dispatch<SetStateAction<AppSettings>>
   setSettingsAuditLog: Dispatch<SetStateAction<SettingsAuditEntry[]>>
   setUsers: Dispatch<SetStateAction<UserAccount[]>>
-  setVendors: Dispatch<SetStateAction<VendorRecord[]>>
+  setVendors: Dispatch<SetStateAction<VendorIdentitySummary[]>>
+  setVendorAccountStates: Dispatch<SetStateAction<VendorAccountStateV2[]>>
   setWorkspaceMetrics: Dispatch<SetStateAction<WorkspaceMetrics>>
 }
 
@@ -234,42 +239,8 @@ export function sortByCreatedAtDesc<T extends { createdAt: string }>(items: T[])
   return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-export function normalizeName(value: string) {
-  return value.trim().replace(/\s+/g, ' ')
-}
-
-export function uniqNames(values: string[]) {
-  const map = new Map<string, string>()
-  values.forEach((value) => {
-    const normalized = normalizeName(value)
-    if (!normalized) return
-    const key = normalized.toLowerCase()
-    if (!map.has(key)) map.set(key, normalized)
-  })
-  return Array.from(map.values()).sort((a, b) => a.localeCompare(b))
-}
-
 export function mapDoc<T extends DocumentData>(id: string, data: T) {
   return { id, ...data } as T & { id: string }
-}
-
-export function normalizeVendorRecord(record: VendorRecord) {
-  const openingOutstanding = Math.max(record.openingOutstanding ?? 0, 0)
-  const openingOutstandingRemaining = Math.max(
-    Math.min(record.openingOutstandingRemaining ?? openingOutstanding, openingOutstanding),
-    0,
-  )
-  return {
-    ...record,
-    name: normalizeName(record.name),
-    ownerName: normalizeName(record.ownerName),
-    contact: record.contact.trim(),
-    address: record.address.trim(),
-    companiesProvided: record.companiesProvided.trim(),
-    notes: record.notes.trim(),
-    openingOutstanding,
-    openingOutstandingRemaining,
-  }
 }
 
 export function normalizeLoanRecord(record: LoanEntry): LoanEntry {
@@ -289,33 +260,6 @@ export function normalizeLoanRecord(record: LoanEntry): LoanEntry {
     settledAt: status === 'Settled' ? record.settledAt ?? record.createdAt : undefined,
     updatedAt: record.updatedAt ?? record.createdAt,
   }
-}
-
-export function parseVendorCatalog(data: DocumentData | undefined) {
-  const raw = data?.vendors
-  if (!Array.isArray(raw)) return [] as VendorRecord[]
-  return sortByCreatedAtDesc(
-    raw.flatMap((entry) => {
-      if (!entry || typeof entry !== 'object') return []
-      const candidate = entry as Partial<VendorRecord>
-      if (
-        typeof candidate.id !== 'string' ||
-        typeof candidate.name !== 'string' ||
-        typeof candidate.ownerName !== 'string' ||
-        typeof candidate.contact !== 'string' ||
-        typeof candidate.address !== 'string' ||
-        typeof candidate.companiesProvided !== 'string' ||
-        typeof candidate.notes !== 'string' ||
-        (candidate.openingOutstanding !== undefined && typeof candidate.openingOutstanding !== 'number') ||
-        (candidate.openingOutstandingRemaining !== undefined && typeof candidate.openingOutstandingRemaining !== 'number') ||
-        typeof candidate.createdAt !== 'string' ||
-        typeof candidate.updatedAt !== 'string'
-      ) {
-        return []
-      }
-      return [normalizeVendorRecord(candidate as VendorRecord)]
-    }),
-  )
 }
 
 export function nowIso() {
@@ -344,6 +288,7 @@ export type StoreCollectionState = {
   plannedPayments: PlannedPayment[]
   settingsAuditLog: SettingsAuditEntry[]
   users: UserAccount[]
-  vendors: VendorRecord[]
+  vendors: VendorIdentitySummary[]
+  vendorAccountStates: VendorAccountStateV2[]
   workspaceMetrics: WorkspaceMetrics
 }

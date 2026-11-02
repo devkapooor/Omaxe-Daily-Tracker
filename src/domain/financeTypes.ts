@@ -36,6 +36,10 @@ export type Purchase = {
   purchaseAmount: number
   paidAmount: number
   unpaidAmount: number
+  cutoverUnpaidAmountBefore?: number
+  cutoverHistoricalOnly?: boolean
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
   paymentMode: PaymentMode
   category: string
   notes: string

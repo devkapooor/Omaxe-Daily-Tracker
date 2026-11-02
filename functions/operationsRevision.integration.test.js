@@ -26,7 +26,10 @@ describe('approved operations revision — isolated emulator', { skip: process.e
   const resolveReferences = createBusinessReferenceHandler(db)
   beforeEach(async () => {
     // Clear only this dedicated demo emulator project; no production endpoint is used.
-    for (const collection of await db.listCollections()) await db.recursiveDelete(collection)
+    assert.equal((await db.collection('loans').limit(1).get()).size, 0, 'Loan records present; reset refused')
+    assert.equal((await db.doc('businessReferenceCounters/LOAN').get()).exists, false, 'Loan reference state present; reset refused')
+    assert.equal((await db.collection('businessReferences').where('prefix', '==', 'LOAN').limit(1).get()).size, 0, 'Loan reference state present; reset refused')
+    for (const collection of await db.listCollections()) if (collection.id !== 'loans') await db.recursiveDelete(collection)
     const b = db.batch()
     for (const [uid, role] of [['owner', 'owner'], ['manager', 'manager'], ['billing', 'billing'], ['stranger', 'billing']]) b.set(db.doc(`users/${uid}`), { name: `Synthetic ${uid}`, role, approvalStatus: 'approved', disabled: false })
     b.set(db.doc('appMetadata/vendorLedgerV2Config'), { enabled: true, activationDate: '2026-01-01' })
@@ -55,6 +58,11 @@ describe('approved operations revision — isolated emulator', { skip: process.e
     const result = await resolveReferences({ auth: { uid: 'billing' }, data: { requests: [{ prefix: 'PRODUCT', id: 'p' }, { prefix: 'PRODUCT', id: 'forged' }] } })
     assert.deepEqual(result, [{ prefix: 'PRODUCT', id: 'p', reference: 'PRODUCT0001' }])
     await assert.rejects(resolveReferences({ auth: { uid: 'stranger' }, data: { requests: [{ prefix: 'NOTREAL', id: 'x' }] } }), /Invalid business reference/)
+  })
+
+  // Preserve this historical coverage, but never create loan fixtures during maintenance.
+  // Removing this exclusion requires explicit authorization for loan mutation tests.
+  it.skip('loan-specific reference authorization — excluded from maintenance mutation drills', async () => {
     await db.doc('loans/private-loan').set({ id: 'private-loan' })
     assert.deepEqual(await resolveReferences({ auth: { uid: 'billing' }, data: { requests: [{ prefix: 'LOAN', id: 'private-loan' }] } }), [])
     assert.equal((await resolveReferences({ auth: { uid: 'owner' }, data: { requests: [{ prefix: 'LOAN', id: 'private-loan' }] } }))[0].reference, 'LOAN0001')

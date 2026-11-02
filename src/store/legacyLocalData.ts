@@ -90,7 +90,6 @@ function migrateNameDirectory() {
   const parsed = parseJson<Partial<NameDirectory>>(nameDirectoryStorageKey, {})
   return {
     people: uniqNames(Array.isArray(parsed.people) ? parsed.people : []),
-    vendors: uniqNames(Array.isArray(parsed.vendors) ? parsed.vendors : []),
   } satisfies NameDirectory
 }
 

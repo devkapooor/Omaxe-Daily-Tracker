@@ -126,7 +126,7 @@ export function VendorLedgerPreviewPage() {
             <TabsTrigger value="invoices">Open Invoices</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="pt-2">
-            <VendorDirectoryV2 currentUserRole="owner" legacyVendorNames={['Northstar', 'Old Demo Supplier']} vendors={previewVendors} />
+            <VendorDirectoryV2 currentUserRole="owner" knownVendorNames={['Northstar', 'Old Demo Supplier']} vendors={previewVendors} />
           </TabsContent>
           <TabsContent value="purchases" className="pt-2">
             <PurchaseFormV2 isBusy={false} vendors={previewVendors} onSave={savePurchase} onRecordPayment={openPayment} />

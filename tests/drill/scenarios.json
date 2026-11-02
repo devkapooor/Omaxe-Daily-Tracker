@@ -571,7 +571,7 @@
     "priority": "P1",
     "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
     "actions": [
-      "Open Stock with blank barcode/All; inspect actual Firestore Listen traffic and idle state.",
+      "Record POS Quick Add target IDs, navigate to blank Current Stock and require those targets to detach; inspect only the new stock-phase queries.",
       "Filter00001 and open direct Edit. Keep Recorded movement history collapsed; then close details or leave workspace.",
       "Verify only scoped product/cost detail targets start and detach through removeTarget; distinguish truly shared global dependencies."
     ],
@@ -689,19 +689,20 @@
   },
   {
     "id": "GRN-02",
-    "title": "Existing-product partial receipt/invoice link",
+    "title": "Received stock with confirmed shortage credit note",
     "role": "billing/manager/owner",
     "priority": "P0",
     "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
     "actions": [
       "Sign in as billing/manager/owner; open Stock > Receive Stock/GRN History and capture its canonical baseline.",
-      "Exercise \"Existing-product partial receipt/invoice link\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Try saving a receipt with a short line and no credit note; confirm it is rejected without writes. Record only received lines, enter the full invoice amount and confirmed credit-note details, then submit once and retry the same operation.",
       "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
     ],
-    "expected": "Receive A x3 at cost6000, MRP10000,sell9000: stock20->23; full invoice18000 paise payable once, linked reservation/source/ledger.",
+    "expected": "Receive A x3 at cost6000, MRP10000,sell9000: stock20->23; original invoice100000 paise less confirmed credit82000 gives net payable18000 once. The credit-note reservation, source receipt, stock movement, invoice and vendor account reconcile; retry has no second effect.",
     "status": "Not Run",
     "automation": [
-      "tests/drill/financial.spec.cjs"
+      "tests/drill/financial.spec.cjs",
+      "tests/drill/stock.spec.cjs"
     ]
   },
   {
@@ -732,7 +733,7 @@
       "Exercise \"Duplicate and concurrent submissions\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
       "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
     ],
-    "expected": "Same draft/invoice does not add stock or payable twice; partial receipts share one full invoice payable.",
+    "expected": "Repeating the same submission does not add stock or payable twice; a second new receipt against the same vendor/invoice is rejected without writes.",
     "status": "Not Run",
     "automation": [
       "tests/drill/closure.spec.cjs",
@@ -785,7 +786,7 @@
       "Exercise \"Vendor picker pages/search/new vendor\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
       "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
     ],
-    "expected": "Dropdown automatically loads bounded pages; selected vendor retained, case-sensitive prefix labelled, retry/stale responses safe.",
+    "expected": "Picker shows 25 initial options and 50 after Show more matches; name/alias search covers the complete vendor directory, including a vendor outside those options. Selected vendor is retained; retry/stale responses remain safe.",
     "status": "Not Run",
     "automation": [
       "tests/drill/remaining.spec.cjs"
@@ -1305,7 +1306,7 @@
       "Exercise \"Role settings, operations and audit\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
       "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
     ],
-    "expected": "Only owner can edit projection/POS/notice settings; staff password/staff-directory limits enforced in Rules.",
+    "expected": "Current settings include Business Identity for owner; projection/POS/notice/identity permissions remain enforced and staff password/staff-directory limits remain intact.",
     "status": "Not Run",
     "automation": [
       "tests/drill/closure.spec.cjs",
@@ -1314,19 +1315,35 @@
   },
   {
     "id": "SET-02",
-    "title": "Synthetic announcement and notifications",
+    "title": "Scheduled staff notifications",
     "role": "owner/staff",
     "priority": "P1",
     "preconditions": "Fresh guarded demo fixture; real authenticated profile for the listed role; ENV-01 passed before business writes.",
     "actions": [
       "Sign in as owner/staff; open Settings and its named role-restricted tab and capture its canonical baseline.",
-      "Exercise \"Synthetic announcement and notifications\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
+      "Exercise \"Scheduled staff notifications\" using the current accessible controls, including the named rejection/retry variant. Follow the exact executable steps linked below.",
       "Read source/state/ledger/stock/balance/actor/revision independently; compare this card's expected arithmetic and verify rejected/repeated writes leave no extra effect."
     ],
-    "expected": "Owner publish audit, active staff notices, dismissal/expiry/window behavior; only emulator records.",
+    "expected": "Owner save audit, scheduled staff notices, role targeting and acknowledgement; only emulator records.",
     "status": "Not Run",
     "automation": [
-      "tests/drill/advanced.spec.cjs",
+      "tests/drill/closure.spec.cjs"
+    ]
+  },
+  {
+    "id": "SET-03",
+    "title": "Business identity and owner-only bank details",
+    "role": "owner/staff",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; ENV-01 passed before business writes.",
+    "actions": [
+      "As owner, save firm name, GSTIN, optional FSSAI licence and synthetic bank details in Business Identity.",
+      "Reload and verify every field, including account-number leading zeros.",
+      "Verify the staff settings projection excludes bank fields, staff has no Business Identity tab, and the retired Announcements tab is absent."
+    ],
+    "expected": "Business details persist in the canonical owner settings; bank data stays owner-only.",
+    "status": "Not Run",
+    "automation": [
       "tests/drill/closure.spec.cjs"
     ]
   },
@@ -1507,19 +1524,188 @@
   },
   {
     "id": "DIR-01",
-    "title": "Party Directory add/search/rename and read-only references",
+    "title": "Combined Vendor Workspace directory add/search/rename and read-only references",
     "role": "owner/manager/billing",
     "priority": "P1",
     "preconditions": "Guarded demo fixture; real profile; ENV-01 local endpoint proof; no loan mutations.",
     "expected": "Saved party can be renamed; record-derived references remain view-only. Directory changes do not rewrite financial history.",
     "status": "Not Run",
     "actions": [
-      "Open Party Directory > Add Party and save Drill Synthetic Party.",
-      "View Parties; search Synthetic, open saved party and rename to Drill Renamed Party. Inspect record-derived references.",
+      "Open Vendor Workspace > Vendors & Parties > Add Party / Vendor; choose Other party and save Drill Synthetic Party.",
+      "Search Synthetic, rename the saved party to Drill Renamed Party, require the dialog to close, then search Renamed and verify the persisted nameDirectory entry. Inspect record-derived references.",
       "Read nameDirectory and verify financial history/empty Loans unchanged; distinguish saved editable names from view-only references."
     ],
     "automation": [
       "tests/drill/advanced.spec.cjs"
+    ]
+  },
+  {
+    "preconditions": "Fresh guarded synthetic demo fixture, real Auth/Rules/Functions, ENV-01 before writes.",
+    "status": "Not Run",
+    "id": "B1-15",
+    "title": "Same last unit real callable race and unchanged retries",
+    "role": "billingA/billingB",
+    "priority": "P0",
+    "actions": [
+      "Seed synthetic product stock1/revision1; authenticate two independent sessions.",
+      "Hold each real checkout POST until both arrive, then release together.",
+      "Read bills/stock/movement/drawer independently; replay both original intents."
+    ],
+    "expected": "One9000-paise bill/movement; other stale-revision rejected; stock0; repeats have no new effect. Current negative-stock policy unchanged.",
+    "automation": [
+      "tests/drill/checkout.spec.cjs"
+    ]
+  },
+  {
+    "preconditions": "Fresh guarded synthetic demo fixture, real Auth/Rules/Functions, ENV-01 before writes.",
+    "status": "Not Run",
+    "id": "UX-04",
+    "title": "Visible receipt opener focus after live responsive layout change",
+    "role": "billingA",
+    "priority": "P1",
+    "actions": [
+      "Create synthetic bill; open its read-only receipt.",
+      "Change desktop to phone viewport while open; Escape; reopen and return to desktop; Close.",
+      "Check visible opener focus and financial source equality; recorder UID is collapsed until explicitly revealed."
+    ],
+    "expected": "Focus restored to visible source action, not hidden responsive duplicate; receipt does not mutate source records.",
+    "automation": [
+      "tests/drill/refund.spec.cjs"
+    ]
+  },
+  {
+    "preconditions": "Fresh guarded synthetic demo fixture, real Auth/Rules/Functions, ENV-01 before writes.",
+    "status": "Not Run",
+    "id": "UX-05",
+    "title": "Observed navigation timing and request counts",
+    "role": "owner",
+    "priority": "P2",
+    "actions": [
+      "Navigate POS/Stock/Vendor Workspace/Logs/Settings three rounds.",
+      "Record readiness latency and observed requests; check financial sources remain empty."
+    ],
+    "expected": "No financial mutation; observational timings are finite. No claim of device latency, performance threshold or billable reads.",
+    "automation": [
+      "tests/drill/resilience.spec.cjs"
+    ]
+  },
+  {
+    "id": "AUTH-08",
+    "title": "Active disablement and owner role removal with three live sessions",
+    "role": "owner/billingA/billingB",
+    "priority": "P0",
+    "preconditions": "Fresh guarded demo, ENV-01, real authenticated contexts.",
+    "actions": [
+      "Owner disables active billingA through real Rules-protected SDK update.",
+      "Verify disabled session loses business UI and trusted price call is denied; billingB remains usable.",
+      "Demote owner to billing through real SDK; private owner settings read denied, owner navigation removed; sources unchanged."
+    ],
+    "expected": "Live authority revoked without new financial/stock effects or disrupting the unrelated valid till.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
+    ]
+  },
+  {
+    "id": "OPS-01",
+    "title": "Actual Chrome process restart and exactly-once expense recovery",
+    "role": "billingA",
+    "priority": "P0",
+    "preconditions": "Guarded demo stack, ENV-01, fresh synthetic persistent Chrome profile; service workers blocked.",
+    "actions": [
+      "Post5000-paise expense with actual server commit then lose client acknowledgement.",
+      "Close owned Chrome process and verify it exited; relaunch same profile in a fresh process.",
+      "Verify actual persisted Auth and pending intent, recover original result, independently compare expense/operation records and drawer."
+    ],
+    "expected": "One original5000-paise expense and -5000 drawer delta, no duplicate operation/source; no copied storage/auth mocks. Desktop process acceptance only.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financeFollowup.spec.cjs"
+    ]
+  },
+  {
+    "id": "F45-17",
+    "title": "Overnight counter: current count supports cash operations",
+    "role": "owner/billing",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; ENV-01 passed. Original opening belongs to the previous day; latest accepted count is today.",
+    "actions": [
+      "Keep two independently authenticated sessions active and retain the original opening record.",
+      "Post a sale, cash expense and customer item return; close through Cashout using independently calculated cash.",
+      "Verify original opening/count records and bill remain unchanged, cash/stock effects occur once, and Open Counter appears after closure."
+    ],
+    "expected": "100000 count + 18000 sale - 5000 expense - 9000 refund = 104000 paise removed by Cashout; drawer ends at zero. Opening provenance remains intact.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/financeFollowup.spec.cjs"
+    ]
+  },
+  {
+    "id": "F45-20",
+    "title": "Explicit historical cash timing with concurrent live billing",
+    "role": "owner and billing",
+    "priority": "P1",
+    "preconditions": "Guarded demo fixture; ENV-01 passed; owner and billing sessions independently authenticated.",
+    "actions": ["Verify a past-date Cashout requires an explicit cash-removal choice.", "Select Cash already removed, keep a real billing session active and post a sale before saving the historical amount.", "Verify no drawer reservation or debit, retained sale/stock effects and a usable phone confirmation."],
+    "expected": "100000 opening + 9000 live sale = 109000 live drawer paise. Recording 150000 historical paise does not change the drawer or stop billing.",
+    "status": "Not Run",
+    "automation": ["tests/drill/financeFollowup.spec.cjs"]
+  },
+  {
+    "id": "F45-21",
+    "title": "Audited duplicate historical deduction reversal and lost-response recovery",
+    "role": "owner and billing",
+    "priority": "P1",
+    "preconditions": "Guarded demo fixture; ENV-01 passed; synthetic applied historical debit followed by a real cash expense.",
+    "actions": ["Review and explicitly confirm an owner correction for cash already removed earlier.", "Drop the response only after the real correction commits; recover the original operation.", "Independently verify current balance, one correction, unchanged sale/expense/closure evidence and denial of forged client writes."],
+    "expected": "100000 - 50000 mistaken debit - 5000 later expense + 50000 correction = 95000 live drawer paise, with one immutable correction and original financial records preserved.",
+    "status": "Not Run",
+    "automation": ["tests/drill/financeFollowup.spec.cjs"]
+  },
+  {
+    "id": "F45-18",
+    "title": "Historical expenses and audited completed Cashout correction",
+    "role": "owner and billing",
+    "priority": "P1",
+    "preconditions": "Guarded demo fixture; ENV-01 passed; synthetic past-date legacy cash expense.",
+    "actions": [
+      "Confirm the historical expense total through the owner screen; verify billing and direct client writes are denied.",
+      "Save a physical Cashout, then explicitly correct its expense total and independently verify unchanged sales, sources, count and drawer.",
+      "Inspect desktop light/dark and phone layout and fractional-rupee display in Cashout and Logs."
+    ],
+    "expected": "400000 recorded + 65600 adjustment = 465600 expense paise. Only the 50000 physical cash count debits the drawer. Expense-only corrections preserve all cash-count and source evidence.",
+    "status": "Not Run",
+    "automation": ["tests/drill/financeFollowup.spec.cjs"]
+  },
+  {
+    "id": "F45-19",
+    "title": "Historical reconciliation lost-response recovery",
+    "role": "owner",
+    "priority": "P1",
+    "preconditions": "Guarded demo fixture; ENV-01 passed; real emulator authentication and synthetic historical expense.",
+    "actions": [
+      "Abort the response only after the real callable commits the reconciliation.",
+      "Recover the persisted original operation and inspect the dated revision, immutable operation count and drawer."
+    ],
+    "expected": "One dated adjustment and one immutable operation. Original result recovered, journal cleared, no drawer debit.",
+    "status": "Not Run",
+    "automation": ["tests/drill/financeFollowup.spec.cjs"]
+  },
+  {
+    "id": "VEN-11",
+    "title": "Completed reset visibility and compact invoice periods",
+    "role": "owner",
+    "priority": "P1",
+    "preconditions": "Fresh guarded demo fixture; ENV-01 passed. Synthetic same-day current and historical invoices and a recorded balance cutover.",
+    "actions": [
+      "Verify reset control is visible before completion and disappears after the config records the cutover.",
+      "Verify compact current/historical/all invoice views, search and sort, historical paid/balance display, disabled historical payment, invoice/GRN details and current payment navigation.",
+      "Review light/dark desktop and phone layouts; reload and verify financial source snapshots and reset visibility."
+    ],
+    "expected": "Current invoices are the default; historical invoices remain read-only and do not appear paid by reset. Filter controls fit the phone viewport and only the table scrolls sideways. Financial fixtures remain unchanged.",
+    "status": "Not Run",
+    "automation": [
+      "tests/drill/remaining.spec.cjs"
     ]
   }
 ]

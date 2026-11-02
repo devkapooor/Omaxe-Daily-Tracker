@@ -16,6 +16,8 @@ export async function authIdentity() { safe(); return { uid: auth.currentUser?.u
 export async function restoreAccount(email: string, password: string) { safe(); await signInWithEmailAndPassword(auth, email, password); return { uid: auth.currentUser?.uid ?? null } }
 function firebaseFailure(cause: unknown): never { const error = cause as { code?: string; message?: string }; throw new Error((error.code ?? 'unknown') + ': ' + (error.message ?? String(cause))) }
 export async function read(path: string) { try { const value = await getDoc(doc(db, path)); return value.exists() ? { id: value.id, ...value.data() } : null } catch (cause) { return firebaseFailure(cause) } }
+/** Server-backed SDK read; an existing authorized target may still be reused. */
+export async function readServer(path: string) { safe(); try { const value = await getDocFromServer(doc(db, path)); return value.exists() ? { id: value.id, ...value.data() } : null } catch (cause) { return firebaseFailure(cause) } }
 export async function list(path: string) { try { return (await getDocs(collection(db, path))).docs.map(value => ({ id: value.id, ...value.data() })) } catch (cause) { return firebaseFailure(cause) } }
 export async function write(path: string, value: Record<string, unknown>, mode = 'set') {
   safe(path)

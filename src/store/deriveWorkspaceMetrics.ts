@@ -1,8 +1,9 @@
 import { ordinaryExpenseAmount, recordedNetSales } from '@/domain/refundAccounting'
 import { expensePartyVisibility, partyNameKey } from '@/domain/partyDirectory'
 import { IST_TIMEZONE, cashoutCategories, daysBetweenInclusive, shiftDate, today, uniqNames } from '@/app/uiHelpers'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, MonthlyReportMeta, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, MonthlyReportMeta, UserAccount, VendorIdentitySummary } from '@/domain/appTypes'
 import type { Cashout, FinanceData, Payment } from '@/domain/financeTypes'
+import type { VendorAccountStateV2 } from '@/domain/vendorLedgerV2'
 import type {
   DashboardRangeSummary,
   LabelAmountRow,
@@ -246,7 +247,8 @@ export function deriveWorkspaceMetrics(args: {
   monthlyReports: MonthlyReportMeta[]
   plannedPayments: Array<{ id: string; title: string; date: string; amount: number; notes: string }>
   users: UserAccount[]
-  vendors: VendorRecord[]
+  vendors: VendorIdentitySummary[]
+  vendorAccountStates?: VendorAccountStateV2[]
 }): Omit<WorkspaceMetrics, 'updatedAt'> {
   const {
     appSettings,
@@ -258,6 +260,7 @@ export function deriveWorkspaceMetrics(args: {
     plannedPayments,
     users,
     vendors,
+    vendorAccountStates = [],
   } = args
 
   const generatedForDate = today()
@@ -290,7 +293,7 @@ export function deriveWorkspaceMetrics(args: {
   const totalLoans = normalizedLoans.reduce((total, loan) => total + loan.remainingAmount, 0)
   const openLoanCount = normalizedLoans.filter((loan) => loan.remainingAmount > 0).length
 
-  const vendorOutstandingByNameMap = deriveVendorOutstanding(financeData, vendors)
+  const vendorOutstandingByNameMap = deriveVendorOutstanding(vendors, vendorAccountStates)
   const vendorOutstandingByName = Object.fromEntries(Array.from(vendorOutstandingByNameMap.entries()).sort((left, right) => left[0].localeCompare(right[0])))
   const totalVendorOutstanding = Object.values(vendorOutstandingByName).reduce((total, amount) => total + amount, 0)
 
@@ -406,10 +409,9 @@ export function deriveDirectoryOptions(args: {
   loans: LoanEntry[]
   nameDirectory: {
     people: string[]
-    vendors: string[]
   }
   users: UserAccount[]
-  vendors: VendorRecord[]
+  vendors: VendorIdentitySummary[]
 }) {
   const { financeData, loans, nameDirectory, users, vendors } = args
   // Keep historical expense labels out of the party list after categories change.
@@ -446,6 +448,6 @@ export function deriveDirectoryOptions(args: {
     party,
     realParties: realPartyNames,
     references: references.filter(name => !vendorNameKeys.has(partyNameKey(name))),
-    vendors: uniqNames([...vendorNames, ...nameDirectory.vendors, ...derivedVendors]),
+    vendors: uniqNames([...vendorNames, ...derivedVendors]),
   }
 }

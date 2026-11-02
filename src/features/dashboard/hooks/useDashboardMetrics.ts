@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { CashTransfer, DailyCashoutEntry, LoanEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
+import type { CashTransfer, DailyCashoutEntry, LoanEntry, UserAccount, VendorIdentitySummary } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
 import type { WorkspaceMetrics } from '@/domain/workspaceMetrics'
 import { today, type DashboardMonthOffset } from '@/app/uiHelpers'
@@ -18,10 +18,9 @@ type UseDashboardMetricsArgs = {
   loans: LoanEntry[]
   nameDirectory: {
     people: string[]
-    vendors: string[]
   }
   users: UserAccount[]
-  vendors: VendorRecord[]
+  vendors: VendorIdentitySummary[]
   workspaceMetrics: WorkspaceMetrics
 }
 

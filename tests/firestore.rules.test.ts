@@ -499,7 +499,10 @@ describe('V2 vendor ledger capability enforcement', () => {
       enabled: true, activationDate: '2026-10-01',
     })
     expect((await getDoc(doc(ownerDb, 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
-    expect((await getDoc(doc(ownerDb, 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+    await assertFails(getDoc(doc(ownerDb, 'vendors', 'legacy-vendor')))
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      expect((await getDoc(doc(context.firestore(), 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+    })
   })
 
   it('activates the reviewed clean start atomically for the owner only', async () => {
@@ -528,7 +531,10 @@ describe('V2 vendor ledger capability enforcement', () => {
     expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', 'clean-vendor-open'))).data()?.outstandingPaise).toBe(125050)
     expect((await getDoc(doc(ownerDb, 'vendorAccountStatesV2', 'clean-vendor-zero'))).exists()).toBe(false)
     expect((await getDoc(doc(ownerDb, 'loans', 'protected-loan'))).data()?.remainingAmount).toBe(98765)
-    expect((await getDoc(doc(ownerDb, 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+    await assertFails(getDoc(doc(ownerDb, 'vendors', 'legacy-vendor')))
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      expect((await getDoc(doc(context.firestore(), 'vendors', 'legacy-vendor'))).data()?.openingOutstandingRemaining).toBe(12345)
+    })
     await expect(activateVendorLedgerV2(input, ownerDb)).rejects.toThrow(/already initialized/)
     await assertSucceeds(updateDoc(doc(ownerDb, 'appMetadata', 'vendorLedgerV2Config'), {
       enabled: false, updatedAt: '2026-10-01T01:00:00.000Z', updatedByUserId: 'owner-user',
@@ -866,5 +872,33 @@ describe('Payroll access and audit enforcement', () => {
     }, manager)).rejects.toThrow()
     await assertFails(updateDoc(doc(manager, 'salarySlips', slipId), { outstandingPaise: 0 }))
     await assertFails(deleteDoc(doc(owner, 'users', 'manager-user')))
+  })
+})
+
+describe('single-source vendor identity Rules', () => {
+  it('allows party-name updates while preventing edits to the retired vendor-name list', async () => {
+    await testEnvironment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'appMetadata', 'nameDirectory'), {
+        people: ['Existing Party'],
+        vendors: ['Old Vendor Label'],
+      })
+    })
+    const manager = userDb('manager-user')
+    const nameDirectory = doc(manager, 'appMetadata', 'nameDirectory')
+
+    await assertSucceeds(setDoc(nameDirectory, { people: ['Existing Party', 'New Party'] }, { merge: true }))
+    await assertFails(updateDoc(nameDirectory, { vendors: ['Different Vendor'] }))
+    expect((await getDoc(nameDirectory)).data()).toMatchObject({
+      people: ['Existing Party', 'New Party'],
+      vendors: ['Old Vendor Label'],
+    })
+  })
+
+  it('denies client reads of retired vendor records and migration recovery archives', async () => {
+    const owner = userDb('owner-user')
+    await assertFails(getDoc(doc(owner, 'vendors', 'legacy-vendor')))
+    await assertFails(getDoc(doc(owner, 'appMetadata', 'vendorCatalog')))
+    await assertFails(getDoc(doc(owner, 'vendorMasterMigrationArchives', 'archive-record')))
+    await assertFails(getDoc(doc(owner, 'vendorMasterMigrations', 'migration-record')))
   })
 })

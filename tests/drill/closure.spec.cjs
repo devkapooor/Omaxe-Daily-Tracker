@@ -38,6 +38,23 @@ test('SET-01 SET-02 projection audit and synthetic staff notification',async({dr
  const {page:owner}=await h.session('owner'),{page:staff}=await h.session('billingA');await h.nav(owner,'Settings');await owner.getByRole('tab',{name:'Operations',exact:true}).click();const margin=owner.getByRole('spinbutton',{name:/Margin/});await margin.fill('30');await owner.getByRole('button',{name:'Save Projection Settings',exact:true}).click();await expect.poll(async()=>(await h.records('settingsAudit')).length).toBeGreaterThan(0)
  await owner.getByRole('tab',{name:'Staff Notifications',exact:true}).click();await owner.getByRole('button',{name:'Add Notification',exact:true}).click();await owner.getByRole('textbox',{name:'Title',exact:true}).fill('Drill Staff Reminder');await owner.getByRole('textbox',{name:'Message',exact:true}).fill('Synthetic local acknowledgement');const now=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date());await owner.getByLabel('Trigger Time (IST)',{exact:true}).fill(now);await owner.getByRole('button',{name:'Save Notifications',exact:true}).click();await expect(staff.getByRole('alertdialog')).toContainText('Drill Staff Reminder');await staff.getByRole('button',{name:/Acknowledge|Understood|Got it/i}).click();await expect(staff.getByRole('alertdialog')).toHaveCount(0)
 })
+test('SET-03 business identity saves optional details and keeps bank information owner-only',async({drill:h})=>{
+ const {page:owner}=await h.session('owner'),{page:staff}=await h.session('billingA')
+ await h.nav(owner,'Settings')
+ await expect(owner.getByRole('tab',{name:'Announcements',exact:true})).toHaveCount(0)
+ await owner.getByRole('tab',{name:'Business Identity',exact:true}).click()
+ const fields={'Registered legal firm name':'Synthetic Store Pvt Ltd','GSTIN':'09ABCDE1234F1Z5','FSSAI licence number (optional)':'12345678901234','Bank name':'Synthetic Bank','Account holder name':'Synthetic Store','Account number':'000123456789','IFSC':'TEST0123456','Branch':'Fixture branch'}
+ for(const [label,value]of Object.entries(fields))await owner.getByLabel(label,{exact:true}).fill(value)
+ await owner.getByRole('button',{name:'Save Business Identity',exact:true}).click()
+ await expect(owner.getByRole('status').filter({hasText:'Firm identity saved'})).toBeVisible()
+ const saved=await h.get('appMetadata/appSettings'),shared=await h.get('appMetadata/staffSettings')
+ expect(saved.businessBankAccountNumber).toBe('000123456789');expect(saved.businessFssaiLicense).toBe('12345678901234')
+ expect(Object.keys(shared).filter(key=>key.startsWith('businessBank'))).toEqual([])
+ await owner.reload();await h.nav(owner,'Settings');await owner.getByRole('tab',{name:'Business Identity',exact:true}).click()
+ for(const [label,value]of Object.entries(fields))await expect(owner.getByLabel(label,{exact:true})).toHaveValue(value)
+ await h.nav(staff,'Settings');await expect(staff.getByRole('tab',{name:'Business Identity',exact:true})).toHaveCount(0)
+ h.evidence.assertions.push({optionalIdentityReloaded:true,leadingZerosPreserved:true,bankExcludedFromStaffSettings:true,announcementsRemoved:true})
+})
 test('ACT-01 ACT-03 price review UI, badges, history and filters',async({drill:h})=>{
  const {page:staff}=await h.session('billingA');const result=await h.rpc(staff,CLIENT,'call',['changeStockPrices',{operationId:'stock-price-'+crypto.randomUUID(),productId:'drill-product-1',expectedRevision:1,mrpPaise:10000,sellingPricePaise:9500,reason:'Drill owner UI evidence review'}]);const {page:owner}=await h.session('owner');await h.nav(owner,'Action Centre');await expect(owner.getByRole('tab',{name:/Pending/})).toContainText('1');await owner.getByRole('button',{name:'View Details',exact:true}).click();await expect(owner.getByRole('dialog')).toContainText('Drill billingA');await owner.getByRole('button',{name:'Mark Reviewed',exact:true}).click();await owner.getByRole('button',{name:'Confirm Reviewed',exact:true}).click();await expect.poll(async()=>(await h.get(h.base+'/stockPriceChanges/'+result.id)).reviewStatus).toBe('reviewed');await expect(owner.getByRole('tab',{name:/Pending/})).toContainText('0');await owner.getByRole('tab',{name:'History',exact:true}).click();await expect(owner.getByRole('button',{name:'View Details',exact:true})).toHaveCount(1);await owner.getByRole('textbox',{name:'Search',exact:true}).fill('No such drill source');await expect(owner.getByText(/No Matching History|No Requests Match/)).toBeVisible();expect((await h.get(h.base+'/products/drill-product-1')).sellingPricePaise).toBe(9500)
 })

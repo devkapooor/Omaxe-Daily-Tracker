@@ -1,6 +1,12 @@
 # Vendor Ledger
 
-Current behavior is documented from source at baseline 5777168. Firestore remains the authority for activation, permissions and financial records; this document is not a balance or activation report. The complete original decision register, phase evidence and workbook controls are retained in the [implementation archive](../archive/PURCHASE_VENDOR_CHEQUE_IMPLEMENTATION_2026-10-01.md).
+## Current-source scope ? 31 October 2026
+
+The detailed cutover/workbook sections below describe the historical `5777168` baseline and retained compatibility, not a current activation instruction. Current Vendor Workspace has Vendors & Parties, Invoices, Payment Corrections and Balances; Stock Return is under Stock, and Register owns New Payment/Payment History/owner Cheques. Loans has a separate owner page and is excluded from mutation drills. The old cutover/preview cluster has no current app-entry consumer and is retained H rather than reactivated.
+
+Current vendor financial posting/return/opening/GST paths use authenticated Functions and durable intents; source records, allocations, balances and audit entries remain separate. Current authority: [Architecture](../architecture/ARCHITECTURE.md); proof/limits: [test coverage](../operations/TEST_COVERAGE.md). Do not execute historical activation, workbook import, bank initialization or rollback commands against live records during maintenance.
+
+Historical behavior below was documented from source at baseline 5777168. Firestore remains the authority for activation, permissions and financial records; this document is not a balance or activation report. The complete original decision register, phase evidence and workbook controls are retained in the [implementation archive](../archive/PURCHASE_VENDOR_CHEQUE_IMPLEMENTATION_2026-10-01.md).
 
 ## Implemented workflow
 
@@ -28,6 +34,22 @@ Current behavior is documented from source at baseline 5777168. Firestore remain
 - Return credit is vendor-level, never invoice-level. Replacement and rejection have no monetary effect. Cash refund is unsupported; returns never modify operational cash, bank or loan records.
 - Legacy vendor records and balances do not seed V2 accounts. Legacy/expense cheque tracking must never create V2 vendor settlement postings.
 - Original source records, opening entries and financial ledger evidence are not overwritten by corrections. Loan data and party balances remain outside this workflow.
+
+## Single source of truth
+
+- `vendorsV2` is the only vendor master read by the app. The dashboard gets vendor display names from this master. The old `/vendors` collection and `appMetadata/vendorCatalog` are denied by the current Rules source and are not runtime fallbacks.
+- `appMetadata/nameDirectory` stores confirmed people/party names only. Vendor names and aliases belong in `vendorsV2`; historical supplier labels remain part of their original transaction records.
+- `vendorLedgerEntriesV2` is the append-only financial evidence. `vendorAccountStatesV2` and `invoiceStatesV2` are transactionally maintained current-state projections used for posting and display. A posting updates its source, ledger evidence, and projections in one guarded operation; a discrepancy requires reconciliation before further posting.
+- `appMetadata/workspaceMetrics` and the staff-safe metrics document are derived reporting snapshots. They are rebuilt from current sources and must never be used to post or correct vendor balances.
+- The app includes an owner-only review flow to move retained V1 `/vendors` profiles and saved vendor-name labels into V2. The flow requires a destination for every source, archives originals in restricted Firestore collections, and removes the old active records atomically. It never imports V1 opening balances or rewrites legacy purchases/payments. Do not run it until the code and Rules are deployed together and the owner has reviewed each mapping.
+
+## One-time vendor balance cutover
+
+The owner-only `vendor-balance-cutover` operation starts a new payable period on the selected business date. It zeros V2 vendor payable/credit projections and vendor opening balances, while preserving V2 invoice, payment, ledger, return, and cheque history. Legacy V1 records are left untouched as history and are excluded from the new payable source. Old invoice states become historical and are excluded from current due. Old pending issued cheques become tracking-only; a later status update records their outcome without posting a new-period payment. Pending returns may still be physically resolved, but an old vendor credit note is recorded as historical-only and cannot reduce the new balance. Old GRN reversals and corrections to prior-period payments are blocked from affecting the new period; pending old correction requests are closed with an owner audit note.
+
+The reset is one-time and requires the exact date confirmation. It must only be invoked after the deployed reset implementation has been reviewed against current production counts. For each existing vendor, the owner enters the verified net amount actually owed as of the cutover date during that vendor's first new GRN, payment, or issued vendor cheque. That opening is posted once to the ledger and combined with the current transaction atomically. Staff cannot submit the first transaction for an uncaptured vendor. Vendors created after cutover are captured at creation and do not receive a second opening prompt. A failed or incomplete transaction does not save the opening amount.
+
+The dashboard and reset summary use V2 account states only. Legacy V1 balances are not included or modified. The balance reset itself is not run during local implementation or build validation; production execution occurs only after a separately authorized deployment and owner action.
 
 ## Approved decision register
 
@@ -61,7 +83,7 @@ All decisions below were approved on 2026-10-01. Approval does not imply every U
 - Domain helpers cover reservation release and legacy tracking semantics. The current live new-cheque form does not provide cheque invoice-allocation capture; do not claim complete reservation persistence from helper tests alone.
 - The 30 workbook instruments have not been imported by cleanup. Their future initialization, conflict review, normalized matching and cross-source uniqueness need explicit operational controls.
 - Showing legacy expense cheques read-only and merging planner schedules is not a persisted unified expense-cheque migration. Keep that requirement open.
-- V2 account balances are shown in Vendor Workspace. The Dashboard currently receives its legacy vendor metric from workspaceMetrics; switching that source is a separate financial change.
+- V2 account balances are shown in Vendor Workspace and now supply the Dashboard payable metric. Legacy `/vendors` records still await an identity-reviewed migration/retirement step.
 - Disabled initialized ledgers cannot be initialized again. Containment/resume requires a separate reviewed operation, preserving all original evidence.
 
 ## Verification and references

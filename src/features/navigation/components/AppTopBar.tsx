@@ -63,7 +63,6 @@ function NavigationLinks({
   onSelect: (item: NavItem) => void
 }) {
   const groups: NavigationGroup[] = ['Core Engine', 'Ledger & Cash Flow', 'Governance & Audit']
-  let shortcut = 0
 
   return (
     <nav aria-label="Main navigation" className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
@@ -76,8 +75,6 @@ function NavigationLinks({
               {!collapsed ? <h2 className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group}</h2> : null}
               <ul className="space-y-0.5">
                 {groupItems.map((item) => {
-                  shortcut += 1
-                  const currentShortcut = shortcut <= 9 ? `Alt+${shortcut}` : undefined
                   const active = item.page === activePage
                   return (
                     <li key={item.label}>
@@ -97,7 +94,6 @@ function NavigationLinks({
                         </span>
                         {!collapsed ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
                         {!collapsed && item.page === 'actions' ? <PendingBadge count={pendingApprovalCount} /> : null}
-                        {!collapsed && currentShortcut ? <kbd className={cn('ml-auto text-[10px] font-normal text-muted-foreground', active && 'text-primary-foreground/75')}>{currentShortcut}</kbd> : null}
                       </button>
                     </li>
                   )
@@ -126,20 +122,6 @@ export function AppTopBar({ currentUser, activePage, pendingApprovalCount, onPag
   }, [isMobileOpen])
 
   useEffect(() => subscribeToTheme(setTheme), [])
-
-  useEffect(() => {
-    function handleShortcut(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null
-      const isEditing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable
-      if (isEditing || !event.altKey || !/^[1-9]$/.test(event.key)) return
-      const item = navigationItems[Number(event.key) - 1]
-      if (!item?.page) return
-      event.preventDefault()
-      onPageChange(item.page)
-    }
-    window.addEventListener('keydown', handleShortcut)
-    return () => window.removeEventListener('keydown', handleShortcut)
-  }, [navigationItems, onPageChange])
 
   function handleSelect(item: NavItem) {
     setIsMobileOpen(false)

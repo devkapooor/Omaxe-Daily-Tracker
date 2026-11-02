@@ -7,7 +7,7 @@ const test=baseTest.extend({drill:[async({browser},use,info)=>{
  const fixture=await admin.seed();const sessions=[];const evidence={fixture,requests:[],blocked:[],console:[],failed:[],assertions:[],records:[]}
  const h={...admin,expect,fixture,evidence,
   async session(role='owner',options={}){
-   const context=await browser.newContext({viewport:options.viewport??{width:1440,height:1000},serviceWorkers:'block',reducedMotion:'reduce'})
+   const context=options.context??await browser.newContext({viewport:options.viewport??{width:1440,height:1000},serviceWorkers:'block',reducedMotion:'reduce'})
    const page=await context.newPage();sessions.push({context,page,role})
    await context.route('**/*',async route=>{
     const request=route.request(),url=new URL(request.url())
@@ -28,9 +28,14 @@ const test=baseTest.extend({drill:[async({browser},use,info)=>{
    expect(client).toEqual({project:admin.PROJECT,auth:'http://127.0.0.1:9099',firestore:'127.0.0.1:8080',functions:'http://127.0.0.1:5001',bypass:false})
    evidence.assertions.push({kind:'pre-login-isolation',role,client})
    if(role!=='unauthenticated'){
+    if(options.resume){
+     await expect.poll(async()=>page.evaluate(async()=>{const {auth}=await import('/src/shared/lib/firebase.ts');return auth.currentUser?.uid??null})).toBe('drill-'+role)
+     evidence.assertions.push({kind:'persisted-auth-restored',role,uid:'drill-'+role})
+    }else{
     await page.getByRole('textbox',{name:'Email',exact:true}).fill(role.toLowerCase()+'@drill.invalid')
     await page.getByLabel('Password',{exact:true}).fill(options.password??admin.PASSWORD)
     await page.getByRole('button',{name:'Open Workspace',exact:true}).click()
+    }
     if(options.gate!==false){
      await expect(page.getByRole('button',{name:/^Stock(?:\s|$)/}).first()).toBeVisible();await h.clock(page)
      const ledger=await admin.get(admin.base+'/handover/main')

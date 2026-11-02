@@ -31,17 +31,21 @@ export function CashoutPage(props: CashoutPageProps) {
         )} />
       )}>
         <TabsContent value="new" className="m-0 min-h-0 flex-1">
-          <DailyCashoutForm currentUserId={currentUser.id} currentUserName={currentUser.name} todayCashExpenses={todayCashExpenses} onSave={async (draft) => {
+          <DailyCashoutForm currentUserId={currentUser.id} currentUserName={currentUser.name} canReconcileHistoricalExpenses={currentUser.role === 'owner'} todayCashExpenses={todayCashExpenses} onSave={async (draft) => {
             await onSave(draft)
             if (draft.historicalCountOnlyVersion === 1) {
-              showToast(`Historical Cashout and sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} credited to ${currentUser.name}; today’s drawer is unchanged.`)
+              if (draft.historicalCashTiming === 'already-removed') {
+                showToast('Historical Cashout and sales saved. Cash was already removed earlier; today\'s drawer is unchanged.')
+                return
+              }
+              showToast(`Historical Cashout and sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} removed from the current virtual drawer and credited to ${currentUser.name}.`)
               return
             }
             showToast(draft.auditStatus === 'matched' ? `Cashout + Sales saved. ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.` : `${draft.auditMessage} ${money(draft.drawerTotal ?? draft.remainingBalance)} removed; POS drawer closed at ₹0.00.`)
           }} />
         </TabsContent>
         <TabsContent value="corrections" className="m-0 min-h-0 flex-1">
-          <CashoutCorrectionPanel currentUser={currentUser} dailyCashouts={dailyCashouts} requests={correctionRequests} onSubmit={async (entry, values, reason) => {
+          <CashoutCorrectionPanel currentUser={currentUser} dailyCashouts={dailyCashouts} requests={correctionRequests} showToast={showToast} onSubmit={async (entry, values, reason) => {
             await onSubmitCorrection(entry.id, values, reason, currentUser)
             showToast('Correction request submitted for owner approval.')
           }} onWithdraw={async (requestId) => {

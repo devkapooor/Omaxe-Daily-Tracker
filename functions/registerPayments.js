@@ -1,5 +1,6 @@
 const p = require('./financeOperations');
 const v = require('./vendorLedgerPolicy');
+const { createHash } = require('node:crypto');
 function createRegisterHandlers(ops) {
   const {
     db,
@@ -25,6 +26,24 @@ function createRegisterHandlers(ops) {
   }
   function queue(ctx, collection, key, value, create = false) {
     ctx.writes.push(() => create ? ctx.tx.create(ref(collection, key), value) : ctx.tx.set(ref(collection, key), value));
+  }
+  function captureCutoverOpening(ctx, vendorRecord, account, openingBalancePaise) {
+    const pending = Boolean(vendorRecord.balanceCutoverId && vendorRecord.cutoverOpeningCaptured !== true);
+    if (!pending) {
+      if (openingBalancePaise !== undefined) p.fail('This vendor already has an opening balance for the current ledger period.');
+      return { vendor: vendorRecord, account };
+    }
+    if (ctx.actor.role !== 'owner') p.fail('The owner must enter this vendor\'s opening payable before the first GRN or payment.', 'permission-denied');
+    p.paise(openingBalancePaise, 'Opening payable');
+    if (account && (p.paise(account.outstandingPaise) !== 0 || p.paise(account.vendorCreditPaise ?? 0) !== 0)) p.fail('This vendor already has financial activity after the balance reset. Ask the owner to review it.');
+    const amount = openingBalancePaise;
+    const ledgerEntryId = `cutover-opening-${createHash('sha256').update(`${vendorRecord.balanceCutoverId}:${vendorRecord.id}`).digest('hex').slice(0, 28)}`;
+    const nextVendor = { ...vendorRecord, cutoverOpeningCaptured: true, cutoverOpeningBalancePaise: amount, cutoverOpeningCapturedAt: ctx.timestamp, cutoverOpeningCapturedByUid: ctx.actor.uid, revision: (vendorRecord.revision ?? 0) + 1, updatedAt: ctx.timestamp, updatedByUserId: ctx.actor.uid };
+    const nextAccount = { ...(account ?? { id: vendorRecord.id, vendorId: vendorRecord.id, outstandingPaise: 0, vendorCreditPaise: 0, revision: 0 }), outstandingPaise: amount, vendorCreditPaise: 0, revision: (account?.revision ?? 0) + 1, lastLedgerEntryId: ledgerEntryId, balanceCutoverId: vendorRecord.balanceCutoverId, updatedAt: ctx.timestamp, updatedByUserId: ctx.actor.uid };
+    queue(ctx, 'vendorLedgerEntriesV2', ledgerEntryId, { id: ledgerEntryId, vendorId: vendorRecord.id, eventType: 'cutover-opening', posting: 'financial', signedAmountPaise: amount, beforeOutstandingPaise: 0, afterOutstandingPaise: amount, sourceType: 'vendor-balance-cutover', sourceRecordId: vendorRecord.balanceCutoverId, sourceRevision: nextVendor.revision, occurredOn: vendorRecord.balanceCutoverDate, reason: 'Owner-entered opening payable for the new vendor ledger period.', createdAt: ctx.timestamp, createdByUserId: ctx.actor.uid }, true);
+    queue(ctx, 'vendorsV2', vendorRecord.id, nextVendor);
+    queue(ctx, 'vendorAccountStatesV2', vendorRecord.id, nextAccount);
+    return { vendor: nextVendor, account: nextAccount };
   }
   function outflow(ctx, d, kind, recipient, sourceId, funding, extra = {}) {
     const amount = p.paise(d.amountPaise),
@@ -97,7 +116,7 @@ function createRegisterHandlers(ops) {
     });
   }
   async function settlement(request) {
-    const d = p.object(request.data, ['operationId', 'id', 'vendorId', 'date', 'amountPaise', 'mode', 'invoiceId', 'notes']);
+    const d = p.object(request.data, ['operationId', 'id', 'vendorId', 'date', 'amountPaise', 'mode', 'invoiceId', 'notes', 'openingBalancePaise']);
     p.id(d.id);
     p.id(d.vendorId);
     p.date(d.date);
@@ -107,9 +126,10 @@ function createRegisterHandlers(ops) {
     return run(request, 'vendor-payment', d, p.STAFF, async ctx => {
       p.requireCapability(ctx.actor, 'settlement.create');
       await config(ctx, d.date);
-      const ven = await vendor(ctx, d.vendorId),
-        account = (await ctx.tx.get(ref('vendorAccountStatesV2', d.vendorId))).data(),
-        invoice = d.invoiceId ? (await ctx.tx.get(ref('invoiceStatesV2', d.invoiceId))).data() : undefined;
+      let ven = await vendor(ctx, d.vendorId),
+        account = (await ctx.tx.get(ref('vendorAccountStatesV2', d.vendorId))).data();
+      ({ vendor: ven, account } = captureCutoverOpening(ctx, ven, account, d.openingBalancePaise));
+      const invoice = d.invoiceId ? (await ctx.tx.get(ref('invoiceStatesV2', d.invoiceId))).data() : undefined;
       if (!account) p.fail('Vendor outstanding evidence is missing.');
       if (d.amountPaise > (await availablePayable(ctx, d.vendorId, account))) p.fail('Payment exceeds payable available after issued cheque commitments.');
       if ((await ctx.tx.get(ref('vendorSettlementsV2', d.id))).exists) p.fail('This payment ID already exists. Recover its original operation.', 'already-exists');
@@ -164,6 +184,8 @@ function createRegisterHandlers(ops) {
         actorUserId: ctx.actor.uid,
         timestamp: ctx.timestamp
       });
+      const activeCutoverId = (await ctx.tx.get(ref('appMetadata', 'vendorLedgerV2Config'))).get('balanceCutoverId');
+      if (activeCutoverId) Object.assign(posting.vendor, { balanceCutoverId: activeCutoverId, balanceCutoverDate: d.openingDate || ctx.timestamp.slice(0, 10), cutoverOpeningCaptured: true, cutoverOpeningBalancePaise: d.openingBalancePaise ?? 0, cutoverOpeningCapturedAt: ctx.timestamp, cutoverOpeningCapturedByUid: ctx.actor.uid });
       if ((await ctx.tx.get(ref('vendorsV2', d.id))).exists) p.fail('Vendor already exists.', 'already-exists');
       for (const [collection, value] of [['vendorsV2', posting.vendor], ['vendorLedgerEntriesV2', posting.ledgerEntry], ['vendorAccountStatesV2', posting.accountState]]) if (value) queue(ctx, collection, value.id, value, true);
       return {
@@ -173,11 +195,11 @@ function createRegisterHandlers(ops) {
     });
   }
   async function purchase(request) {
-    const d = p.object(request.data, ['operationId', 'id', 'vendorId', 'invoiceNumber', 'invoiceDate', 'receiptDate', 'invoiceTotalPaise', 'category', 'notes']);
+    const d = p.object(request.data, ['operationId', 'id', 'vendorId', 'invoiceNumber', 'invoiceDate', 'receiptDate', 'invoiceTotalPaise', 'category', 'notes', 'openingBalancePaise']);
     return run(request, 'vendor-purchase', d, p.STAFF, async ctx => {
       p.requireCapability(ctx.actor, 'purchase.create');
       await config(ctx, p.date(d.invoiceDate));
-      await vendor(ctx, p.id(d.vendorId));
+      let ven = await vendor(ctx, p.id(d.vendorId));
       p.paise(d.invoiceTotalPaise, 'Invoice total', 1);
       const posting = v.buildPurchasePostingV2({
         ...d,
@@ -186,7 +208,8 @@ function createRegisterHandlers(ops) {
       });
       const [source, reservation, accountSnapshot] = await Promise.all([ctx.tx.get(ref('purchasesV2', p.id(d.id))), ctx.tx.get(ref('invoiceReservationsV2', posting.reservation.id)), ctx.tx.get(ref('vendorAccountStatesV2', d.vendorId))]);
       if (source.exists || reservation.exists) p.fail('Invoice number or purchase reference already exists.', 'already-exists');
-      const account = accountSnapshot.data();
+      let account = accountSnapshot.data();
+      ({ vendor: ven, account } = captureCutoverOpening(ctx, ven, account, d.openingBalancePaise));
       for (const [collection, value] of [['purchasesV2', posting.purchase], ['invoiceReservationsV2', posting.reservation], ['vendorLedgerEntriesV2', posting.ledgerEntry], ['invoiceStatesV2', posting.invoiceState]]) queue(ctx, collection, value.id, value, true);
       queue(ctx, 'vendorAccountStatesV2', d.vendorId, {
         ...(account || {
@@ -206,8 +229,9 @@ function createRegisterHandlers(ops) {
     });
   }
   async function cheque(request) {
-    const d = p.object(request.data, ['operationId', 'purpose', 'chequeBookId', 'chequeNumber', 'vendorId', 'invoiceId', 'date', 'chequeDate', 'amountPaise', 'category', 'paidTo', 'mode', 'notes']);
+    const d = p.object(request.data, ['operationId', 'purpose', 'chequeBookId', 'chequeNumber', 'vendorId', 'invoiceId', 'date', 'chequeDate', 'amountPaise', 'category', 'paidTo', 'mode', 'notes', 'openingBalancePaise']);
     if (!['vendor-payment', 'expense'].includes(d.purpose)) p.fail('Invalid cheque purpose.', 'invalid-argument');
+    if (d.purpose === 'expense' && d.openingBalancePaise !== undefined) p.fail('An opening payable can only be recorded with a vendor transaction.', 'invalid-argument');
     p.paise(d.amountPaise, 'Cheque amount', 1);
     return run(request, 'cheque-issue', d, p.STAFF, async ctx => {
       p.requireCapability(ctx.actor, 'cheque.prepare');
@@ -224,6 +248,7 @@ function createRegisterHandlers(ops) {
       if (d.purpose === 'vendor-payment') {
         ven = await vendor(ctx, p.id(d.vendorId));
         account = (await ctx.tx.get(ref('vendorAccountStatesV2', d.vendorId))).data();
+        ({ vendor: ven, account } = captureCutoverOpening(ctx, ven, account, d.openingBalancePaise));
         if (!account || d.amountPaise > (await availablePayable(ctx, d.vendorId, account))) p.fail('Cheque exceeds available vendor payable.');
         if (d.invoiceId) {
           invoice = (await ctx.tx.get(ref('invoiceStatesV2', p.id(d.invoiceId)))).data();
@@ -331,7 +356,7 @@ function createRegisterHandlers(ops) {
       const key = v.normalizeChequeNumber(d.chequeNumber),
         source = await ctx.tx.get(ref('chequesV2', key)),
         c = source.data();
-      if (!c || c.trackingOnly || c.origin !== 'v2') p.fail('Legacy tracking-only cheques cannot post new financial effects.');
+      if (!c || c.trackingOnly && c.cutoverTrackingOnly !== true || c.origin !== 'v2') p.fail('Legacy tracking-only cheques cannot post new financial effects.');
       v.assertExpectedRevision(c.revision, d.expectedRevision);
       if (d.toStatus === 'issued') p.requireCapability(ctx.actor, 'cheque.issue');else if (d.toStatus === 'presented') p.requireCapability(ctx.actor, 'cheque.present');else if (ctx.actor.role !== 'owner') p.fail('Only the owner can confirm debit or an exception.', 'permission-denied');
       let status = c.status;
@@ -353,8 +378,18 @@ function createRegisterHandlers(ops) {
             lastDebitCheckAt: ctx.timestamp,
             lastDebitCheckByUid: ctx.actor.uid
           } : {})
-        },
-        isDebit = d.toStatus === 'debited',
+        };
+      if (c.cutoverTrackingOnly === true) {
+        if (d.toStatus === 'debited' || ['cancelled', 'bounced'].includes(d.toStatus)) p.text(d.reason, 'Exception reason');
+        next.trackingOnly = true;
+        next.cutoverTrackingOnly = true;
+        next.outcomeRecordedAt = ctx.timestamp;
+        next.outcomeRecordedByUid = ctx.actor.uid;
+        if (d.reason) next.outcomeReason = p.text(d.reason, 'Outcome reason');
+        queue(ctx, 'chequesV2', key, next);
+        return { cheque: next, historicalOnly: true };
+      }
+      const isDebit = d.toStatus === 'debited',
         isRelease = ['cancelled', 'bounced'].includes(d.toStatus);
       let account, invoice, expense;
       if (c.vendorId) {

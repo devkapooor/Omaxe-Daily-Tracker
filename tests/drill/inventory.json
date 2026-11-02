@@ -10,16 +10,6 @@
     ]
   },
   {
-    "file": "src/app/UpgradeAnnouncementNotice.tsx",
-    "tabs": [],
-    "modals": [
-      {
-        "line": 30,
-        "text": "role=\"alertdialog\""
-      }
-    ]
-  },
-  {
     "file": "src/features/action-center/components/ActionCenterPage.tsx",
     "tabs": [
       [
@@ -272,10 +262,6 @@
       [
         "pos",
         "POS"
-      ],
-      [
-        "announcements",
-        "Announcements"
       ],
       [
         "notifications",

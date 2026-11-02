@@ -4,6 +4,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } fr
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { auth, db, isLocalAuthBypassEnabled, localBypassCredentials } from '../shared/lib/firebase'
 import type { AppUser, FinanceData } from '../domain/financeTypes'
+import type { VendorAccountStateV2 } from '@/domain/vendorLedgerV2'
 import type {
   CashTransfer,
   CashoutCorrectionRequest,
@@ -14,7 +15,7 @@ import type {
   PlannedPayment,
   SettingsAuditEntry,
   UserAccount,
-  VendorRecord,
+  VendorIdentitySummary,
 } from '../domain/appTypes'
 import { createAppStoreActions } from './storeActions'
 import {
@@ -42,7 +43,8 @@ export function useAppStore() {
   const [financeData, setFinanceData] = useState<FinanceData>(emptyFinanceData)
   const [appSettings, setAppSettings] = useState(defaultAppSettings)
   const [users, setUsers] = useState<UserAccount[]>([])
-  const [vendors, setVendors] = useState<VendorRecord[]>([])
+  const [vendors, setVendors] = useState<VendorIdentitySummary[]>([])
+  const [vendorAccountStates, setVendorAccountStates] = useState<VendorAccountStateV2[]>([])
   const [nameDirectory, setNameDirectory] = useState<NameDirectory>(emptyNameDirectory)
   const [loans, setLoans] = useState<LoanEntry[]>([])
   const [dailyCashouts, setDailyCashouts] = useState<DailyCashoutEntry[]>([])
@@ -59,7 +61,6 @@ export function useAppStore() {
   const [verifiedRole, setVerifiedRole] = useState<AppUser['role'] | null>(null)
   const bootstrappedOwnerRef = useRef<string | null>(null)
   const localBypassAttemptedRef = useRef(false)
-  const vendorFallbackLoadedRef = useRef(false)
   const metricsSyncInFlightRef = useRef(false)
   const staffViewsBootstrappedForOwnerRef = useRef<string | null>(null)
 
@@ -86,6 +87,7 @@ export function useAppStore() {
       setAppSettings(defaultAppSettings)
       setUsers([])
       setVendors([])
+      setVendorAccountStates([])
       setNameDirectory(emptyNameDirectory)
       setLoans([])
       setDailyCashouts([])
@@ -227,9 +229,9 @@ export function useAppStore() {
       setSettingsAuditLog,
       setUsers,
       setVendors,
+      setVendorAccountStates,
       setWorkspaceMetrics,
       currentUserRole: verifiedRole,
-      vendorFallbackLoadedRef,
     })
   }, [authUser, canStartSubscriptions, verifiedRole])
 
@@ -321,6 +323,7 @@ export function useAppStore() {
         plannedPayments,
         users,
         vendors,
+        vendorAccountStates,
       })
       const currentComparable = JSON.stringify({ ...workspaceMetrics, updatedAt: null })
       const nextComparable = JSON.stringify({ ...nextMetrics, updatedAt: null })
@@ -355,6 +358,7 @@ export function useAppStore() {
     plannedPayments,
     users,
     vendors,
+    vendorAccountStates,
     verifiedRole,
     workspaceMetrics,
   ])
@@ -375,8 +379,7 @@ export function useAppStore() {
       cashTransfers.length === 0 &&
       plannedPayments.length === 0 &&
       settingsAuditLog.length === 0 &&
-      nameDirectory.people.length === 0 &&
-      nameDirectory.vendors.length === 0
+      nameDirectory.people.length === 0
     )
   }, [
     authUser,
@@ -389,7 +392,6 @@ export function useAppStore() {
     financeData.sales.length,
     loans.length,
     nameDirectory.people.length,
-    nameDirectory.vendors.length,
     plannedPayments.length,
     settingsAuditLog.length,
     vendors.length,
@@ -411,6 +413,7 @@ export function useAppStore() {
       workspaceMetrics,
       users,
       vendors,
+      vendorAccountStates,
     }),
     setAuthError,
     setIsBusy,
@@ -461,12 +464,9 @@ export function useAppStore() {
     saveOperationalSettings: actions.saveOperationalSettings,
     saveBusinessIdentity: actions.saveBusinessIdentity,
     saveScheduledNotifications: actions.saveScheduledNotifications,
-    publishUpgradeAnnouncement: actions.publishUpgradeAnnouncement,
-    clearUpgradeAnnouncement: actions.clearUpgradeAnnouncement,
     savePayment: actions.savePayment,
     savePurchase: actions.savePurchase,
     saveSales: actions.saveSales,
-    saveVendor: actions.saveVendor,
     settingsAuditLog,
     signIn: actions.signIn,
     signOutCurrentUser: actions.signOutCurrentUser,

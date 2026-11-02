@@ -6,6 +6,7 @@ const {
 } = require('firebase-admin/firestore');
 const {
   activeUser,
+  isCounterOpenForDate,
   pendingCashForUser
 } = require('./cashBalance');
 const {
@@ -34,6 +35,10 @@ function text(value, label, optional = false, max = 1000) {
 }
 function paise(value, label = 'Amount', min = 0) {
   if (!Number.isSafeInteger(value) || value < min) fail(label + ' must be a valid integer amount in paise.', 'invalid-argument');
+  return value;
+}
+function integer(value, label, min = 0) {
+  if (!Number.isSafeInteger(value) || value < min) fail(label + ' must be a valid whole number of ' + min + ' or more.', 'invalid-argument');
   return value;
 }
 function rupees(value, label = 'Amount', min = 0) {
@@ -142,7 +147,7 @@ function createFinanceOperations(db, clock = () => Date.now()) {
       ledger = l.data(),
       cashier = c.data(),
       authTime = request.auth?.token?.auth_time;
-    if (!ledger?.initialized || ledger.counterSession?.status !== 'open' || ledger.counterSession.date !== businessDate || ledger.checkpoint?.date !== businessDate) fail('Open the correct shared counter before using drawer cash.');
+    if (!isCounterOpenForDate(ledger, businessDate)) fail('Open the correct shared counter before using drawer cash.');
     const ownerMayCount = allowOwnerWithoutJoining && actor.role === 'owner';
     if (!Number.isSafeInteger(authTime) || !ownerMayCount && (cashier?.uid !== actor.uid || cashier.authTime !== authTime || cashier.closed !== false || cashier.joinedCounterId !== ledger.counterSession.openingReconciliationId)) fail('Join the shared counter before this operation.');
     const reservation = ledger.countReservation,
@@ -217,6 +222,7 @@ module.exports = {
   id,
   text,
   paise,
+  integer,
   rupees,
   safe,
   object,

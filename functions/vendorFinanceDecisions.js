@@ -25,6 +25,7 @@ function createVendorDecisionHandlers(ops, register) {
     const source = (await ctx.tx.get(ref('vendorSettlementsV2', request.sourceRecordId))).data(),
       state = (await ctx.tx.get(ref('vendorSettlementStatesV2', request.sourceRecordId))).data();
     if (!source || !state) p.fail('Original settlement evidence is missing.');
+    if (source.cutoverHistoricalOnly === true || state.cutoverHistoricalOnly === true) p.fail('This payment belongs to the previous payable period and cannot change current vendor balances.');
     const account = (await ctx.tx.get(ref('vendorAccountStatesV2', state.vendorId))).data(),
       invoice = state.invoiceId ? (await ctx.tx.get(ref('invoiceStatesV2', state.invoiceId))).data() : undefined;
     if (!account) p.fail('Vendor account evidence missing.');
@@ -111,6 +112,7 @@ function createVendorDecisionHandlers(ops, register) {
       const source = sourceSnap.data(),
         state = stateSnap.data();
       if (!source || !state) p.fail('Payment source missing.');
+      if (source.cutoverHistoricalOnly === true || state.cutoverHistoricalOnly === true) p.fail('This payment belongs to the previous payable period and cannot be corrected into current balances.');
       v.assertExpectedRevision(state.revision, d.expectedRevision);
       if (!pending.empty) p.fail('A correction is already pending.');
       if (d.applyImmediately && ctx.actor.role !== 'owner') p.fail('Owner approval required.', 'permission-denied');
@@ -188,6 +190,21 @@ function createVendorDecisionHandlers(ops, register) {
       const source = (await ctx.tx.get(ref('vendorReturnsV2', p.id(d.returnId)))).data();
       if (!source) p.fail('Return missing.');
       v.assertExpectedRevision(source.revision, d.expectedRevision);
+      if (source.cutoverHistoricalOnly === true && d.outcome === 'vendor-credit') {
+        if (source.outcome !== 'pending') p.fail('This historical return has already been resolved.');
+        const amount = p.paise(d.creditedValuePaise ?? source.valuePaise, 'Vendor credit', 1);
+        if (amount > source.valuePaise) p.fail('Vendor credit cannot exceed the dispatched return value.');
+        const note = p.text(d.creditNoteNumber, 'Vendor credit note number');
+        p.date(d.creditNoteDate);
+        if (d.creditNoteDate < source.date) p.fail('Credit note date cannot precede the return date.');
+        const reservationId = require('./stockOperations').hash(source.vendorId + ':' + note.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleUpperCase('en-IN'));
+        const reservationRef = ref('vendorCreditNoteReservationsV2', reservationId);
+        if ((await ctx.tx.get(reservationRef)).exists) p.fail('This vendor credit note has already been applied.');
+        const next = { ...source, outcome: 'vendor-credit', outcomeReason: d.outcomeReason.trim(), creditedValuePaise: amount, creditNoteNumber: note, creditNoteDate: d.creditNoteDate, historicalCreditOnly: true, reviewedAt: ctx.timestamp, reviewedByUserId: ctx.actor.uid, reviewedBy: ctx.actor.name, revision: source.revision + 1, updatedAt: ctx.timestamp, updatedByUserId: ctx.actor.uid };
+        queue(ctx, 'vendorCreditNoteReservationsV2', reservationId, { vendorId: source.vendorId, number: note, date: d.creditNoteDate, amountPaise: amount, vendorReturnId: source.id, historicalOnly: true, createdAt: ctx.timestamp, createdByUserId: ctx.actor.uid }, true);
+        queue(ctx, 'vendorReturnsV2', source.id, next);
+        return { return: next, historicalOnly: true };
+      }
       if (source.stockPostingVersion === 1) return stockReturns.settle(ctx, source, d);
       const account = (await ctx.tx.get(ref('vendorAccountStatesV2', source.vendorId))).data();
       if (!account) p.fail('Vendor account missing.');

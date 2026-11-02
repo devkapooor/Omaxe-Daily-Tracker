@@ -120,12 +120,15 @@ export type FinanceCashoutQuote = {
   actorUid: string;
   date: string;
   historicalCashout?: boolean;
+  historicalCashTiming?: 'already-removed' | 'remove-now';
   counterDate?: string;
   lateCashout?: boolean;
   lateCashoutCarryoverPaise?: number;
   lateCashoutOpeningReconciliationId?: string;
   currentExpectedDrawerPaise?: number;
-  reservationId: string;
+  /** Current running drawer amount shown while recording a past-date cashout. */
+  currentDrawerPaise?: number;
+  reservationId: string | null;
   expiresAtMs: number;
   handoverRevision: number | null;
   grossMethods: {
@@ -137,6 +140,12 @@ export type FinanceCashoutQuote = {
   cashRefundPaise: number;
   windowRefundPaise: number;
   ordinaryCashExpensePaise: number;
+  recordedCashExpensePaise?: number;
+  historicalExpenseAdjustmentPaise?: number;
+  historicalExpenseRevision?: number;
+  historicalLegacyCashExpensePaise?: number;
+  historicalUnclassifiedCashPaise?: number;
+  historicalUnclassifiedCashCount?: number;
   vendorCashPaymentPaise: number;
   cashPaidOutPaise: number;
   netCashCollectionsPaise: number;
@@ -154,4 +163,47 @@ export async function getFinanceCashoutSummary(date: string) {
   }, FinanceCashoutQuote>(functions, 'getFinanceCashoutSummary')({
     date
   })).data;
+}
+
+export type HistoricalExpenseReview = {
+  date: string;
+  recordedCashExpensePaise: number;
+  legacyCashExpensePaise: number;
+  adjustmentPaise: number;
+  confirmedExpensePaise: number;
+  savedConfirmedExpensePaise: number | null;
+  vendorCashPaymentPaise: number;
+  cashRefundPaise: number;
+  cashPaidOutPaise: number;
+  unclassifiedCashPaise: number;
+  unclassifiedCashCount: number;
+  revision: number;
+  reconciliationStale: boolean;
+  expectedFingerprint: string;
+  completedCashoutCount: number;
+  completedCorrectionBlockedReason: string;
+  recordedCashoutPaidOutPaise: number | null;
+  lastReason: string;
+  lastConfirmedAt: string | null;
+};
+export async function getHistoricalExpenseReview(date: string) {
+  return (await httpsCallable<{ date: string; expenseReconciliation: true }, HistoricalExpenseReview>(functions, 'getFinanceCashoutSummary')({ date, expenseReconciliation: true })).data;
+}
+
+export type HistoricalDrawerReview = {
+  eligible: boolean;
+  date: string;
+  message?: string;
+  cashoutId?: string;
+  expectedRevision?: number;
+  expectedFingerprint?: string;
+  originalDebitPaise?: number;
+  restorePaise?: number;
+  beforePaise?: number;
+  afterPaise?: number;
+  absorbedByLaterCount?: boolean;
+  countActive?: boolean;
+};
+export async function getHistoricalDrawerReview(date: string) {
+  return (await httpsCallable<{ date: string; drawerReversal: true }, HistoricalDrawerReview>(functions, 'getFinanceCashoutSummary')({ date, drawerReversal: true })).data;
 }

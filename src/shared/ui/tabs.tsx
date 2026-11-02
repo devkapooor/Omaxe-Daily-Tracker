@@ -2,7 +2,22 @@ import * as React from 'react'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
 import { cn } from '@/shared/lib/utils'
 
-const Tabs = TabsPrimitive.Root
+type TabsNavigationState = { value: string; onValueChange: (value: string) => void }
+export const TabsNavigationContext = React.createContext<TabsNavigationState | null>(null)
+
+const Tabs = React.forwardRef<React.ElementRef<typeof TabsPrimitive.Root>, React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>>(
+  ({ value: controlledValue, defaultValue, onValueChange, ...props }, ref) => {
+    const [internalValue, setInternalValue] = React.useState(defaultValue ?? '')
+    const value = controlledValue ?? internalValue
+    const changeValue = React.useCallback((next: string) => {
+      if (controlledValue === undefined) setInternalValue(next)
+      onValueChange?.(next)
+    }, [controlledValue, onValueChange])
+    const navigationState = React.useMemo(() => ({ value, onValueChange: changeValue }), [value, changeValue])
+    return <TabsNavigationContext.Provider value={navigationState}><TabsPrimitive.Root ref={ref} {...props} value={value} onValueChange={changeValue}/></TabsNavigationContext.Provider>
+  },
+)
+Tabs.displayName = TabsPrimitive.Root.displayName
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,

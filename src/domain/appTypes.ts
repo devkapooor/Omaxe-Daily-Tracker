@@ -30,6 +30,12 @@ export type UserAccount = AppUser & {
 export type VendorLedgerV2Config = {
   enabled: boolean
   activationDate?: string
+  balanceCutoverId?: string
+  balanceCutoverDate?: string
+  balanceCutoverAt?: string
+  balanceCutoverByUserId?: string
+  balanceCutoverReason?: string
+  balanceCutoverCounts?: { vendors: number; invoices: number; settlements?: number; pendingCheques: number; pendingReturns: number; pendingCorrections?: number }
   updatedAt?: string
   updatedByUserId?: string
 }
@@ -43,15 +49,6 @@ export type ScheduledNotification = {
   triggerTime: string
   targetRoles: Array<'manager' | 'billing'>
   enabled: boolean
-}
-
-export type UpgradeAnnouncement = {
-  id: string
-  title: string
-  message: string
-  publishedAt: string
-  expiresAt: string
-  publishedBy: string
 }
 
 export type LoanStatus = 'Open' | 'Settled'
@@ -72,6 +69,14 @@ export type LoanEntry = {
 }
 
 export type DailyCashoutEntry = {
+  historicalCashTiming?: 'already-removed' | 'remove-now'
+  drawerDebitReversalOperationId?: string
+  drawerDebitReversalRestoredPaise?: number
+  drawerDebitReversalAt?: string
+  drawerDebitReversalReason?: string
+  /** Dated owner reconciliation; does not change the physical count or drawer. */
+  historicalExpenseReconciliationId?: string
+  historicalExpenseReconciliationRevision?: number
   financeQuoteId?: string
   financePostingVersion?: 1
   historicalCountOnlyVersion?: 1
@@ -104,6 +109,14 @@ export type DailyCashoutEntry = {
   drawerClosureId?: string
   cashRemovedPaise?: number
   closingDrawerPaise?: number
+  /** Applied once to the running virtual drawer; historical reporting totals remain unchanged. */
+  drawerDebitPaise?: number
+  drawerBalanceBeforePaise?: number
+  drawerBalanceAfterPaise?: number
+  drawerDebitAt?: string
+  drawerDebitByUid?: string
+  drawerDebitOperationId?: string
+  drawerDebitReason?: string
   /** Snapshot of every active staff member's derived cash balance at this close. */
   holderBalancesAtClose?: Array<{ userId: string; name: string; amountPaise: number }>
   holderBalancesRevision?: number
@@ -207,21 +220,9 @@ export type MonthlyReportMeta = {
   updatedBy: string
 }
 
-export type VendorRecord = {
-  id: string
-  name: string
-  ownerName: string
-  contact: string
-  address: string
-  companiesProvided: string
-  notes: string
-  openingOutstanding: number
-  openingOutstandingRemaining: number
-  createdAt: string
-  updatedAt: string
-}
+/** Minimal vendor identity used by shared finance summaries; balances stay in V2 ledger state. */
+export type VendorIdentitySummary = { id: string; name: string }
 
 export type NameDirectory = {
   people: string[]
-  vendors: string[]
 }

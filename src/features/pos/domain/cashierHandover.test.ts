@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyPayments, countCash, expectedHandover, handoverDate, requiresLoginHandover, seedHandoverTotals, type HandoverLedger } from './cashierHandover'
+import { applyPayments, countCash, expectedHandover, handoverDate, isCounterOpen, requiresLoginHandover, seedHandoverTotals, type HandoverLedger } from './cashierHandover'
 import type { PosBill } from './types'
 
 const ledger = (): HandoverLedger => ({ initialized: true, revision: 1, cashNetPaise: 10000, dailyTotals: { '2026-10-04': { upi: 20000, card: 30000 } }, lastOperation: 'initialize', lastOperationId: '', updatedByUid: 'owner' })
@@ -21,6 +21,17 @@ describe('Shared cashier handover accounting', () => {
   it('uses IST midnight rather than UTC midnight', () => {
     expect(handoverDate('2026-10-03T18:29:59.000Z')).toBe('2026-10-03')
     expect(handoverDate('2026-10-03T18:30:00.000Z')).toBe('2026-10-04')
+  })
+  it('uses the current cash-count date for readiness and retains the original opening date as history', () => {
+    const state = ledger()
+    state.counterSession = { status: 'open', date: '2026-10-03', openingReconciliationId: 'original-opening', openedByUid: 'owner' }
+    state.checkpoint = { cashActualPaise: 9000, cashNetPaise: 10000, date: '2026-10-04', upiActualPaise: 0, cardActualPaise: 0, upiNetPaise: 0, cardNetPaise: 0, reconciliationId: 'today-count' }
+    const before = structuredClone(state)
+    expect(isCounterOpen(state, '2026-10-04')).toBe(true)
+    expect(isCounterOpen(state, '2026-10-03')).toBe(false)
+    expect(isCounterOpen(state, '2026-10-05')).toBe(false)
+    expect(isCounterOpen({ ...state, counterSession: { ...state.counterSession, status: 'closed' } }, '2026-10-04')).toBe(false)
+    expect(state).toEqual(before)
   })
   it('counts denominations and loose coins in integer paise', () => expect(countCash({ '500': 2, '10': 3, '1': 2 }, 50)).toBe(103250))
   it.each([-1, 0.5, NaN])('rejects invalid denomination count %s', (value) => expect(() => countCash({ '500': value }, 0)).toThrow())

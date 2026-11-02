@@ -5,17 +5,19 @@ const {createStockReceivingHandlers}=require('./stockReceiving')
 const {createFinanceOperations}=require('./financeOperations')
 const {createRegisterHandlers}=require('./registerPayments')
 const {createVendorOpeningHandlers}=require('./vendorOpening')
+const {createVendorBalanceCutoverHandlers}=require('./vendorBalanceCutover')
 
 describe('approved stock/vendor revision — isolated transactions', {skip:process.env.RUN_STOCK_VENDOR_TESTS!=='true'},()=>{
  if(process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8080')throw Error('Exact loopback emulator required')
  const {initializeApp,deleteApp}=require('firebase-admin/app'),{getFirestore}=require('firebase-admin/firestore')
  const project='demo-stock-vendor-revision',app=initializeApp({projectId:project},'stock-vendor-revision'),db=getFirestore(app),base='posSandboxes/test'
- const receiving=createStockReceivingHandlers(db,()=> '2026-10-29T09:00:00.000Z'),ops=createFinanceOperations(db,()=>Date.parse('2026-10-29T09:00:00Z')),register=createRegisterHandlers(ops),opening=createVendorOpeningHandlers(ops,register)
+ const receiving=createStockReceivingHandlers(db,()=> '2026-10-29T09:00:00.000Z'),ops=createFinanceOperations(db,()=>Date.parse('2026-10-29T09:00:00Z')),register=createRegisterHandlers(ops),opening=createVendorOpeningHandlers(ops,register),cutover=createVendorBalanceCutoverHandlers(ops)
  const req=(data,uid='owner')=>({auth:{uid,token:{auth_time:42}},data:{operationId:randomUUID(),...data}})
  const read=async path=>(await db.doc(path).get()).data()
  const draft=(extra={})=>({id:randomUUID(),expectedRevision:0,vendorId:'v',invoiceNumber:'INV-1',invoiceDate:'2026-10-29',receiptDate:'2026-10-29',invoiceTotalPaise:999999,pricingMode:'received-stock',lines:[{productId:'p',barcode:'007',productName:'Synthetic item',category:'Fixture',quantity:2,unitCostPaise:8000,mrpPaise:10000,sellingPricePaise:10000,expectedRevision:1}],...extra})
  async function post(extra={}){const saved=await receiving.saveDraft(req(draft(extra)));const intent=req({id:saved.id,expectedRevision:saved.revision});const result=await receiving.submit(intent);return {saved,result,intent,purchaseId:result.purchaseId}}
  beforeEach(async()=>{
+  assert.equal((await db.collection('loans').limit(1).get()).size,0,'Loan records present; reset refused')
   assert.equal((await fetch(`http://127.0.0.1:8080/emulator/v1/projects/${project}/databases/(default)/documents`,{method:'DELETE'})).ok,true)
   const b=db.batch();for(const [uid,role]of[['owner','owner'],['manager','manager'],['billing','billing'],['disabled','owner']])b.set(db.doc('users/'+uid),{name:'Synthetic '+uid,role,disabled:uid==='disabled',approvalStatus:'approved'})
   b.set(db.doc('appMetadata/vendorLedgerV2Config'),{enabled:true,activationDate:'2026-01-01'})
@@ -60,6 +62,21 @@ describe('approved stock/vendor revision — isolated transactions', {skip:proce
   assert.equal(r.result.totalPaise,16000);assert.equal((await read('vendorAccountStatesV2/v')).outstandingPaise,16000)
   assert.equal((await db.collection('vendorCreditNoteReservationsV2').get()).size,1)
   await assert.rejects(receiving.confirmCreditNote(req({id:r.saved.id,expectedRevision:2,creditNoteNumber:'CN-1',creditNoteDate:'2026-10-29'})),/no pending/)
+ })
+ it('captures an owner-entered opening payable atomically with the first post-cutover GRN',async()=>{
+  await cutover.reset(req({cutoverId:'stock-cutover-20261029',cutoverDate:'2026-10-29',reason:'Synthetic reset test',confirmation:'RESET VENDOR BALANCES 2026-10-29'}))
+  const saved=await receiving.saveDraft(req(draft()))
+  const result=await receiving.submit(req({id:saved.id,expectedRevision:saved.revision,openingBalancePaise:50000}))
+  assert.equal(result.totalPaise,16000)
+  assert.equal((await read('vendorAccountStatesV2/v')).outstandingPaise,66000)
+  assert.equal((await read('vendorsV2/v')).cutoverOpeningCaptured,true)
+  assert.equal((await read('vendorLedgerEntriesV2/cutover-opening-'+require('node:crypto').createHash('sha256').update('stock-cutover-20261029:v').digest('hex').slice(0,28))).signedAmountPaise,50000)
+  assert.equal((await read(base+'/products/p')).currentQuantity,7)
+  const second=draft({invoiceNumber:'INV-2'});second.lines[0].expectedRevision=2
+  const later=await receiving.saveDraft(req(second))
+  await assert.rejects(receiving.submit(req({id:later.id,expectedRevision:later.revision,openingBalancePaise:50000})),/already has an opening balance/i)
+  assert.equal((await read('vendorAccountStatesV2/v')).outstandingPaise,66000)
+  assert.equal((await read(base+'/products/p')).currentQuantity,7)
  })
  it('rejects a reused credit note on a different invoice without adding stock or payable',async()=>{
   await post({shortage:{state:'received',originalInvoiceTotalPaise:20000,creditNoteNumber:'CN-1',creditNoteDate:'2026-10-29'}})

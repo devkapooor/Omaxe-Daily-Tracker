@@ -10,7 +10,7 @@ type AuthActionArgs = {
   getState: () => StoreCollectionState
   setAuthError: React.Dispatch<React.SetStateAction<string | null>>
   setIsBusy: React.Dispatch<React.SetStateAction<boolean>>
-  ensureNameInDirectory: (type: 'people' | 'vendors', rawName: string) => Promise<boolean>
+  ensureNameInDirectory: (type: 'people', rawName: string) => Promise<boolean>
   pushSettingsAudit: (action: string, actor: string) => Promise<void>
 }
 

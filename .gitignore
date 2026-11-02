@@ -34,5 +34,10 @@ coverage/
 functions/node_modules/
 functions/lib/
 
+# Local business records and backups; keep them available to the local app/tests.
+/docs/backups/
+/data/pos/
+/server/omaxe.db
+
 .DS_Store
 Thumbs.db

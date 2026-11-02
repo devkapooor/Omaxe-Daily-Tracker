@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type AriaAttributes } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -10,7 +10,8 @@ export type SelectOption = {
   value: string
 }
 
-type SelectFieldProps = {
+type SelectFieldProps = Pick<AriaAttributes, 'aria-label' | 'aria-labelledby' | 'aria-describedby'> & {
+  id?: string
   className?: string
   disabled?: boolean
   emptyMessage?: string
@@ -43,6 +44,10 @@ function filterOptions(options: SelectOption[], query: string) {
 }
 
 export function SelectField({
+  id,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-describedby': ariaDescribedBy,
   className,
   disabled = false,
   emptyMessage = 'No matching options.',
@@ -295,6 +300,10 @@ export function SelectField({
       {searchable ? (
         <div className="relative">
           <input
+            id={id}
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabelledBy}
+            aria-describedby={ariaDescribedBy}
             aria-expanded={isOpen}
             aria-haspopup="listbox"
             className={cn(
@@ -351,6 +360,10 @@ export function SelectField({
         </div>
       ) : (
         <button
+          id={id}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy}
+          aria-describedby={ariaDescribedBy}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           className={cn(

@@ -11,8 +11,8 @@ import { Input } from '@/shared/ui/input'
 import { NativeSelect } from '@/shared/ui/native-select'
 import { BusinessReference } from '@/shared/businessReferences'
 
-export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVendor, vendors, partyNames = [], savedPartyNames = [], confirmedPartyNames = [], referenceNames = [], onSaveParty, onRenameParty, onEditOpening, onUpdateVendorGstin }: {
-  currentUserRole: UserRole; legacyVendorNames: string[]; onAddVendor?: () => void; vendors: VendorV2[]
+export function VendorDirectoryV2({ currentUserRole, knownVendorNames, onAddVendor, vendors, partyNames = [], savedPartyNames = [], confirmedPartyNames = [], referenceNames = [], onSaveParty, onRenameParty, onEditOpening, onUpdateVendorGstin }: {
+  currentUserRole: UserRole; knownVendorNames: string[]; onAddVendor?: () => void; vendors: VendorV2[]
   partyNames?: string[]; savedPartyNames?: string[]; confirmedPartyNames?: string[]; referenceNames?: string[]
   onSaveParty?: (name: string) => Promise<void>; onRenameParty?: (before: string, after: string) => Promise<void>
   onEditOpening?: (vendor: VendorV2) => void
@@ -32,18 +32,17 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
     return () => document.removeEventListener('keydown', escape)
   }, [selectedVendorId, selectedParty])
   const selected = vendors.find(vendor => vendor.id === selectedVendorId)
-  useEffect(() => { setVendorGstin(selected?.gstin ?? '') }, [selected?.gstin, selectedVendorId])
   const saved = new Set(savedPartyNames.map(partyNameKey)), references = new Set(referenceNames.map(partyNameKey))
-  const confirmed = new Set([...savedPartyNames, ...confirmedPartyNames].map(partyNameKey))
+  const confirmed = useMemo(() => new Set([...savedPartyNames, ...confirmedPartyNames].map(partyNameKey)), [savedPartyNames, confirmedPartyNames])
   const words = search.trim().toLocaleLowerCase('en-IN').split(/\s+/).filter(Boolean)
   const visibleVendors = vendors.filter(vendor => (filter === 'all' || filter === 'vendors') && words.every(word => vendorIdentitySearchText(vendor).includes(word)))
   const others = useMemo(() => {
-    const vendorLabels = new Set([...vendors.flatMap(vendor => [vendor.canonicalName, ...vendor.aliases]), ...legacyVendorNames].map(partyNameKey))
+    const vendorLabels = new Set([...vendors.flatMap(vendor => [vendor.canonicalName, ...vendor.aliases]), ...knownVendorNames].map(partyNameKey))
     const references = new Set(referenceNames.map(partyNameKey))
     // Unconfirmed expense labels are references, not directory entries. Their source history remains untouched.
     // Keep confirmed parties even when a supplier happens to share the same name.
     return [...new Map(partyNames.filter(name => confirmed.has(partyNameKey(name)) || (!vendorLabels.has(partyNameKey(name)) && !references.has(partyNameKey(name)))).map(name => [partyNameKey(name), name])).values()].sort((a, b) => a.localeCompare(b))
-  }, [partyNames, legacyVendorNames, vendors, savedPartyNames, confirmedPartyNames, referenceNames])
+  }, [partyNames, knownVendorNames, vendors, referenceNames, confirmed])
   const visibleParties = others.filter(name => (filter === 'all' || filter === 'parties') && words.every(word => partyNameKey(name).includes(word)))
   async function save(action: () => Promise<void>) { setBusy(true); setError(''); try { await action(); setSelectedParty(null) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Party could not be saved.') } finally { setBusy(false) } }
   async function saveVendorTax(vendor: VendorV2) { if (!onUpdateVendorGstin) return; setBusy(true); setError(''); try { await onUpdateVendorGstin(vendor, vendorGstin.trim().toUpperCase()); setError('Vendor GSTIN saved.') } catch (cause) { setError(cause instanceof Error ? cause.message : 'Vendor GSTIN could not be saved.') } finally { setBusy(false) } }
@@ -52,7 +51,7 @@ export function VendorDirectoryV2({ currentUserRole, legacyVendorNames, onAddVen
     <div className="flex flex-wrap gap-2"><FieldLabel label="Search names or aliases"><Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search the directory" /></FieldLabel><FieldLabel label="Show"><NativeSelect value={filter} onChange={event => setFilter(event.target.value)}><option value="all">All</option><option value="vendors">Vendors</option><option value="parties">Other parties</option></NativeSelect></FieldLabel>{onAddVendor ? <Button className="self-end" onClick={onAddVendor}><Plus className="size-4" />Add Party / Vendor</Button> : null}</div>
   </CardHeader><CardContent className="divide-y pt-0">
     {!visibleVendors.length && !visibleParties.length ? <p className="py-4 text-sm text-muted-foreground">No matching names.</p> : null}
-    {visibleVendors.map(vendor => <button key={vendor.id} type="button" className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setSelectedVendorId(vendor.id)}><span><strong>{vendor.canonicalName}</strong><small className="block text-muted-foreground"><BusinessReference prefix="VENDOR" id={vendor.id}/></small></span><span className="text-[11px] text-muted-foreground">{vendor.active ? 'Vendor' : 'Inactive vendor'}</span></button>)}
+    {visibleVendors.map(vendor => <button key={vendor.id} type="button" className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-secondary/50 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setVendorGstin(vendor.gstin ?? ''); setSelectedVendorId(vendor.id) }}><span><strong>{vendor.canonicalName}</strong><small className="block text-muted-foreground"><BusinessReference prefix="VENDOR" id={vendor.id}/></small></span><span className="text-[11px] text-muted-foreground">{vendor.active ? 'Vendor' : 'Inactive vendor'}</span></button>)}
     {visibleParties.map(name => <button key={partyNameKey(name)} type="button" className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-secondary/50" onClick={() => { setSelectedParty(name); setRename(name); setError('') }}><span><strong>{name}</strong>{saved.has(partyNameKey(name))?<small className="block text-muted-foreground"><BusinessReference prefix="PARTY" id={name}/></small>:null}</span><span className="text-[11px] text-muted-foreground">{references.has(partyNameKey(name)) && !confirmed.has(partyNameKey(name)) ? 'Reference' : 'Party'}</span></button>)}
   </CardContent>
   {selected || selectedParty ? <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" aria-label={selected ? 'Vendor details' : 'Party details'}><Card className="max-h-[88dvh] w-full max-w-xl overflow-y-auto"><CardHeader className="flex-row items-center justify-between border-b"><h2 className="font-semibold">{selected?.canonicalName ?? selectedParty}</h2><Button ref={closeRef} size="icon" variant="ghost" aria-label="Close directory details" onClick={() => { setSelectedVendorId(null); setSelectedParty(null) }}><X /></Button></CardHeader><CardContent className="grid gap-3 pt-4 text-sm">

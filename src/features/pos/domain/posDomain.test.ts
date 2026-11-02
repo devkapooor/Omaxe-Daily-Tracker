@@ -29,11 +29,21 @@ describe('POS test calculations', () => {
 })
 
 describe('approved POS CSV parsing', () => {
-  it('validates the normalized 2 October workbook export exactly', () => {
+  // One-time operational provenance check, not a prerequisite for a clean clone.
+  it.runIf(process.env.RUN_APPROVED_CATALOGUE_EVIDENCE === 'true')('validates the normalized 2 October workbook export exactly', () => {
     const parsed = parseApprovedPosCsv(readFileSync('data/pos/omaxe-opening-stock-2026-10-02.approved.csv', 'utf8'))
     expect(parsed.validation).toMatchObject({ rowCount: 6069, uniqueProductIds: 6069, uniqueBarcodes: 6069, negativeQuantityCount: 379, zeroQuantityCount: 3294, errors: [] })
     expect(parsed.products[0].sourceValues['Source Workbook Name']).toBe('CUrrent Stock 2 OCt.xlsx')
     expect(parsed.products[0].sourceValues['Source Workbook SHA256']).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('parses shared synthetic catalogue evidence without operational data files', () => {
+    const parsed = parseApprovedPosCsv(readFileSync('tests/fixtures/pos-products.synthetic.csv', 'utf8'))
+    expect(parsed.validation).toMatchObject({ rowCount: 2, uniqueProductIds: 2, uniqueBarcodes: 2, negativeQuantityCount: 1, zeroQuantityCount: 1, errors: [] })
+    expect(parsed.products[0]).toMatchObject({ barcode: '00001', name: 'Synthetic, Product A', sellingPricePaise: 1250, costPaise: 800 })
+    expect(parsed.products[0].sourceValues['Source Workbook Name']).toBe('Synthetic Catalogue.csv')
+    expect(parsed.products[0].sourceValues['Source Workbook SHA256']).toBe('0'.repeat(64))
+    expect(parsed.products[1].costPaise).toBeNull()
   })
 
   it('preserves source evidence and accepts negative and zero opening quantities', () => {

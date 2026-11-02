@@ -87,11 +87,12 @@ export function daysBetweenInclusive(from: string, to: string) {
   return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1
 }
 
-export function money(value: number) {
+export function money(value: number, maximumFractionDigits: 0 | 2 = 0) {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
   }).format(value)
 }
 
@@ -164,20 +165,7 @@ export function canOpenSettings(role: string) {
   return role === 'owner' || role === 'manager' || role === 'billing'
 }
 
-export function normalizeName(value: string) {
-  return value.trim().replace(/\s+/g, ' ')
-}
-
-export function uniqNames(values: string[]) {
-  const map = new Map<string, string>()
-  values.forEach((value) => {
-    const normalized = normalizeName(value)
-    if (!normalized) return
-    const key = normalized.toLowerCase()
-    if (!map.has(key)) map.set(key, normalized)
-  })
-  return Array.from(map.values()).sort((a, b) => a.localeCompare(b))
-}
+export { normalizeName, uniqNames } from '@/shared/lib/nameUtils'
 
 export function resolveActivePage(role: string, activePage: Page) {
   if (role === 'owner') return activePage

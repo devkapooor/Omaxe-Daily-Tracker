@@ -30,10 +30,10 @@ After that:
 
 - auth is Firebase email/password only
 - users are created from inside the app by the owner
-- finance writes go straight to Firestore
+- current financial and stock posting uses authenticated Node22 callables; retained legacy/profile/config writes still follow their source-specific Rules and permissions
 - app settings live under `appMetadata/appSettings`
 - shared searchable names live under `appMetadata/nameDirectory`
-- manual planner payments are stored in Firestore and subscribe live with the rest of the workspace data
+- planner records remain historical compatibility data; there is no active Payment Planner page
 
 ## Main Collections And Metadata
 
@@ -60,7 +60,7 @@ After that:
 - Hosting deploys alone are not enough when data access rules have changed.
 - Stable production releases should be tagged before major deployments.
 - Deploy only with explicit confirmation. This cleanup requires no rules/index changes, production activation or data writes.
-- Existing client transactions, Authentication, Firestore and Hosting remain Spark-compatible; there is no deployed Functions requirement.
+- Current source requires deployed Cloud Functions for ordinary financial/stock operations and trusted time. Verify the intended project billing/runtime/API prerequisites before a separately approved release; old Spark-only guidance does not describe this application.
 
 ## Local Testing Note
 
@@ -74,7 +74,7 @@ VITE_LOCAL_AUTH_PASSWORD=
 
 These default to disabled/empty. Enabled loopback sign-in still authenticates to the configured Firebase project. VITE-prefixed values are included in browser code: never include real passwords in release build inputs. Existing local .env files are not changed by cleanup.
 
-Run npm run test:rules against its configured demo-alphahub emulator project. Java and Firebase CLI must be available; missing prerequisites are Blocked, not passing tests. Follow the [QA checklist](../operations/QA_CHECKLIST.md); all mutation scenarios require isolated data.
+For complete current maintenance use [the guarded Node22 drill runbook](../../drill.md#current-maintenance-execution--31-october-2026). Run npm run test:rules only as a standalone Firestore-only check against its configured demo-alphahub emulator project with free ports. Java and Firebase CLI must be available; missing prerequisites are Blocked, not passing tests. Follow the [QA checklist](../operations/QA_CHECKLIST.md); all mutation scenarios require isolated data.
 
 ## Relevant Files
 

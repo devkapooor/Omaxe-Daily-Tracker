@@ -2,7 +2,7 @@ import { DatabaseZap } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useMemo } from 'react'
 import type { AppUser, CashoutDraft, PaymentDraft } from '@/domain/financeTypes'
-import type { Page, UserAccount, UpgradeAnnouncement } from '@/domain/appTypes'
+import type { Page, UserAccount } from '@/domain/appTypes'
 import type { PlannerScheduleItemSnapshot } from '@/domain/workspaceMetrics'
 import {
   type AppToast,
@@ -14,7 +14,7 @@ import {
   legacyCashHolderLabel,
   money,
 } from '@/app/uiHelpers'
-import { AppTopBar } from '@/features/navigation/components/AppTopBar'
+import { AppNavigationShell } from '@/features/navigation/components/AppNavigationShell'
 import { CashMovementForm } from '@/features/cash-movement/components/CashMovementForm'
 import { CashoutPage } from '@/features/cashout/components/CashoutPage'
 import { LoadingScreen } from '@/features/auth/components/LoadingScreen'
@@ -37,12 +37,12 @@ import { Button } from '@/shared/ui/button'
 import { StatusPanel } from '@/shared/ui/status-panel'
 import type { CashoutCorrectionRequest, CashoutCorrectionValues, CashTransfer, DailyCashoutEntry, LoanEntry, ScheduledNotification, SettingsAuditEntry } from '@/domain/appTypes'
 import type { FinanceData } from '@/domain/financeTypes'
-import type { OperationalExpenseBreakdown } from '@/store/storeShared'
+import type { AppSettings, OperationalExpenseBreakdown } from '@/store/storeShared'
+import type { BusinessIdentity } from '@/domain/businessIdentity'
 import { ToastHost } from '@/shared/ui/toast-host'
 import { useConfirmationDialog } from '@/shared/ui/confirmation-dialog'
 import { serverNowIso } from '@/shared/lib/serverClock'
 import { AppBlockingNotice } from '@/app/AppBlockingNotice'
-import { UpgradeAnnouncementNotice } from '@/app/UpgradeAnnouncementNotice'
 import {
   applySettlementCorrectionV2,
   rejectSettlementCorrectionRequestV2,
@@ -51,15 +51,7 @@ import {
 
 type AppWorkspaceProps = {
   activePage: Page
-  appSettings: {
-    marginPercentage: number
-    monthlyOperationalExpense: number
-    operationalExpenseBreakdown: OperationalExpenseBreakdown
-    businessLegalName: string
-    businessGstin: string
-    scheduledNotifications: ScheduledNotification[]
-    upgradeAnnouncement: UpgradeAnnouncement | null
-  }
+  appSettings: AppSettings
   canImportLegacyData: boolean
   cashTransfers: CashTransfer[]
   cashoutCorrectionRequests: CashoutCorrectionRequest[]
@@ -87,7 +79,7 @@ type AppWorkspaceProps = {
     realParties: string[]
     references: string[]
   }
-  ensureNameInDirectory: (type: 'people' | 'vendors', name: string) => Promise<boolean>
+  ensureNameInDirectory: (type: 'people', name: string) => Promise<boolean>
   importLegacyData: () => Promise<boolean>
   isBusy: boolean
   isPageLoaderVisible: boolean
@@ -117,10 +109,8 @@ type AppWorkspaceProps = {
   withdrawCashoutCorrectionRequest: (requestId: string, actor: AppUser) => Promise<void>
   saveLoanEntry: (draft: Omit<LoanEntry, 'id' | 'createdAt' | 'paidAmount' | 'remainingAmount' | 'status' | 'settledAt' | 'updatedAt'>) => Promise<void>
   saveOperationalSettings: (operationalExpenseBreakdown: OperationalExpenseBreakdown, marginPercentage: number, actor: string) => Promise<void>
-  saveBusinessIdentity: (businessLegalName: string, businessGstin: string) => Promise<void>
+  saveBusinessIdentity: (identity: BusinessIdentity) => Promise<void>
   saveScheduledNotifications: (notices: ScheduledNotification[], actor: string) => Promise<void>
-  publishUpgradeAnnouncement: (title: string, message: string, durationHours: number, actor: string) => Promise<void>
-  clearUpgradeAnnouncement: (actor: string) => Promise<void>
   savePayment: (draft: PaymentDraft) => Promise<void>
   setDashboardMonthOffset: Dispatch<SetStateAction<DashboardMonthOffset>>
   settingsAuditLog: SettingsAuditEntry[]
@@ -177,8 +167,6 @@ export function AppWorkspace({
   saveOperationalSettings,
   saveBusinessIdentity,
   saveScheduledNotifications,
-  publishUpgradeAnnouncement,
-  clearUpgradeAnnouncement,
   savePayment,
   setDashboardMonthOffset,
   settingsAuditLog,
@@ -227,15 +215,14 @@ export function AppWorkspace({
   }
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full overflow-hidden">
-      <AppTopBar
+    <AppNavigationShell
         currentUser={currentUser}
         activePage={activePage}
         pendingApprovalCount={pendingCount}
         onPageChange={onPageChange}
         onLogout={onLogout}
-      />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-page-inset pb-page-inset pt-16 xl:pt-page-inset">
+      >
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {isPageLoaderVisible ? <LoadingScreen mode="page" message="Opening page..." /> : null}
 
         {canImportLegacyData ? (
@@ -335,7 +322,7 @@ export function AppWorkspace({
             currentUser={currentUser}
             ledger={vendorLedger}
             legacyChequeItems={legacyChequeItems}
-            legacyVendorNames={directoryOptions.vendors}
+            knownVendorNames={directoryOptions.vendors}
             partyNames={directoryOptions.party}
             referenceNames={directoryOptions.references}
             savedPartyNames={savedPartyNames}
@@ -453,13 +440,11 @@ export function AppWorkspace({
               isBusy={isBusy}
               monthlyOperationalExpense={appSettings.monthlyOperationalExpense}
               operationalExpenseBreakdown={appSettings.operationalExpenseBreakdown}
-              businessLegalName={appSettings.businessLegalName}
-              businessGstin={appSettings.businessGstin}
-              onSaveBusinessIdentity={async (legalName, gstin) => {
-                await saveBusinessIdentity(legalName, gstin)
+              businessIdentity={appSettings}
+              onSaveBusinessIdentity={async (identity) => {
+                await saveBusinessIdentity(identity)
                 showToast('Business name and GSTIN saved to Settings master.')
               }}
-              upgradeAnnouncement={appSettings.upgradeAnnouncement}
               marginPercentage={appSettings.marginPercentage}
               scheduledNotifications={appSettings.scheduledNotifications}
               onSaveScheduledNotifications={async (notices) => {
@@ -482,21 +467,12 @@ export function AppWorkspace({
                 await saveOperationalSettings(nextOperationalExpenseBreakdown, nextMarginPercentage, currentUser.name)
                 showToast('Operational settings updated.')
               }}
-              onPublishUpgradeAnnouncement={async (title, message, durationHours) => {
-                await publishUpgradeAnnouncement(title, message, durationHours, currentUser.name)
-                showToast('Upgrade announcement published to active sessions.')
-              }}
-              onClearUpgradeAnnouncement={async () => {
-                await clearUpgradeAnnouncement(currentUser.name)
-                showToast('Upgrade announcement cleared.')
-              }}
             />
           </section>
         ) : null}
         {confirmation.dialog}
       </div>
       {currentUser.role === 'owner' ? null : <AppBlockingNotice user={currentUser} notices={appSettings.scheduledNotifications} />}
-      <UpgradeAnnouncementNotice user={currentUser} announcement={appSettings.upgradeAnnouncement} />
-    </main>
+    </AppNavigationShell>
   )
 }

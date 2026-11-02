@@ -20,8 +20,21 @@ const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeri
 const PASSWORD='DrillSynthetic123!'
 async function seed(mode='open'){
  const proof=await health()
- const clear=await fetch(`http://127.0.0.1:8080/emulator/v1/projects/${PROJECT}/databases/(default)/documents`,{method:'DELETE'})
- if(!clear.ok)throw Error('Demo Firestore reset failed')
+ // Reset is idempotent and happens before any scenario assertion or fixture write.
+ // The emulator can return ABORTED while a prior closed context finishes a commit.
+ // Preserve the bootstrap failure and retry only that exact local lock conflict.
+ for(let attempt=1;attempt<=3;attempt++){
+  const clear=await fetch(`http://127.0.0.1:8080/emulator/v1/projects/${PROJECT}/databases/(default)/documents`,{method:'DELETE'})
+  if(clear.ok)break
+  const body=await clear.json().catch(()=>null),status=body?.error?.status,message=typeof body?.error?.message==='string'?body.error.message.slice(0,500):'No structured emulator error'
+  const retryable=status==='ABORTED'&&message.includes('Transaction lock timeout')
+  const runId=process.env.DRILL_RUN_ID
+  if(!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(runId||''))throw Error('DRILL_ISOLATION: valid evidence run ID required before reset retry')
+  require('node:fs').appendFileSync(path.resolve('output/playwright',runId,'bootstrap-events.jsonl'),JSON.stringify({at:new Date().toISOString(),project:PROJECT,operation:'pre-scenario-reset',attempt,httpStatus:clear.status,status,message,retryable})+'\n')
+  if(!retryable||attempt===3)throw Error(`Demo Firestore reset failed: HTTP ${clear.status} ${status||'unknown'} ${message}`)
+  await new Promise(resolve=>setTimeout(resolve,attempt*250))
+  await health()
+ }
  const accounts=await auth.listUsers(1000);if(accounts.users.length)await auth.deleteUsers(accounts.users.map(u=>u.uid))
  const stamp=new Date().toISOString();const records=[]
  for(const role of ['owner','manager','billingA','billingB','disabled','missing']){
@@ -32,7 +45,7 @@ async function seed(mode='open'){
  records.push(['stores/single-store',{name:'Drill Store',city:'Synthetic',active:true}])
  records.push(['appMetadata/nameDirectory',{people:['Drill owner','Drill manager','Drill billingA','Drill billingB','Drill Party'],vendors:[]}])
  records.push(['appMetadata/vendorCatalog',{vendors:[]}])
- records.push(['appMetadata/appSettings',{currentBankBalance:0,marginPercentage:25,monthlyOperationalExpense:0,operationalExpenseBreakdown:{rent:0,electricity:0,maintenance:0,salaries:0,royalty:0,caFee:0,miscellaneous:0},scheduledNotifications:[],upgradeAnnouncement:null}])
+ records.push(['appMetadata/appSettings',{currentBankBalance:0,marginPercentage:25,monthlyOperationalExpense:0,operationalExpenseBreakdown:{rent:0,electricity:0,maintenance:0,salaries:0,royalty:0,caFee:0,miscellaneous:0},scheduledNotifications:[]}])
  const views=require('../../functions/sharedViews')
  const settings=records.find(([p])=>p==='appMetadata/appSettings')[1]
  const metrics={...require('./empty-metrics.json'),generatedForDate:date,updatedAt:stamp}

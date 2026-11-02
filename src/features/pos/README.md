@@ -1,14 +1,14 @@
 # POS
 
+Current navigation/authority: [Architecture](../../../docs/architecture/ARCHITECTURE.md). The approved stock files below are retained historical operational sources, locally excluded from the public index. Permanent parser/retired-import coverage uses `tests/fixtures/pos-products.synthetic.csv`. The exact original workbook-provenance test remains opt-in via `RUN_APPROVED_CATALOGUE_EVIDENCE=true`, not part of routine/full synthetic regression. Do not restore or import historical stock to run tests.
+
 The POS product catalog is the official live inventory used by billing, goods receipts, and stock audits. Its current Firestore path is `posSandboxes/test`, a legacy compatibility path name that does not mean these are test records. It also contains real counter sales. Do not reset, move, or reclassify these records as part of a UI-label change.
 
 Products created from an unknown barcode in billing are added to this same live catalog at zero quantity, then added to the cart as normal catalog products. This does not create a stock-in movement; stock changes only through the existing receipt, audit, sale, return, and adjustment flows.
 
-## Import
+## Historical import (retired)
 
-The browser accepts only the approved normalized CSV. It does not load XLSX files or add an XLSX runtime dependency. Owner import validates exactly 6,069 unique product IDs and barcodes, including 379 negative and 3,294 zero opening quantities. It writes deterministic product and protected-cost documents in 175-row chunks (350 writes), records source values and checksums, and resumes from the last completed row when the same CSV is selected again.
-
-A completed import cannot be repeated: selecting the same CSV again preserves current stock and reports that it was already imported.
+Current browser/repository import rejects new CSV import attempts. The original approved import and its provenance are retained as history, not a current seed/reset/recovery command. Earlier implementation validated the 2 October workbook, used deterministic chunked writes and retained checksums; those historical facts do not authorize another import or stock rewrite. The permanent retired-import denial test uses synthetic CSV and verifies existing stock remains unchanged.
 
 The approved source files are:
 
@@ -23,6 +23,6 @@ Bills, stock movements, and events are append-only. Bill status and returned qua
 
 ## Stock workspace (deployed in v1.5.0)
 
-POS now contains Billing, Dashboard and Bills. Receive Stock and Stock Audit reuse the existing workflows in the separate four-tab Stock workspace. Collection paths and existing financial posting algorithms remain unchanged. Checkout-only listeners stop outside Billing; dashboard bills/refunds use complete date ranges through bounded realtime pages, and state queries use only selected bill IDs. The active billing draft survives navigation to Stock in memory and is discarded on logout/user change.
+POS now contains Billing, Dashboard and Bills. Receive Stock and Stock Audit reuse the existing workflows in the separate six-tab Stock workspace. Collection paths remain compatible; current checkout/refund/stock operations use trusted Functions, as documented in the current Architecture. Checkout-only listeners stop outside Billing; dashboard bills/refunds use complete date ranges through bounded realtime pages, and state queries use only selected bill IDs. The active billing draft survives navigation to Stock in memory and is discarded on logout/user change.
 
 See [Stock workspace checkpoint](../../../docs/operations/STOCK_WORKSPACE_2026-10-12.md) for query limits, index requirements, historical-field limitations and remaining server-authority gaps.

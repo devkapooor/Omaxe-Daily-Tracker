@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { where } from 'firebase/firestore'
 import type { AppUser } from '@/domain/financeTypes'
 import type { PosGoodsReceipt } from '@/features/pos/domain/types'
@@ -7,9 +7,10 @@ import { SelectField } from '@/shared/ui/select-field'
 import { readPage, type Cursor, type ServerPage } from '../data/stockQueries'
 import { stockMoney, stockDate } from '../domain/currentStock'
 
-export function SavedReceiptDrafts({ actor, refreshKey, onResume, onDelete, busy = false }: {
+export function SavedReceiptDrafts({ actor, refreshKey, onResume, onDelete, busy = false, children }: {
   actor: AppUser; refreshKey: number; busy?: boolean
   onResume: (receipt: PosGoodsReceipt) => void; onDelete: (receipt: PosGoodsReceipt) => void
+  children?: ReactNode
 }) {
   const [items, setItems] = useState<PosGoodsReceipt[]>([])
   const [selected, setSelected] = useState('')
@@ -41,6 +42,7 @@ export function SavedReceiptDrafts({ actor, refreshKey, onResume, onDelete, busy
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-semibold">Saved drafts{loading ? '' : ' (' + items.length + ')'}</span>
       <SelectField className="min-w-48 flex-1" searchable disabled={loading || busy || !!error} placeholder={loading ? 'Loading drafts…' : items.length ? 'Search vendor or invoice · all dates' : 'No saved drafts'} value={receipt?.id ?? ''} onValueChange={setSelected} options={items.map(item => ({ value: item.id, label: item.vendorName + ' · ' + item.invoiceNumber + ' · ' + stockDate(item.updatedAt ?? item.createdAt) + ' · ' + stockMoney(item.invoiceTotalPaise ?? item.totalPaise) }))} />
+      {children}
       <Button type="button" size="sm" variant="outline" disabled={busy || !canEdit} onClick={() => receipt && onResume(receipt)}>Resume</Button>
       <Button type="button" size="sm" variant="outline" disabled={busy || !canEdit} onClick={() => receipt && onDelete(receipt)}>Delete draft</Button>
       <Button type="button" size="sm" variant="ghost" disabled={busy || loading} onClick={() => setAttempt(value => value + 1)}>Refresh</Button>

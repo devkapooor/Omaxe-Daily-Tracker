@@ -19,11 +19,15 @@ function parseOptions(children: React.ReactNode): SelectOption[] {
   })
 }
 
-function NativeSelect({ children, className, defaultValue, disabled, name, onChange, required, value }: NativeSelectProps) {
+function NativeSelect({ children, className, defaultValue, disabled, name, onChange, required, value, id, 'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy, 'aria-describedby': ariaDescribedBy }: NativeSelectProps) {
   const options = React.useMemo(() => parseOptions(children), [children])
 
   return (
     <SelectField
+      id={id}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
       className={className}
       defaultValue={typeof defaultValue === 'string' ? defaultValue : undefined}
       disabled={disabled}

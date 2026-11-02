@@ -15,6 +15,8 @@ import {
 import { VendorDirectoryV2 } from '@/features/directory/components/VendorDirectoryV2'
 import { VendorInvoiceDetails } from './VendorInvoiceDetails'
 import { VendorBalances } from './VendorBalances'
+import { VendorBalanceCutoverControl } from './VendorBalanceCutoverControl'
+import { LegacyVendorMigrationControl } from './LegacyVendorMigrationControl'
 import { VendorOpeningCorrection } from './VendorOpeningCorrection'
 import { OpenInvoicesV2 } from '@/features/register/components/OpenInvoicesV2'
 import type { VendorLedgerV2Data } from '@/features/vendor-workspace/hooks/useVendorLedgerV2'
@@ -38,10 +40,10 @@ import {
   withdrawSettlementCorrectionRequestV2,
 } from '@/store/vendorLedgerV2Repository'
 
-type DirectoryProps = { partyNames?: string[]; referenceNames?: string[]; savedPartyNames?: string[]; confirmedPartyNames?: string[]; legacyVendorNames?: string[]; onAddParty?: (name: string) => Promise<void>; onRenameParty?: (before: string, after: string) => Promise<void> }
+type DirectoryProps = { partyNames?: string[]; referenceNames?: string[]; savedPartyNames?: string[]; confirmedPartyNames?: string[]; knownVendorNames?: string[]; onAddParty?: (name: string) => Promise<void>; onRenameParty?: (before: string, after: string) => Promise<void> }
 type Props = DirectoryProps & { currentUser: AppUser; ledger: VendorLedgerV2Data; legacyChequeItems: PlannerScheduleItemSnapshot[]; onOpenRegister:(vendorId?:string,invoiceId?:string)=>void }
 
-export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister, partyNames = [], referenceNames = [], savedPartyNames = [], confirmedPartyNames = [], legacyVendorNames = [], onAddParty, onRenameParty }: Props) {
+export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister, partyNames = [], referenceNames = [], savedPartyNames = [], confirmedPartyNames = [], knownVendorNames = [], onAddParty, onRenameParty }: Props) {
   const [tab, setTab] = useState('directory')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -53,7 +55,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister,
     () => ledger.purchases.map(purchase => {
       const source = ledger.invoiceStates.find(state => state.invoiceId === purchase.id)
       const balance = source ? { purchase, openAmountPaise: source.openAmountPaise, reservedAmountPaise: source.reservedAmountPaise, availableToAllocatePaise: Math.max(0, source.openAmountPaise - source.reservedAmountPaise) } : invoiceBalanceV2(purchase, ledger.allocations)
-      return { ...balance, paidAmountPaise: ledger.allocations.filter(item => item.invoiceId === purchase.id).reduce((sum, item) => sum + (item.state === 'posted' ? item.amountPaise : item.state === 'reversed' ? -item.amountPaise : 0), 0) }
+      return { ...balance, ...(source?.cutoverStatus === 'historical' ? { cutoverOpenAmountPaise: source.cutoverOpenAmountPaise, balanceCutoverDate: source.balanceCutoverDate, cutoverStatus: source.cutoverStatus } : {}), paidAmountPaise: ledger.allocations.filter(item => item.invoiceId === purchase.id).reduce((sum, item) => sum + (item.state === 'posted' ? item.amountPaise : item.state === 'reversed' ? -item.amountPaise : 0), 0) }
     }).sort((a, b) => b.purchase.invoiceDate.localeCompare(a.purchase.invoiceDate)),
     [ledger.allocations, ledger.purchases, ledger.invoiceStates],
   )
@@ -61,7 +63,7 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister,
 
   if (ledger.loading && !ledger.config) return <PageLayout header={<PageHeader title="Vendor Workspace" />}><p className="p-4 text-sm text-muted-foreground">Checking V2 vendor ledger status...</p></PageLayout>
   if (ledger.config?.enabled !== true) {
-    return <FinanceOperationBoundary uid={currentUser.id} fill><PageLayout className="min-h-0 flex-1 overflow-hidden" header={<PageHeader title="Vendor Workspace" />}><div className="min-h-0 flex-1 space-y-3 overflow-y-auto"><p className="rounded border p-3 text-sm">Vendor ledger setup is required for invoices, payments and opening balances. Your other parties remain available.</p>{ledger.error ? <p role="alert" className="text-destructive">{ledger.error}</p> : null}<VendorDirectoryV2 currentUserRole={currentUser.role} vendors={[]} legacyVendorNames={legacyVendorNames} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onAddVendor={() => setVendorFormOpen(true)} onSaveParty={onAddParty} onRenameParty={onRenameParty} />{vendorFormOpen ? <VendorCreateModal busy={busy} currentUser={currentUser} vendors={[]} onClose={() => setVendorFormOpen(false)} onRun={run} onAddParty={onAddParty} partyOnly /> : null}</div></PageLayout></FinanceOperationBoundary>
+    return <FinanceOperationBoundary uid={currentUser.id} fill><PageLayout className="min-h-0 flex-1 overflow-hidden" header={<PageHeader title="Vendor Workspace" />}><div className="min-h-0 flex-1 space-y-3 overflow-y-auto"><p className="rounded border p-3 text-sm">Vendor ledger setup is required for invoices, payments and opening balances. Your other parties remain available.</p>{ledger.error ? <p role="alert" className="text-destructive">{ledger.error}</p> : null}<VendorDirectoryV2 currentUserRole={currentUser.role} vendors={[]} knownVendorNames={knownVendorNames} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onAddVendor={() => setVendorFormOpen(true)} onSaveParty={onAddParty} onRenameParty={onRenameParty} />{vendorFormOpen ? <VendorCreateModal busy={busy} currentUser={currentUser} vendors={[]} onClose={() => setVendorFormOpen(false)} onRun={run} onAddParty={onAddParty} partyOnly /> : null}</div></PageLayout></FinanceOperationBoundary>
   }
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -98,11 +100,13 @@ export function VendorLedgerWorkspacePage({ currentUser, ledger, onOpenRegister,
         {ledger.error || message ? <p className="rounded-xl border border-border bg-secondary/50 px-3 py-2 text-sm">{ledger.error ?? message}</p> : null}
 
           <TabsContent value="directory" className="grid gap-2.5 pt-2">
-            <VendorDirectoryV2 currentUserRole={currentUser.role} legacyVendorNames={legacyVendorNames} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onSaveParty={onAddParty} onRenameParty={onRenameParty} onEditOpening={setOpeningVendor} onUpdateVendorGstin={async (vendor,gstin) => { await run(() => updateVendorGstin(vendor,gstin), 'Vendor GSTIN updated.') }} />
+            <VendorDirectoryV2 currentUserRole={currentUser.role} knownVendorNames={knownVendorNames} onAddVendor={() => setVendorFormOpen(true)} vendors={ledger.vendors} partyNames={partyNames} referenceNames={referenceNames} savedPartyNames={savedPartyNames} confirmedPartyNames={confirmedPartyNames} onSaveParty={onAddParty} onRenameParty={onRenameParty} onEditOpening={setOpeningVendor} onUpdateVendorGstin={async (vendor,gstin) => { await run(() => updateVendorGstin(vendor,gstin), 'Vendor GSTIN updated.') }} />
+            <LegacyVendorMigrationControl user={currentUser} config={ledger.config} currentVendors={ledger.vendors} />
           </TabsContent>
-          <TabsContent value="invoices" className="pt-2"><>{invoiceFilter ? <Button className="mb-2" size="sm" variant="outline" onClick={() => setInvoiceFilter('')}>Clear vendor filter</Button> : null}<OpenInvoicesV2 balances={invoiceFilter ? balances.filter(row => row.purchase.vendorId === invoiceFilter) : balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} onViewInvoice={setSelectedInvoice} /></></TabsContent>
+          <TabsContent value="invoices" className="min-w-0 pt-2"><>{invoiceFilter ? <Button className="mb-2" size="sm" variant="outline" onClick={() => setInvoiceFilter('')}>Clear vendor filter</Button> : null}<OpenInvoicesV2 balances={invoiceFilter ? balances.filter(row => row.purchase.vendorId === invoiceFilter) : balances} vendorNameById={vendorNameById} onRecordPayment={openPayment} onViewInvoice={setSelectedInvoice} /></></TabsContent>
           <TabsContent value="corrections" className="pt-2"><CorrectionForm busy={busy} currentUser={currentUser} ledger={ledger} vendors={vendorNameById} onRun={run} /></TabsContent>
           <TabsContent value="balances" className="grid gap-2 pt-2">
+            <VendorBalanceCutoverControl user={currentUser} config={ledger.config} />
             <VendorBalances vendors={ledger.vendors} states={ledger.accountStates} onInvoices={id => { setInvoiceFilter(id); setTab('invoices') }} />
           </TabsContent>
           </PageCardStack>

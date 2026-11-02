@@ -1,5 +1,7 @@
 # Release Process
 
+The latest application deployment is recorded in [31 October deployment](DEPLOYMENT_2026-10-31.md). This procedure is guidance for future separately authorized releases; it does not authorize commit, push, deployment, cloud changes or production mutations. Use the current [full isolated runbook](../../drill.md#current-maintenance-execution--31-october-2026) and [coverage/exclusions](TEST_COVERAGE.md); a build is not workflow/device acceptance. Preserve unrelated edits and use a reviewed clean release checkout. Historical version examples below are not automatically compatible with current data/Rules/Functions.
+
 ## Standard Release Flow
 
 Use this process for every stable AlphaHub release.
@@ -7,9 +9,9 @@ Use this process for every stable AlphaHub release.
 1. Finish the intended changes on `main`.
 2. Follow [QA Checklist](./QA_CHECKLIST.md) and run:
    - `npm test`
-   - `npx eslint src tests`
+   - `npm run lint` and drill lint through the full runner
    - `npm run build`
-   - `npm run test:rules` when rules or financial workflows are affected; record blocked prerequisites honestly
+   - the current guarded `test:full` path with stack startup/shutdown and fresh evidence ID; never start a second Firestore emulator over an existing stack. Record all exclusions, failures and device gaps.
 3. Update `package.json` version to the next release number.
 4. Add a new entry to `docs/operations/VERSION_LOG.md`.
 5. Commit the release state with a release-style message, for example:

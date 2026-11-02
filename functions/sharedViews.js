@@ -20,6 +20,12 @@ function gstin(value) {
   if (!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalized)) fail('Enter a valid 15-character GSTIN.')
   return normalized
 }
+function optionalText(value, max, label, pattern) {
+  if (typeof value !== 'string' || value.length > max) fail(`Enter a valid ${label}.`)
+  const normalized = value.trim()
+  if (normalized && pattern && !pattern.test(normalized)) fail(`Enter a valid ${label}.`)
+  return normalized
+}
 const expenseKeys = ['rent', 'electricity', 'maintenance', 'salaries', 'royalty', 'caFee', 'miscellaneous']
 function notices(value) {
   if (!Array.isArray(value) || value.length > 25) fail('Use at most 25 staff notifications.')
@@ -38,13 +44,10 @@ function settingsProjection(source, timestamp) {
   for (const k of ['marginPercentage', 'monthlyOperationalExpense']) if (source[k] !== undefined) result[k] = number(source[k])
   if (source.businessLegalName !== undefined) result.businessLegalName = text(source.businessLegalName, 200)
   if (source.businessGstin !== undefined) result.businessGstin = gstin(source.businessGstin)
+  if (source.businessFssaiLicense !== undefined) result.businessFssaiLicense = optionalText(source.businessFssaiLicense, 14, '14-digit FSSAI licence number', /^\d{14}$/)
+  // Bank details belong only to owner settings; never include them in staff projections.
   if (source.operationalExpenseBreakdown) result.operationalExpenseBreakdown = Object.fromEntries(expenseKeys.map(k => [k, number(source.operationalExpenseBreakdown[k] ?? 0)]))
   if (source.scheduledNotifications !== undefined) result.scheduledNotifications = notices(source.scheduledNotifications)
-  if (source.upgradeAnnouncement === null) result.upgradeAnnouncement = null
-  else if (source.upgradeAnnouncement) {
-    const a = source.upgradeAnnouncement
-    result.upgradeAnnouncement = Object.fromEntries(['id', 'title', 'message', 'publishedAt', 'expiresAt', 'publishedBy'].map(k => [k, text(a[k], k === 'message' ? 500 : 180)]))
-  }
   return result
 }
 // Schemas include only existing staff-facing information. Private planner balances
@@ -114,17 +117,18 @@ function createSharedViewHandlers(db, clock = () => Date.now()) {
         action='Operational settings updated'
       }else if(d.kind==='notifications'){patch.scheduledNotifications=notices(d.value);action='Scheduled blocking notifications updated'}
       else if(d.kind==='business-identity'){
-        object(d.value,['businessLegalName','businessGstin'])
+        object(d.value,['businessLegalName','businessGstin','businessFssaiLicense','businessBankName','businessBankAccountHolder','businessBankAccountNumber','businessBankIfsc','businessBankBranch'])
         patch.businessLegalName=text(d.value.businessLegalName,200)
         patch.businessGstin=gstin(d.value.businessGstin)
-        action='Business legal name and GSTIN updated'
+        // Older clients send only name/GSTIN. Preserve details they did not submit.
+        if(d.value.businessFssaiLicense !== undefined) patch.businessFssaiLicense=optionalText(d.value.businessFssaiLicense,14,'14-digit FSSAI licence number',/^\d{14}$/)
+        if(d.value.businessBankName !== undefined) patch.businessBankName=optionalText(d.value.businessBankName,120,'bank name')
+        if(d.value.businessBankAccountHolder !== undefined) patch.businessBankAccountHolder=optionalText(d.value.businessBankAccountHolder,200,'account holder name')
+        if(d.value.businessBankAccountNumber !== undefined) patch.businessBankAccountNumber=optionalText(d.value.businessBankAccountNumber,34,'account number',/^\d+$/)
+        if(d.value.businessBankIfsc !== undefined) patch.businessBankIfsc=optionalText(typeof d.value.businessBankIfsc === 'string' ? d.value.businessBankIfsc.toUpperCase() : d.value.businessBankIfsc,11,'IFSC',/^[A-Z]{4}0[A-Z0-9]{6}$/)
+        if(d.value.businessBankBranch !== undefined) patch.businessBankBranch=optionalText(d.value.businessBankBranch,200,'branch name')
+        action='Business identity updated'
       }
-      else if(d.kind==='announcement'){
-        object(d.value,['title','message','durationHours'])
-        if(![1,4,24].includes(d.value.durationHours))fail('Choose a valid announcement duration.')
-        patch.upgradeAnnouncement={id:d.operationId,title:text(d.value.title,100),message:text(d.value.message,500),publishedAt:timestamp,expiresAt:new Date(clock()+d.value.durationHours*3600000).toISOString(),publishedBy:actor.name}
-        action='App upgrade announcement published'
-      }else if(d.kind==='clear-announcement'){if(d.value!==null)fail('Invalid clear-announcement intent.');patch.upgradeAnnouncement=null;action='App upgrade announcement cleared'}
       else fail('Unsupported settings operation.')
       patch.sharedSettingsRevision=(before.sharedSettingsRevision||0)+1
       const result={revision:patch.sharedSettingsRevision,operationId:d.operationId}

@@ -13,8 +13,9 @@ export type HandoverCheckpoint = {
 export type HandoverLedger = {
   initialized: boolean; revision: number; cashNetPaise: number
   dailyTotals: Record<string, { upi: number; card: number }>
-  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close' | 'count-reserve' | 'count-release' | 'payment'
+  lastOperation: 'initialize' | 'bill' | 'refund' | 'reconciliation' | 'cashout-close' | 'cashout-correction' | 'count-reserve' | 'count-release' | 'payment'
   lastOperationId: string; updatedByUid: string; checkpoint?: HandoverCheckpoint
+  // date is the original session opening date, not the date of its latest count.
   counterSession?: { status: 'open' | 'closed'; date: string; openingReconciliationId: string; openedByUid: string }
   countReservation?: CountReservation | null
 }
@@ -42,6 +43,7 @@ export type CashierReconciliation = {
 }
 
 export function isCounterOpen(ledger: HandoverLedger | null | undefined, date = handoverDate()) {
+  // Match the server cashBalance.isCounterOpenForDate and Rules counterOpen contract.
   return ledger?.initialized === true && ledger.counterSession?.status === 'open' && ledger.checkpoint?.date === date
 }
 

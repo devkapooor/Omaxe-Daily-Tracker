@@ -40,6 +40,30 @@ describe('trusted immediate cash returns on dedicated demo emulator', { skip: !p
     assert.equal(after.events.length, 1); assert.equal(after.stockMovements.length, 1); assert.deepEqual(await read(`${base}/bills/bill`), originalBill)
     assert.equal((await read(`${base}/cashierStates/${role}`)).needsLogoutCheck, true)
   })
+  it('overnight counter uses its current count for a prior-day bill refund and refund-aware Cashout proof', async () => {
+    nowMs = Date.parse('2026-10-14T23:30:00.000Z'); // 15 October IST
+    await db.doc(`${base}/handover/main`).update({ 'checkpoint.date': '2026-10-15', 'checkpoint.cashNetPaise': 18000 });
+    const originalBill = await read(`${base}/bills/bill`), before = await read(`${base}/handover/main`);
+    const intent = await input(), returned = await call(handlers.post, intent);
+    assert.equal(returned.refundDate, '2026-10-15');
+    const ledger = await read(`${base}/handover/main`);
+    assert.deepEqual(ledger.counterSession, before.counterSession);
+    assert.deepEqual(ledger.checkpoint, before.checkpoint);
+    assert.equal(ledger.cashNetPaise, 9000);
+    assert.equal(ledger.checkpoint.cashActualPaise + ledger.cashNetPaise - ledger.checkpoint.cashNetPaise, 91000);
+    assert.equal((await read(`${base}/products/a`)).currentQuantity, 19);
+    assert.deepEqual(await read(`${base}/bills/bill`), originalBill);
+    assert.deepEqual(await call(handlers.post, intent), returned);
+    const proof = await call(handlers.prepareCashout, { operationId: randomUUID(), date: '2026-10-15' });
+    assert.equal(proof.posCashRefundPaise, 9000);
+    assert.deepEqual(await read(`${base}/handover/main`), ledger);
+    const after = await effects();
+    assert.equal(after.expenses.length, 1); assert.equal(after.events.length, 1); assert.equal(after.stockMovements.length, 1);
+  })
+  it('overnight counter rejects a new-day refund until a current count exists, without changing stock or cash', async () => {
+    nowMs += 86400000;
+    await unchanged(async () => call(handlers.post, await input()), /Open.*counter/);
+  })
   it('replays after changed counter/stock and rejects changed actor/intent exactly once', async () => {
     const intent = await input(), original = await call(handlers.post, intent)
     await db.doc(`${base}/handover/main`).update({ 'counterSession.status': 'closed' })

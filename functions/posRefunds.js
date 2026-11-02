@@ -1,5 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https')
-const { activeUser } = require('./cashBalance')
+const { activeUser, isCounterOpenForDate } = require('./cashBalance')
 const { hash, canonical, istDate } = require('./stockOperations')
 const p = require('./posRefundPolicy')
 const BASE = 'posSandboxes/test', STAFF = ['owner', 'manager', 'billing']
@@ -123,7 +123,7 @@ function createPosRefundHandlers(db, clock = () => Date.now()) {
       const result = await buildQuote(tx, input, actor, nowMs), { quote: q, src, ledger, cashier, products } = result
       if (!q.selected.length) p.fail('Select at least one return quantity.')
       if (d.sourceBillRevision !== q.sourceBillRevision || d.businessDate !== q.businessDate || d.confirmationHash !== q.confirmationHash || d.refundAmountPaise !== q.refundPaise) p.fail('Return quote or counter changed. Refresh the quote and confirm the latest quantities and cash before paying.')
-      if (!ledger?.initialized || ledger.counterSession?.status !== 'open' || ledger.checkpoint?.date !== q.businessDate || ledger.counterSession.date !== q.businessDate) p.fail('Open the current-day shared counter before completing a return.')
+      if (!isCounterOpenForDate(ledger, q.businessDate)) p.fail('Open the current-day shared counter before completing a return.')
       const reservation = ledger.countReservation
       if (reservation && (!reservation.startedAt?.toMillis || nowMs < reservation.startedAt.toMillis() + 300000)) p.fail(`${reservation.name || 'A cashier'} is counting the shared drawer. Wait until the count is saved or cancelled.`)
       if (!cashier || cashier.uid !== actor.uid || cashier.authTime !== request.auth.token?.auth_time || cashier.closed !== false || cashier.joinedCounterId !== ledger.counterSession.openingReconciliationId) p.fail('Join the open shared counter before completing a cash return.')
@@ -177,7 +177,7 @@ function createPosRefundHandlers(db, clock = () => Date.now()) {
     if (typeof d.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) p.fail('Select the counter closing date.', 'invalid-argument')
     return run(request, 'prepare-cashout-refund-proof', d, STAFF, async ({ tx, actor, timestamp, operationId, writes }) => {
       const [day, ledger, latest] = await Promise.all([tx.get(ref('refundDays', d.date)), tx.get(ref('handover', 'main')), tx.get(db.collection('dailyCashouts').where('date', '==', d.date).orderBy('createdAt', 'desc').limit(1))])
-      if (!day.exists || !ledger.get('initialized') || ledger.get('counterSession.status') !== 'open' || ledger.get('counterSession.date') !== d.date) p.fail('Open this date\'s shared counter before preparing its refund-aware cashout.')
+      if (!day.exists || !isCounterOpenForDate(ledger.data(), d.date)) p.fail('Open this date\'s shared counter before preparing its refund-aware cashout.')
       const total = p.integer(day.get('cashRefundPaise'), 'Server day refunds')
       const previous = latest.docs[0]
       const closedTotal = previous?.get('refundAccountingVersion') === 1 ? p.integer(previous.get('posRefundDayTotalPaise'), 'Previous closing refund snapshot') : 0

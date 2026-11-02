@@ -6,6 +6,13 @@ function activeUser(user) {
   return user && user.disabled !== true && user.approvalStatus !== 'rejected'
 }
 
+// A session can span days. Its opening date is history; the latest accepted
+// physical count determines which day's drawer is ready. Keep this contract
+// aligned with isCounterOpen in cashierHandover.ts and counterOpen in Rules.
+function isCounterOpenForDate(ledger, date) {
+  return ledger?.initialized === true && ledger.counterSession?.status === 'open' && ledger.checkpoint?.date === date
+}
+
 function pendingCashForUser(userId, users, cashouts, transfers) {
   const active = users.filter((user) => activeUser(user.data))
   const activeIds = new Set(active.map((user) => user.id))
@@ -33,4 +40,4 @@ function pendingCashForUser(userId, users, cashouts, transfers) {
   return amount
 }
 
-module.exports = { activeUser, normalizedName, pendingCashForUser }
+module.exports = { activeUser, isCounterOpenForDate, normalizedName, pendingCashForUser }

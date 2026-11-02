@@ -19,19 +19,44 @@ test('POS-01 POS-03 POS-04 name search, negative stock warning and real owner ov
 })
 test('STK-09 ACT-03 synthetic history tied dates cursor pages unique',async({drill:h},info)=>{
  info.annotations.push({type:'layer',description:'Read-only real UI queries against explicit synthetic history fixtures; does not validate posting those records'})
- const time=new Date(Date.now()-60000).toISOString();const batch=h.db.batch();for(let i=0;i<28;i++){const id='drill-history-'+String(i).padStart(3,'0'),value={id,productId:'drill-product-1',barcode:'00001',productName:'Drill Product A',actorUid:'drill-billingA',actorName:'Drill billingA',reason:'Drill synthetic historical price '+i,createdAt:time,reviewedAt:time,reviewStatus:'reviewed',reviewedByUid:'drill-owner',reviewedByName:'Drill owner',before:{mrpPaise:10000,sellingPricePaise:9000},after:{mrpPaise:10000,sellingPricePaise:9000}};batch.set(h.db.doc(h.base+'/stockPriceChanges/'+id),value);batch.set(h.db.doc(h.base+'/stockMovements/'+id),{...value,type:'stock-price-correction',correctionId:id,quantityDelta:0,beforeMrpPaise:10000,afterMrpPaise:10000,beforeSellingPricePaise:9000,afterSellingPricePaise:9000})}await batch.commit();const {page}=await h.session('owner');await h.nav(page,'Stock');await page.getByRole('tab',{name:'Stock History',exact:true}).click();const identifier=page.getByPlaceholder('Optional exact identifier');await identifier.fill('00001');await expect(page.getByText(/Product filters cover stock movements/)).toBeVisible();await expect(page.locator('tbody tr')).toHaveCount(25);const first=await page.locator('tbody tr').allTextContents();expect(first.every(row=>row.includes('drill-history-'))).toBe(true);await page.getByRole('button',{name:'Next',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(3);const second=await page.locator('tbody tr').allTextContents();expect(new Set([...first,...second]).size).toBe(28);await page.getByRole('button',{name:'Previous',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(25);await h.nav(page,'Action Centre');await page.getByRole('tab',{name:'History',exact:true}).click();await expect(page.getByRole('button',{name:'View Details',exact:true})).toHaveCount(25);await page.getByRole('button',{name:'Load More History',exact:true}).click();await expect(page.getByRole('button',{name:'View Details',exact:true})).toHaveCount(28)
+ const time=new Date(Date.now()-60000).toISOString();const batch=h.db.batch();for(let i=0;i<28;i++){const id='drill-history-'+String(i).padStart(3,'0'),value={id,productId:'drill-product-1',barcode:'00001',productName:'Drill Product A',actorUid:'drill-billingA',actorName:'Drill billingA',reason:'Drill synthetic historical price '+i,createdAt:time,reviewedAt:time,reviewStatus:'reviewed',reviewedByUid:'drill-owner',reviewedByName:'Drill owner',before:{mrpPaise:10000,sellingPricePaise:9000},after:{mrpPaise:10000,sellingPricePaise:9000}};batch.set(h.db.doc(h.base+'/stockPriceChanges/'+id),value);batch.set(h.db.doc(h.base+'/stockMovements/'+id),{...value,type:'stock-price-correction',correctionId:id,quantityDelta:0,beforeMrpPaise:10000,afterMrpPaise:10000,beforeSellingPricePaise:9000,afterSellingPricePaise:9000})}await batch.commit()
+ const {page}=await h.session('owner');await h.nav(page,'Stock');await page.getByRole('tab',{name:'Stock History',exact:true}).click()
+ await page.getByPlaceholder('Optional exact identifier').fill('00001');await expect(page.getByText(/Product filters cover stock movements/)).toBeVisible()
+ const rows=page.locator('tbody tr')
+ const identities=values=>values.map(row=>{const marker=row.match(/Drill synthetic historical price (\d+)/);expect(marker).not.toBeNull();return Number(marker[1])})
+ await expect(rows).toHaveCount(25)
+ await expect(rows.first().getByTitle('Business reference')).toHaveText(/^PRICE\d+$/)
+ const first=identities(await rows.allTextContents())
+ await page.getByRole('button',{name:'Next',exact:true}).click();await expect(rows).toHaveCount(3)
+ const second=identities(await rows.allTextContents())
+ expect([...first,...second].sort((a,b)=>a-b)).toEqual(Array.from({length:28},(_,i)=>i))
+ await page.getByRole('button',{name:'Previous',exact:true}).click();await expect(rows).toHaveCount(25)
+ expect(identities(await rows.allTextContents())).toEqual(first)
+ await h.nav(page,'Action Centre');await page.getByRole('tab',{name:'History',exact:true}).click();await expect(page.getByRole('button',{name:'View Details',exact:true})).toHaveCount(25);await page.getByRole('button',{name:'Load More History',exact:true}).click();await expect(page.getByRole('button',{name:'View Details',exact:true})).toHaveCount(28)
+ expect(await h.records(h.base+'/stockMovements')).toHaveLength(28)
 })
 test('STK-04 UX-03 actual detail listeners detach and movement reads stay lazy',async({drill:h},info)=>{
  info.annotations.push({type:'layer',description:'Observed actual Firestore Listen addTarget/removeTarget traffic; no production read-savings measurement'})
- const {page}=await h.session('billingA');await h.nav(page,'Stock');await expect(page.getByText('Enter a barcode or choose a stock status to load stock.',{exact:true})).toBeVisible()
+ const {page}=await h.session('billingA')
  const messages=()=>h.evidence.requests.flatMap(r=>r.listen||[]).flatMap(value=>{try{return [JSON.parse(value)]}catch{return []}})
- const targets=()=>messages().filter(m=>m.addTarget).map(m=>m.addTarget)
- expect(targets().some(t=>t.query?.structuredQuery?.from?.some(s=>s.collectionId==='products'))).toBe(false)
+ const activeTargets=()=>{const active=new Map();for(const m of messages()){if(m.addTarget)active.set(String(m.addTarget.targetId),m.addTarget);if(m.removeTarget!==undefined)active.delete(String(m.removeTarget))}return active}
+ const collection=(target,name)=>target.query?.structuredQuery?.from?.some(source=>source.collectionId===name)
+ const quickBarcodes=['102030','101151','19008','757953692553','769807187498','726684841202'].sort()
+ const quickAdd=target=>{const f=target.query?.structuredQuery?.where?.fieldFilter;return collection(target,'products')&&f?.field?.fieldPath==='barcode'&&f.op==='IN'&&JSON.stringify((f.value?.arrayValue?.values??[]).map(v=>v.stringValue).sort())===JSON.stringify(quickBarcodes)}
+ await expect.poll(()=>[...activeTargets().values()].filter(quickAdd).length).toBeGreaterThan(0)
+ const start=messages().length
+ await h.nav(page,'Stock');await expect(page.getByText('Enter a barcode or choose a stock status to load stock.',{exact:true})).toBeVisible()
+ await expect.poll(()=>[...activeTargets().values()].filter(quickAdd).length).toBe(0)
+ const stockTargets=()=>messages().slice(start).filter(m=>m.addTarget).map(m=>m.addTarget)
+ expect(stockTargets().filter(t=>collection(t,'products')&&!quickAdd(t))).toEqual([])
+ const detailStart=messages().length
  await page.getByRole('textbox',{name:'Barcode',exact:true}).fill('00001');await page.getByRole('button',{name:'Edit Stock Prices For Drill Product A',exact:true}).click();await expect(page.getByRole('heading',{name:'Edit Stock Prices',exact:true})).toBeVisible()
- const detailIds=()=>targets().filter(t=>t.documents?.documents?.some(d=>d.endsWith('/products/drill-product-1')||d.endsWith('/productCosts/drill-product-1'))).map(t=>t.targetId)
- await expect.poll(()=>detailIds().length).toBeGreaterThanOrEqual(2);expect(targets().some(t=>t.query?.structuredQuery?.from?.some(s=>s.collectionId==='stockMovements'))).toBe(false)
- await page.getByRole('button',{name:'Close Product Details',exact:true}).click();await expect.poll(()=>detailIds().every(id=>messages().some(m=>m.removeTarget===id))).toBe(true)
- h.evidence.assertions.push({detailTargets:detailIds(),removedTargets:messages().filter(m=>m.removeTarget).map(m=>m.removeTarget),globalCollectionTargets:targets().filter(t=>t.query?.structuredQuery?.from).map(t=>t.query.structuredQuery.from)})
+ const detailIds=()=>[...new Set(messages().slice(detailStart).filter(m=>m.addTarget?.documents?.documents?.some(d=>d.endsWith('/products/drill-product-1')||d.endsWith('/productCosts/drill-product-1'))).map(m=>String(m.addTarget.targetId)))]
+ await expect.poll(()=>detailIds().length).toBeGreaterThanOrEqual(2)
+ expect(stockTargets().filter(t=>collection(t,'stockMovements'))).toEqual([])
+ for(const target of stockTargets().filter(t=>collection(t,'products')&&!quickAdd(t))){expect(target.query.parent).toBe('projects/demo-alphahub-drill/databases/(default)/documents/posSandboxes/test');expect(target.query.structuredQuery.where.fieldFilter).toMatchObject({field:{fieldPath:'barcode'},op:'EQUAL',value:{stringValue:'00001'}});expect(target.query.structuredQuery.limit).toBeLessThanOrEqual(51)}
+ await page.getByRole('button',{name:'Close Product Details',exact:true}).click();await expect.poll(()=>detailIds().every(id=>!activeTargets().has(id))).toBe(true)
+ h.evidence.assertions.push({phaseBoundaries:{stockNavigation:start,productDetails:detailStart},detailTargets:detailIds(),removedTargets:messages().filter(m=>m.removeTarget!==undefined).map(m=>m.removeTarget),stockQueryTargets:stockTargets().filter(t=>t.query)})
 })
 test('UX-02 current Register cheque fields and table confirmation expose keyboard semantics',async({drill:h})=>{
  await h.db.doc('chequeBooksV2/book-1120-1199').set({active:true,startNumber:1120,endNumber:1199})
@@ -41,7 +66,7 @@ test('UX-02 current Register cheque fields and table confirmation expose keyboar
  await page.getByRole('textbox',{name:'Cheque number',exact:true}).focus();await expect(page.getByRole('textbox',{name:'Cheque number',exact:true})).toBeFocused()
  expect(await h.records('cashouts')).toEqual([])
  await page.getByLabel('Recipient',{exact:true}).fill('Synthetic accessible cheque');await page.getByLabel('Amount (₹)',{exact:true}).fill('30');await page.getByRole('textbox',{name:'Cheque number',exact:true}).fill('1188')
- const future=new Date(Date.now()+86400000).toISOString().slice(0,10);await page.getByLabel('Cheque date',{exact:true}).fill(future)
+ const future=new Date(Date.parse(h.date+'T00:00:00Z')+86400000).toISOString().slice(0,10);expect(future>h.date).toBe(true);await page.getByLabel('Cheque date',{exact:true}).fill(future)
  await page.getByRole('button',{name:'Register issued cheque',exact:true}).click();await expect.poll(async()=>(await h.records('chequesV2')).length).toBe(1)
  await page.getByRole('tab',{name:'Cheques',exact:true}).click();await page.getByRole('button',{name:'Cancel cheque 1188',exact:true}).click();const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();await expect(dialog).toContainText('Cancel cheque')
  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).toHaveCount(0)
@@ -69,6 +94,31 @@ test('FIN-04 UX-03 Cash Movement double-click must post one transfer',async({dri
 test('SEC-05 FIN-01 direct negative expense must be rejected',async({drill:h})=>{
  const {page}=await h.session('billingA');const result=await attempt(()=>h.rpc(page,CLIENT,'write',['cashouts/drill-negative-expense',{id:'drill-negative-expense',storeId:'single-store',date:h.date,paidTo:'Drill Party',amount:-2500,category:'Rent',paymentMode:'Cash',approvedBy:'Drill owner',notes:'Drill forged negative expense',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}]));const saved=await h.get('cashouts/drill-negative-expense');h.evidence.assertions.push({result,saved,independentMinimumExpensePaise:0});expect(result.ok).toBe(false);expect(saved).toBeNull()
 })
+test('UX-05 navigation observations preserve financial sources and record local timing', async ({ drill: h }, info) => {
+ info.annotations.push({ type: 'layer', description: 'Observed automated desktop navigation latency and protocol request counts; not physical-device latency or billable Firestore read counts.' })
+ const { page } = await h.session('owner'), samples = []
+ await h.nav(page, 'Settings')
+ for (let round = 0; round < 3; round++) {
+  for (const section of ['POS', 'Stock', 'Vendor Workspace', 'Logs', 'Settings']) {
+   const offset = h.evidence.requests.length, started = await page.evaluate(() => performance.now())
+   await h.nav(page, section)
+   if (section === 'POS') await expect(page.getByRole('tablist', { name: 'POS sections' })).toBeVisible()
+   else if (section === 'Stock') await expect(page.getByText('Enter a barcode or choose a stock status to load stock.', { exact: true })).toBeVisible()
+   else if (section === 'Vendor Workspace') await expect(page.getByRole('button', { name: 'Add Party / Vendor', exact: true })).toBeVisible()
+   else if (section === 'Logs') { await page.getByRole('tab', { name: 'Expenses', exact: true }).click(); await expect(page.getByText('No expenses found', { exact: true })).toBeVisible() }
+   else await expect(page.getByRole('tablist', { name: 'Settings sections' })).toBeVisible()
+   const elapsedMs = (await page.evaluate(() => performance.now())) - started
+   const requests = h.evidence.requests.slice(offset)
+   expect(Number.isFinite(elapsedMs)).toBe(true)
+   samples.push({ section, round, elapsedMs, observedRequests: requests.length, listenPosts: requests.filter(r => r.method === 'POST' && r.url.includes('/Listen/')).length })
+  }
+ }
+ expect(await h.records('cashouts')).toEqual([])
+ expect(await h.records(h.base + '/bills')).toEqual([])
+ expect(await h.records(h.base + '/stockMovements')).toEqual([])
+ h.evidence.assertions.push({ kind: 'navigation-observation', samples, interpretation: 'Includes automation dispatch and readiness waits; phases do not measure settled network traffic or billable reads.' })
+})
+
 test('COUNTER-08 AUD-01 real IST audit date must match its stock movement',async({drill:h},info)=>{
  info.annotations.push({type:'layer',description:'Actual server-synchronized posting after IST midnight; UTC and IST date expectations calculated independently'})
  test.skip(h.date===new Date().toISOString().slice(0,10),'Run in the actual 00:00–05:29 IST boundary interval; no trusted-clock mocking.')

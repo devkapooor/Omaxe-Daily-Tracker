@@ -1,6 +1,6 @@
 import { activeWorkspaceUsers, legacyCashHolderLabel, normalizeName } from '@/app/uiHelpers'
-import type { CashTransfer, DailyCashoutEntry, UserAccount, VendorRecord } from '@/domain/appTypes'
-import type { FinanceData } from '@/domain/financeTypes'
+import type { CashTransfer, DailyCashoutEntry, UserAccount, VendorIdentitySummary } from '@/domain/appTypes'
+import type { VendorAccountStateV2 } from '@/domain/vendorLedgerV2'
 import type { PendingCashSnapshot } from '@/domain/workspaceMetrics'
 
 export function derivePendingCash(users: UserAccount[], dailyCashouts: DailyCashoutEntry[], cashTransfers: CashTransfer[]): PendingCashSnapshot {
@@ -84,15 +84,21 @@ export function derivePendingCash(users: UserAccount[], dailyCashouts: DailyCash
   }
 }
 
-export function deriveVendorOutstanding(financeData: FinanceData, vendors: VendorRecord[]) {
+export function deriveVendorOutstanding(vendors: VendorIdentitySummary[], accountStates: VendorAccountStateV2[]) {
   const totals = new Map<string, number>()
+  const vendorNameById = new Map<string, string>()
   vendors.forEach((vendor) => {
     const key = vendor.name.trim().toLowerCase()
-    if (key) totals.set(key, vendor.openingOutstandingRemaining ?? 0)
+    if (!key) return
+    vendorNameById.set(vendor.id, key)
+    if (!totals.has(key)) totals.set(key, 0)
   })
-  financeData.purchases.forEach((purchase) => {
-    const key = purchase.supplierName.trim().toLowerCase()
-    if (key) totals.set(key, (totals.get(key) ?? 0) + purchase.unpaidAmount)
+  accountStates.forEach((account) => {
+    const key = vendorNameById.get(account.vendorId) ?? account.vendorId.trim().toLowerCase()
+    if (!key) return
+    const amountPaise = account.outstandingPaise
+    if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) throw new Error(`Invalid payable balance for vendor ${account.vendorId}.`)
+    totals.set(key, (totals.get(key) ?? 0) + amountPaise / 100)
   })
   return totals
 }

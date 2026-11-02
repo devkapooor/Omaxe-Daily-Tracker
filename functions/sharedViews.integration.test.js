@@ -14,7 +14,7 @@ describe('private bank and staff-safe settings publication', {skip: !process.env
     metrics=structuredClone(require('../tests/drill/empty-metrics.json'))
     metrics.updatedAt='2026-10-16T04:00:00Z'
     metrics.planner.groupedSchedule=[{date:'2026-10-16',totalAmount:300,items:[{id:'cheque-1',amount:300,date:'2026-10-16',note:'Fixture cheque',source:'vendor-cheque',title:'Vendor',runningBalanceAfter:12045.67,status:'available',chequeNumber:'100001',unexpectedPrivate:{balance:12345.67}}]}]
-    settings={currentBankBalance:12345.67,marginPercentage:25,monthlyOperationalExpense:0,operationalExpenseBreakdown:{rent:0,electricity:0,maintenance:0,salaries:0,royalty:0,caFee:0,miscellaneous:0},scheduledNotifications:[],upgradeAnnouncement:null}
+    settings={currentBankBalance:12345.67,marginPercentage:25,monthlyOperationalExpense:0,operationalExpenseBreakdown:{rent:0,electricity:0,maintenance:0,salaries:0,royalty:0,caFee:0,miscellaneous:0},scheduledNotifications:[]}
     const b=db.batch()
     for(const role of ['owner','manager','billing','disabled'])b.set(db.doc('users/'+role),{name:'Synthetic '+role,role:role==='disabled'?'owner':role,disabled:role==='disabled',approvalStatus:'approved'})
     b.set(db.doc('appMetadata/appSettings'),settings);b.set(db.doc('appMetadata/workspaceMetrics'),metrics);b.set(db.doc('bankBalanceControl/main'),{balancePaise:1234567,revision:7,initialized:true});b.set(db.doc('cashouts/historical'),{amountPaise:123,postedByUid:'billing'})
@@ -38,7 +38,7 @@ describe('private bank and staff-safe settings publication', {skip: !process.env
     assert.deepEqual(await get('appMetadata/appSettings'),settings);assert.deepEqual(await get('appMetadata/workspaceMetrics'),metrics)
   })
   it('rejects unauthenticated, staff, missing and disabled publishers on every entry point',async()=>{
-    for(const uid of [null,'manager','billing','missing','disabled'])for(const [name,data]of [['publishExisting',{dryRun:true}],['publishMetrics',{metrics,expectedUpdatedAt:metrics.updatedAt}],['updateSettings',{operationId:randomUUID(),kind:'clear-announcement',value:null}]])await assert.rejects(handlers[name](call(data,uid)),e=>['unauthenticated','permission-denied'].includes(e.code))
+    for(const uid of [null,'manager','billing','missing','disabled'])for(const [name,data]of [['publishExisting',{dryRun:true}],['publishMetrics',{metrics,expectedUpdatedAt:metrics.updatedAt}],['updateSettings',{operationId:randomUUID(),kind:'notifications',value:[]}]])await assert.rejects(handlers[name](call(data,uid)),e=>['unauthenticated','permission-denied'].includes(e.code))
     assert.equal(await get('appMetadata/staffSettings'),undefined)
   })
   it('rejects stale release publication without writing safe projections',async()=>{
@@ -55,12 +55,12 @@ describe('private bank and staff-safe settings publication', {skip: !process.env
     assert.deepEqual(await get('bankBalanceControl/main'),{balancePaise:1234567,revision:7,initialized:true})
   })
   it('recovers original settings result and rejects changed intent under the same ID',async()=>{
-    const operationId=randomUUID(),data={operationId,kind:'announcement',value:{title:'Update',message:'Synthetic staff notice',durationHours:4}}
+    const operationId=randomUUID(),data={operationId,kind:'notifications',value:[{id:'update',title:'Update',message:'Synthetic staff notice',triggerTime:'10:30',targetRoles:['billing'],enabled:true}]}
     const first=await handlers.updateSettings(call(data));assert.deepEqual(await handlers.updateSettings(call(data)),first)
     assert.equal((await db.collection('settingsAudit').get()).size,1)
-    await assert.rejects(handlers.updateSettings(call({...data,value:{...data.value,durationHours:24}})),e=>e.code==='already-exists')
-    const notice=(await get('appMetadata/staffSettings')).upgradeAnnouncement
-    assert.equal(notice.publishedBy,'Synthetic owner');assert.equal(notice.expiresAt,'2026-10-16T09:00:00.000Z')
+    await assert.rejects(handlers.updateSettings(call({...data,value:[{...data.value[0],triggerTime:'11:30'}]})),e=>e.code==='already-exists')
+    assert.deepEqual((await get('appMetadata/staffSettings')).scheduledNotifications,data.value)
+    assert.equal((await get('settingsAudit/'+operationId)).actor,'Synthetic owner')
   })
   it('rejects forged bank fields, unknown kinds, invalid margins, invalid notifications and extra fields without changes',async()=>{
     for(const data of [
@@ -68,17 +68,56 @@ describe('private bank and staff-safe settings publication', {skip: !process.env
       {kind:'operations',value:{marginPercentage:101,operationalExpenseBreakdown:settings.operationalExpenseBreakdown}},
       {kind:'notifications',value:[{id:'x',title:'x',message:'x',enabled:true,targetRoles:['owner'],triggerTime:'12:00'}]},
       {kind:'bank-baseline',value:999},
-      {kind:'clear-announcement',value:null,actorUid:'forged'}
+      {kind:'notifications',value:[],actorUid:'forged'}
     ])await assert.rejects(handlers.updateSettings(call({operationId:randomUUID(),...data})),e=>e.code==='invalid-argument')
     assert.deepEqual(await get('appMetadata/appSettings'),settings);assert.equal((await db.collection('settingsAudit').get()).size,0)
   })
-  it('publishes and clears staff notifications/announcements in the same revisioned projection',async()=>{
+  it('publishes and clears staff notifications in the same revisioned projection',async()=>{
     const value=[{id:'end',title:'Count',message:'Synthetic notice',enabled:true,targetRoles:['billing','manager'],triggerTime:'23:50'}]
     await handlers.updateSettings(call({operationId:randomUUID(),kind:'notifications',value}))
     assert.deepEqual((await get('appMetadata/staffSettings')).scheduledNotifications,value)
-    await handlers.updateSettings(call({operationId:randomUUID(),kind:'clear-announcement',value:null}))
+    await handlers.updateSettings(call({operationId:randomUUID(),kind:'notifications',value:[]}))
     assert.equal((await get('appMetadata/staffSettings')).sourceRevision,2)
-    assert.equal((await get('appMetadata/staffSettings')).upgradeAnnouncement,null)
+    assert.deepEqual((await get('appMetadata/staffSettings')).scheduledNotifications,[])
+  })
+  it('saves business registration and bank details while excluding bank fields from staff views',async()=>{
+    const value={businessLegalName:'Synthetic Store Pvt Ltd',businessGstin:'09ABCDE1234F1Z5',businessFssaiLicense:'12345678901234',businessBankName:'Synthetic Bank',businessBankAccountHolder:'Synthetic Store',businessBankAccountNumber:'000123456789',businessBankIfsc:'test0123456',businessBankBranch:'Fixture branch'}
+    const operationId=randomUUID(),request=call({operationId,kind:'business-identity',value})
+    const first=await handlers.updateSettings(request)
+    assert.deepEqual(await handlers.updateSettings(request),first)
+    const saved=await get('appMetadata/appSettings'),staff=await get('appMetadata/staffSettings')
+    assert.equal(saved.businessBankAccountNumber,'000123456789');assert.equal(saved.businessBankIfsc,'TEST0123456')
+    for(const key of ['businessBankName','businessBankAccountHolder','businessBankBranch'])assert.equal(saved[key],value[key])
+    assert.equal(staff.businessFssaiLicense,value.businessFssaiLicense)
+    assert.equal(Object.keys(staff).some(k=>k.startsWith('businessBank')),false)
+    const audit=await get('settingsAudit/'+operationId)
+    assert.equal(audit.actorUid,'owner');assert.equal(JSON.stringify(audit).includes(value.businessBankAccountNumber),false)
+    // Cached clients saving name/GST must preserve optional details.
+    await handlers.updateSettings(call({operationId:randomUUID(),kind:'business-identity',value:{businessLegalName:value.businessLegalName,businessGstin:value.businessGstin}}))
+    assert.equal((await get('appMetadata/appSettings')).businessBankAccountNumber,value.businessBankAccountNumber)
+    const clear={...value,businessFssaiLicense:'',businessBankName:'',businessBankAccountHolder:'',businessBankAccountNumber:'',businessBankIfsc:'',businessBankBranch:''}
+    await handlers.updateSettings(call({operationId:randomUUID(),kind:'business-identity',value:clear}))
+    assert.equal((await get('appMetadata/appSettings')).businessBankAccountNumber,'')
+    assert.deepEqual(await get('bankBalanceControl/main'),{balancePaise:1234567,revision:7,initialized:true})
+  })
+  it('rejects invalid business details and unauthorized identity writes without partial changes',async()=>{
+    const base={businessLegalName:'Synthetic Store',businessGstin:'09ABCDE1234F1Z5'}
+    for(const field of [{businessFssaiLicense:'123'},{businessBankAccountNumber:123456},{businessBankAccountNumber:'12-34'},{businessBankIfsc:'INVALID'},{businessBankName:'x'.repeat(121)}]){
+      await assert.rejects(handlers.updateSettings(call({operationId:randomUUID(),kind:'business-identity',value:{...base,...field}})),e=>e.code==='invalid-argument')
+    }
+    for(const uid of ['manager','billing','disabled',null])await assert.rejects(handlers.updateSettings(call({operationId:randomUUID(),kind:'business-identity',value:base},uid)),e=>['permission-denied','unauthenticated'].includes(e.code))
+    assert.deepEqual(await get('appMetadata/appSettings'),settings)
+    assert.equal((await db.collection('settingsAudit').get()).size,0)
+    assert.equal(await get('appMetadata/staffSettings'),undefined)
+  })
+  it('rejects retired announcement writes and omits legacy notices when republishing staff settings',async()=>{
+    for(const kind of ['announcement','clear-announcement'])await assert.rejects(handlers.updateSettings(call({operationId:randomUUID(),kind,value:null})),e=>e.code==='invalid-argument')
+    assert.deepEqual(await get('appMetadata/appSettings'),settings)
+    assert.equal((await db.collection('settingsAudit').get()).size,0)
+    await db.doc('appMetadata/appSettings').set({upgradeAnnouncement:{title:'Historical notice'}},{merge:true})
+    await handlers.publishExisting(call({dryRun:false,expectedSettingsRevision:0,expectedMetricsUpdatedAt:metrics.updatedAt}))
+    assert.equal((await get('appMetadata/staffSettings')).upgradeAnnouncement,undefined)
+    assert.equal((await get('appMetadata/appSettings')).upgradeAnnouncement.title,'Historical notice')
   })
   it('publishes metrics atomically, sanitises nested rows and rejects stale owner cache publication',async()=>{
     await handlers.publishMetrics(call({metrics,expectedUpdatedAt:metrics.updatedAt}))

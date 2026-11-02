@@ -3,6 +3,7 @@ import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase'
 import { nowIso, type OperationalExpenseBreakdown, type StoreCollectionState } from '@/store/storeShared'
 import type { ScheduledNotification } from '@/domain/appTypes'
+import type { BusinessIdentity } from '@/domain/businessIdentity'
 import { parseScheduledNotifications } from '@/features/action-center/domain/scheduledNotifications'
 
 type SettingsActionArgs = {
@@ -25,28 +26,18 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     void actor
   }
 
-  async function saveBusinessIdentity(businessLegalName: string, businessGstin: string) {
-    const legalName = businessLegalName.trim()
-    const gstin = businessGstin.trim().toUpperCase()
+  async function saveBusinessIdentity(identity: BusinessIdentity) {
+    const legalName = identity.businessLegalName.trim()
+    const gstin = identity.businessGstin.trim().toUpperCase()
     if (!legalName || legalName.length > 200) throw new Error('Enter the registered legal firm name (up to 200 characters).')
     if (!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) throw new Error('Enter a valid 15-character GSTIN.')
-    await updateWorkspaceSettings('business-identity', { businessLegalName: legalName, businessGstin: gstin })
+    await updateWorkspaceSettings('business-identity', { ...identity, businessLegalName: legalName, businessGstin: gstin })
   }
 
   async function saveScheduledNotifications(value: ScheduledNotification[], actor: string) {
     const parsed = parseScheduledNotifications(value)
     if (parsed.length !== value.length) throw new Error('Each notification needs a title, message, valid trigger time, and at least one staff role.')
     await updateWorkspaceSettings('notifications', parsed)
-    void actor
-  }
-
-  async function publishUpgradeAnnouncement(title: string, message: string, durationHours: number, actor: string) {
-    await updateWorkspaceSettings('announcement', { title: title.trim(), message: message.trim(), durationHours })
-    void actor
-  }
-
-  async function clearUpgradeAnnouncement(actor: string) {
-    await updateWorkspaceSettings('clear-announcement', null)
     void actor
   }
 
@@ -80,7 +71,5 @@ export function createSettingsActions({ getState, pushSettingsAudit }: SettingsA
     saveOperationalSettings,
     saveBusinessIdentity,
     saveScheduledNotifications,
-    publishUpgradeAnnouncement,
-    clearUpgradeAnnouncement,
   }
 }

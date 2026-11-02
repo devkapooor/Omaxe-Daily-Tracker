@@ -30,6 +30,7 @@ if (process.env.RUN_TELEGRAM_EMULATOR_TESTS !== 'true') {
   }
   describe('Telegram milestones, commands, cashouts and delivery in an isolated emulator', { concurrency: false }, () => {
     beforeEach(async () => {
+      assert.equal((await db.collection('loans').limit(1).get()).size, 0, 'Loan records present; reset refused')
       const result = await fetch('http://127.0.0.1:8189/emulator/v1/projects/' + projectId + '/databases/(default)/documents', { method: 'DELETE' })
       assert.equal(result.ok, true)
       timestamp = Date.parse('2026-10-24T08:00:00Z'); sent = []; outcome = null

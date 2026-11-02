@@ -1,5 +1,7 @@
 # AlphaHub
 
+Current documentation entry point: [operations index](docs/operations/README.md). Verified against the local working tree based on `ccc0eb4` on 31 October 2026; this is not a claim of deployed source parity. See the [maintenance completion plan](docs/operations/MAINTENANCE_COMPLETION_PLAN_2026-10-31.md), [coverage and command map](docs/operations/TEST_COVERAGE.md), and [current drill runbook](drill.md#current-maintenance-execution--31-october-2026).
+
 Single-store finance operations app for the AlphaHub workflow.
 
 ## Production Data Safety Rule
@@ -24,8 +26,9 @@ Only a deliberate action by an authorized user through an approved live financia
 - Shared POS drawer reconciliation at login/logout with discrepancy review
 - Owner dashboard with T/T-1/T-2 performance, comparisons, trend, coverage and projections
 - Owner Action Centre for cashout corrections, vendor payment corrections and return decisions
-- Vendor Workspace for vendor profiles, purchases, separate payments, invoices, returns, corrections, cheques and balances
-- Party Directory for people; Register for expenses and owner loan entry/repayment
+- Stock for Current Stock, Receive Stock, GRN History, Stock Return, Stock Audit and Stock History
+- Vendor Workspace for Vendors & Parties, invoices, payment corrections and balances
+- Register for New Payment, Payment History and owner Cheques; Loans has its own owner page and remains excluded from mutation drills
 - Cash movement tracking between real staff user accounts and bank
 - Daily cashout flow with drawer audit details
 - Shared financial summaries retain read-only legacy cheque metrics for compatibility
@@ -41,7 +44,7 @@ Only a deliberate action by an authorized user through an approved live financia
 - TypeScript
 - Firebase Authentication
 - Firestore
-- Cloud Functions callable for trusted server time used by cashout controls
+- Node 22 Cloud Functions for trusted checkout/refunds, stock posting, finance operations, server time and staff-safe shared views
 - Tailwind CSS v4
 - Local shadcn-style UI primitives
 - Web app manifest and service worker installability
@@ -50,11 +53,12 @@ Only a deliberate action by an authorized user through an approved live financia
 
 Owner sees:
 
-- `POS` (Billing, Dashboard, Bills, GRN, Audit)
+- `POS` (Billing, Dashboard, Bills)
+- `Stock`
 - `Dashboard`
 - `Action Centre`
 - `Vendor Workspace`
-- `Directory`
+- `Loans` (read-only in maintenance drills)
 - `Register`
 - `Cashout`
 - `Cash Movement`
@@ -63,9 +67,9 @@ Owner sees:
 
 Manager sees:
 
-- `POS` (Billing, Dashboard, Bills, GRN, Audit)
+- `POS` (Billing, Dashboard, Bills)
+- `Stock`
 - `Vendor Workspace`
-- `Directory`
 - `Register`
 - `Cashout`
 - `Cash Movement`
@@ -73,9 +77,9 @@ Manager sees:
 
 Billing sees:
 
-- `POS` (Billing, Dashboard, Bills, GRN, Audit)
+- `POS` (Billing, Dashboard, Bills)
+- `Stock`
 - `Vendor Workspace`
-- `Directory`
 - `Register`
 - `Cashout`
 - `Cash Movement`
@@ -83,10 +87,11 @@ Billing sees:
 
 `Register` currently contains:
 
-- `Expenses`
-- `Loans` (Loan Taken and Loan Repayment) for owner only
+- `New Payment`
+- `Payment History`
+- `Cheques` for owner only
 
-The Directory navigation label is `Party Directory`. Vendor creation is available only from the Vendor Workspace modal.
+Parties and vendors share the Vendor Workspace directory and Add Party / Vendor modal. The old `directory` page key resolves to the combined workspace for compatibility. Stock Audit history is in owner Logs, not a separate Stock tab. Staff Cashout access also depends on the permitted IST window.
 
 ## Mobile Install
 
@@ -106,18 +111,17 @@ The Directory navigation label is `Party Directory`. Vendor creation is availabl
 
 ## Local Scripts
 
-Use Node.js with npm and the locked dependency versions. Configure a local `.env` from `.env.example` with the intended Firebase web-project settings before starting the app. A local URL can still point at production; financial mutation tests must use an isolated project or the emulator.
+Use Node 22 with npm and the locked dependency versions. Configure a local `.env` from `.env.example` only for deliberate development against its selected project. A local URL can still point at production; all maintenance mutation tests use the separate guarded drill configuration. Do not install or upgrade packages merely to run maintenance checks when existing prerequisites are available.
 
 ```powershell
-npm ci
-npm run dev
-npm test
-npx eslint src tests
+npm run test:unit
+npm run lint
 npm run build
-npm run preview -- --host 127.0.0.1
 ```
 
-`npm run test:rules` uses the `demo-alphahub` Firestore emulator and requires Java and Firebase CLI. See [Firebase setup](docs/setup/FIREBASE_SETUP.md) and the [QA checklist](docs/operations/QA_CHECKLIST.md). Cashout's trusted clock calls the deployed `getServerTime` Cloud Function; check the target Firebase project's current billing and runtime requirements before deploying Functions.
+For complete isolated testing, follow [drill.md](drill.md#current-maintenance-execution--31-october-2026): `drill:start`, `test:full`, optional `test:concurrency`, then `drill:stop` using the original stack run ID. `test:full` runs static checks, Functions, Rules/support, dedicated Telegram integration and all 14 current browser suites serially. `test:functions` without emulator environment runs focused tests and skips integrations; it is not comprehensive acceptance. `test:rules` starts a Firestore-only demo emulator and needs free port 8080; do not run it over an existing full stack.
+
+`npm run test:rules` uses the `demo-alphahub` Firestore emulator and requires Java, Firebase CLI, and the configured Node 22 runtime. It excludes four historical loan-mutation Rules cases. See [Firebase setup](docs/setup/FIREBASE_SETUP.md) and the [QA checklist](docs/operations/QA_CHECKLIST.md). Cashout's trusted clock calls the deployed `getServerTime` Cloud Function; check the target Firebase project's current billing and runtime requirements before deploying Functions.
 
 ## Root Files
 

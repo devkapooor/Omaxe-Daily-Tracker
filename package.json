@@ -6,9 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "test": "vitest run src",
-    "test:rules": "firebase emulators:exec --project demo-alphahub --only firestore \"vitest run tests\"",
+    "test:unit": "vitest run src",
+    "test:functions": "npm --prefix functions test",
+    "test:smoke": "node tests/drill/run.cjs smoke",
+    "test:full": "node tests/drill/full-financial-acceptance.cjs full",
+    "test:concurrency": "node tests/drill/full-financial-acceptance.cjs concurrency",
+    "drill:start": "node tests/drill/run.cjs start",
+    "drill:stop": "node tests/drill/run.cjs stop",
+    "test:rules": "firebase emulators:exec --project demo-alphahub --only firestore \"node tests/drill/full-financial-acceptance.cjs rules\"",
     "preview": "vite preview"
   },
   "dependencies": {

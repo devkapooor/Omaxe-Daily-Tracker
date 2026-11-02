@@ -629,46 +629,6 @@ service cloud.firestore {
         data.updatedAt is string;
     }
 
-    function validPurchaseCreate(data, documentId) {
-      return hasDocumentId(data, documentId) &&
-        data.storeId is string &&
-        data.date is string &&
-        data.supplierName is string &&
-        isNonNegativeNumber(data.purchaseAmount) &&
-        isNonNegativeNumber(data.paidAmount) &&
-        isNonNegativeNumber(data.unpaidAmount) &&
-        data.paidAmount + data.unpaidAmount == data.purchaseAmount &&
-        data.createdAt is string &&
-        data.updatedAt is string;
-    }
-
-    function isVendorPaymentAllocation() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidAmount', 'unpaidAmount', 'updatedAt']) &&
-        request.resource.data.paidAmount >= resource.data.paidAmount &&
-        request.resource.data.unpaidAmount <= resource.data.unpaidAmount &&
-        request.resource.data.unpaidAmount >= 0 &&
-        request.resource.data.paidAmount + request.resource.data.unpaidAmount == resource.data.purchaseAmount;
-    }
-
-    function isOpeningBalanceAllocation() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openingOutstandingRemaining', 'updatedAt']) &&
-        request.resource.data.openingOutstandingRemaining is number &&
-        request.resource.data.openingOutstandingRemaining >= 0 &&
-        request.resource.data.openingOutstandingRemaining <= resource.data.openingOutstandingRemaining;
-    }
-
-    function isVendorDirectoryUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'name',
-        'ownerName',
-        'contact',
-        'address',
-        'companiesProvided',
-        'notes',
-        'updatedAt'
-      ]) && request.resource.data.createdAt == resource.data.createdAt;
-    }
-
     match /users/{userId} {
       allow read: if isStaff() || (isSignedIn() && request.auth.uid == userId);
       allow create, update: if isOwner();
@@ -860,12 +820,16 @@ service cloud.firestore {
     }
 
     match /appMetadata/nameDirectory {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.keys().hasOnly(['people']) &&
+        request.resource.data.people is list && request.resource.data.people.size() <= 1000;
+      allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['people']) &&
+        request.resource.data.people is list && request.resource.data.people.size() <= 1000;
+      allow delete: if false;
     }
 
     match /appMetadata/vendorCatalog {
-      allow read: if isStaff();
-      allow write: if false;
+      allow read, write: if false;
     }
 
     match /appMetadata/vendorLedgerV2Config {
@@ -897,7 +861,7 @@ service cloud.firestore {
     match /sharedViewOperations/{operationId} { allow read, write: if false; }
 
     match /appMetadata/{documentId} {
-      allow read, write: if isOwner() && !(documentId in ['appSettings', 'workspaceMetrics', 'staffSettings', 'staffWorkspaceMetrics', 'vendorLedgerV2Config', 'vendorCatalog']);
+      allow read, write: if isOwner() && !(documentId in ['appSettings', 'workspaceMetrics', 'staffSettings', 'staffWorkspaceMetrics', 'vendorLedgerV2Config', 'vendorCatalog', 'nameDirectory']);
     }
 
     match /stores/{documentId} {
@@ -916,8 +880,15 @@ service cloud.firestore {
     }
 
     match /vendors/{documentId} {
-      allow read: if isStaff();
-      allow write: if false;
+      allow read, write: if false;
+    }
+
+    match /vendorMasterMigrationArchives/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /vendorMasterMigrations/{documentId} {
+      allow read, write: if false;
     }
 
     function isLinkedPosRefund(data) {

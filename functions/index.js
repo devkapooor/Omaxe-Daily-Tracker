@@ -37,16 +37,20 @@ const register = require('./registerPayments').createRegisterHandlers(financeOps
 const vendorStockReturns = require('./vendorStockReturns').createVendorStockReturnHandlers(financeOps, register)
 const vendorDecisions = require('./vendorFinanceDecisions').createVendorDecisionHandlers(financeOps, register)
 const vendorOpening = require('./vendorOpening').createVendorOpeningHandlers(financeOps, register)
+const vendorBalanceCutover = require('./vendorBalanceCutover').createVendorBalanceCutoverHandlers(financeOps)
+const vendorMasterMigration = require('./vendorMasterMigration').createVendorMasterMigrationHandlers(financeOps)
 const cashout = require('./financeCashout').createCashoutHandlers(financeOps)
-const financialHandlers = { expense:register.expense, 'vendor-payment':register.settlement, 'vendor-create':register.createVendor, 'vendor-purchase':register.purchase, 'cheque-issue':register.cheque, 'cheque-decision':register.transitionCheque, 'vendor-correction':vendorDecisions.correct, 'vendor-correction-decision':vendorDecisions.decision, 'vendor-return':vendorDecisions.createReturn, 'vendor-return-decision':vendorDecisions.resolveReturn, 'outflow-review':vendorDecisions.reviewOutflow, 'expense-cancel':vendorDecisions.cancelExpense, 'cashout-count-start':cashout.prepare, 'cashout-count-cancel':cashout.cancel, 'cashout-close':cashout.close, 'cashout-correction':cashout.correction, 'cashout-correction-decision':cashout.decideCorrection, 'cashout-delete':cashout.deleteLegacy, 'cashout-review':cashout.review }
+const financialHandlers = { expense:register.expense, 'vendor-payment':register.settlement, 'vendor-create':register.createVendor, 'vendor-purchase':register.purchase, 'cheque-issue':register.cheque, 'cheque-decision':register.transitionCheque, 'vendor-correction':vendorDecisions.correct, 'vendor-correction-decision':vendorDecisions.decision, 'vendor-return':vendorDecisions.createReturn, 'vendor-return-decision':vendorDecisions.resolveReturn, 'outflow-review':vendorDecisions.reviewOutflow, 'expense-cancel':vendorDecisions.cancelExpense, 'cashout-count-start':cashout.prepare, 'cashout-count-cancel':cashout.cancel, 'cashout-close':cashout.close, 'cashout-correction':cashout.correction, 'cashout-drawer-debit':cashout.applyHistoricalDrawerDebit, 'cashout-correction-decision':cashout.decideCorrection, 'cashout-delete':cashout.deleteLegacy, 'cashout-review':cashout.review, 'cashout-expense-reconcile':cashout.reconcileExpenses, 'cashout-drawer-reversal':cashout.reverseHistoricalDrawer }
 exports.postFinanceOperation = onCall({ region:'asia-south1', minInstances:0 }, request => {
   const p = require('./financeOperations')
   p.object(request.data,['kind','intent'])
   const returnHandlers = { 'vendor-return-draft':vendorStockReturns.save, 'vendor-return-draft-delete':vendorStockReturns.remove, 'vendor-return-dispatch':vendorStockReturns.dispatch, 'vendor-return-receive':vendorStockReturns.receive }
-  const handler=request.data.kind === 'vendor-opening-correction' ? vendorOpening.correct : request.data.kind === 'vendor-gstin-update' ? vendorOpening.updateGstin : returnHandlers[request.data.kind] ?? financialHandlers[request.data.kind]
+  const handler=request.data.kind === 'vendor-opening-correction' ? vendorOpening.correct : request.data.kind === 'vendor-gstin-update' ? vendorOpening.updateGstin : request.data.kind === 'vendor-balance-cutover' ? vendorBalanceCutover.reset : returnHandlers[request.data.kind] ?? financialHandlers[request.data.kind]
   if(!handler)p.fail('Unsupported financial operation. Reload AlphaHub.','invalid-argument')
   return handler({...request,data:request.data.intent})
 })
+exports.previewLegacyVendorMasterMigration = onCall({ region:'asia-south1', minInstances:0 }, vendorMasterMigration.preview)
+exports.applyLegacyVendorMasterMigration = onCall({ region:'asia-south1', minInstances:0 }, vendorMasterMigration.apply)
 exports.presentDueCheque = onCall({region:'asia-south1',minInstances:0, maxInstances:20}, register.presentDue)
 exports.createCashTransfer = onCall({region:'asia-south1',minInstances:0, maxInstances:20},require('./financeTransfers').createTransferHandler(financeOps))
 exports.getFinanceCashoutSummary = onCall({region:'asia-south1',minInstances:0, maxInstances:20},cashout.readSummary)
